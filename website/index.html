@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>atpotato</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <section class="profile">
+            <h2>Profile</h2>
+            <div class="logo-container">
+                <img src="/api/placeholder/300/300" alt="atpotato logo" class="logo">
+            </div>
+            <h1>atpotato</h1>
+            <p class="subtitle">https://atpota.to</p>
+            
+            <div class="buttons">
+                <a href="/temporary-logo.png" class="button" target="_blank">Bluesky</a>
+                <a href="https://tangled.sh/@atpota.to" class="button" target="_blank">Tangled</a>
+                <a href="https://github.com/atpota-to" class="button" target="_blank">GitHub</a>
+            </div>
+        </section>
+
+        <section class="projects">
+            <h2>Projects</h2>
+            <div class="project-list">
+                <a href="https://cred.blue" class="project-link" target="_blank">cred.blue</a>
+                <a href="https://flushes.app" class="project-link" target="_blank">Flushes</a>
+                <p class="coming-soon">...more coming soon</p>
+            </div>
+        </section>
+
+        <div class="theme-toggle">
+            <button id="toggle-theme">Toggle Dark/Light Mode</button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('toggle-theme').addEventListener('click', function() {
+            document.body.classList.toggle('light-mode');
+            
+            // Save preference to localStorage
+            const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+            localStorage.setItem('theme', currentTheme);
+        });
+
+        // Load saved theme preference
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                document.body.classList.add('light-mode');
+            }
+        });
+    </script>
+</body>
+</html>
