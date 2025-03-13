@@ -31,28 +31,6 @@
                 <p class="coming-soon">...more coming soon</p>
             </div>
         </section>
-
-        <div class="theme-toggle">
-            <button id="toggle-theme">Toggle Dark/Light Mode</button>
-        </div>
     </div>
-
-    <script>
-        document.getElementById('toggle-theme').addEventListener('click', function() {
-            document.body.classList.toggle('light-mode');
-            
-            // Save preference to localStorage
-            const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
-            localStorage.setItem('theme', currentTheme);
-        });
-
-        // Load saved theme preference
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'light') {
-                document.body.classList.add('light-mode');
-            }
-        });
-    </script>
 </body>
 </html>

@@ -1,31 +1,16 @@
 /* Global Styles */
 :root {
-    --bg-color: #121212;
-    --text-color: #e0e0e0;
-    --secondary-color: #888888;
-    --highlight-color: #5c6bc0;
-    --container-bg: #1e1e1e;
-    --button-bg: #333333;
-    --button-hover: #444444;
+    --text-color: #212121;
+    --secondary-color: #555555;
+    --highlight-color: #3f51b5;
 }
 
 body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--bg-color);
+    background-color: #ffffff;
     color: var(--text-color);
     margin: 0;
     padding: 0;
-    transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-body.light-mode {
-    --bg-color: #f5f5f5;
-    --text-color: #212121;
-    --secondary-color: #555555;
-    --highlight-color: #3f51b5;
-    --container-bg: #ffffff;
-    --button-bg: #e0e0e0;
-    --button-hover: #d0d0d0;
 }
 
 .container {
@@ -37,11 +22,9 @@ body.light-mode {
 
 /* Profile Section */
 .profile {
-    background-color: var(--container-bg);
-    padding: 30px;
-    border-radius: 10px;
-    margin-bottom: 30px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 30px 0;
+    margin-bottom: 40px;
+    border-bottom: 1px solid #eaeaea;
 }
 
 .logo-container {
@@ -85,7 +68,7 @@ h2 {
 .button {
     display: inline-block;
     padding: 10px 20px;
-    background-color: var(--button-bg);
+    background-color: #f5f5f5;
     color: var(--text-color);
     text-decoration: none;
     border-radius: 5px;
@@ -93,17 +76,14 @@ h2 {
 }
 
 .button:hover {
-    background-color: var(--button-hover);
+    background-color: #e0e0e0;
     transform: translateY(-2px);
 }
 
 /* Projects Section */
 .projects {
-    background-color: var(--container-bg);
-    padding: 30px;
-    border-radius: 10px;
-    margin-bottom: 30px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px 0;
+    margin-bottom: 40px;
 }
 
 .project-list {
@@ -129,26 +109,6 @@ h2 {
     color: var(--secondary-color);
     font-style: italic;
     margin-top: 10px;
-}
-
-/* Theme Toggle */
-.theme-toggle {
-    margin-top: 20px;
-}
-
-#toggle-theme {
-    background-color: var(--button-bg);
-    color: var(--text-color);
-    border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: background-color 0.2s ease;
-}
-
-#toggle-theme:hover {
-    background-color: var(--button-hover);
 }
 
 /* Responsive Adjustments */
