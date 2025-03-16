@@ -137,8 +137,8 @@ h2 {
 /* Responsive Adjustments */
 @media (max-width: 480px) {
     .logo-container {
-        width: 120px;
-        height: 120px;
+        width: 180px;
+        height: 150px;
     }
     
     h1 {
