@@ -1,11 +1,9 @@
 {
-  "routes": [
+  "redirects": [
     {
-      "src": "/(.*)",
-      "status": 307,
-      "headers": {
-        "Location": "https://roomy.chat/-/atproto.garden"
-      },
+      "source": "/(.*)",
+      "destination": "https://roomy.chat/-/atproto.garden",
+      "permanent": false,
       "has": [
         {
           "type": "host",
@@ -14,11 +12,9 @@
       ]
     },
     {
-      "src": "/(.*)",
-      "status": 307,
-      "headers": {
-        "Location": "https://roomy.chat/-/atproto.garden"
-      },
+      "source": "/(.*)",
+      "destination": "https://roomy.chat/-/atproto.garden",
+      "permanent": false,
       "has": [
         {
           "type": "host",
