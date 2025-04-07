@@ -5,7 +5,26 @@
       "status": 307,
       "headers": {
         "Location": "https://roomy.chat/-/atproto.garden"
-      }
+      },
+      "has": [
+        {
+          "type": "host",
+          "value": "atproto.garden"
+        }
+      ]
+    },
+    {
+      "src": "/(.*)",
+      "status": 307,
+      "headers": {
+        "Location": "https://roomy.chat/-/atproto.garden"
+      },
+      "has": [
+        {
+          "type": "host",
+          "value": "www.atproto.garden"
+        }
+      ]
     }
   ],
   "headers": [
