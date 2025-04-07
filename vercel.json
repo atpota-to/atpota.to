@@ -1,0 +1,15 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://roomy.chat/-/atproto.garden",
+      "permanent": true,
+      "has": [
+        {
+          "type": "host",
+          "value": "atproto.garden"
+        }
+      ]
+    }
+  ]
+} 
