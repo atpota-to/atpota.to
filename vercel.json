@@ -1,13 +1,26 @@
 {
-  "redirects": [
+  "routes": [
+    {
+      "src": "/(.*)",
+      "status": 307,
+      "headers": {
+        "Location": "https://roomy.chat/-/atproto.garden"
+      }
+    }
+  ],
+  "headers": [
     {
       "source": "/(.*)",
-      "destination": "https://roomy.chat/-/atproto.garden",
-      "permanent": true,
       "has": [
         {
           "type": "host",
           "value": "atproto.garden"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
         }
       ]
     }
