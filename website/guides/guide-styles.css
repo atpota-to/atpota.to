@@ -134,6 +134,10 @@ a {
     transition: all 0.2s ease;
 }
 
+.support-thanks a {
+    font-style: italic;
+  }
+
 a:hover {
     text-decoration: underline;
 }
