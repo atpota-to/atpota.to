@@ -10,6 +10,9 @@ body {
     position: relative;
     margin: 0;
     min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
 }
 
 body::before {
@@ -48,6 +51,8 @@ body::after {
     max-width: calc(var(--max-width) + var(--toc-width) + 4rem + 200px);
     margin: 0 auto;
     margin-top: 5rem;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Main Content */
@@ -64,6 +69,17 @@ body::after {
     max-width: var(--max-width);
     background: transparent;
     margin-top: 5rem;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    -webkit-hyphens: auto;
+    -ms-hyphens: auto;
+    hyphens: auto;
+    box-sizing: border-box;
+}
+
+.guide-content * {
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .header {
@@ -274,7 +290,42 @@ a:hover {
 
 @media (max-width: 768px) {
     .guide-container {
-        padding: 1.5rem var(--side-padding);
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        padding: 0 var(--side-padding);
+        margin-top: 2rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .guide-content {
+        grid-column: 1;
+        margin-top: 2rem;
+        padding: 0;
+        width: 100%;
+        max-width: 100%;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+
+    .guide-content img {
+        max-width: 100%;
+        margin: 2rem 0;
+        border-radius: 8px;
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    p, h1, h2, h3, h4, h5, h6 {
+        width: 100%;
+        max-width: 100%;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+
+    img {
+        max-width: 100%;
+        height: auto;
     }
 
     .button-backdrop {
@@ -327,8 +378,42 @@ a:hover {
 }
 
 @media (max-width: 480px) {
+    :root {
+        --side-padding: 1rem;
+    }
+
     .guide-container {
-        padding: 1rem var(--side-padding);
+        padding: 0 var(--side-padding);
+        width: 100%;
+    }
+
+    .guide-content {
+        font-size: 1rem;
+        padding: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .guide-content img {
+        width: calc(100% + (2 * var(--side-padding)));
+        max-width: calc(100% + (2 * var(--side-padding)));
+        margin-left: calc(-1 * var(--side-padding));
+        margin-right: calc(-1 * var(--side-padding));
+        border-radius: 0;
+    }
+
+    p, h1, h2, h3, h4, h5, h6 {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    img {
+        width: 100vw;
+        margin-left: calc(-1 * var(--side-padding));
+        margin-right: calc(-1 * var(--side-padding));
+        max-width: none;
+        margin-top: 0;
+        margin-bottom: 0;
     }
 
     .theme-toggle {
@@ -519,10 +604,14 @@ blockquote {
 }
 
 /* Images */
-img {
+.guide-content img {
     max-width: 100%;
     height: auto;
-    border-radius: 8px;
+    border-radius: 12px;
+    margin: 2rem 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* Lists */
@@ -701,7 +790,7 @@ li {
 }
 
 .guide-header h1 {
-    font-size: 3.5rem;
+    font-size: 3rem;
     line-height: 1.2;
     margin-bottom: 1rem;
     color: var(--text-color);
@@ -710,7 +799,9 @@ li {
 .guide-header h2 {
     font-size: 1.5rem;
     line-height: 1.4;
-    margin-bottom: 1.5rem;
+    line-height: 1.4;
+    margin-bottom: 0;
+    margin-top: 0;
     color: var(--secondary-color);
     font-weight: 400;
     border: none;
