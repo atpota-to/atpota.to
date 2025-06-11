@@ -4,7 +4,7 @@
     --text-color: #2a2a2a;
     --highlight-color: #00A6ED;
     --secondary-color: #666666;
-    --background-color: rgba(255, 255, 255, 0.95);
+    --background-color: rgb(255, 255, 255);
     --surface-color: rgba(255, 255, 255, 0.8);
     --border-color: rgba(230, 230, 230, 0.8);
     --section-border-color: rgba(200, 200, 200, 0.8);
