@@ -71,9 +71,6 @@ body::after {
     margin-top: 5rem;
     overflow-wrap: break-word;
     word-wrap: break-word;
-    -webkit-hyphens: auto;
-    -ms-hyphens: auto;
-    hyphens: auto;
     box-sizing: border-box;
 }
 
