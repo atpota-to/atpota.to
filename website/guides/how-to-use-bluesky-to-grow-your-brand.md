@@ -473,9 +473,7 @@ With that being said, you should likely still maintain some sort of a presence o
 
 The information contained in this guide will hopefully get you started, and I will do my best to provide updates as new features come out and dynamics evolve. If you have any questions, feel free to leave a comment below or in the replies to my post on Bluesky.
 
----
-
-*Thanks for reading!*
+Thanks for reading!
 
 Dame  
 [Find me on Bluesky (@dame.is)](https://bsky.app/profile/dame.is)
