@@ -32,24 +32,26 @@ function initLogoHover() {
             logo.src = defaultSrc;
         });
 
-        // Add touch listeners for mobile
-        logo.addEventListener('touchstart', (e) => {
-            // Prevent default to avoid any unwanted behaviors
-            e.preventDefault();
-            logo.src = getRandomExpression();
-            
-            // Reset to default after a short delay
-            clearTimeout(touchTimeout);
-            touchTimeout = setTimeout(() => {
-                logo.src = defaultSrc;
-            }, 500); // Reset after 500ms
-        });
+        // Add touch listeners for mobile only to the main logo
+        if (logo.classList.contains('logo')) {
+            logo.addEventListener('touchstart', (e) => {
+                // Prevent default to avoid any unwanted behaviors
+                e.preventDefault();
+                logo.src = getRandomExpression();
+                
+                // Reset to default after a short delay
+                clearTimeout(touchTimeout);
+                touchTimeout = setTimeout(() => {
+                    logo.src = defaultSrc;
+                }, 500); // Reset after 500ms
+            });
 
-        // Clear timeout if touch is canceled
-        logo.addEventListener('touchcancel', () => {
-            clearTimeout(touchTimeout);
-            logo.src = defaultSrc;
-        });
+            // Clear timeout if touch is canceled
+            logo.addEventListener('touchcancel', () => {
+                clearTimeout(touchTimeout);
+                logo.src = defaultSrc;
+            });
+        }
     });
 }
 
