@@ -1,12 +1,16 @@
 ## Introduction
 
-As of May 2025, Bluesky has over 36 million users. Journalists, politicians, activists, celebrities, and everyday individuals are now using it to engage with the content and communities that matter most to them. If you're wondering whether your brand should be there too, this guide will help you decide—and show you exactly how to succeed if you do.
+As of May 2025, Bluesky has over 36 million users. Journalists, politicians, activists, celebrities, and everyday individuals are now using it to engage with the content and communities that matter most to them. If you're wondering whether your brand should be there too, **this guide will help you decide—and show you exactly how to succeed if you do.**
 
-Getting started on Bluesky is actually very easy, and it doesn't require a big time investment. You don't need to completely change your content strategy or brand voice to make it work. All it takes are a few small tweaks. You can eventually choose to dive deeper and use Bluesky's more advanced features, but they are not necessary.
+Getting started on Bluesky is actually very easy, and it doesn't require a big time investment. You don't need to completely change your content strategy or brand voice to make it work. 
+
+All it takes are a few small tweaks. You can eventually choose to dive deeper and use Bluesky's more advanced features, but they are not necessary.
 
 But first, why should you listen to me about this? 
 
-Well, I've been on Bluesky since basically the beginning… I was account #1,216. I also set up one of the first brand accounts there, back when that wasn't something anyone thought was worth doing. My background is in social media and community growth, but nowadays I create resources that help people have a more enjoyable experience online. My hope is that I can use all the hours I've invested on Bluesky to make it more accessible to everyone else, including brands and communities that want to connect with their audiences there.
+Well, I've been on Bluesky since basically the beginning… I was account #1,216. I also set up one of the first brand accounts there, back when that wasn't something anyone thought was worth doing. 
+
+My background is in social media and community growth, but nowadays I create resources that help people have a more enjoyable experience online. My hope is that I can use all the hours I've invested on Bluesky to make it more accessible to everyone else, including brands and communities that want to connect with their audiences there.
 
 We'll start with the basics if you're itching to jump right in, and then proceed to covering the complexities if you're ready to take things to the next level.
 
@@ -46,7 +50,9 @@ Now, while you wait for your custom domain to finish connecting or your IT depar
 
 ### Backstory
 
-In 2019, the CEO of Twitter announced an internal research project called "Bluesky". The goal was to explore the feasibility of creating a decentralized internet protocol that could power Twitter and other social media platforms. After a couple of years and an initial funding pool of $13 million contributed by Twitter, Bluesky became an independent organization with zero ties to its originator. In late 2022, Bluesky privately launched its new social media app to a small group of test users. The app was very similar to Twitter, but it was powered by what became known as the AT Protocol.
+In 2019, the CEO of Twitter announced an internal research project called "Bluesky". The goal was to explore the feasibility of creating a decentralized internet protocol that could power Twitter and other social media platforms. 
+
+After a couple of years and an initial funding pool of $13 million contributed by Twitter, Bluesky became an independent organization with zero ties to its originator. In late 2022, Bluesky privately launched its new social media app to a small group of test users. The app was very similar to Twitter, but it was powered by what became known as the AT Protocol.
 
 ![Jack Dorsey's tweet announcing the Bluesky project](/guides/screenshots/jack-tweet.png)
 
@@ -54,13 +60,19 @@ In 2019, the CEO of Twitter announced an internal research project called "Blues
 
 While you might be tempted to gloss over the decentralized technology that underlies Bluesky, learning the basics of it can be extremely helpful in both understanding part of the Bluesky culture and also tapping into the unique opportunities it can provide.
 
-On a traditional social media site like Twitter or Facebook, all of the user data is controlled by one centralized entity — a for-profit corporation — and stored within that entity's database in a proprietary data format that will only work with their app. If that social media app goes rogue, declines in quality, or gets bought by a billionaire, then the users don't have much of a choice in the matter... they either have to forfeit all of the followers and content they amassed over a long period of time or continue using the platform despite all of its toxicity and general crappiness.
+On a traditional social media site like Twitter or Facebook, all of the user data is controlled by one centralized entity — a for-profit corporation — and stored within that entity's database in a proprietary data format that will only work with their app. 
+
+If that social media app goes rogue, declines in quality, or gets bought by a billionaire, then the users don't have much of a choice in the matter... they either have to forfeit all of the followers and content they amassed over a long period of time or continue using the platform despite all of its toxicity and general crappiness.
 
 The AT Protocol was built to solve this problem, and within a short period of time it has come a long way towards reaching its goals. You can now own your social networking data, take it with you, and hopefully avoid being locked into one specific app in the future.
 
 ### Where your data is stored
 
-When you create an account on Bluesky, you're actually creating an AT Protocol account, even if you don't realize it. When you make a post on Bluesky, reply to another user, or like an image, all of that data gets stored in what's called your account's Personal Data Server (PDS). The PDS is basically just a file folder containing lots of different files that get stored on a server in the cloud. You can decide which company (or even yourself) "hosts" your data, similar to how a website is hosted. By default, new Bluesky accounts have their PDS data hosted on one of many different Bluesky servers, each of which is named after a different type of mushroom.
+When you create an account on Bluesky, you're actually creating an AT Protocol account, even if you don't realize it. When you make a post on Bluesky, reply to another user, or like an image, all of that data gets stored in what's called your account's Personal Data Server (PDS). 
+
+The PDS is basically just a file folder containing lots of different files that get stored on a server in the cloud. You can decide which company (or even yourself) "hosts" your data, similar to how a website is hosted. 
+
+By default, new Bluesky accounts have their PDS data hosted on one of many different Bluesky servers, each of which is named after a different type of mushroom.
 
 `shiitake.us-east.host.bsky.network`  
 `oyster.us-east.host.bsky.network`  
@@ -68,23 +80,29 @@ When you create an account on Bluesky, you're actually creating an AT Protocol a
 
 If Bluesky were to ever shut down or become hostile, users could move their data to a new host and still maintain all of their likes, followers, and posts. 
 
-Think of it like your email provider–there are many different companies that provide email hosting services such as Gmail, Outlook, and iCloud. If you ever need or want to, you can download your email archive and contacts and import that data into another email provider. The reason this is possible is because all of these companies chose to build their product on top of the decentralized protocols that emailing technology uses. In that sense, the AT Protocol is sort of like email but for social media.
+Think of it like your email provider — there are many different companies that provide email hosting services such as Gmail, Outlook, and iCloud. If you ever need or want to, you can download your email archive and contacts and import that data into another email provider. 
+
+The reason this is possible is because all of these companies chose to build their product on top of the decentralized protocols that emailing technology uses. In that sense, the AT Protocol is sort of like email but for social media.
 
 ### How Bluesky is different from Twitter
 
-Many people think Bluesky is just a decentralized version of Twitter. And while that's true in some ways, Bluesky has many features that Twitter (now X) never had and likely never will have. Let's walk through each of these features now and then revisit some of them later to discuss how to use them effectively.
+Many people think Bluesky is just a decentralized version of Twitter. And while that's true in some ways, Bluesky has many features that Twitter (now X) never had and likely never will have. Let's walk through each of these features and then revisit some of them later to discuss how to use them effectively.
 
 #### 1. Custom feeds (algorithms)
 
 Perhaps its flagship feature, Bluesky has become famous for how it allows anyone to not only choose which algorithm their feed uses, but also build their own. Gone are the days of being forced to scroll through a non-chronological feed containing posts from random accounts you've never followed. For creators and brands, this means that your primary goal is no longer just "appease the algorithm"… because there isn't just one singular algorithm to please.
 
-Bluesky comes with two optional feeds out of the box: 1) Discover, and 2) Following. Discover is Bluesky's proprietary suggestion algorithm similar to TikTok's "For You" feed. The difference of course is that no one has to use the Discover feed or even have it appear in their app at all… you can disable it completely and rely upon the Following feed, another community-made feed, or a custom feed of your own design.
+Bluesky comes with two optional feeds out of the box: 1) Discover, and 2) Following. 
+
+Discover is Bluesky's proprietary suggestion algorithm similar to TikTok's "For You" feed. The difference of course is that no one has to use the Discover feed or even have it appear in their app at all… you can disable it completely and rely upon the Following feed, another community-made feed, or a custom feed of your own design.
 
 ![A screenshot showing a custom feed called "Fungi Friends" that filters posts about mushrooms](/guides/screenshots/fungi-friends-feed.png)
 
 #### 2. Third-party moderation services
 
-After the AT Protocol launched, there was a lot of talk about the concept of "composable moderation", which basically just means a suite of tools and infrastructure that would let anyone provide moderation services on top of the network. One of the most well known examples of this is a service called Blacksky which provides a space for Black community building. Users can report posts/content to this third-party service and filter content out of their feeds based on it instead of Bluesky's official moderation.
+After the AT Protocol launched, there was a lot of talk about the concept of "composable moderation", which basically just means a suite of tools and infrastructure that would let anyone provide moderation services on top of the network. 
+
+One of the most well known examples of this is a service called [Blacksky](https://bsky.app/profile/blacksky.app) which provides a space for Black community building. Users can report posts/content to this third-party service and filter content out of their feeds based on it instead of Bluesky's official moderation.
 
 ![A screenshot showing Blacksky's moderation labeler interface](/guides/screenshots/blacksky-moderation-labeler.png)
 
@@ -94,17 +112,23 @@ Bluesky also has "moderation lists" that any user can create and subscribe to. O
 
 #### 3. Labelers + content filters
 
-Connected to third-party moderation services are a special tool called "labelers". A labeler… well, it applies labels to things. There are moderation labelers that allow you to hide, warn, or filter posts/accounts based on specific labels (i.e. like the screenshot labeler mentioned earlier), but then there are also vanity labelers that allow users to self-identify with communities, causes, and more by applying a voluntary public label to their own account. For instance, there's a [vanity labeler for Swifties](https://bsky.app/profile/eras.bsky.sh) that lets them add a little "flair" to their profile in the form of their favorite Taylor Swift Era. Custom labelers of all types and sizes can be created by anyone, though the process to do so is still quite technical at this time.
+Connected to third-party moderation services are a special tool called "labelers". What is a labeler? Well, it applies labels to things. 
+
+There are moderation labelers that allow you to hide, warn, or filter posts/accounts based on specific labels (i.e. like the screenshot labeler mentioned earlier), but then there are also vanity labelers that allow users to self-identify with communities, causes, and more by applying a voluntary public label to their own account. 
+
+For instance, there's a [vanity labeler for Swifties](https://bsky.app/profile/eras.bsky.sh) that lets them add a little "flair" to their profile in the form of their favorite Taylor Swift Era. Custom labelers of all types and sizes can be created by anyone, though the process to do so is still quite technical at this time.
 
 ![A screenshot showing the Taylor Swift Eras vanity labeler interface](/guides/screenshots/taylor-swift-eras-labeler.png)
 
 #### 4. Domain names as usernames
 
-Ever been frustrated when joining a new app and learning that your username of choice has already been taken? On Bluesky, this problem is not nearly as significant thanks to the fact that all usernames on the network are actually domain names. When you create a new account, you can get a default username that looks like `name.bsky.social`, but you can (and should) set up your own because brands and creators without default names are sometimes seen as potential impersonators. 
+Ever been frustrated when joining a new app and learning that your username of choice has already been taken? On Bluesky, this problem is not nearly as significant thanks to the fact that all usernames on the network are actually domain names. 
+
+When you create a new account, you can get a default username that looks like `name.bsky.social`, but you can (and should) set up your own because brands and creators without default names are sometimes seen as potential impersonators. 
 
 Using your own domain name is a way to self-verify your account's legitimacy. For instance, NPR (National Public Radio) has the username of @npr.org, which is also its official website. Only the owner of the domain can possibly set it as a Bluesky username, so you know with confidence that the account is official. There are even many government accounts that can be quickly identified by their country's government domain structure (such as .gov in the United States).
 
-You can even set up subdomains as usernames, so if you are a company or part of an organization, you could set up team member accounts such as name.brand.team. Bluesky itself does this for many of its employees—check out the CEO's handle: @jay.bsky.team
+You can also set up subdomains as usernames, so you could set up team member accounts such as name.brand.team. Bluesky itself does this for many of its employees — check out the CEO's handle: @jay.bsky.team
 
 [How to use your domain as your Bluesky handle](https://bsky.social/about/blog/4-28-2023-domain-handle-tutorial) 
 
@@ -112,21 +136,27 @@ You can even set up subdomains as usernames, so if you are a company or part of 
 
 In addition to being able to self-verify your account via your domain name, there is also a unique verification system run by Bluesky that functions similarly to the original "blue check" from Twitter before it became X. While it may look the same on the surface though, there's actually a lot more going on.
 
-Bluesky itself can issue blue check verifications like you would expect, but it also can designate a third-party organization like the New York Times to be considered a "Trusted Verifier", meaning that there are now multiple independent sources for verification. At launch, there are only a handful of "Trusted Verifiers", but Bluesky says they will be increasing this over time.
+Bluesky can issue blue check verifications like you would expect, but it also can designate a third-party organization like the New York Times to be considered a "Trusted Verifier", meaning that there are now multiple independent sources for verification. At launch, there are only a handful of "Trusted Verifiers", but Bluesky says they will be increasing this over time.
 
 ![A screenshot showing Paul Frazee's verified account on Bluesky](/guides/screenshots/paul-verification.png)
 
-Furthermore, the underlying technology that makes this system possible is completely composable, meaning that any user on the network can issue a "verification" record for any other account and theoretically become a "Trusted Verifier" themself. While the odds of this are relatively low in the official Bluesky app, there are already third-party Bluesky client apps like [deer.social](https://deer.social) that allow you to fully customize and set your own list of "Trusted Verifiers". This means that you could have blue check marks appear next to accounts verified by your friends or colleagues rather than from Bluesky or the New York Times. 
+Furthermore, the underlying technology that makes this system possible is completely composable, meaning that any user on the network can issue a "verification" record for any other account and theoretically become a "Trusted Verifier" themself. 
+
+While the odds of this are relatively low in the official Bluesky app, there are already third-party Bluesky client apps like [deer.social](https://deer.social) that allow you to fully customize and set your own list of "Trusted Verifiers". This means that you could have blue check marks appear next to accounts verified by your friends or colleagues rather than from Bluesky or the New York Times. 
 
 #### 6. Free, open API
 
-Back in the day, Twitter used to have a free and relatively open stream of public data that was accessible via an API (Application Programming Interface). But when Elon Musk took over, he quickly shut this API down and started charging exorbitant prices to access the data. If you're unsure of what an API is or why it's significant, just compare the vibrant ecosystem of third-party integrations and applications that exists on Bluesky with what X has today. Bluesky is like a lush beautiful garden filled with lots of diverse plant life, and X is a vacant backlot with some old and dying corporate landscaping. An API is merely a highway that developers and creators can use to retrieve and send data. With Bluesky, that highway is open, free, and lets you explore the world. With X, only the wealthiest can drive on the highway and there are speed traps everywhere.
+Twitter used to have a free and relatively open stream of public data that was accessible via an API (Application Programming Interface), but when Elon Musk took over, he quickly shut this API down and started charging exorbitant prices to access the data. 
+
+If you're unsure of what an API is or why it's significant, just compare the vibrant ecosystem of third-party integrations and applications that exists on Bluesky with what X has today... Bluesky is like a lush beautiful garden filled with lots of diverse plant life, and X is a vacant backlot with some old and dying corporate landscaping. 
+
+An API is merely a highway that developers and creators can use to retrieve and send data. With Bluesky, that highway is open, free, and lets you explore the world. With X, only the wealthiest can drive on the highway and there are speed traps everywhere.
 
 An open and free API means an environment friendly to innovation, network effects, and the public good.
 
 #### 7. Everything is public
 
-Speaking of the public, almost everything you do on Bluesky at the moment is publicly accessible data (even blocks and likes). This won't matter that much to brands, organizations, and creators who explicitly want their content to be public, but it might matter to some of the people in your audience or community. Stay mindful about it, and just know that there are long-term plans to introduce some form of private accounts or content in the future. 
+Speaking of the public, almost everything you do on Bluesky at the moment is publicly accessible data (even blocks and likes!). This won't matter that much to brands, organizations, and creators who explicitly want their content to be public, but it might matter to some of the people in your audience or community. Stay mindful about it, and just know that there are long-term plans to introduce some form of private data or narrow-casting in the future. 
 
 #### 8. In-app media players
 
@@ -140,35 +170,47 @@ Since we're on the subject of sharing links, now's a great time to mention that 
 
 One of the difficult parts of joining a new social network is finding accounts that share your common interests and values. Bluesky tackled this issue by introducing an industry-first that was soon copied by Meta/Instagram: Starter Packs. 
 
-At their core, Starter Packs are hand-curated lists of accounts that anyone can make. Each starter pack even has an invite-link attached to it. By sharing a Starter Pack with someone, they can create a new Bluesky account and follow a bunch of relevant accounts instantly. This feature works especially well for community building, whether that's for a city (Boston!), a fandom (kpop!), or even bicycle riders. If you're a brand, you could set up a Starter Pack that has your entire team in it or trusted industry voices.
+At their core, Starter Packs are hand-curated lists of accounts that anyone can make. Each starter pack even has an invite-link attached to it. By sharing a Starter Pack with someone, they can create a new Bluesky account and follow a bunch of relevant accounts instantly. 
+
+This feature works especially well for community building, whether that's for a city (Boston!), a fandom (kpop!), or even bicycle riders. If you're a brand, you could set up a Starter Pack that has your entire team in it or trusted industry voices.
 
 ![A screenshot showing the Starter Pack interface on Bluesky](/guides/screenshots/starter-pack.png)
 
 #### 11. Advanced preferences
 
-Hidden under the surface of Bluesky are a plethora of user customizations that apply to the "Following" feed (the reverse-chronological feed of just posts from accounts someone follows) and beyond. For instance, you can disable seeing reposts, quote posts, and replies. Within threads, you have the option of ordering the replies however you want: most liked, oldest, newest, prioritize following, hot, or even random (aka "Poster's Roulette"). 
+Hidden under the surface of Bluesky are a plethora of user customizations that apply to the "Following" feed (the reverse-chronological feed of just posts from accounts someone follows) and beyond. For instance, you can disable seeing reposts, quote posts, and replies. 
+
+Within threads, you have the option of ordering the replies however you want: most liked, oldest, newest, prioritize following, hot, or even random (aka "Poster's Roulette"). 
 
 ![A screenshot showing the feed preferences interface on Bluesky](/guides/screenshots/feed-preferences.png)
 
 #### 12. Advanced reply/quote settings
 
-Not only can you turn off replies to your Bluesky posts, but you can also customize reply permissions in extremely granular ways. For instance, you can specify that only users on a custom list can contribute to the conversation or make it so that someone has to be following you in order to reply. Additionally, you can prevent people from quote-posting your content completely. Both of these features are even available to apply retroactively.
+Not only can you turn off replies to your Bluesky posts, but you can also customize reply permissions in extremely granular ways. For instance, you can specify that only users on a custom list can contribute to the conversation or make it so that someone has to be following you in order to reply. 
+
+Additionally, you can prevent people from quote-posting your content completely. Both of these features are even available to apply retroactively.
 
 #### 13. Nuclear block
 
-Bluesky has intentionally tried to cultivate an environment where users have more control over who can interact with them. One of the ways they achieved this is through what is colloquially known as the Nuclear Block. If two people are having a conversation on Bluesky and one blocks the other, the entire conversation thread becomes hidden from view for everyone else. This feature is a bit controversial, having divided the community into two camps: people who love it and people who hate it. There's not much that can be done about it though, so it's good to keep in mind if you ever run into a situation where you see a "blocked" message in a thread and wonder what's going on. It doesn't mean that you've been blocked by anyone.
+Bluesky has intentionally tried to cultivate an environment where users have more control over who can interact with them. One of the ways they achieved this is through what is colloquially known as the Nuclear Block. 
+
+If two people are having a conversation on Bluesky and one blocks the other, the entire conversation thread becomes hidden from view for everyone else. This feature is a bit controversial, having divided the community into two camps: people who love it and people who hate it. There's not much that can be done about it though, so just keep it in mind if you ever see a "blocked" message in a thread and wonder what's going on. It doesn't always mean that you've been blocked by someone.
 
 #### 14. Paragraph breaks in bios
 
-Lastly, it's a small detail, but Bluesky profiles offer flexible bio formatting, making it easy to create a clean, readable description without needing tedious tricks or workarounds.
+Lastly, it's a small detail, but Bluesky profiles offer flexible bio formatting, making it easy to create a clean, readable description without needing tedious tricks or workarounds. There is no dedicated field for links, but you can add as many as the character limit will allow.
 
 ### Audience and Culture
 
-Over the course of Bluesky's two-year history, its culture has shifted as the network has become more populated. When there were only several thousands users, the space reflected the industry it sprang out of, so it was very centered on the United States' technology scene. Eventually there were growth periods that were dominated by other countries such as Japan or Brazil, with the latter case happening due to X temporarily abandoning Brazilian users entirely.
+Over the course of Bluesky's two-year history, its culture has shifted as the network has become more populated. When there were only several thousands users, the space reflected the industry it sprang out of, so it was very centered on the United States' technology scene.
+
+Eventually, there were growth periods that were dominated by other countries such as Japan or Brazil, with the latter case happening due to X temporarily abandoning Brazilian users entirely.
 
 The biggest growth event that the network has experienced so far though was in the days surrounding the 2024 United States presidential election, at which point millions of people created new Bluesky accounts in an effort to migrate off of big tech social networks like Facebook, Instagram, and X.
 
-In the months that followed, many people mistakenly started to assume that Bluesky had effectively become a politically left-leaning platform just for democrats. In reality, the culture of Bluesky is so multi-faceted at this point that it really doesn't make sense to think about it with such a hegemonic lens. For starters, there isn't a singular "Bluesky Culture" anymore. The user base is made up of millions of people from all over the world with an innumerable number of niche interests.
+In the months that followed, many people mistakenly started to assume that Bluesky had effectively become a politically left-leaning platform just for democrats. In reality, the culture of Bluesky is so multi-faceted at this point that it really doesn't make sense to think about it with such a hegemonic lens. 
+
+There isn't a singular "Bluesky Culture" anymore. The user base is made up of millions of people from all over the world with an innumerable number of niche interests.
 
 Start thinking about Bluesky as a diverse system of hundreds (if not thousands) of large to small sub-cultures. Approaching the network with this perspective will better prepare you for all the different types of people you likely will encounter on any given day, and it will help you find the communities you are most interested in.
 
@@ -178,7 +220,7 @@ While it's true that Bluesky is hard to pin-down culturally, there are a variety
 
 #### 1. It's an open, decentralized, interoperable network.
 
-For the past two decades most people have only experienced an online social network that is both centralized and closed. Platforms like Facebook, TikTok, and X became known for trying to keep people on their apps for as long as possible to make money off of advertisements, even if it meant making the user experience worse by pushing invasive algorithms and hiding links to outside websites.
+For the past two decades, most people have only experienced an online social network that is both centralized and closed. Platforms like Facebook, TikTok, and X became known for trying to keep people on their apps for as long as possible to make money from advertisements, even if it meant making the user experience worse by pushing invasive algorithms and hiding links to outside websites.
 
 As the years went on and the user experience continued to degrade, more and more people started to be fed up. A new future began to be conceived of, and experimental versions of alternative social apps started to gain some traction. The properties that defined these platforms were usually one or all of the following:
 
@@ -192,37 +234,45 @@ The network is designed and implemented in such a way that one centralized entit
 
 ##### C. Interoperable
 
-An "interoperable" network means that the data and features that exist in one place can be easily used in many different places. A simple example of this would be multiple different apps that rely on the same user profile data. For instance, you can login to a new app and it could recognize your existing profile data that you made on Bluesky, and it would automatically use that for your profile. 
+An "interoperable" network means that the data and features that exist in one place can be easily used in many different places. A simple example of this would be multiple different apps that rely on the same user profile data. For instance, you would login to a new app, and it could recognize your existing profile data that you made on Bluesky.
 
 #### 2. There aren't any ads… yet.
 
 One of the primary reasons traditional corporations implement user-hostile things like link suppression and intrusive algorithms is to maintain their revenue model: advertising. Their primary incentive is to keep users in their apps for as long as possible at all costs.
 
-With Bluesky, an advertising model is not nearly as feasible or sustainable due to the underlying protocol's design and open nature. If Bluesky began having advertisements in their app, people could easily choose to consume the same content through the "window" of a third-party app that doesn't have ads.
+With Bluesky, a traditional advertising model is not nearly as feasible or sustainable due to the underlying protocol's design and open nature. If Bluesky began having advertisements in their app, people could easily choose to consume the same content through the "window" of a third-party app that doesn't have ads.
 
-In this situation, the primary way to keep people using your app (and even get them to pay for it!) is to offer an unparalleled positive experience with quality features. This framework better aligns the company's incentives to be in step with users' needs. This isn't to say that advertising will never exist within Bluesky, but at the very least it won't manifest in the exact same way as it has in the past.
+In this situation, the primary way to keep people using your app (and even get them to pay for it!) is to offer an unparalleled positive experience with quality features. This framework better aligns the company's incentives to be in step with the users' needs. 
+
+This isn't to say that advertising will never exist within Bluesky, but at the very least it won't manifest in the exact same way as it has in the past.
 
 #### 3. There's more control.
 
-One of the many benefits of an open and interoperable network is that users have greater control over their individual experiences. Bluesky empowers users with a significantly higher degree of agency in comparison to traditional social platforms. This reality also contributes to Bluesky's multicultural environment... for any given user that you meet, you can't assume that they are engaging with the network using the same "lens" that you are.
+One of the many benefits of an open and interoperable network is that users have greater control over their individual experiences. Bluesky empowers users with a significantly higher degree of agency in comparison to traditional social platforms. 
+
+This reality also contributes to Bluesky's multicultural environment... for any given user that you meet, you can't assume that they are engaging with the network using the same "lens" that you are.
 
 #### 4. It's not "big tech".
 
-Given the fact that almost all of the major social media platforms in the United States have decided to align themselves with specific government administrations and policy proposals, even to extreme degrees, many people are uncomfortable spending their time with products made by those companies. Bluesky does not have the same affiliations or baggage, making it an attractive alternative.
+Given the fact that almost all of the major social media platforms in the United States have decided to align themselves with specific government administrations and policy proposals, even to extreme degrees, many people are uncomfortable spending their time with products made by those companies. Bluesky does not have the same affiliations or baggage, thus making it an attractive alternative.
 
 Now that you have a solid understanding of Bluesky, its underlying technology, and its multifaceted community, you're ready to start thinking about how you can practically fit into the equation.
 
 ## Achieving Growth and Engagement
 
-If you're reading this guide, then you're probably not on Bluesky just to have fun and blow off steam. You're likely an organization or a public figure that has a product, service, or cause that you need to promote to achieve your goals. In order to do that, you need to get peoples' attention and sustain their interest in what you have to say. Thus, you need followers and engagement.
+If you're reading this guide, then you're probably not on Bluesky just to have fun and blow off steam. You're likely an organization or a public figure that has a product, service, or cause that you need to promote to achieve your goals. In order to do that, you need to get peoples' attention and sustain their interest in what you have to say. **Thus, you need followers and engagement.**
 
-Attracting followers wasn't easy on traditional social media, so it's not easy on a decentralized network like Bluesky either. Plus, there aren't many ways to do advertising on Bluesky, so you can't reliably use "paid media" to force your way into peoples' attention spans. Instead, you have to provide valuable content that gets spread organically. This guide won't be teaching you how to do that, but it will be showing you how to apply that content creation to the unique context of Bluesky in a way that maximizes its potential. 
+Attracting followers wasn't easy on traditional social media, so it's not easy on a decentralized network like Bluesky either. Plus, there aren't many ways to do advertising on Bluesky, so you can't reliably use "paid media" to force your way into peoples' attention spans.
+
+Instead, you have to provide valuable content that gets spread organically. This guide won't be teaching you how to do that, but it will be showing you how to apply that content creation to the unique context of Bluesky in a way that maximizes its potential.
 
 ### Formatting and packaging your content for Bluesky
 
 #### 1. Use links directly, without any weird hacks
 
-As we've discussed in previous sections, Bluesky does not suppress outbound links to other websites. This means that you don't need to perform the same algorithmic gymnastics just to sneak in a link to your website. Instead of making a main post and then following up with a reply containing the link or pointing to your bio, just put the link in the main post. If you keep using the workarounds from other platforms when you post to Bluesky, many people will see your activity as half-hearted, ignorant, or even cringe. On Bluesky, people like links and don't want to have to go searching for them in weird places.
+As we've discussed in previous sections, Bluesky does not suppress outbound links to other websites. This means that you don't need to perform the same algorithmic gymnastics just to sneak in a link to your website. Instead of making a main post and then following up with a reply containing the link or pointing to your bio, just put the link in the main post. 
+
+If you were to keep using the workarounds that are required on other platforms, many Bluesky users might see your activity as half-hearted, ignorant, or even cringe. On Bluesky, people like links and don't want to have to go searching for them in weird places.
 
 ❌ Don't: 'Great article! (link in bio)' 
 
@@ -230,7 +280,9 @@ As we've discussed in previous sections, Bluesky does not suppress outbound link
 
 #### 2. If you post images, always include alt text
 
-More so than in other places, a significant part of Bluesky's culture cares a lot about web accessibility. By including alt text on your images, you're being inclusive to people with certain disabilities, but you're also making your content more discoverable because alt text is included in search results! For instance, if you post a screenshot of a document or promotional graphic, you should include all of that content as alt text too. If you didn't do this, then your post would not end up in relevant search results where it otherwise could and should. There are even Bluesky users who refuse to share content from other accounts if alt text isn't present.
+More so than in other places, a significant part of Bluesky's culture cares a lot about web accessibility. By including alt text on your images, you're being inclusive to people with certain disabilities, but you're also making your content more discoverable because alt text is included in search results!
+
+For instance, if you post a screenshot of a document or promotional graphic, you should include all of that content as alt text too. If you didn't do this, then your post would not end up in relevant search results where it otherwise could and should. There are even Bluesky users who refuse to share content from other accounts if alt text isn't present.
 
 #### 3. Be conservative and mindful with your hashtag usage
 
@@ -238,7 +290,9 @@ While hashtags are supported on Bluesky and used in many different contexts, inc
 
 #### 4. Consider the variables or conditions of relevant topical feeds
 
-Remember, Bluesky doesn't just have one algorithmic feed. It has a limitless number of customizable user-generated algorithms in addition to its default "Discover" algorithm. Many people disable the default algorithm completely and choose to rely upon more niche or topical feeds instead. For instance, there are community-controlled feeds dedicated to lovers of mushrooms/fungi, web development, and academic research. Each of these feeds has a custom algorithm with different conditions/rules that dictates which posts or content show up in the feed (for instance, this is often a good use-case for hashtags). Consider if there are any popular feeds in your niche that would welcome your contributions. If you do find such feeds, try to see if there is any public documentation available that shows how the feed works, and then use that information appropriately while crafting your related content.
+Remember, Bluesky doesn't just have one algorithmic feed. It has a limitless number of customizable user-generated algorithms in addition to its default "Discover" algorithm. Many people disable the default algorithm completely and choose to rely upon more niche or topical feeds instead. 
+
+For instance, there are community-controlled feeds dedicated to lovers of mushrooms/fungi, web development, and academic research. Each of these feeds has a custom algorithm with different conditions/rules that dictates which posts or content show up in the feed (this is often a good use-case for hashtags). Consider if there are any popular feeds in your niche that would welcome your contributions. If you do find such feeds, try to see if there is any public documentation available that shows how the feed works, and then use that information appropriately while crafting your related content.
 
 Be warned though, if your activity violates the norms or rules of a custom feed, your entire account could get banned from ever appearing in it again. Don't be a bad actor.
 
@@ -256,7 +310,9 @@ While it doesn't make sense to post a YouTube link on Twitter/X anymore because 
 
 A Labeler is a customizable integration that can be used to display helpful information within the Bluesky app. They are used to apply textual and visual labels to either specific accounts or specific posts. These labels are only visible to users who "Subscribe" to the Labeler, meaning users must explicitly opt-in for the tags to appear in the user interface of their app.
 
-While Labelers were originally designed as a "serious" moderation tool, they have now evolved to include even more casual or even silly use cases. For instance, the official Bluesky company released a Superbowl Labeler for the 2025 Superbowl which allowed users to apply a label to their accounts to display which football team they were rooting for. Other Labelers use more advanced technology to automatically analyze and categorize accounts/posts based on publicly available data. 
+While Labelers were originally designed as a "serious" moderation tool, they have now evolved to include even more casual or even silly use cases. For instance, the official Bluesky company released a Super Bowl Labeler for the 2025 Super Bowl which allowed users to apply a label to their accounts to display which football team they were rooting for.
+
+Other Labelers use more advanced technology to automatically analyze and categorize accounts/posts based on publicly available data. 
 
 ![Screenshot of the Bikesky Labeler showing a profile with a "Cyclist" label applied](screenshots/bikesky-labeler.png)
 
@@ -270,7 +326,7 @@ Here is a list of some different Labelers to give you more inspiration and ideas
 * [The Cave of Trophonius](https://bsky.app/profile/oracle.posters.rip)  
 * [Screenshots Labeler](https://bsky.app/profile/xblock.aendra.dev)
 
-Creating your own Labeler is not user-friendly at the moment, but it is possible if you have some coding/development skills. To get you started [check out this Github Repository](https://github.com/aliceisjustplaying/labeler-starter-kit-bsky) that a community member created to serve as a starter kit for creating a Labeler.
+Creating your own Labeler is not user-friendly at the moment though, but it is possible if you have some coding/development skills. To get you started [check out this Github Repository](https://github.com/aliceisjustplaying/labeler-starter-kit-bsky) that a community member created to serve as a starter kit for creating a Labeler.
 
 #### 2. Feeds (Easy/Moderate)
 
@@ -278,7 +334,9 @@ One of the most popular, powerful, and relatively easy things you can do is crea
 
 The internal feed is designed to include only mentions of your brand name, links to your website, or important keywords for monitoring trends. You, your social media manager, or customer support team can use this feed to stay on top of feedback or community questions. Keep in mind though that any feed you create is public and could be followed by any other user.
 
-The public feed is your brand's contribution to the community. It should be a highly valuable feed that displays curated or relevant posts from other accounts that are about or adjacent to your niche. This feed shouldn't be specifically for just the people that are aware of you, but rather it should be for appealing to newcomers first and foremost. By doing this, you're providing a valuable free service to people and getting your brand name out there at the same time. Be tactful in how you promote yourself though using this method, most people are not going to be interested in a feed that is created or managed in a way that comes across as self promo or advertising.
+The public feed is your brand's contribution to the community. It should be a highly valuable feed that displays curated or relevant posts from other accounts that are about or adjacent to your niche. This feed shouldn't be specifically for just the people that are aware of you, but rather it should be for appealing to newcomers first and foremost. 
+
+By doing this, you're providing a valuable free service to people and getting your brand name out there at the same time. Be tactful in how you promote yourself though using this method, most people are not going to be interested in a feed that is created or managed in a way that comes across as self promo or advertising.
 
 ![Screenshot of the Graze.social feed editor interface showing various filtering options](screenshots/graze-editor.jpg)
 
@@ -286,7 +344,9 @@ The public feed is your brand's contribution to the community. It should be a hi
 
 As a reminder, Starter Packs are just curated lists of Bluesky accounts that you're recommending other folks check out or follow. They are helpful for sending to new community members or onboarding people to Bluesky itself. When you send a Starter Pack link to someone, they can easily follow all of the accounts contained within it and create their very own Bluesky account using the pack's special invite link.
 
-When thinking about creating your own Starter Packs, one simple option would be to create a Starter Pack with prominent public-facing members of your organization or team that you want people to also follow. Another idea would be to curate a list of adjacent brands and content creators within your niche. For instance, if you are a fashion designer, then you could put together a list of other prominent designers and clothing labels within your industry. There's a chance your Starter Pack might be well-received and get spread around a lot, thereby earning you some attention for it.
+When thinking about creating your own Starter Packs, one simple option would be to create a Starter Pack with prominent public-facing members of your organization or team that you want people to also follow.
+
+Another idea would be to curate a list of adjacent brands and content creators within your niche. For instance, if you are a fashion designer, then you could put together a list of other prominent designers and clothing labels within your industry. There's a chance your Starter Pack might be well-received and get spread around a lot, thereby earning you some attention for it.
 
 You can even include up to three custom feeds in a Starter Pack, so people can use them to find the feeds you created earlier as well.
 
@@ -294,7 +354,7 @@ You can even include up to three custom feeds in a Starter Pack, so people can u
 
 #### 4. Custom domains / handles (Moderate)
 
-While the primary purpose of domain names as usernames on Bluesky is for self-verification purposes, people have begun using subdomains  for community identification and recognition. A subdomain is when you see a normal domain like example.com but it has an extra part tacked on at the beginning such as extra.example.com, with the "extra" part being the subdomain. This can be powerful when you pair it with a tool like [handles.net](https://handles.net/) which allows you to give custom subdomains to your community members, volunteers, or team members.
+While the primary purpose of domain names as usernames on Bluesky is for self-verification purposes, people have begun using subdomains for community identification and recognition. A subdomain is when you see a normal domain like example.com but it has an extra part tacked on at the beginning such as extra.example.com, with the "extra" part being the subdomain. This can be powerful when you pair it with a tool like [handles.net](https://handles.net/) which allows you to give custom subdomains to your community members, volunteers, or team members.
 
 For instance, Taylor Swift fans can get their very own free username that uses the swifties.social domain, making it easy for other Swifties to identify them as part of the group. So your username could be @hannah.swifties.social. The Bluesky team itself uses this for some of their team members, such as @jay.bsky.team. If you only want to issue a handful of subdomain handles, then you can do this fairly easy within your domain manager's DNS settings, but if you intend to issue a large number of usernames then it's best to get your IT team to assist or use a service like [handles.net](https://handles.net/).
 
@@ -375,10 +435,10 @@ The internet is a wonderful place, but it can sometimes be difficult to navigate
 
 ### Sensitive Topics
 
-In additions to all of the usual touchy subjects in social settings such as politics and religion, Bluesky in particular has several vocal sub communities that are critical or outright opposed to the following issues:
+In addition to all of the usual touchy subjects in social settings such as politics and religion, Bluesky in particular has several vocal sub communities that are critical or outright opposed to the following issues:
 
 * Artificial Intelligence (especially Image Generation)  
-* Cryptocurrency and Blockchain  
+* Cryptocurrency and Blockchain 
 * Big Tech (Facebook, Google, etc)
 
 If your brand provides products or content that cover any of these topics, keep in mind that you could encounter some pushback or even aggression in the replies to your posts at times. You can reduce the degree to which this becomes an issue by communicating clearly and being prepared with some mitigation strategies.
@@ -389,7 +449,7 @@ If your brand provides products or content that cover any of these topics, keep 
 
 One approach to risk mitigation is through effective use of Bluesky's safety features, as well as a few third-party tools. Let's briefly take a look at each technique so that you'll understand how they work.
 
-When using these features it is important to remember that the way in which you use them can sometimes make matters worse if you don't know what you're doing. Also, I don't reference the "mute" feature here because I don't typically recommend brands mute people because you will no longer have visibility into what they are potentially saying under your posts or about you in other places. If you are an individual, personality, or content creator this advice probably doesn't apply.
+When using these features, it is important to remember that the way in which you use them can sometimes make matters worse if you don't know what you're doing. Also, I don't reference the "mute" feature here because I don't typically recommend brands mute people because you will no longer have visibility into what they are potentially saying under your posts or about you in other places. If you are an individual, personality, or content creator this advice probably doesn't apply.
 
 ##### Post Interaction Settings (Thread gates)
 
@@ -405,9 +465,9 @@ And if you find yourself in an extreme scenario, there's even [a third-party too
 
 For organization or company accounts, it's typically best to avoid blocking people because it could make your brand be perceived negatively, so proceed with caution.
 
-If you're a content creator, influencer, or personality, then utilizing the block feature is much more acceptable and likely not to create any PR issues. Your mental health and safety matters a lot, so protect yourself as is needed.
+If you're a content creator, influencer, or personality, then utilizing the block feature is much more acceptable and likely not to create any public relation issues. Your mental health and safety matters a lot, so protect yourself as needed.
 
-That being said, you should know that your blocks and blocklists are public data, so anyone can use a tool like [Clearsky](https://clearsky.app/) to see who you're trying to keep away.
+All this being said, you should know that your blocks and blocklists are public data, so anyone can use a tool like [Clearsky](https://clearsky.app/) to see who you're trying to keep away.
 
 ##### Hide replies for everyone
 
@@ -457,7 +517,7 @@ Try to ignore negative posts if they are coming from an audience that isn't your
 
 #### Introspect
 
-When you are going to make a post about a topic that is sensitive, think carefully about how you word what you say and if it's necessary. Actively try to see your own words in the worst possible light because this is how some people will be perceiving them.
+When you go to make a post about a topic that might be sensitive, think carefully about how you word what you say. Actively try to see your own words in the worst possible light because this is how some people will be perceiving them.
 
 ### Community guidelines
 
@@ -467,7 +527,9 @@ Lastly, be aware of Bluesky's rules and make sure you don't violate them.
 
 ## Next Steps
 
-While Bluesky has only been on the social media scene for a tiny fraction of the industry's history, it has already made significant strides towards creating a more consumer-friendly platform and foundation upon which a healthier system could emerge. Establishing yourself as a brand or creator early in the journey positions you for the potential benefits that could come if the AT Protocol succeeds in its mission.
+While Bluesky has only been on the social media scene for a tiny fraction of the industry's history, it has already made significant strides towards creating a more consumer-friendly platform and foundation upon which a healthier system could emerge. 
+
+Establishing yourself as a brand or creator early in the journey positions you for the potential benefits that could come if the AT Protocol succeeds in its mission.
 
 With that being said, you should likely still maintain some sort of a presence on other networks in the meantime. Bluesky is still relatively small in comparison to legacy platforms like LinkedIn, Facebook, and Instagram, so it probably can't meet all your communication needs just yet. It can be a viable alternative to Twitter/X though if you prefer to avoid that place completely.
 
