@@ -1,0 +1,13 @@
+{
+  "name": "atpotato-website",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "serve .",
+    "build": "cp -r . .next/",
+    "start": "serve ."
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+} 

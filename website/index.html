@@ -22,14 +22,16 @@
     <meta property="og:image" content="/og-image.jpg">
     <script>
         window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-      </script>
-      <script defer src="/_vercel/insights/script.js"></script>
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+    <script defer src="theme.js"></script>
+    <script defer src="logo-hover.js"></script>
 </head>
 <body>
     <div class="container">
         <section class="profile">
             <div class="logo-container">
-                <img src="/atpotato-logo.png" alt="atpotato logo" class="logo">
+                <img src="/atpotato-normal.png" alt="atpotato logo" class="logo">
             </div>
             <h1>atpotato</h1>
             <p class="subtitle">https://atpota.to</p>
@@ -43,11 +45,17 @@
         </section>
         <section class="projects">
             <div class="project-list">
-                <a href="https://cred.blue" class="project-link" target="_blank">cred.blue 🍥</a>
-                <a href="https://flushes.app" class="project-link" target="_blank">flushes 🧻</a>
+                <a href="/guides/bluesky-for-brands" class="project-link">How to use Bluesky to grow your brand</a>
+                <a href="https://cred.blue" class="project-link" target="_blank">cred.blue</a>
+                <a href="https://flushes.app" class="project-link" target="_blank">flushes.app</a>
                 <p class="coming-soon">...more coming soon</p>
             </div>
         </section>
     </div>
+
+    <div class="button-backdrop"></div>
+    <a href="/" class="home-button">
+        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
+    </a>
 </body>
 </html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to use Bluesky to grow your brand - atpotato</title>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="guide-styles.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.png" type="image/png">
+    
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="How to use Bluesky to grow your brand - atpotato">
+    <meta name="description" content="A comprehensive guide for brands, organizations, and creators looking to establish and grow their presence on Bluesky.">
+    
+    <!-- Open Graph -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://atpota.to/guides/bluesky-for-brands">
+    <meta property="og:title" content="How to use Bluesky to grow your brand - atpotato">
+    <meta property="og:description" content="A comprehensive guide for brands, organizations, and creators looking to establish and grow their presence on Bluesky.">
+    <meta property="og:image" content="/og-image.jpg">
+
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+    <script defer src="../theme.js"></script>
+    <script defer src="../logo-hover.js"></script>
+</head>
+<body>
+    <div class="guide-container">
+        <main class="guide-content">
+            <header class="guide-header">
+                <h1>How to use Bluesky to grow your brand</h1>
+                <h2>A comprehensive guide for companies, communities, and creators</h2>
+                <div class="guide-meta">
+                    <span class="reading-time">📚 calculating...</span>
+                    <span class="meta-separator">·</span>
+                    <span class="guide-author">written by <a href="https://bsky.app/profile/dame.is" target="_blank">@dame.is</a></span>
+                </div>
+                <p class="support-thanks"><em>Thanks to Protocol Labs for their support in helping make this guide possible.</em></p>
+            </header>
+
+            <div id="markdown-content">
+                <!-- Markdown content will be inserted here -->
+            </div>
+
+            <footer class="footer">
+                <p>Written by <a href="https://bsky.app/profile/dame.is">Dame</a></p>
+                <p>© 2024 atpotato. All rights reserved.</p>
+            </footer>
+        </main>
+        <!-- Table of contents will be inserted here by JavaScript -->
+    </div>
+
+    <div class="button-backdrop"></div>
+    <a href="/" class="home-button">
+        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
+    </a>
+
+    <!-- Markdown processing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="guide-components.js"></script>
+    <script>
+        // Configure marked options
+        marked.setOptions({
+            headerIds: true,
+            gfm: true
+        });
+
+        // Fetch and render markdown
+        fetch('how-to-use-bluesky-to-grow-your-brand.md')
+            .then(response => response.text())
+            .then(markdown => {
+                document.getElementById('markdown-content').innerHTML = marked.parse(markdown);
+            });
+    </script>
+</body>
+</html> 
