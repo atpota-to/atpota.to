@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "serve .",
-    "build": "cp -r . .next/",
-    "start": "serve ."
+    "build": "mkdir -p dist && cp -r index.html styles.css theme.js logo-hover.js *.png *.jpg *.JPG guides favicon.png dist/",
+    "start": "serve dist"
   },
   "devDependencies": {
     "serve": "^14.2.1"
