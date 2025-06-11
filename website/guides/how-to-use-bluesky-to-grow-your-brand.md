@@ -8,7 +8,7 @@ All it takes are a few small tweaks. You can eventually choose to dive deeper an
 
 But first, why should you listen to me about this? 
 
-Well, I've been on Bluesky since basically the beginning… I was account #1,216. I also set up one of the first brand accounts there, back when that wasn't something anyone thought was worth doing. 
+Well, I've been on Bluesky since basically the beginning… I was account #1,216. I also set up one of the first brand accounts, back when that wasn't something anyone thought was worth doing. 
 
 My background is in social media and community growth, but nowadays I create resources that help people have a more enjoyable experience online. My hope is that I can use all the hours I've invested on Bluesky to make it more accessible to everyone else, including brands and communities that want to connect with their audiences there.
 
