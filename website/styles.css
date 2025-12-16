@@ -124,23 +124,17 @@ h2 {
     background: var(--surface-color);
     color: var(--text-color);
     text-decoration: none;
-    border-radius: 20px;
     border: 1px solid var(--border-color);
-    transition: all 0.2s ease;
     font-family: "eigerdals", sans-serif;
     font-size: 0.9rem;
     font-weight: 700;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
 }
 
 .button:hover {
     background: var(--border-color);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* Projects Section */
@@ -196,16 +190,12 @@ h2 {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
     z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
     font-size: 1.5rem;
 }
 
 .theme-toggle:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: var(--border-color);
 }
 
 /* Home Button */
@@ -221,22 +211,17 @@ h2 {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
     z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
 }
 
 .home-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: var(--border-color);
 }
 
 .home-logo {
     width: 2.5rem;
     height: 2.5rem;
     object-fit: contain;
-    transition: all 0.2s ease;
 }
 
 /* Responsive Adjustments */
