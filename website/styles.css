@@ -2,7 +2,9 @@
 :root {
     /* Light Theme */
     --text-color: #2a2a2a;
-    --highlight-color: #00A6ED;
+    --highlight-color: #39B54A;
+    --h1-color: #725B36;
+    --h2-color: #A58650;
     --secondary-color: #666666;
     --background-color: rgb(255, 255, 255);
     --surface-color: rgba(255, 255, 255, 0.8);
@@ -18,7 +20,9 @@
 /* Dark theme */
 [data-theme="dark"] {
     --text-color: #ffffff;
-    --highlight-color: #00A6ED;
+    --highlight-color: #39B54A;
+    --h1-color: #A58650;
+    --h2-color: #E3CE90;
     --secondary-color: #999999;
     --background-color: rgba(18, 18, 18, 0.95);
     --surface-color: rgba(30, 30, 30, 0.8);
@@ -90,12 +94,12 @@ h1 {
     margin: 10px 0;
     font-weight: 900;
     font-style: normal;
-    color: var(--text-color);
+    color: var(--h1-color);
 }
 
 h2 {
     font-size: 1.5rem;
-    color: var(--highlight-color);
+    color: var(--h2-color);
     margin-bottom: 20px;
     font-weight: 700;
     font-style: normal;
