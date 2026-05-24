@@ -3,7 +3,6 @@ import path from "node:path";
 import { marked } from "marked";
 import type { Metadata } from "next";
 import { HomeButton } from "@/components/HomeButton";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { GuideEnhancements } from "./GuideEnhancements";
 import "./guide-styles.css";
 
@@ -75,7 +74,6 @@ export default async function GuidePage() {
       <div className="button-backdrop" />
       <GuideEnhancements />
       <HomeButton />
-      <ThemeToggle />
     </>
   );
 }

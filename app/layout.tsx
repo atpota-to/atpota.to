@@ -30,12 +30,6 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&display=swap"
           rel="stylesheet"
         />
-        <script
-          // Apply theme before paint to avoid flash
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
-          }}
-        />
       </head>
       <body>{children}</body>
     </html>

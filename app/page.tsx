@@ -1,7 +1,5 @@
 import { ProjectSticker } from "@/components/ProjectSticker";
 import { Mascot } from "@/components/Mascot";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { HomeButton } from "@/components/HomeButton";
 import { KonamiConfetti } from "@/components/KonamiConfetti";
 import { LiveTicker } from "@/components/LiveTicker";
 import { projects } from "@/lib/projects";
@@ -167,9 +165,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      <ThemeToggle />
-      <HomeButton />
     </main>
   );
 }
