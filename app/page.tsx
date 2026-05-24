@@ -33,9 +33,8 @@ export default function HomePage() {
 
           {/* Wordmark + tagline */}
           <div className="md:col-span-7 order-2 md:order-1 relative">
-            <h1 className="wordmark text-[20vw] md:text-[10.5rem] leading-[0.85] text-[var(--brown)]">
-              <span style={{ display: "inline-block", transform: "rotate(-2deg)" }}>at</span>
-              <span style={{ display: "inline-block" }}>potato</span>
+            <h1 className="wordmark text-[18vw] md:text-[clamp(4rem,9.5vw,9rem)] leading-[0.9] text-[var(--brown)] whitespace-nowrap">
+              atpotato
             </h1>
 
             <p className="hand text-3xl md:text-4xl mt-8 max-w-2xl text-[var(--ink-soft)] leading-tight">
