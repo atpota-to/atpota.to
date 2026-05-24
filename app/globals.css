@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f1e6;
+  --bg-elev: #fffaf0;
+  --ink: #2a2a2a;
+  --ink-soft: #5a5a5a;
+  --brown: #725b36;
+  --tan: #a58650;
+  --sprout: #39b54a;
+  --blush: #f2b5a8;
+  --sky: #7cc4f5;
+  --sticker-edge: #ffffff;
+  --sticker-shadow: 0 6px 0 rgba(0, 0, 0, 0.08), 0 18px 28px -8px rgba(40, 30, 10, 0.22);
+
+  /* Legacy tokens (used by the guide route) */
+  --text-color: var(--ink);
+  --highlight-color: var(--sprout);
+  --h1-color: var(--brown);
+  --h2-color: var(--tan);
+  --secondary-color: var(--ink-soft);
+  --background-color: var(--bg);
+  --surface-color: var(--bg-elev);
+  --border-color: rgba(40, 30, 10, 0.12);
+  --section-border-color: rgba(40, 30, 10, 0.16);
+  --toc-background: var(--bg-elev);
+  --code-background: rgba(40, 30, 10, 0.06);
+  --progress-background: rgba(40, 30, 10, 0.12);
+  --progress-fill: var(--sprout);
+  --overlay-background: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] {
+  --bg: #141210;
+  --bg-elev: #1f1c18;
+  --ink: #f2ece0;
+  --ink-soft: #aea59a;
+  --brown: #c4a373;
+  --tan: #e3ce90;
+  --sprout: #4dd163;
+  --blush: #ffb5a8;
+  --sky: #9cd4ff;
+  --sticker-edge: #f7f1e6;
+  --sticker-shadow: 0 6px 0 rgba(0, 0, 0, 0.45), 0 18px 28px -8px rgba(0, 0, 0, 0.6);
+
+  /* Legacy tokens (used by the guide route) */
+  --border-color: rgba(255, 240, 220, 0.12);
+  --section-border-color: rgba(255, 240, 220, 0.18);
+  --code-background: rgba(255, 240, 220, 0.06);
+  --progress-background: rgba(255, 240, 220, 0.12);
+  --overlay-background: rgba(0, 0, 0, 0.7);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-brown: var(--brown);
+  --color-tan: var(--tan);
+  --color-sprout: var(--sprout);
+  --color-blush: var(--blush);
+  --color-sky: var(--sky);
+  --font-display: "eigerdals", ui-sans-serif, system-ui, sans-serif;
+  --font-hand: "Caveat", "Comic Sans MS", cursive;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "eigerdals", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+}
+
+/* Kiss-cut sticker treatment.
+   Use stacked drop-shadows to fake a chunky outline that follows alpha edges of the underlying image. */
+.sticker-img {
+  filter:
+    drop-shadow(2px 0 0 var(--sticker-edge))
+    drop-shadow(-2px 0 0 var(--sticker-edge))
+    drop-shadow(0 2px 0 var(--sticker-edge))
+    drop-shadow(0 -2px 0 var(--sticker-edge))
+    drop-shadow(2px 2px 0 var(--sticker-edge))
+    drop-shadow(-2px -2px 0 var(--sticker-edge))
+    drop-shadow(2px -2px 0 var(--sticker-edge))
+    drop-shadow(-2px 2px 0 var(--sticker-edge))
+    drop-shadow(0 8px 16px rgba(40, 30, 10, 0.28));
+}
+
+.sticker-img-thick {
+  filter:
+    drop-shadow(4px 0 0 var(--sticker-edge))
+    drop-shadow(-4px 0 0 var(--sticker-edge))
+    drop-shadow(0 4px 0 var(--sticker-edge))
+    drop-shadow(0 -4px 0 var(--sticker-edge))
+    drop-shadow(3px 3px 0 var(--sticker-edge))
+    drop-shadow(-3px -3px 0 var(--sticker-edge))
+    drop-shadow(3px -3px 0 var(--sticker-edge))
+    drop-shadow(-3px 3px 0 var(--sticker-edge))
+    drop-shadow(0 12px 22px rgba(40, 30, 10, 0.3));
+}
+
+/* Sticker card (paper-style) */
+.sticker-card {
+  background: var(--sticker-edge);
+  border-radius: 18px;
+  box-shadow: var(--sticker-shadow);
+  position: relative;
+}
+
+.sticker-card::after {
+  /* subtle inner edge to suggest die-cut */
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 14px;
+  border: 1px dashed rgba(0, 0, 0, 0.04);
+  pointer-events: none;
+}
+
+/* Marquee */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 60s linear infinite;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Floating */
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(var(--mascot-tilt, 0deg)); }
+  50% { transform: translateY(-10px) rotate(var(--mascot-tilt, 0deg)); }
+}
+
+.mascot-float {
+  animation: float 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .mascot-float {
+    animation: none !important;
+  }
+}
+
+/* Wordmark display */
+.wordmark {
+  font-family: "eigerdals", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.85;
+}
+
+.hand {
+  font-family: "Caveat", cursive;
+  font-weight: 600;
+}
+
+/* Confetti potato */
+@keyframes confetti-fall {
+  0% { transform: translate(0, -100vh) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx, 0), 110vh) rotate(720deg); opacity: 0; }
+}
+
+.confetti-potato {
+  position: fixed;
+  top: 0;
+  width: 36px;
+  height: 36px;
+  pointer-events: none;
+  animation: confetti-fall var(--dur, 3s) cubic-bezier(0.25, 0.8, 0.5, 1) forwards;
+  z-index: 9999;
+}
