@@ -25,9 +25,9 @@ export default function HomePage() {
 
       {/* ===== HERO ===== */}
       <section className="relative min-h-[100svh] px-6 md:px-12 pt-16 pb-24 flex items-center">
-        <div className="max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-4 items-center">
+        <div className="max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-x-20 md:gap-y-4 items-center">
           {/* Mascot */}
-          <div className="md:col-span-5 flex justify-center md:justify-start order-1 md:order-2">
+          <div className="md:col-span-5 flex justify-center md:justify-end md:pl-8 order-1 md:order-2">
             <Mascot size={400} tilt={-6} follow float />
           </div>
 
@@ -49,12 +49,14 @@ export default function HomePage() {
                   href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="sticker-card px-5 py-3 font-bold text-lg inline-block"
-                  style={{
-                    background: s.color,
-                    color: s.ink,
-                    transform: `rotate(${i % 2 === 0 ? -2 : 2}deg)`,
-                  }}
+                  className="sticker-card sticker-btn px-5 py-3 font-bold text-lg"
+                  style={
+                    {
+                      background: s.color,
+                      color: s.ink,
+                      ["--tilt" as string]: `${i % 2 === 0 ? -2 : 2}deg`,
+                    } as React.CSSProperties
+                  }
                 >
                   {s.label}
                 </a>
@@ -135,8 +137,14 @@ export default function HomePage() {
             <div className="mt-10 flex flex-wrap gap-4">
               <a
                 href="/guides/bluesky-for-brands"
-                className="sticker-card px-6 py-4 font-bold text-lg inline-block"
-                style={{ background: "var(--sprout)", color: "var(--ink)", transform: "rotate(-1.5deg)" }}
+                className="sticker-card sticker-btn px-6 py-4 font-bold text-lg"
+                style={
+                  {
+                    background: "var(--sprout)",
+                    color: "var(--ink)",
+                    ["--tilt" as string]: "-1.5deg",
+                  } as React.CSSProperties
+                }
               >
                 📘 our brand guide
               </a>

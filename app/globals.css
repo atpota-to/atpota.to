@@ -131,6 +131,43 @@ a {
   pointer-events: none;
 }
 
+/* Hoverable sticker button — uses --tilt for resting rotation so hover can
+   compose translate/scale on top without clobbering the inline style. */
+.sticker-btn {
+  --tilt: 0deg;
+  display: inline-block;
+  transform: rotate(var(--tilt));
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.4, 0.64, 1),
+    box-shadow 220ms ease-out,
+    filter 220ms ease-out;
+  will-change: transform;
+}
+
+.sticker-btn:hover {
+  transform: rotate(calc(var(--tilt) * 0.25)) translateY(-4px) scale(1.06);
+  box-shadow:
+    0 10px 0 rgba(0, 0, 0, 0.1),
+    0 24px 36px -10px rgba(40, 30, 10, 0.32);
+  filter: brightness(1.04);
+}
+
+.sticker-btn:active {
+  transform: rotate(var(--tilt)) translateY(-1px) scale(1.02);
+  transition-duration: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sticker-btn,
+  .sticker-btn:hover,
+  .sticker-btn:active {
+    transition: none;
+  }
+  .sticker-btn:hover {
+    transform: rotate(var(--tilt));
+  }
+}
+
 /* Marquee */
 @keyframes marquee {
   from { transform: translateX(0); }
