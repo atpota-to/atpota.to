@@ -2,15 +2,15 @@
 
 :root {
   --bg: #f7f1e6;
-  --bg-elev: #fffaf0;
-  --ink: #2a2a2a;
-  --ink-soft: #5a5a5a;
+  --bg-elev: #efe6d3;
+  --ink: #2a2118;
+  --ink-soft: #6b5a42;
   --brown: #725b36;
   --tan: #a58650;
+  --cream: #e3d4a5;
   --sprout: #39b54a;
-  --blush: #f2b5a8;
-  --sky: #7cc4f5;
-  --sticker-edge: #ffffff;
+  --moss: #4f7a3a;
+  --sticker-edge: #fffaf0;
   --sticker-shadow: 0 6px 0 rgba(0, 0, 0, 0.08), 0 18px 28px -8px rgba(40, 30, 10, 0.22);
 
   /* Legacy tokens (used by the guide route) */
@@ -31,15 +31,15 @@
 }
 
 [data-theme="dark"] {
-  --bg: #141210;
-  --bg-elev: #1f1c18;
+  --bg: #1a1610;
+  --bg-elev: #2a2218;
   --ink: #f2ece0;
-  --ink-soft: #aea59a;
+  --ink-soft: #b5a584;
   --brown: #c4a373;
-  --tan: #e3ce90;
-  --sprout: #4dd163;
-  --blush: #ffb5a8;
-  --sky: #9cd4ff;
+  --tan: #d4b478;
+  --cream: #6b5a3a;
+  --sprout: #5cd16f;
+  --moss: #7ba85a;
   --sticker-edge: #f7f1e6;
   --sticker-shadow: 0 6px 0 rgba(0, 0, 0, 0.45), 0 18px 28px -8px rgba(0, 0, 0, 0.6);
 

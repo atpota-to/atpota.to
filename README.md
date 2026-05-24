@@ -2,7 +2,7 @@
 
 [https://atpota.to](https://atpota.to)
 
-a tiny studio making fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.
+a super serious legal entity responsible for weird and creative social software for the Atmosphere.
 
 [bluesky](https://bsky.app/profile/atpota.to) · [tangled](https://tangled.sh/@atpota.to) · [github](https://github.com/atpota-to)
 
@@ -11,6 +11,7 @@ a tiny studio making fun apps, helpful tools, and approachable content for the a
 - [aturi.to](https://aturi.to)
 - [anisota.net](https://anisota.net)
 - [flushes.app](https://flushes.app)
+- [cred.blue](https://cred.blue)
 - ...more sprouting soon
 
 ## dev

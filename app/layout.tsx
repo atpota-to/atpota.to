@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "atpotato — a tiny studio for the atproto-verse",
+  title: "atpotato — a super serious studio for weird social software",
   description:
-    "atpotato is a little studio making fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.",
+    "atpotato is a super serious legal entity responsible for weird and creative social software for the Atmosphere.",
   metadataBase: new URL("https://atpota.to"),
   openGraph: {
     title: "atpotato",
     description:
-      "a tiny studio making fun apps and helpful tools for the atproto-verse",
+      "a super serious legal entity responsible for weird and creative social software",
     url: "https://atpota.to",
     images: ["/og-image.jpg"],
     type: "website",

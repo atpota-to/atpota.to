@@ -3,11 +3,21 @@
 import { motion } from "framer-motion";
 import type { Project, ProjectColor } from "@/lib/projects";
 
-const accentVar: Record<ProjectColor, string> = {
-  blush: "var(--blush)",
-  sky: "var(--sky)",
+const accentBg: Record<ProjectColor, string> = {
   sprout: "var(--sprout)",
+  moss: "var(--moss)",
   tan: "var(--tan)",
+  cream: "var(--cream)",
+  brown: "var(--brown)",
+};
+
+// Dark backgrounds (moss, brown) get cream ink; others get deep ink.
+const accentInk: Record<ProjectColor, string> = {
+  sprout: "var(--ink)",
+  moss: "var(--bg)",
+  tan: "var(--ink)",
+  cream: "var(--ink)",
+  brown: "var(--bg)",
 };
 
 type Props = {
@@ -19,36 +29,31 @@ type Props = {
 export function ProjectSticker({ project, rotation = 0, size = "md" }: Props) {
   const sizeClass =
     size === "lg"
-      ? "p-8 min-h-[220px]"
+      ? "p-8 min-h-[260px]"
       : size === "sm"
-      ? "p-5 min-h-[150px]"
-      : "p-6 min-h-[180px]";
+      ? "p-6 min-h-[170px]"
+      : "p-7 min-h-[210px]";
 
   const titleSize =
-    size === "lg" ? "text-5xl" : size === "sm" ? "text-3xl" : "text-4xl";
+    size === "lg" ? "text-5xl md:text-6xl" : size === "sm" ? "text-3xl" : "text-4xl";
+
+  const ink = accentInk[project.color];
 
   const Inner = (
     <div
-      className={`sticker-card ${sizeClass} flex flex-col justify-between gap-3`}
-      style={{ background: accentVar[project.color] }}
+      className={`sticker-card ${sizeClass} flex flex-col justify-between gap-4`}
+      style={{ background: accentBg[project.color], color: ink }}
     >
       <div>
-        <h3
-          className={`wordmark ${titleSize} text-[var(--ink)]`}
-          style={{
-            color: "var(--ink)",
-            textShadow:
-              "2px 2px 0 var(--sticker-edge), -2px -2px 0 var(--sticker-edge), 2px -2px 0 var(--sticker-edge), -2px 2px 0 var(--sticker-edge), 2px 0 0 var(--sticker-edge), -2px 0 0 var(--sticker-edge), 0 2px 0 var(--sticker-edge), 0 -2px 0 var(--sticker-edge)",
-          }}
-        >
+        <h3 className={`wordmark ${titleSize}`} style={{ color: ink }}>
           {project.name}
         </h3>
-        <p className="hand text-2xl mt-2 text-[var(--ink)] opacity-80">
+        <p className="hand text-2xl mt-3 leading-snug opacity-90" style={{ color: ink }}>
           {project.tagline}
         </p>
       </div>
       {project.url && (
-        <div className="self-end text-xl font-bold text-[var(--ink)]">
+        <div className="self-end text-xl font-bold tracking-tight" style={{ color: ink }}>
           visit →
         </div>
       )}
