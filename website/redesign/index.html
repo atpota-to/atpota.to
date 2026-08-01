@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Redesign directions — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --bg:#faf7f0; --card:#fff; --ink:#241f18; --muted:#6d6357; --line:#e6ddc9;
+}
+[data-theme="dark"]{--bg:#131110; --card:#1e1a16; --ink:#f2ece1; --muted:#a1978a; --line:#2f2a23; --brown:#c9a86a}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif; font-size:17px; line-height:1.55}
+a{color:inherit}
+.wrap{max-width:900px; margin:0 auto; padding:44px 22px 90px}
+.head{display:flex; align-items:center; gap:12px; margin-bottom:34px}
+.head img{width:40px; height:40px; object-fit:contain}
+.head .sp{flex:1}
+.tt{border:1px solid var(--line); background:var(--card); border-radius:999px; padding:7px 14px;
+  font-family:inherit; font-weight:700; font-size:.85rem; cursor:pointer; color:var(--muted)}
+h1{font-size:clamp(2rem,5vw,2.9rem); font-weight:900; letter-spacing:-.035em; margin:0 0 10px; color:var(--brown)}
+.lede{color:var(--muted); max-width:62ch; margin:0 0 8px}
+.note{color:var(--muted); font-size:.9rem; max-width:62ch; margin:0 0 36px}
+.list{display:flex; flex-direction:column; gap:16px}
+.item{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px;
+  display:grid; grid-template-columns:64px 1fr; gap:20px; text-decoration:none;
+  transition:transform .16s ease, border-color .16s ease}
+.item:hover{transform:translateY(-3px); border-color:var(--accent)}
+.n{font-size:1.6rem; font-weight:900; color:var(--accent); letter-spacing:-.03em; line-height:1.1}
+.item h2{margin:0 0 6px; font-size:1.35rem; font-weight:900; letter-spacing:-.025em}
+.item p{margin:0 0 12px; color:var(--muted); font-size:.96rem}
+.tags{display:flex; gap:6px; flex-wrap:wrap}
+.tag{font-size:.7rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+  border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:var(--muted)}
+.tag.best{color:var(--green-deep); border-color:rgba(57,181,74,.35); background:rgba(57,181,74,.1)}
+[data-theme="dark"] .tag.best{color:var(--green)}
+.go{display:inline-block; margin-top:12px; font-weight:900; font-size:.88rem; color:var(--accent)}
+.foot{margin-top:40px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem}
+@media(max-width:600px){.item{grid-template-columns:1fr; gap:8px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <img src="/atpotato-normal.png" alt="">
+    <strong>atpotato</strong>
+    <span class="sp"></span>
+    <button class="tt" id="tt">theme</button>
+  </div>
+
+  <h1>Five redesign directions</h1>
+  <p class="lede">Working prototypes of the atpota.to homepage, each one a different answer to the same
+    brief: show off the apps under the brand umbrella instead of listing them as links.</p>
+  <p class="note">All five use the real mascot, the real brand palette, and real copy for cred.blue,
+    anisota, aturi.to, flushes and the guides. Per-app accent colours are placeholders — swap them for
+    each app's actual brand colour. Every page has a working light/dark toggle.</p>
+
+  <div class="list">
+
+    <a class="item" style="--accent:#39B54A" href="01-produce-stand">
+      <div class="n">01</div>
+      <div>
+        <h2>Produce Stand</h2>
+        <p>Warm indie-studio layout. Sticky nav, mascot hero, then a card grid where cred.blue and
+          anisota get double-width feature cards. Reads instantly, scales to a dozen apps without redesign.</p>
+        <div class="tags"><span class="tag best">safest bet</span><span class="tag">card grid</span><span class="tag">low risk</span></div>
+        <span class="go">Open direction 01 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#7e8874" href="02-protocol-index">
+      <div class="n">02</div>
+      <div>
+        <h2>Protocol Index</h2>
+        <p>Dark-first, monospace, dense. The homepage as a directory listing: numbered rows, status dots,
+          lexicon metadata. Talks directly to developers and heavy atproto users.</p>
+        <div class="tags"><span class="tag">developer-facing</span><span class="tag">very fast</span><span class="tag">least playful</span></div>
+        <span class="go">Open direction 02 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#725B36" href="03-root-system">
+      <div class="n">03</div>
+      <div>
+        <h2>Root System</h2>
+        <p>The potato metaphor, taken literally. Sky above the fold, then you dig into the soil where each
+          app hangs off an animated taproot. The most memorable, and the most work to maintain.</p>
+        <div class="tags"><span class="tag">highest personality</span><span class="tag">illustrated</span><span class="tag">scroll animation</span></div>
+        <span class="go">Open direction 03 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#181510" href="04-editorial">
+      <div class="n">04</div>
+      <div>
+        <h2>Editorial</h2>
+        <p>Studio-portfolio energy. Enormous type, hairline rules, one full-width band per app with a
+          screenshot slot and a metadata list. Bands invert to black on hover.</p>
+        <div class="tags"><span class="tag">most premium</span><span class="tag">needs screenshots</span><span class="tag">5–8 apps max</span></div>
+        <span class="go">Open direction 04 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#A58650" href="05-bento">
+      <div class="n">05</div>
+      <div>
+        <h2>Sticker Sheet</h2>
+        <p>Bento grid of tiles that tilt when you touch them, including a poke-the-potato tile that cycles
+          the mascot's expressions. Playful, mobile-friendly, endlessly extendable — add a tile per app.</p>
+        <div class="tags"><span class="tag">most fun</span><span class="tag">bento grid</span><span class="tag">easy to extend</span></div>
+        <span class="go">Open direction 05 →</span>
+      </div>
+    </a>
+
+  </div>
+
+  <p class="foot">Prototypes only — nothing here replaces the live homepage yet. Pick one (or mix two)
+    and it becomes the new <code>index.html</code>.</p>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  var img = document.querySelector('.head img');
+  img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+  img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+})();
+</script>
+</body>
+</html>

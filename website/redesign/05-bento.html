@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 05 · Sticker Sheet — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --bg:#efe7d4; --tile:#fffdf7; --ink:#241d12; --muted:#736550; --line:#e0d5bb;
+  --shadow:0 2px 0 rgba(114,91,54,.16), 0 14px 28px -18px rgba(60,45,20,.55);
+  --r:22px;
+}
+[data-theme="dark"]{
+  --bg:#171310; --tile:#221c16; --ink:#f5efe3; --muted:#a1937d; --line:#33291f;
+  --shadow:0 2px 0 rgba(0,0,0,.5), 0 14px 28px -18px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(rgba(114,91,54,.13) 1.3px, transparent 1.4px);
+  background-size:20px 20px}
+[data-theme="dark"] body{background-image:radial-gradient(rgba(255,255,255,.05) 1.3px, transparent 1.4px)}
+a{color:inherit; text-decoration:none}
+.wrap{max-width:1120px; margin:0 auto; padding:26px 22px 70px}
+
+/* ---------- top strip ---------- */
+.strip{display:flex; align-items:center; gap:12px; margin-bottom:20px}
+.strip img{width:34px; height:34px; object-fit:contain}
+.strip b{font-weight:900; letter-spacing:-.02em; font-size:1.05rem}
+.strip .sp{flex:1}
+.pill{border:1px solid var(--line); background:var(--tile); border-radius:999px; padding:7px 14px;
+  font-weight:800; font-size:.85rem; color:var(--muted); cursor:pointer; font-family:inherit}
+.pill:hover{color:var(--ink)}
+
+/* ---------- bento ---------- */
+.bento{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; grid-auto-rows:168px}
+.t{background:var(--tile); border:1px solid var(--line); border-radius:var(--r); padding:22px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden; position:relative;
+  transition:transform .18s cubic-bezier(.3,1.2,.5,1), box-shadow .18s ease}
+a.t:hover{transform:translateY(-5px) rotate(-.7deg);
+  box-shadow:0 2px 0 rgba(114,91,54,.2), 0 24px 40px -20px rgba(60,45,20,.6)}
+a.t:nth-child(even):hover{transform:translateY(-5px) rotate(.7deg)}
+.t h2,.t h3{margin:0; letter-spacing:-.025em}
+.t p{margin:8px 0 0; font-size:.93rem; color:var(--muted); line-height:1.45}
+.t .top{display:flex; align-items:center; gap:9px; font-size:.72rem; font-weight:800;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:auto}
+.t .go{margin-top:14px; font-size:.85rem; font-weight:900; opacity:.85}
+
+/* sizes */
+.s-2x2{grid-column:span 2; grid-row:span 2}
+.s-2x1{grid-column:span 2}
+.s-1x2{grid-row:span 2}
+
+/* brand tile */
+.brandtile{background:linear-gradient(150deg,var(--sand),#d9c085); border-color:#cbb27a; color:#3b2f18;
+  align-items:flex-start; justify-content:flex-end}
+[data-theme="dark"] .brandtile{background:linear-gradient(150deg,#5d4c2c,#3a2f1a); border-color:#4b3d24; color:var(--sand)}
+.brandtile h2{font-size:clamp(2rem,4.6vw,3.1rem); font-weight:900; line-height:.95}
+.brandtile p{color:inherit; opacity:.78; font-size:1rem; max-width:26ch}
+.brandtile .mascot{position:absolute; right:-14px; top:-10px; width:150px; height:auto;
+  transform:rotate(9deg); filter:drop-shadow(0 12px 18px rgba(70,55,25,.3))}
+
+/* app tiles */
+.app{background:linear-gradient(155deg, var(--accent), color-mix(in srgb,var(--accent) 62%, #000));
+  border-color:color-mix(in srgb,var(--accent) 70%, #000); color:#fff}
+.app .top{color:rgba(255,255,255,.72)}
+.app p{color:rgba(255,255,255,.86)}
+.app h3{font-size:1.5rem; font-weight:900}
+.app.big h3{font-size:2.2rem}
+.badge{display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,.2);
+  border-radius:999px; padding:3px 9px; font-size:.68rem; letter-spacing:.1em}
+.badge i{width:6px; height:6px; border-radius:50%; background:#9dffab; display:block}
+
+/* sticker tile */
+.sticker{display:grid; place-items:center; cursor:pointer; background:var(--tile); padding-bottom:40px}
+.sticker img{width:70%; max-width:132px; height:auto; transition:transform .2s ease}
+.sticker:hover img{transform:scale(1.08) rotate(-5deg)}
+.sticker span{position:absolute; bottom:16px; left:0; right:0; text-align:center; font-size:.7rem;
+  letter-spacing:.1em; text-transform:uppercase; font-weight:800; color:var(--muted)}
+
+/* guide tile */
+.guide{background:var(--tile)}
+.guide h3{font-size:1.35rem; color:var(--tan)}
+.guide .cover{position:absolute; right:-40px; bottom:-40px; width:150px; height:150px; border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, var(--tan), transparent 70%); opacity:.14; z-index:0}
+.guide > :not(.cover){position:relative; z-index:1}
+
+/* small utility tiles */
+.mini h3, h3.mini{font-size:1.05rem}
+.links{display:flex; flex-direction:column; gap:7px; margin-top:10px}
+.links a{font-weight:800; font-size:.92rem; color:var(--green-deep)}
+[data-theme="dark"] .links a{color:var(--green)}
+.links a:hover{text-decoration:underline}
+.soon{border-style:dashed; background:transparent}
+.soon .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px}
+.soon .chips span{font-size:.75rem; font-weight:700; color:var(--muted);
+  border:1px solid var(--line); border-radius:999px; padding:4px 10px}
+.stat{align-items:flex-start; justify-content:center}
+.stat .n{font-size:2.6rem; font-weight:900; letter-spacing:-.04em; line-height:1; color:var(--green-deep)}
+[data-theme="dark"] .stat .n{color:var(--green)}
+.stat small{color:var(--muted); font-size:.85rem; font-weight:700}
+
+footer{margin-top:26px; display:flex; gap:16px; flex-wrap:wrap; align-items:center;
+  color:var(--muted); font-size:.88rem}
+footer .sp{flex:1}
+footer a{font-weight:700}
+footer a:hover{color:var(--ink)}
+
+@media(max-width:900px){
+  .bento{grid-template-columns:repeat(2,1fr); grid-auto-rows:158px}
+  .s-2x2{grid-column:span 2; grid-row:span 2}
+  .s-2x1{grid-column:span 2}
+}
+@media(max-width:520px){
+  .bento{grid-template-columns:1fr; grid-auto-rows:auto}
+  .s-2x2,.s-2x1,.s-1x2{grid-column:span 1; grid-row:span 1}
+  .t{min-height:150px}
+  .brandtile{min-height:230px}
+  .brandtile .mascot{width:110px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="strip">
+    <img id="mark" src="/atpotato-normal.png" alt=""><b>atpota.to</b>
+    <span class="sp"></span>
+    <button class="pill" id="tt">🌚 theme</button>
+  </div>
+
+  <div class="bento">
+
+    <div class="t s-2x2 brandtile">
+      <img class="mascot" src="/atpotato-normal.png" alt="The atpotato mascot">
+      <h2>atpotato</h2>
+      <p>Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.</p>
+    </div>
+
+    <a class="t s-2x2 app big" style="--accent:#2f80ed" href="https://cred.blue">
+      <div class="top"><span class="badge"><i></i>live</span> flagship</div>
+      <h3>cred.blue</h3>
+      <p>Generate a Bluesky credibility score, discover your AT&nbsp;Protocol data footprint, and vibe-check strangers and new accounts.</p>
+      <div class="go">Open ↗</div>
+    </a>
+
+    <a class="t s-2x1 app" style="--accent:#7a5cc4" href="https://anisota.net">
+      <div class="top"><span class="badge"><i></i>live</span> client · game</div>
+      <h3>anisota</h3>
+      <p>A finite deck of cards instead of an endless feed.</p>
+    </a>
+
+    <a class="t app" style="--accent:#1f9e8f" href="https://aturi.to">
+      <div class="top"><span class="badge"><i></i>live</span></div>
+      <h3>aturi.to</h3>
+      <p>Universal links for the ATmosphere.</p>
+    </a>
+
+    <a class="t app" style="--accent:#3aa0c9" href="https://flushes.app">
+      <div class="top"><span class="badge"><i></i>live</span></div>
+      <h3>flushes</h3>
+      <p>The decentralised toilet network. 🚽</p>
+    </a>
+
+    <div class="t sticker" id="sticker" title="Click the potato">
+      <img src="/atpotato-normal.png" alt="A potato with a changing expression">
+      <span>poke me</span>
+    </div>
+
+    <a class="t s-2x1 guide" href="/guides/bluesky-for-brands">
+      <div class="cover"></div>
+      <div class="top">📚 guide · ~40 min</div>
+      <h3>How to use Bluesky to grow your brand</h3>
+      <p>A comprehensive, jargon-free guide for companies, communities, and creators.</p>
+      <div class="go">Read →</div>
+    </a>
+
+    <div class="t mini stat">
+      <div class="n">4</div>
+      <small>apps shipped,<br>all free</small>
+    </div>
+
+    <div class="t mini">
+      <div class="top">find us</div>
+      <div class="links">
+        <a href="https://bsky.app/profile/atpota.to">bluesky ↗</a>
+        <a href="https://tangled.sh/@atpota.to">tangled ↗</a>
+        <a href="https://github.com/atpota-to">github ↗</a>
+      </div>
+    </div>
+
+    <a class="t mini" href="mailto:contact@atpota.to">
+      <div class="top">say hello</div>
+      <h3>contact@<br>atpota.to</h3>
+      <div class="go">Email us →</div>
+    </a>
+
+    <div class="t s-2x1 soon">
+      <div class="top">🌱 still in the ground</div>
+      <h3 class="mini">Coming soon</h3>
+      <div class="chips"><span>anisota cocoon</span><span>mothing</span><span>habit tracker</span><span>types</span></div>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>atpotato · cultivating knowledge, equipping individuals, growing community</span>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">@atpota.to</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  var b = document.getElementById('tt');
+  b.textContent = (t === 'light' ? '🌚' : '🌞') + ' theme';
+  b.onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+    b.textContent = (t === 'light' ? '🌚' : '🌞') + ' theme';
+  };
+
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  var pick = function(){ return faces[Math.floor(Math.random()*faces.length)]; };
+
+  var st = document.getElementById('sticker'), stImg = st.querySelector('img');
+  st.addEventListener('click', function(){ stImg.src = pick(); });
+  st.addEventListener('mouseenter', function(){ stImg.src = pick(); });
+
+  document.querySelectorAll('#mark, .brandtile .mascot').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = pick(); });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

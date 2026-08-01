@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 04 · Editorial — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --paper:#f7f4ec; --ink:#181510; --muted:#7a7062; --rule:#d8d1c0;
+}
+[data-theme="dark"]{
+  --paper:#100e0b; --ink:#f4efe4; --muted:#8f8676; --rule:#2b2620;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0; background:var(--paper); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.5; -webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1180px; margin:0 auto; padding:0 32px}
+.mono{font-family:ui-monospace,"SFMono-Regular","Menlo",monospace; font-size:.72rem;
+  letter-spacing:.14em; text-transform:uppercase}
+
+/* ---------- masthead ---------- */
+.mast{border-bottom:1px solid var(--rule); position:sticky; top:0; z-index:20;
+  background:color-mix(in srgb,var(--paper) 92%, transparent); backdrop-filter:blur(8px)}
+.mast-in{max-width:1180px; margin:0 auto; padding:14px 32px; display:flex; align-items:center; gap:16px}
+.mast img{width:28px; height:28px; object-fit:contain}
+.mast .name{font-weight:900; letter-spacing:-.02em}
+.mast .sp{flex:1}
+.mast a.lnk{text-decoration:none; color:var(--muted)}
+.mast a.lnk:hover{color:var(--ink)}
+.tt{border:1px solid var(--rule); background:none; color:var(--ink); border-radius:0;
+  padding:5px 10px; cursor:pointer; font-family:inherit}
+
+/* ---------- hero ---------- */
+.hero{padding:70px 0 40px; position:relative}
+.hero .kick{color:var(--green-deep); margin-bottom:26px}
+[data-theme="dark"] .hero .kick{color:var(--green)}
+.wordmark{font-size:clamp(4rem,15.5vw,13rem); font-weight:900; letter-spacing:-.055em;
+  line-height:.82; margin:0; color:var(--brown)}
+[data-theme="dark"] .wordmark{color:var(--sand)}
+.hero-grid{display:grid; grid-template-columns:1fr auto; gap:40px; align-items:end; margin-top:26px;
+  border-top:1px solid var(--rule); padding-top:22px}
+.hero-grid p{margin:0; font-size:1.3rem; max-width:36ch; line-height:1.35}
+.hero-grid .facts{text-align:right; color:var(--muted); white-space:nowrap}
+.hero-grid .facts span{display:block; margin-bottom:5px}
+.hero .potato{position:absolute; right:2%; top:34px; width:min(180px,22vw); height:auto;
+  transform:rotate(-8deg); pointer-events:auto; filter:drop-shadow(0 14px 24px rgba(80,62,30,.25))}
+
+/* ---------- bands ---------- */
+.bands{margin-top:56px; border-top:1px solid var(--rule)}
+.band{display:grid; grid-template-columns:120px minmax(0,1fr) minmax(0,.9fr); gap:36px;
+  padding:44px 0; border-bottom:1px solid var(--rule); text-decoration:none; align-items:start;
+  transition:background .22s ease, color .22s ease, padding .22s ease; position:relative}
+.band:hover{background:var(--ink); color:var(--paper); padding-left:22px; padding-right:22px}
+.band .idx{color:var(--muted); padding-top:8px}
+.band:hover .idx{color:var(--green)}
+.band h2{margin:0; font-size:clamp(2.1rem,5.2vw,3.6rem); font-weight:900; letter-spacing:-.04em; line-height:.94}
+.band .sub{margin:14px 0 0; font-size:1.08rem; color:var(--muted); max-width:40ch}
+.band:hover .sub{color:#cfc7b6}
+.band .dl{margin:22px 0 0; display:grid; grid-template-columns:auto 1fr; gap:5px 18px; color:var(--muted)}
+.band:hover .dl{color:#a79e8d}
+.band .dl dt{margin:0}
+.band .dl dd{margin:0; color:var(--ink); font-weight:700; font-size:.85rem}
+.band:hover .dl dd{color:var(--paper)}
+.band .go{display:inline-block; margin-top:24px; font-weight:900; font-size:.95rem; color:var(--green-deep)}
+[data-theme="dark"] .band .go{color:var(--green)}
+.band:hover .go{color:var(--green)}
+
+/* mock screen */
+.screen{border:1px solid var(--rule); background:var(--paper); overflow:hidden; align-self:stretch;
+  min-height:210px; display:flex; flex-direction:column}
+.band:hover .screen{border-color:#3a352c}
+.screen .chrome{display:flex; gap:5px; padding:9px 11px; border-bottom:1px solid var(--rule); align-items:center}
+.screen .chrome i{width:9px; height:9px; border-radius:50%; background:var(--rule); display:block}
+.screen .chrome span{margin-left:8px; font-family:ui-monospace,monospace; font-size:.68rem; color:var(--muted)}
+.screen .fill{flex:1; background:
+  linear-gradient(135deg, color-mix(in srgb,var(--accent) 90%, #000 0%), color-mix(in srgb,var(--accent) 35%, transparent));
+  display:grid; place-items:center; color:#fff; font-weight:900; letter-spacing:-.02em; font-size:1.2rem;
+  text-align:center; padding:20px}
+.screen .fill small{display:block; font-weight:700; font-size:.7rem; letter-spacing:.14em;
+  text-transform:uppercase; opacity:.75; margin-top:8px}
+
+/* ---------- lab strip ---------- */
+.lab{padding:44px 0; border-bottom:1px solid var(--rule); display:grid;
+  grid-template-columns:120px 1fr; gap:36px}
+.lab h3{margin:0 0 10px; font-size:1.5rem; font-weight:900; letter-spacing:-.03em}
+.lab p{margin:0 0 16px; color:var(--muted); max-width:52ch}
+.lab ul{list-style:none; padding:0; margin:0; display:flex; flex-wrap:wrap; gap:10px}
+.lab li{border:1px solid var(--rule); padding:7px 14px; font-size:.85rem; font-weight:700; color:var(--muted)}
+
+/* ---------- outro ---------- */
+.outro{padding:76px 0 40px; display:grid; grid-template-columns:1fr auto; gap:30px; align-items:end}
+.outro h2{margin:0; font-size:clamp(2.4rem,7vw,5rem); font-weight:900; letter-spacing:-.045em; line-height:.9}
+.outro a.mail{color:var(--green-deep); text-decoration:none}
+[data-theme="dark"] .outro a.mail{color:var(--green)}
+.outro a.mail:hover{text-decoration:underline}
+footer{border-top:1px solid var(--rule); padding:22px 0 64px; display:flex; gap:22px;
+  flex-wrap:wrap; color:var(--muted); align-items:center}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+footer .sp{flex:1}
+
+@media(max-width:1000px){
+  .band{grid-template-columns:70px 1fr; }
+  .band .screen{grid-column:2; margin-top:22px}
+  .lab{grid-template-columns:70px 1fr}
+}
+@media(max-width:680px){
+  .wrap{padding:0 20px}
+  .mast-in{padding:12px 20px}
+  .hero .potato{display:none}
+  .hero-grid{grid-template-columns:1fr}
+  .hero-grid .facts{text-align:left}
+  .band{grid-template-columns:1fr; gap:0; padding:34px 0}
+  .band .screen{grid-column:1}
+  .band .idx{padding-top:0; margin-bottom:10px}
+  .band:hover{padding-left:14px; padding-right:14px}
+  .lab{grid-template-columns:1fr; gap:12px}
+  .outro{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important; scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <div class="mast-in">
+    <img src="/atpotato-normal.png" alt="">
+    <span class="name">atpotato</span>
+    <span class="sp"></span>
+    <a class="lnk mono" href="#work">Work</a>
+    <a class="lnk mono" href="#lab">Lab</a>
+    <a class="lnk mono" href="#contact">Contact</a>
+    <button class="tt mono" id="tt">Theme</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="mono kick">Independent studio · AT Protocol · est. 2025</div>
+    <h1 class="wordmark">atpotato</h1>
+    <img class="potato" src="/atpotato-normal.png" alt="The atpotato mascot">
+    <div class="hero-grid">
+      <p>We make fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem —
+         staple food for a new social internet.</p>
+      <div class="facts mono">
+        <span>4 apps shipped</span>
+        <span>1 long-form guide</span>
+        <span>All open source</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="bands" id="work">
+
+    <a class="band" href="https://cred.blue" style="--accent:#2f80ed">
+      <div class="idx mono">01 / App</div>
+      <div>
+        <h2>cred.blue</h2>
+        <p class="sub">Generate a Bluesky credibility score, discover your AT&nbsp;Protocol data footprint,
+          and vibe-check strangers and new accounts before you follow them.</p>
+        <dl class="dl mono">
+          <dt>Status</dt><dd>Live</dd>
+          <dt>Type</dt><dd>Analysis &amp; scoring</dd>
+          <dt>Audience</dt><dd>Everyone on Bluesky</dd>
+        </dl>
+        <span class="go">Visit cred.blue ↗</span>
+      </div>
+      <div class="screen">
+        <div class="chrome"><i></i><i></i><i></i><span>cred.blue</span></div>
+        <div class="fill">Score card + data footprint<small>screenshot slot</small></div>
+      </div>
+    </a>
+
+    <a class="band" href="https://anisota.net" style="--accent:#7a5cc4">
+      <div class="idx mono">02 / App</div>
+      <div>
+        <h2>anisota</h2>
+        <p class="sub">A finite deck of post cards instead of an infinite feed. Stamina instead of
+          doomscrolling, card rarity instead of like counts, decks you can collect and share.</p>
+        <dl class="dl mono">
+          <dt>Status</dt><dd>Live</dd>
+          <dt>Type</dt><dd>Client &amp; game</dd>
+          <dt>Audience</dt><dd>People who want to be online better</dd>
+        </dl>
+        <span class="go">Visit anisota.net ↗</span>
+      </div>
+      <div class="screen">
+        <div class="chrome"><i></i><i></i><i></i><span>anisota.net</span></div>
+        <div class="fill">Card deck + stamina meter<small>screenshot slot</small></div>
+      </div>
+    </a>
+
+    <a class="band" href="https://aturi.to" style="--accent:#1f9e8f">
+      <div class="idx mono">03 / Tool</div>
+      <div>
+        <h2>aturi.to</h2>
+        <p class="sub">Universal links for the ATmosphere. Wrap any record in a single URL that resolves
+          into whichever app the reader already uses — share atproto content anywhere.</p>
+        <dl class="dl mono">
+          <dt>Status</dt><dd>Live</dd>
+          <dt>Type</dt><dd>Developer utility</dd>
+          <dt>Audience</dt><dd>Builders &amp; sharers</dd>
+        </dl>
+        <span class="go">Visit aturi.to ↗</span>
+      </div>
+      <div class="screen">
+        <div class="chrome"><i></i><i></i><i></i><span>aturi.to</span></div>
+        <div class="fill">at:// → everywhere<small>screenshot slot</small></div>
+      </div>
+    </a>
+
+    <a class="band" href="https://flushes.app" style="--accent:#3aa0c9">
+      <div class="idx mono">04 / App</div>
+      <div>
+        <h2>flushes</h2>
+        <p class="sub">The decentralised toilet network of planet Earth. A deliberately silly app with a
+          deliberately serious custom lexicon — a working reference for building past microblogging.</p>
+        <dl class="dl mono">
+          <dt>Status</dt><dd>Live</dd>
+          <dt>Type</dt><dd>Custom lexicon &amp; AppView</dd>
+          <dt>Audience</dt><dd>Developers, and the brave</dd>
+        </dl>
+        <span class="go">Visit flushes.app ↗</span>
+      </div>
+      <div class="screen">
+        <div class="chrome"><i></i><i></i><i></i><span>flushes.app</span></div>
+        <div class="fill">Post a flush 🚽<small>screenshot slot</small></div>
+      </div>
+    </a>
+
+    <a class="band" href="/guides/bluesky-for-brands" style="--accent:#A58650">
+      <div class="idx mono">05 / Writing</div>
+      <div>
+        <h2>Guides</h2>
+        <p class="sub">Long-form, jargon-free writing for people arriving in the ecosystem. Starting with
+          a comprehensive guide for companies, communities, and creators growing on Bluesky.</p>
+        <dl class="dl mono">
+          <dt>Status</dt><dd>Published</dd>
+          <dt>Length</dt><dd>~40 minutes</dd>
+          <dt>Price</dt><dd>Free, forever</dd>
+        </dl>
+        <span class="go">Read the guide →</span>
+      </div>
+      <div class="screen">
+        <div class="chrome"><i></i><i></i><i></i><span>atpota.to/guides</span></div>
+        <div class="fill">How to use Bluesky to grow your brand<small>screenshot slot</small></div>
+      </div>
+    </a>
+
+  </main>
+
+  <section class="lab" id="lab">
+    <div class="idx mono">06 / Lab</div>
+    <div>
+      <h3>Still in the ground</h3>
+      <p>Half-finished ideas we're prototyping in public. No promises, no launch dates — just commits.</p>
+      <ul>
+        <li>anisota cocoon</li>
+        <li>mothing</li>
+        <li>habit tracker</li>
+        <li>types</li>
+        <li>…more coming soon</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="outro" id="contact">
+    <h2>Got an idea<br>worth planting?</h2>
+    <div class="mono"><a class="mail" href="mailto:contact@atpota.to">contact@atpota.to</a></div>
+  </section>
+
+  <footer class="mono">
+    <span>© 2026 atpotato</span>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">Bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">Tangled</a>
+    <a href="https://github.com/atpota-to">GitHub</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.mast img, .potato').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

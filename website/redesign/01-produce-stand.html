@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 01 · Produce Stand — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837;
+  --brown:#725B36; --tan:#A58650; --sand:#E3CE90;
+  --ink:#241f18; --muted:#6d6357;
+  --bg:#faf6ee; --card:#ffffff; --line:#e7ddc9;
+  --shadow:0 1px 2px rgba(36,31,24,.05), 0 8px 24px -12px rgba(36,31,24,.18);
+  --radius:18px;
+  --app-cred:#2f80ed; --app-anisota:#7a5cc4; --app-aturi:#1f9e8f;
+  --app-flushes:#3aa0c9; --app-guide:#A58650;
+}
+[data-theme="dark"]{
+  --ink:#f3ede2; --muted:#a49a8b;
+  --bg:#14120f; --card:#1d1a16; --line:#2e2921;
+  --brown:#c9a86a; --tan:#A58650;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:17px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+  background:
+    radial-gradient(900px 460px at 50% -8%, rgba(57,181,74,.10), transparent 65%),
+    radial-gradient(700px 380px at 92% 12%, rgba(227,206,144,.28), transparent 70%);
+}
+[data-theme="dark"] body::before{opacity:.35}
+a{color:inherit}
+.wrap{max-width:1080px; margin:0 auto; padding:0 24px; position:relative; z-index:1}
+
+/* ---------- nav ---------- */
+.nav{position:sticky; top:0; z-index:20; backdrop-filter:blur(10px);
+  background:color-mix(in srgb, var(--bg) 82%, transparent);
+  border-bottom:1px solid var(--line)}
+.nav-in{max-width:1080px; margin:0 auto; padding:12px 24px; display:flex; align-items:center; gap:14px}
+.brand{display:flex; align-items:center; gap:10px; text-decoration:none; font-weight:900; letter-spacing:-.02em}
+.brand img{width:34px; height:34px; object-fit:contain}
+.nav-links{margin-left:auto; display:flex; align-items:center; gap:4px}
+.nav-links a{
+  text-decoration:none; font-size:.92rem; font-weight:700; color:var(--muted);
+  padding:8px 12px; border-radius:999px}
+.nav-links a:hover{color:var(--ink); background:var(--line)}
+.toggle{border:1px solid var(--line); background:var(--card); border-radius:999px; width:36px; height:36px;
+  cursor:pointer; font-size:1rem; line-height:1; display:grid; place-items:center; margin-left:6px}
+
+/* ---------- hero ---------- */
+.hero{padding:72px 0 30px; display:grid; grid-template-columns:1.15fr .85fr; gap:40px; align-items:center}
+.eyebrow{display:inline-flex; align-items:center; gap:8px; font-size:.78rem; font-weight:800;
+  text-transform:uppercase; letter-spacing:.12em; color:var(--green-deep);
+  background:rgba(57,181,74,.12); border:1px solid rgba(57,181,74,.25);
+  padding:6px 12px; border-radius:999px}
+[data-theme="dark"] .eyebrow{color:var(--green)}
+h1{font-size:clamp(2.8rem,6vw,4.4rem); line-height:.98; margin:18px 0 14px; font-weight:900;
+  letter-spacing:-.035em; color:var(--brown)}
+.lede{font-size:1.22rem; color:var(--muted); max-width:30ch; margin:0 0 28px}
+.cta{display:flex; gap:12px; flex-wrap:wrap}
+.btn{display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-weight:800; font-size:.95rem;
+  padding:12px 20px; border-radius:999px; border:1px solid transparent; transition:transform .15s ease}
+.btn:hover{transform:translateY(-2px)}
+.btn-primary{background:var(--green-deep); color:#fff}
+.btn-ghost{background:var(--card); border-color:var(--line); color:var(--ink)}
+.hero-art{justify-self:center; position:relative}
+.hero-art img{width:min(300px,74vw); height:auto; display:block; filter:drop-shadow(0 18px 30px rgba(114,91,54,.28))}
+.hero-art::after{content:""; position:absolute; left:50%; bottom:-16px; translate:-50% 0;
+  width:64%; height:18px; border-radius:50%; background:rgba(114,91,54,.16); filter:blur(9px)}
+
+/* ---------- section head ---------- */
+.sec{padding:44px 0}
+.sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:22px; flex-wrap:wrap}
+.sec-head h2{font-size:1.6rem; margin:0; font-weight:900; letter-spacing:-.02em; color:var(--tan)}
+.sec-head p{margin:0; color:var(--muted); font-size:.95rem}
+.rule{flex:1; height:1px; background:var(--line); min-width:24px}
+
+/* ---------- app cards ---------- */
+.grid{display:grid; grid-template-columns:repeat(6,1fr); gap:18px}
+.card{
+  grid-column:span 2; background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:22px; text-decoration:none; display:flex; flex-direction:column; gap:10px;
+  box-shadow:var(--shadow); transition:transform .18s ease, border-color .18s ease; position:relative; overflow:hidden}
+.card::before{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:var(--accent)}
+.card:hover{transform:translateY(-4px); border-color:var(--accent)}
+.card.feature{grid-column:span 3}
+.card.wide{grid-column:span 6; flex-direction:row; align-items:center; gap:26px}
+.card-name{font-size:1.35rem; font-weight:900; letter-spacing:-.02em; color:var(--accent); margin:6px 0 0}
+.card.feature .card-name{font-size:1.85rem}
+.card-desc{margin:0; color:var(--muted); font-size:.95rem}
+.tags{display:flex; gap:6px; flex-wrap:wrap; margin-top:auto; padding-top:12px}
+.tag{font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+  padding:4px 9px; border-radius:999px; border:1px solid var(--line); color:var(--muted)}
+.tag.live{color:var(--green-deep); border-color:rgba(57,181,74,.35); background:rgba(57,181,74,.1)}
+[data-theme="dark"] .tag.live{color:var(--green)}
+.card-go{font-size:.85rem; font-weight:800; color:var(--accent)}
+.thumb{width:112px; height:112px; flex:none; border-radius:14px; display:grid; place-items:center;
+  background:color-mix(in srgb, var(--accent) 12%, transparent); font-size:2.6rem}
+.card.wide .card-body{display:flex; flex-direction:column; gap:8px}
+
+/* ---------- soil / coming soon ---------- */
+.soil{margin-top:14px; border:1px dashed var(--line); border-radius:var(--radius); padding:24px;
+  background:linear-gradient(180deg, transparent, rgba(165,134,80,.07))}
+.soil h3{margin:0 0 6px; font-size:1.05rem; font-weight:900; color:var(--tan)}
+.soil p{margin:0 0 14px; color:var(--muted); font-size:.95rem}
+.seeds{display:flex; gap:8px; flex-wrap:wrap}
+.seed{font-size:.85rem; font-weight:700; padding:7px 13px; border-radius:999px;
+  border:1px solid var(--line); background:var(--card); color:var(--muted)}
+
+/* ---------- footer ---------- */
+footer{margin-top:48px; border-top:1px solid var(--line); padding:34px 0 60px}
+.foot{display:flex; gap:20px; align-items:center; flex-wrap:wrap}
+.foot img{width:44px; height:44px; object-fit:contain}
+.foot .spacer{flex:1}
+.foot a{color:var(--muted); text-decoration:none; font-weight:700; font-size:.92rem}
+.foot a:hover{color:var(--green-deep)}
+.foot small{color:var(--muted); display:block; font-size:.82rem}
+
+@media(max-width:860px){
+  .hero{grid-template-columns:1fr; text-align:center; padding:48px 0 36px}
+  .lede{margin-inline:auto}
+  .cta{justify-content:center}
+  .hero-art{order:-1}
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .card,.card.feature,.card.wide{grid-column:span 2}
+  .card.wide{flex-direction:column; align-items:flex-start}
+  .nav-links a:not(.nav-cta){display:none}
+}
+@media(max-width:560px){ .grid{grid-template-columns:1fr} .card,.card.feature,.card.wide{grid-column:span 1} }
+@media(prefers-reduced-motion:reduce){*{transition:none!important; scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top"><img src="/atpotato-normal.png" alt=""><span>atpotato</span></a>
+    <div class="nav-links">
+      <a href="#apps">apps</a>
+      <a href="#reading">reading</a>
+      <a href="#about">about</a>
+      <a class="nav-cta" href="mailto:contact@atpota.to">contact</a>
+      <button class="toggle" id="tt" aria-label="Toggle colour theme">🌚</button>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap" id="top">
+
+  <header class="hero">
+    <div>
+      <span class="eyebrow">🥔 a small studio on atproto</span>
+      <h1>Staple food<br>for the ATmosphere.</h1>
+      <p class="lede">Fun apps, helpful tools, and approachable content that keep the AT&nbsp;Protocol ecosystem grounded.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#apps">Browse the apps ↓</a>
+        <a class="btn btn-ghost" href="https://bsky.app/profile/atpota.to">Follow on Bluesky</a>
+      </div>
+    </div>
+    <div class="hero-art"><img src="/atpotato-normal.png" alt="The atpotato mascot, a potato with an @ symbol"></div>
+  </header>
+
+  <section class="sec" id="apps">
+    <div class="sec-head">
+      <h2>What we grow</h2>
+      <span class="rule"></span>
+      <p>five things, all free, all on atproto</p>
+    </div>
+
+    <div class="grid">
+      <a class="card feature" style="--accent:var(--app-cred)" href="https://cred.blue">
+        <span class="card-go">cred.blue ↗</span>
+        <h3 class="card-name">Credibility scores<br>&amp; data footprints</h3>
+        <p class="card-desc">Generate a Bluesky credibility score, see the shape of your AT&nbsp;Protocol data footprint, and vibe-check strangers before you follow them.</p>
+        <div class="tags"><span class="tag live">live</span><span class="tag">flagship</span><span class="tag">analysis</span></div>
+      </a>
+
+      <a class="card feature" style="--accent:var(--app-anisota)" href="https://anisota.net">
+        <span class="card-go">anisota.net ↗</span>
+        <h3 class="card-name">A finite,<br>calmer Bluesky</h3>
+        <p class="card-desc">Flip through a deck of post cards until your stamina runs out. Card rarity instead of like counts. Collect decks, share decks, then go outside.</p>
+        <div class="tags"><span class="tag live">live</span><span class="tag">client</span><span class="tag">experiment</span></div>
+      </a>
+
+      <a class="card" style="--accent:var(--app-aturi)" href="https://aturi.to">
+        <span class="card-go">aturi.to ↗</span>
+        <h3 class="card-name">aturi.to</h3>
+        <p class="card-desc">Universal links for the ATmosphere. One URL for any record, opening in whichever app the reader already uses.</p>
+        <div class="tags"><span class="tag live">live</span><span class="tag">utility</span></div>
+      </a>
+
+      <a class="card" style="--accent:var(--app-flushes)" href="https://flushes.app">
+        <span class="card-go">flushes.app ↗</span>
+        <h3 class="card-name">flushes.app</h3>
+        <p class="card-desc">The decentralised toilet network. A very silly app with a very real custom lexicon — proof atproto is for more than microblogging.</p>
+        <div class="tags"><span class="tag live">live</span><span class="tag">lexicon demo</span></div>
+      </a>
+
+      <a class="card" style="--accent:var(--app-guide)" href="/guides/bluesky-for-brands">
+        <span class="card-go">guides →</span>
+        <h3 class="card-name">Guides</h3>
+        <p class="card-desc">Long-form, jargon-free writing for people arriving in the ecosystem. Start with the brand guide.</p>
+        <div class="tags"><span class="tag">reading</span><span class="tag">free</span></div>
+      </a>
+    </div>
+
+    <div class="soil">
+      <h3>Still in the ground</h3>
+      <p>Things being prototyped in the open. Follow along on Tangled or GitHub.</p>
+      <div class="seeds">
+        <span class="seed">🦋 anisota cocoon</span>
+        <span class="seed">🌙 mothing</span>
+        <span class="seed">📊 habit tracker</span>
+        <span class="seed">🔤 types</span>
+        <span class="seed">…more coming soon</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="reading">
+    <div class="sec-head">
+      <h2>Reading</h2>
+      <span class="rule"></span>
+      <p>the long stuff</p>
+    </div>
+    <div class="grid">
+      <a class="card wide" style="--accent:var(--app-guide)" href="/guides/bluesky-for-brands">
+        <div class="thumb">📚</div>
+        <div class="card-body">
+          <h3 class="card-name">How to use Bluesky to grow your brand</h3>
+          <p class="card-desc">A comprehensive guide for companies, communities, and creators establishing a presence on Bluesky — written in plain language, with screenshots for every step.</p>
+          <div class="tags"><span class="tag">guide</span><span class="tag">~40 min read</span><span class="tag">updated 2026</span></div>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <footer id="about">
+    <div class="foot">
+      <img src="/atpotato-normal.png" alt="">
+      <div>
+        <strong>atpotato</strong>
+        <small>cultivating knowledge, equipping individuals, growing community.</small>
+      </div>
+      <span class="spacer"></span>
+      <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+      <a href="https://tangled.sh/@atpota.to">tangled</a>
+      <a href="https://github.com/atpota-to">github</a>
+      <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  var b = document.getElementById('tt');
+  b.textContent = t === 'light' ? '🌚' : '🌞';
+  b.onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+    b.textContent = t === 'light' ? '🌚' : '🌞';
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.brand img, .hero-art img, .foot img').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

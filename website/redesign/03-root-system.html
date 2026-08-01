@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 03 · Root System — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --sky-1:#e9f4ff; --sky-2:#f6f4e6;
+  --soil-1:#6b5333; --soil-2:#4a3a22; --soil-3:#33280f;
+  --ink:#2b2418; --muted:#6f6553;
+  --card:#fffdf6; --card-line:#e6dcc4;
+}
+[data-theme="dark"]{
+  --sky-1:#0e1626; --sky-2:#141a1a;
+  --soil-1:#2e2517; --soil-2:#221b10; --soil-3:#171207;
+  --ink:#f3ede2; --muted:#a89d89;
+  --card:#241d13; --card-line:#3b3121;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0; color:var(--ink); background:var(--sky-2);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif; font-size:17px; line-height:1.55;
+  -webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:960px; margin:0 auto; padding:0 22px}
+
+/* ================= SKY ================= */
+.sky{position:relative; background:linear-gradient(180deg,var(--sky-1),var(--sky-2)); overflow:hidden}
+.sky .clouds{position:absolute; inset:0; pointer-events:none; opacity:.75}
+.cloud{position:absolute; background:#fff; border-radius:999px; filter:blur(16px); opacity:.7}
+[data-theme="dark"] .cloud{background:#dce8ff; opacity:.07}
+.c1{width:220px;height:56px;top:14%;left:6%}
+.c2{width:160px;height:44px;top:28%;left:68%}
+.c3{width:120px;height:36px;top:60%;left:19%}
+
+.topbar{position:relative; z-index:3; display:flex; align-items:center; gap:12px;
+  max-width:960px; margin:0 auto; padding:18px 22px}
+.topbar .logo{width:32px;height:32px;object-fit:contain}
+.topbar b{font-weight:900; letter-spacing:-.02em}
+.topbar .sp{flex:1}
+.topbar a{text-decoration:none; font-weight:700; font-size:.9rem; color:var(--muted); padding:6px 10px; border-radius:999px}
+.topbar a:hover{color:var(--ink); background:rgba(0,0,0,.05)}
+[data-theme="dark"] .topbar a:hover{background:rgba(255,255,255,.08)}
+.tt{border:1px solid var(--card-line); background:var(--card); border-radius:999px; width:34px;height:34px;
+  cursor:pointer; display:grid; place-items:center; font-size:.95rem}
+
+.hero{position:relative; z-index:2; text-align:center; padding:56px 0 150px}
+.hero h1{font-size:clamp(2.6rem,7vw,4.6rem); font-weight:900; letter-spacing:-.035em; margin:0 0 14px;
+  color:var(--brown); line-height:1}
+[data-theme="dark"] .hero h1{color:var(--sand)}
+.hero p{max-width:34ch; margin:0 auto; font-size:1.15rem; color:var(--muted)}
+.hero .kicker{display:inline-block; font-size:.78rem; font-weight:800; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--green-deep); margin-bottom:18px}
+[data-theme="dark"] .hero .kicker{color:var(--green)}
+.mascot{width:min(200px,50vw); height:auto; display:block; margin:0 auto 8px; position:relative; z-index:4;
+  filter:drop-shadow(0 14px 22px rgba(70,55,30,.28))}
+.scroll-hint{margin-top:34px; font-size:.85rem; color:var(--muted); letter-spacing:.05em}
+.scroll-hint span{display:inline-block; animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
+
+/* ============ SOIL LINE ============ */
+.horizon{position:relative; line-height:0; margin-top:-110px; z-index:1}
+.horizon svg{display:block; width:100%; height:110px}
+
+/* ================ UNDERGROUND ================ */
+.ground{background:linear-gradient(180deg,var(--soil-1),var(--soil-2) 45%,var(--soil-3));
+  color:#f4ecdc; position:relative; padding:10px 0 90px}
+.ground::before{content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:radial-gradient(rgba(255,255,255,.10) 1px, transparent 1.4px),
+                   radial-gradient(rgba(0,0,0,.22) 1px, transparent 1.4px);
+  background-size:26px 26px, 17px 17px; background-position:0 0, 9px 11px}
+.ground .wrap{position:relative; z-index:1}
+
+.ground-head{text-align:center; padding:34px 0 10px}
+.ground-head h2{font-size:1.9rem; font-weight:900; letter-spacing:-.025em; margin:0 0 6px; color:var(--sand)}
+.ground-head p{margin:0; color:#cbbb99; font-size:.98rem}
+
+/* rows */
+.roots{position:relative; padding:26px 0 10px}
+.taproot{position:absolute; left:50%; top:0; bottom:56px; width:6px; translate:-50% 0;
+  background:linear-gradient(180deg, rgba(57,181,74,0) 0%, var(--green) 8%, var(--green-deep) 60%, rgba(0,104,55,0) 100%);
+  border-radius:6px; opacity:.9}
+.row{display:grid; grid-template-columns:1fr 86px 1fr; align-items:center; gap:0; margin:12px 0;
+  position:relative}
+.branch{position:relative; align-self:center; width:86px; height:80px}
+.branch svg{position:absolute; left:0; top:0; width:86px; height:80px; overflow:visible}
+.branch path{fill:none; stroke:var(--green); stroke-width:5; stroke-linecap:round;
+  stroke-dasharray:var(--len,70); stroke-dashoffset:var(--len,70);
+  transition:stroke-dashoffset .9s cubic-bezier(.3,.9,.4,1)}
+.row.grown .branch path{stroke-dashoffset:0}
+.node{position:absolute; left:50%; top:50%; translate:-50% -50%; width:16px; height:16px; border-radius:50%;
+  background:var(--sand); border:3px solid var(--green-deep); z-index:2}
+
+.card{background:var(--card); color:var(--ink); border:1px solid var(--card-line); border-radius:16px;
+  padding:20px 22px; text-decoration:none; display:block; box-shadow:0 10px 26px -14px rgba(0,0,0,.6);
+  opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease, box-shadow .2s ease}
+.row.grown .card{opacity:1; transform:none}
+.card:hover{box-shadow:0 16px 34px -14px rgba(0,0,0,.7); transform:translateY(-3px)}
+.card h3{margin:0 0 6px; font-size:1.3rem; font-weight:900; letter-spacing:-.02em; color:var(--accent)}
+.card p{margin:0; font-size:.95rem; color:var(--muted)}
+.card .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:12px}
+.chip{font-size:.68rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+  padding:4px 9px; border-radius:999px; border:1px solid var(--card-line); color:var(--muted)}
+.chip.live{color:var(--green-deep); border-color:rgba(57,181,74,.4); background:rgba(57,181,74,.1)}
+[data-theme="dark"] .chip.live{color:var(--green)}
+.row.left .card{margin-right:0}
+.row.right .card{margin-left:0}
+.spacer{min-height:1px}
+
+/* seeds */
+.seeds{margin-top:44px; text-align:center}
+.seeds h3{font-size:1.1rem; color:var(--sand); margin:0 0 4px; font-weight:900}
+.seeds p{margin:0 0 16px; color:#c3b393; font-size:.93rem}
+.seed-row{display:flex; gap:9px; flex-wrap:wrap; justify-content:center}
+.seed{font-size:.85rem; font-weight:700; padding:7px 14px; border-radius:999px;
+  border:1px dashed rgba(227,206,144,.42); color:#e0d2b2}
+
+/* footer */
+.foot{background:var(--soil-3); color:#cbbb99; padding:34px 0 60px}
+.foot .wrap{display:flex; gap:18px; align-items:center; flex-wrap:wrap; font-size:.92rem}
+.foot img{width:40px;height:40px;object-fit:contain}
+.foot .sp{flex:1}
+.foot a{color:var(--sand); text-decoration:none; font-weight:700}
+.foot a:hover{text-decoration:underline}
+.foot small{display:block; color:#9d8f74; font-size:.8rem}
+
+@media(max-width:760px){
+  .row{grid-template-columns:56px 1fr; margin:16px 0}
+  .row .spacer{display:none}
+  .row.left .card, .row.right .card{grid-column:2}
+  .branch{grid-column:1; width:56px; height:70px}
+  .branch svg{width:56px; height:70px}
+  .row.left .branch svg{transform:scaleX(-1)}
+  .taproot{left:28px}
+}
+@media(prefers-reduced-motion:reduce){
+  *{transition:none!important; animation:none!important}
+  .card{opacity:1; transform:none}
+  .branch path{stroke-dashoffset:0}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== ABOVE GROUND ===================== -->
+<div class="sky">
+  <div class="clouds"><i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i></div>
+
+  <div class="topbar">
+    <img class="logo" src="/atpotato-normal.png" alt=""><b>atpotato</b>
+    <span class="sp"></span>
+    <a href="#underground">apps</a>
+    <a href="/guides/bluesky-for-brands">guides</a>
+    <a href="mailto:contact@atpota.to">contact</a>
+    <button class="tt" id="tt" aria-label="Toggle colour theme">🌚</button>
+  </div>
+
+  <header class="hero wrap">
+    <img class="mascot" src="/atpotato-normal.png" alt="The atpotato mascot">
+    <span class="kicker">Everything good grows underground</span>
+    <h1>atpotato</h1>
+    <p>Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.</p>
+    <div class="scroll-hint">dig down to see what we've grown <span>↓</span></div>
+  </header>
+</div>
+
+<div class="horizon" aria-hidden="true">
+  <svg viewBox="0 0 1440 110" preserveAspectRatio="none">
+    <path d="M0,54 C120,26 240,86 360,62 C480,38 600,80 720,58 C840,36 960,84 1080,60 C1200,38 1320,72 1440,50 L1440,110 L0,110 Z" fill="var(--soil-1)"/>
+    <path d="M0,68 C120,44 240,98 360,76 C480,54 600,94 720,72 C840,52 960,96 1080,74 C1200,54 1320,86 1440,64 L1440,110 L0,110 Z" fill="var(--soil-1)" opacity=".55"/>
+  </svg>
+</div>
+
+<!-- ===================== BELOW GROUND ===================== -->
+<div class="ground" id="underground">
+  <div class="wrap">
+    <div class="ground-head">
+      <h2>The root system</h2>
+      <p>Four apps and a guide, all growing off the same taproot: atproto.</p>
+    </div>
+
+    <div class="roots">
+      <div class="taproot" aria-hidden="true"></div>
+
+      <div class="row left" style="--accent:#2f80ed">
+        <a class="card" href="https://cred.blue">
+          <h3>cred.blue</h3>
+          <p>Generate a Bluesky credibility score, map your AT&nbsp;Protocol data footprint, and vibe-check strangers and new accounts.</p>
+          <div class="chips"><span class="chip live">live</span><span class="chip">flagship</span></div>
+        </a>
+        <div class="branch" aria-hidden="true">
+          <svg viewBox="0 0 86 80"><path style="--len:70" d="M43,40 C30,40 24,20 0,20"/></svg>
+          <span class="node"></span>
+        </div>
+        <div class="spacer"></div>
+      </div>
+
+      <div class="row right" style="--accent:#7a5cc4">
+        <div class="spacer"></div>
+        <div class="branch" aria-hidden="true">
+          <svg viewBox="0 0 86 80"><path style="--len:70" d="M43,40 C56,40 62,20 86,20"/></svg>
+          <span class="node"></span>
+        </div>
+        <a class="card" href="https://anisota.net">
+          <h3>anisota.net</h3>
+          <p>A finite deck of post cards instead of an endless feed. Stamina, card rarity, collectable decks — a calmer way to read Bluesky.</p>
+          <div class="chips"><span class="chip live">live</span><span class="chip">client · game</span></div>
+        </a>
+      </div>
+
+      <div class="row left" style="--accent:#1f9e8f">
+        <a class="card" href="https://aturi.to">
+          <h3>aturi.to</h3>
+          <p>Universal links for the ATmosphere. One URL for any record, opening in whichever app the reader already uses.</p>
+          <div class="chips"><span class="chip live">live</span><span class="chip">utility</span></div>
+        </a>
+        <div class="branch" aria-hidden="true">
+          <svg viewBox="0 0 86 80"><path style="--len:70" d="M43,40 C30,40 24,60 0,60"/></svg>
+          <span class="node"></span>
+        </div>
+        <div class="spacer"></div>
+      </div>
+
+      <div class="row right" style="--accent:#3aa0c9">
+        <div class="spacer"></div>
+        <div class="branch" aria-hidden="true">
+          <svg viewBox="0 0 86 80"><path style="--len:70" d="M43,40 C56,40 62,60 86,60"/></svg>
+          <span class="node"></span>
+        </div>
+        <a class="card" href="https://flushes.app">
+          <h3>flushes.app</h3>
+          <p>The decentralised toilet network. A very silly app with a very real custom lexicon — proof that atproto is for more than microblogging.</p>
+          <div class="chips"><span class="chip live">live</span><span class="chip">lexicon demo</span></div>
+        </a>
+      </div>
+
+      <div class="row left" style="--accent:#A58650">
+        <a class="card" href="/guides/bluesky-for-brands">
+          <h3>Guides</h3>
+          <p>Long-form, jargon-free writing for people arriving in the ecosystem. Start with <em>How to use Bluesky to grow your brand</em>.</p>
+          <div class="chips"><span class="chip">reading</span><span class="chip">~40 min</span></div>
+        </a>
+        <div class="branch" aria-hidden="true">
+          <svg viewBox="0 0 86 80"><path style="--len:70" d="M43,40 C30,40 24,22 0,22"/></svg>
+          <span class="node"></span>
+        </div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+
+    <div class="seeds">
+      <h3>Seeds in the ground</h3>
+      <p>Prototyped in the open. No promises, but you can read the commits.</p>
+      <div class="seed-row">
+        <span class="seed">🦋 anisota cocoon</span>
+        <span class="seed">🌙 mothing</span>
+        <span class="seed">📊 habit tracker</span>
+        <span class="seed">🔤 types</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <div class="wrap">
+    <img src="/atpotato-normal.png" alt="">
+    <div><strong>atpotato</strong><small>cultivating knowledge, equipping individuals, growing community.</small></div>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">tangled</a>
+    <a href="https://github.com/atpota-to">github</a>
+    <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+  </div>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  var b = document.getElementById('tt');
+  b.textContent = t === 'light' ? '🌚' : '🌞';
+  b.onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+    b.textContent = t === 'light' ? '🌚' : '🌞';
+  };
+
+  var rows = document.querySelectorAll('.row');
+  if (!('IntersectionObserver' in window) ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    rows.forEach(function(r){ r.classList.add('grown'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('grown'); io.unobserve(e.target); }
+      });
+    }, {threshold:.35});
+    rows.forEach(function(r){ io.observe(r); });
+  }
+
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.mascot, .logo, .foot img').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

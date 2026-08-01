@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 02 · Protocol Index — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650;
+  --bg:#0c0e0c; --panel:#12150f; --line:#232a1f; --line-2:#161b13;
+  --ink:#e8ead9; --muted:#7e8874; --dim:#4d5646;
+  --mono:ui-monospace,"SFMono-Regular","JetBrains Mono","Menlo","Consolas",monospace;
+}
+[data-theme="light"]{
+  --bg:#fbfaf4; --panel:#ffffff; --line:#e2e2d2; --line-2:#efeee2;
+  --ink:#1e2418; --muted:#69705e; --dim:#a4ab97; --green:#2b8f38;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--mono);
+  font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  background-image:linear-gradient(var(--line-2) 1px, transparent 1px),
+                   linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
+  background-size:34px 34px;
+}
+a{color:inherit}
+.wrap{max-width:940px; margin:0 auto; padding:0 20px}
+.display{font-family:"eigerdals",var(--mono); font-weight:900; letter-spacing:-.03em}
+
+/* ---- top bar ---- */
+.bar{border-bottom:1px solid var(--line); background:color-mix(in srgb,var(--bg) 88%, transparent);
+  backdrop-filter:blur(8px); position:sticky; top:0; z-index:10}
+.bar-in{max-width:940px; margin:0 auto; padding:10px 20px; display:flex; gap:12px; align-items:center;
+  font-size:12.5px; color:var(--muted)}
+.bar-in img{width:22px;height:22px;object-fit:contain}
+.bar-in b{color:var(--ink)}
+.bar-in .sp{flex:1}
+.bar-in a{text-decoration:none; padding:3px 7px; border-radius:4px}
+.bar-in a:hover{background:var(--line); color:var(--ink)}
+.tt{background:none; border:1px solid var(--line); color:var(--muted); border-radius:4px;
+  padding:3px 8px; cursor:pointer; font-family:var(--mono); font-size:12px}
+
+/* ---- header block ---- */
+header{padding:64px 0 40px}
+.prompt{color:var(--green); font-size:13px; margin-bottom:20px}
+.prompt::before{content:"$ "; color:var(--dim)}
+h1{margin:0; font-size:clamp(2.6rem,7vw,4rem); line-height:1; color:var(--sand)}
+[data-theme="light"] h1{color:var(--tan)}
+.sub{color:var(--muted); max-width:62ch; margin:16px 0 0; font-size:14px}
+.sub .c{color:var(--dim)}
+.meta{display:flex; flex-wrap:wrap; gap:0; margin-top:30px; border:1px solid var(--line);
+  border-radius:6px; overflow:hidden; background:var(--panel)}
+.meta div{flex:1 1 140px; padding:14px 16px; border-right:1px solid var(--line)}
+.meta div:last-child{border-right:0}
+.meta dt{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.1em; margin:0 0 4px}
+.meta dd{margin:0; font-size:15px; color:var(--ink)}
+.meta dd a{color:var(--green); text-decoration:none}
+.meta dd a:hover{text-decoration:underline}
+
+/* ---- index table ---- */
+section{padding:34px 0}
+.sec-label{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
+  display:flex; align-items:center; gap:12px; margin-bottom:14px}
+.sec-label::after{content:""; flex:1; height:1px; background:var(--line)}
+.idx{border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--panel)}
+.row{display:grid; grid-template-columns:34px 1fr 96px 22px; gap:16px; align-items:start;
+  padding:16px 18px; border-bottom:1px solid var(--line); text-decoration:none;
+  transition:background .12s ease; position:relative}
+.row:last-child{border-bottom:0}
+.row::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:transparent}
+.row:hover{background:color-mix(in srgb,var(--green) 8%, transparent)}
+.row:hover::before{background:var(--green)}
+.num{color:var(--dim); font-size:12px; padding-top:3px}
+.name{font-size:18px; font-weight:700; color:var(--ink); display:flex; align-items:center; gap:9px; flex-wrap:wrap}
+.name .dot{width:7px; height:7px; border-radius:50%; background:var(--green); flex:none}
+.name .dot.beta{background:var(--sand)}
+.name .dot.soon{background:var(--dim)}
+.desc{color:var(--muted); font-size:13.5px; margin:5px 0 0; max-width:64ch}
+.nsid{color:var(--dim); font-size:11.5px; margin-top:7px; display:block; word-break:break-all}
+.status{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); padding-top:5px}
+.arrow{color:var(--dim); padding-top:2px; text-align:right}
+.row:hover .arrow{color:var(--green)}
+
+/* ---- notes / footer ---- */
+.note{border:1px dashed var(--line); border-radius:8px; padding:18px; color:var(--muted); font-size:13px}
+.note b{color:var(--ink)}
+.note ul{margin:10px 0 0; padding-left:18px}
+.note li{margin:3px 0}
+footer{border-top:1px solid var(--line); margin-top:44px; padding:26px 0 60px;
+  display:flex; gap:18px; flex-wrap:wrap; align-items:center; font-size:12.5px; color:var(--muted)}
+footer a{color:var(--green); text-decoration:none}
+footer a:hover{text-decoration:underline}
+footer .sp{flex:1}
+footer img{width:30px; height:30px; object-fit:contain}
+
+@media(max-width:640px){
+  .row{grid-template-columns:26px 1fr 18px; gap:12px}
+  .status{display:none}
+  .meta div{flex:1 1 100%; border-right:0; border-bottom:1px solid var(--line)}
+  .bar-in a{display:none}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-in">
+    <img src="/atpotato-normal.png" alt=""><b>atpota.to</b>
+    <span class="sp"></span>
+    <a href="#index">index</a>
+    <a href="#reading">reading</a>
+    <a href="https://tangled.sh/@atpota.to">source</a>
+    <button class="tt" id="tt">theme</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <div class="prompt">whois atpota.to</div>
+    <h1 class="display">atpotato</h1>
+    <p class="sub">Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.
+      <span class="c">// staple food for the ATmosphere: foundational, accessible, versatile, grounded.</span></p>
+
+    <dl class="meta">
+      <div><dt>handle</dt><dd><a href="https://bsky.app/profile/atpota.to">@atpota.to</a></dd></div>
+      <div><dt>shipped</dt><dd>4 apps · 1 guide</dd></div>
+      <div><dt>source</dt><dd><a href="https://tangled.sh/@atpota.to">tangled</a> · <a href="https://github.com/atpota-to">github</a></dd></div>
+      <div><dt>contact</dt><dd><a href="mailto:contact@atpota.to">contact@atpota.to</a></dd></div>
+    </dl>
+  </header>
+
+  <section id="index">
+    <div class="sec-label">index · applications</div>
+    <div class="idx">
+
+      <a class="row" href="https://cred.blue">
+        <span class="num">01</span>
+        <div>
+          <div class="name"><span class="dot"></span>cred.blue</div>
+          <p class="desc">Generate a Bluesky credibility score, map your AT&nbsp;Protocol data footprint, and vibe-check strangers and new accounts before you follow them.</p>
+          <code class="nsid">app · analysis · public API · cred.blue</code>
+        </div>
+        <span class="status">live</span>
+        <span class="arrow">↗</span>
+      </a>
+
+      <a class="row" href="https://anisota.net">
+        <span class="num">02</span>
+        <div>
+          <div class="name"><span class="dot"></span>anisota.net</div>
+          <p class="desc">An experimental client and game for Bluesky. A finite deck of post cards instead of an infinite feed, stamina instead of doomscrolling, card rarity instead of like counts.</p>
+          <code class="nsid">client · game · collectable decks · anisota.net</code>
+        </div>
+        <span class="status">live</span>
+        <span class="arrow">↗</span>
+      </a>
+
+      <a class="row" href="https://aturi.to">
+        <span class="num">03</span>
+        <div>
+          <div class="name"><span class="dot"></span>aturi.to</div>
+          <p class="desc">Universal links for the ATmosphere. Wrap any <code>at://</code> record in a link that resolves to whichever app the reader already uses.</p>
+          <code class="nsid">utility · at:// resolver · aturi.to</code>
+        </div>
+        <span class="status">live</span>
+        <span class="arrow">↗</span>
+      </a>
+
+      <a class="row" href="https://flushes.app">
+        <span class="num">04</span>
+        <div>
+          <div class="name"><span class="dot"></span>flushes.app</div>
+          <p class="desc">The decentralised toilet network of planet Earth. A deliberately silly AppView with its own custom lexicon — a working reference for building beyond microblogging.</p>
+          <code class="nsid">im.flushing.right.now · custom lexicon · custom AppView</code>
+        </div>
+        <span class="status">live</span>
+        <span class="arrow">↗</span>
+      </a>
+
+      <a class="row" href="https://tangled.sh/@atpota.to">
+        <span class="num">05</span>
+        <div>
+          <div class="name"><span class="dot soon"></span>in progress</div>
+          <p class="desc">anisota-cocoon, mothing, habit-tracker, types. Prototyped in the open — watch the repos if you want to see the ugly middle part.</p>
+          <code class="nsid">wip · no promises · read the commits</code>
+        </div>
+        <span class="status">building</span>
+        <span class="arrow">↗</span>
+      </a>
+
+    </div>
+  </section>
+
+  <section id="reading">
+    <div class="sec-label">index · writing</div>
+    <div class="idx">
+      <a class="row" href="/guides/bluesky-for-brands">
+        <span class="num">01</span>
+        <div>
+          <div class="name"><span class="dot beta"></span>How to use Bluesky to grow your brand</div>
+          <p class="desc">A comprehensive, jargon-free guide for companies, communities, and creators establishing a presence on Bluesky.</p>
+          <code class="nsid">guide · ~40 min · screenshots included</code>
+        </div>
+        <span class="status">read</span>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">notes</div>
+    <div class="note">
+      <b>Everything here is built on the AT Protocol.</b> That means your data is portable, the code is
+      readable, and nothing depends on us staying interested forever.
+      <ul>
+        <li>All apps are free and account-optional where possible.</li>
+        <li>Source lives on Tangled first, mirrored to GitHub.</li>
+        <li>Custom lexicons are documented and open to integrate.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <img src="/atpotato-normal.png" alt="">
+    <span>atpotato · cultivating knowledge, equipping individuals, growing community</span>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">tangled</a>
+    <a href="https://github.com/atpota-to">github</a>
+    <a href="mailto:contact@atpota.to">email</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  var b = document.getElementById('tt');
+  b.onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.bar-in img, footer img').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>
