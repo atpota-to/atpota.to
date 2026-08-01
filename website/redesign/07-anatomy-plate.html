@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 07 · Anatomy Plate — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --paper:#f4eddc; --panel:#fbf6ea;
+  --ink:#221c12; --muted:#6b5f48; --faint:#a08e70; --rule:#c9b895;
+  --app-cred:#2f80ed; --app-anisota:#7a5cc4; --app-aturi:#1f9e8f;
+  --app-flushes:#3aa0c9; --app-guide:#A58650;
+}
+[data-theme="dark"]{
+  --paper:#131109; --panel:#1c1810; --ink:#f2e9d5; --muted:#a3947a; --faint:#7c6e56; --rule:#3d3423;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.wrap{max-width:1120px; margin:0 auto; padding:20px 22px 70px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tiny{font-size:.66rem; letter-spacing:.2em; text-transform:uppercase; color:var(--faint)}
+
+/* ---------- top ---------- */
+.mast{display:flex; align-items:center; gap:12px; padding:6px 0 18px}
+.mast img{width:30px; height:30px; object-fit:contain}
+.mast b{font-weight:900; letter-spacing:-.02em}
+.mast .sp{flex:1}
+.mast a{text-decoration:none; color:var(--muted); font-weight:700; font-size:.87rem; padding:6px 9px}
+.mast a:hover{color:var(--ink); text-decoration:underline}
+.tt{border:1px solid var(--rule); background:transparent; color:var(--muted); cursor:pointer;
+  font-family:inherit; font-weight:700; font-size:.78rem; padding:5px 11px; letter-spacing:.08em}
+.tt:hover{color:var(--ink); border-color:var(--ink)}
+
+/* ---------- plate frame ---------- */
+.plate{
+  border:1px solid var(--rule); padding:22px; background:var(--panel); position:relative;
+  box-shadow:0 1px 0 var(--rule);
+}
+.plate::before{content:""; position:absolute; inset:6px; border:1px solid var(--rule); pointer-events:none; opacity:.55}
+.plate-head{display:flex; align-items:baseline; gap:16px; padding:0 6px 18px; flex-wrap:wrap}
+.plate-head .sp{flex:1}
+.plate-head h1{
+  margin:0; font-size:clamp(1.6rem,3.6vw,2.5rem); font-weight:900; letter-spacing:-.035em;
+  color:var(--brown); line-height:1;
+}
+[data-theme="dark"] .plate-head h1{color:var(--sand)}
+.binomial{font-style:italic; color:var(--muted); font-size:.95rem}
+
+/* ---------- the stage ---------- */
+.stage{position:relative; width:100%; aspect-ratio:960/550; margin:0 auto}
+.stage .specimen{
+  position:absolute; left:50%; top:42%; translate:-50% -50%; width:35.4%; height:auto;
+  filter:drop-shadow(0 14px 22px rgba(90,68,32,.22)); z-index:2;
+}
+.stage svg{position:absolute; inset:0; width:100%; height:100%; z-index:3; pointer-events:none}
+.lead{fill:none; stroke:var(--faint); stroke-width:1.4; transition:stroke .2s ease, stroke-width .2s ease}
+.dot{fill:var(--panel); stroke:var(--faint); stroke-width:1.6; transition:stroke .2s ease, fill .2s ease}
+.stage[data-hot="cred"]    .g-cred    .lead,
+.stage[data-hot="anisota"] .g-anisota .lead,
+.stage[data-hot="aturi"]   .g-aturi   .lead,
+.stage[data-hot="flushes"] .g-flushes .lead,
+.stage[data-hot="guide"]   .g-guide   .lead{stroke:var(--hot); stroke-width:2.6}
+.stage[data-hot="cred"]    .g-cred    .dot,
+.stage[data-hot="anisota"] .g-anisota .dot,
+.stage[data-hot="aturi"]   .g-aturi   .dot,
+.stage[data-hot="flushes"] .g-flushes .dot,
+.stage[data-hot="guide"]   .g-guide   .dot{stroke:var(--hot); fill:var(--hot)}
+
+.tag{position:absolute; z-index:4; text-decoration:none; display:block; max-width:26%}
+.tag .part{font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--faint)}
+.tag h2{margin:2px 0 4px; font-size:1.22rem; font-weight:900; letter-spacing:-.025em; line-height:1.05}
+.tag p{margin:0; font-size:.83rem; color:var(--muted); line-height:1.4}
+.tag:hover h2, .tag:focus-visible h2{color:var(--accent)}
+.tag:hover .part, .tag:focus-visible .part{color:var(--accent)}
+
+.t-aturi  {left:2%;  top:14%; text-align:right}
+.t-cred   {left:2%;  top:49%; text-align:right}
+.t-anisota{right:2%; top:7%;  text-align:left}
+.t-flushes{right:2%; top:50%; text-align:left}
+.t-guide  {left:50%; translate:-50% 0; top:82%; text-align:center; max-width:40%}
+
+.scale{position:absolute; left:6px; bottom:-2px; z-index:4; display:flex; align-items:center; gap:7px}
+.scale .bar{width:64px; height:6px; border:1px solid var(--faint); border-top:0;
+  border-image:none; position:relative}
+
+/* ---------- caption + legend ---------- */
+.caption{padding:16px 6px 0; border-top:1px solid var(--rule); margin-top:10px;
+  display:flex; gap:18px; align-items:baseline; flex-wrap:wrap}
+.caption p{margin:0; font-style:italic; color:var(--muted); font-size:.93rem; max-width:70ch}
+.caption .sp{flex:1}
+
+/* ---------- fallback list (mobile) ---------- */
+.list{display:none; margin-top:6px}
+.list a{display:block; text-decoration:none; padding:16px 4px; border-bottom:1px solid var(--rule)}
+.list a:last-child{border-bottom:0}
+.list .part{font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--faint)}
+.list h2{margin:3px 0 4px; font-size:1.25rem; font-weight:900; letter-spacing:-.025em; color:var(--accent)}
+.list p{margin:0; font-size:.9rem; color:var(--muted)}
+.list .mobile-specimen{width:150px; height:auto; display:block; margin:6px auto 18px}
+
+/* ---------- appendix ---------- */
+.appendix{margin-top:34px; display:grid; grid-template-columns:1fr 1fr; gap:22px}
+.box{border:1px solid var(--rule); padding:20px; background:var(--panel)}
+.box h3{margin:0 0 8px; font-size:.95rem; font-weight:900; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--tan)}
+.box p{margin:0 0 12px; color:var(--muted); font-size:.92rem}
+.box ul{list-style:none; margin:0; padding:0; display:flex; gap:8px; flex-wrap:wrap}
+.box li{border:1px solid var(--rule); padding:5px 11px; font-size:.82rem; font-weight:700; color:var(--muted)}
+.box .links{display:flex; gap:16px; flex-wrap:wrap}
+.box .links a{color:var(--green-deep); font-weight:700; text-decoration:none; font-size:.92rem}
+[data-theme="dark"] .box .links a{color:var(--green)}
+.box .links a:hover{text-decoration:underline}
+
+footer{margin-top:26px; color:var(--faint); font-size:.82rem; display:flex; gap:14px; flex-wrap:wrap}
+footer .sp{flex:1}
+
+@media(max-width:860px){
+  .stage{display:none}
+  .list{display:block}
+  .appendix{grid-template-columns:1fr}
+  .plate{padding:16px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <img src="/atpotato-normal.png" alt=""><b>atpotato</b>
+    <span class="sp"></span>
+    <a href="/guides/bluesky-for-brands">guides</a>
+    <a href="mailto:contact@atpota.to">contact</a>
+    <button class="tt" id="tt">theme</button>
+  </div>
+
+  <div class="plate">
+    <div class="plate-head">
+      <div>
+        <div class="tiny">Plate I · the ATmosphere</div>
+        <h1>atpotato</h1>
+        <div class="binomial">Solanum protocolum — cultivated on the AT Protocol, 2025–</div>
+      </div>
+      <span class="sp"></span>
+      <div class="tiny">Fun apps · helpful tools · approachable content</div>
+    </div>
+
+    <!-- ================= desktop specimen plate ================= -->
+    <div class="stage" id="stage">
+      <img class="specimen" src="/atpotato-normal.png" alt="The atpotato mascot, labelled as an anatomical specimen">
+
+      <svg viewBox="0 90 960 550" aria-hidden="true">
+        <g class="g-aturi"   style="--hot:#1f9e8f"><polyline class="lead" points="255,214 306,214 341,275"/><circle class="dot" cx="341" cy="275" r="5.5"/></g>
+        <g class="g-cred"    style="--hot:#2f80ed"><polyline class="lead" points="255,392 322,392 463,353"/><circle class="dot" cx="463" cy="353" r="5.5"/></g>
+        <g class="g-anisota" style="--hot:#7a5cc4"><polyline class="lead" points="705,178 654,178 500,245"/><circle class="dot" cx="500" cy="245" r="5.5"/></g>
+        <g class="g-flushes" style="--hot:#3aa0c9"><polyline class="lead" points="705,406 660,406 609,384"/><circle class="dot" cx="609" cy="384" r="5.5"/></g>
+        <g class="g-guide"   style="--hot:#A58650"><polyline class="lead" points="480,535 480,442"/><circle class="dot" cx="480" cy="442" r="5.5"/></g>
+      </svg>
+
+      <a class="tag t-aturi" style="--accent:var(--app-aturi)" href="https://aturi.to" data-hot="aturi">
+        <span class="part">fig. a · the runner</span>
+        <h2>aturi.to</h2>
+        <p>Universal links for the ATmosphere. One URL for any record, opening in whichever app the reader already uses.</p>
+      </a>
+
+      <a class="tag t-cred" style="--accent:var(--app-cred)" href="https://cred.blue" data-hot="cred">
+        <span class="part">fig. b · the eye</span>
+        <h2>cred.blue</h2>
+        <p>A Bluesky credibility score, your AT&nbsp;Protocol data footprint, and a way to vibe-check strangers before you follow them.</p>
+      </a>
+
+      <a class="tag t-anisota" style="--accent:var(--app-anisota)" href="https://anisota.net" data-hot="anisota">
+        <span class="part">fig. c · the moth</span>
+        <h2>anisota</h2>
+        <p>A finite deck of post cards instead of an endless feed. Stamina, card rarity, and decks you can collect and share.</p>
+      </a>
+
+      <a class="tag t-flushes" style="--accent:var(--app-flushes)" href="https://flushes.app" data-hot="flushes">
+        <span class="part">fig. d · the sprout</span>
+        <h2>flushes</h2>
+        <p>The decentralised toilet network. A very silly app with a very real custom lexicon.</p>
+      </a>
+
+      <a class="tag t-guide" style="--accent:var(--app-guide)" href="/guides/bluesky-for-brands" data-hot="guide">
+        <span class="part">fig. e · the taproot</span>
+        <h2>Guides</h2>
+        <p>Long-form, jargon-free writing for people arriving in the ecosystem. Start with <em>How to use Bluesky to grow your brand</em>.</p>
+      </a>
+
+      <div class="scale"><span class="bar"></span><span class="tiny">1 potato</span></div>
+    </div>
+
+    <!-- ================= mobile fallback ================= -->
+    <div class="list">
+      <img class="mobile-specimen" src="/atpotato-normal.png" alt="The atpotato mascot">
+      <a href="https://aturi.to" style="--accent:var(--app-aturi)">
+        <span class="part">fig. a · the runner</span><h2>aturi.to</h2>
+        <p>Universal links for the ATmosphere. One URL for any record, opening in whichever app the reader already uses.</p>
+      </a>
+      <a href="https://cred.blue" style="--accent:var(--app-cred)">
+        <span class="part">fig. b · the eye</span><h2>cred.blue</h2>
+        <p>A Bluesky credibility score, your AT&nbsp;Protocol data footprint, and a way to vibe-check strangers.</p>
+      </a>
+      <a href="https://anisota.net" style="--accent:var(--app-anisota)">
+        <span class="part">fig. c · the moth</span><h2>anisota</h2>
+        <p>A finite deck of post cards instead of an endless feed. Stamina, rarity, collectable decks.</p>
+      </a>
+      <a href="https://flushes.app" style="--accent:var(--app-flushes)">
+        <span class="part">fig. d · the sprout</span><h2>flushes</h2>
+        <p>The decentralised toilet network. A very silly app with a very real custom lexicon.</p>
+      </a>
+      <a href="/guides/bluesky-for-brands" style="--accent:var(--app-guide)">
+        <span class="part">fig. e · the taproot</span><h2>Guides</h2>
+        <p>Long-form, jargon-free writing for people arriving in the ecosystem.</p>
+      </a>
+    </div>
+
+    <div class="caption">
+      <p>A hardy, widely cultivated species. Propagates by eyes; tolerates poor soil; sustains
+        communities that would otherwise go hungry. Five specimens shown; further varieties under trial.</p>
+      <span class="sp"></span>
+      <span class="tiny">Drawn from life at atpota.to</span>
+    </div>
+  </div>
+
+  <div class="appendix">
+    <div class="box">
+      <h3>Under trial</h3>
+      <p>Varieties not yet stable enough to label. Prototyped in the open.</p>
+      <ul><li>anisota cocoon</li><li>mothing</li><li>habit tracker</li><li>types</li></ul>
+    </div>
+    <div class="box">
+      <h3>Correspondence</h3>
+      <p>Cultivating knowledge, equipping individuals, growing community.</p>
+      <div class="links">
+        <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+        <a href="https://tangled.sh/@atpota.to">tangled</a>
+        <a href="https://github.com/atpota-to">github</a>
+        <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>atpotato · atpota.to</span><span class="sp"></span><span>Plate I of an ongoing series</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+
+  var stage = document.getElementById('stage');
+  stage.querySelectorAll('.tag').forEach(function(tag){
+    var key = tag.getAttribute('data-hot');
+    var on  = function(){ stage.setAttribute('data-hot', key); };
+    var off = function(){ stage.removeAttribute('data-hot'); };
+    tag.addEventListener('mouseenter', on);
+    tag.addEventListener('mouseleave', off);
+    tag.addEventListener('focus', on);
+    tag.addEventListener('blur', off);
+  });
+
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.mast img, .specimen, .mobile-specimen').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

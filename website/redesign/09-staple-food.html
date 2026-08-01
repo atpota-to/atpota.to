@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 09 · Staple Food — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --bg:#f6f1e3; --card:#fffcf3; --ink:#241d12; --muted:#6b5f4b; --faint:#a4957c;
+  --rule:#cdbc9a;
+  --app-cred:#2f80ed; --app-anisota:#7a5cc4; --app-aturi:#1f9e8f;
+  --app-flushes:#3aa0c9; --app-guide:#A58650;
+}
+[data-theme="dark"]{
+  --bg:#14110b; --card:#1d1811; --ink:#f3ebd9; --muted:#a2957c; --faint:#786b55;
+  --rule:#41372593; --rule:#413725; --brown:#c9a86a;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.wrap{max-width:820px; margin:0 auto; padding:22px 22px 80px}
+
+/* ---------- menu card ---------- */
+.menu{
+  background:var(--card); border:1px solid var(--rule); padding:clamp(24px,5vw,54px);
+  position:relative; box-shadow:0 20px 50px -34px rgba(60,44,20,.55);
+}
+.menu::before{content:""; position:absolute; inset:9px; border:1px solid var(--rule); opacity:.5; pointer-events:none}
+
+.topline{display:flex; align-items:center; gap:12px; margin-bottom:30px; position:relative; z-index:1}
+.topline img{width:28px; height:28px; object-fit:contain}
+.topline .sp{flex:1}
+.topline a{text-decoration:none; color:var(--faint); font-size:.78rem; letter-spacing:.14em;
+  text-transform:uppercase; font-weight:800}
+.topline a:hover{color:var(--ink)}
+.tt{border:0; background:none; color:var(--faint); cursor:pointer; font-family:inherit; font-weight:800;
+  font-size:.78rem; letter-spacing:.14em; text-transform:uppercase; padding:0}
+.tt:hover{color:var(--ink)}
+
+.head{text-align:center; position:relative; z-index:1}
+.head .est{font-size:.7rem; letter-spacing:.34em; text-transform:uppercase; color:var(--faint)}
+.head h1{font-size:clamp(2.4rem,7vw,4rem); font-weight:900; letter-spacing:-.04em; margin:14px 0 4px;
+  color:var(--brown); line-height:.95}
+[data-theme="dark"] .head h1{color:var(--sand)}
+.head .tagline{margin:0; font-style:italic; color:var(--muted); font-size:1.05rem}
+.head .potato{width:74px; height:auto; display:block; margin:0 auto 10px}
+.head .flourish{display:flex; align-items:center; gap:14px; margin:26px 0 6px; color:var(--faint)}
+.head .flourish::before, .head .flourish::after{content:""; flex:1; height:1px; background:var(--rule)}
+.head .flourish span{font-size:.7rem; letter-spacing:.24em; text-transform:uppercase}
+
+/* ---------- courses ---------- */
+.course{margin-top:38px; position:relative; z-index:1}
+.course > h2{
+  margin:0 0 4px; font-size:1.05rem; font-weight:900; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--tan); text-align:center;
+}
+.course > .note{margin:0 0 22px; text-align:center; font-size:.85rem; color:var(--faint); font-style:italic}
+
+.dish{display:block; text-decoration:none; padding:16px 14px; margin:0 -14px; border-radius:8px;
+  transition:background .16s ease}
+.dish:hover{background:color-mix(in srgb,var(--accent) 8%, transparent)}
+.line{display:flex; align-items:baseline; gap:10px}
+.line .name{font-size:1.3rem; font-weight:900; letter-spacing:-.025em; color:var(--ink); white-space:nowrap}
+.dish:hover .line .name{color:var(--accent)}
+.line .dots{flex:1; border-bottom:2px dotted var(--rule); transform:translateY(-5px); min-width:20px}
+.line .price{font-size:.82rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--faint); white-space:nowrap}
+.dish:hover .line .price{color:var(--accent)}
+.dish .desc{margin:6px 0 0; color:var(--muted); font-size:.96rem; max-width:60ch; line-height:1.5}
+.dish .contains{margin:8px 0 0; font-size:.74rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--faint)}
+.dish .contains b{color:var(--muted); font-weight:700}
+
+/* ---------- test kitchen ---------- */
+.kitchen{margin-top:42px; border-top:1px solid var(--rule); padding-top:26px; text-align:center;
+  position:relative; z-index:1}
+.kitchen h2{margin:0 0 4px; font-size:1rem; font-weight:900; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--tan)}
+.kitchen p{margin:0 0 16px; color:var(--muted); font-size:.9rem; font-style:italic}
+.kitchen ul{list-style:none; margin:0; padding:0; display:flex; gap:9px; flex-wrap:wrap; justify-content:center}
+.kitchen li{border:1px solid var(--rule); padding:6px 13px; font-size:.84rem; font-weight:700;
+  color:var(--muted); border-radius:999px}
+
+.footnote{margin-top:34px; padding-top:22px; border-top:1px solid var(--rule); text-align:center;
+  color:var(--faint); font-size:.84rem; position:relative; z-index:1}
+.footnote p{margin:0 0 12px; font-style:italic}
+.footnote .links{display:flex; gap:18px; justify-content:center; flex-wrap:wrap}
+.footnote a{color:var(--green-deep); text-decoration:none; font-weight:800; font-size:.86rem;
+  letter-spacing:.06em; text-transform:uppercase}
+[data-theme="dark"] .footnote a{color:var(--green)}
+.footnote a:hover{text-decoration:underline}
+
+@media(max-width:560px){
+  .line{flex-wrap:wrap}
+  .line .name{white-space:normal}
+  .line .dots{display:none}
+  .line .price{margin-left:auto}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important; scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="menu">
+
+  <div class="topline">
+    <img src="/atpotato-normal.png" alt="">
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">source</a>
+    <button class="tt" id="tt">theme</button>
+  </div>
+
+  <header class="head">
+    <img class="potato" src="/atpotato-normal.png" alt="The atpotato mascot">
+    <div class="est">Serving the ATmosphere since 2025</div>
+    <h1>atpotato</h1>
+    <p class="tagline">Staple food for atproto, bsky, and beyond.</p>
+    <div class="flourish"><span>Today's menu</span></div>
+  </header>
+
+  <section class="course">
+    <h2>Mains</h2>
+    <p class="note">The two we'd order ourselves</p>
+
+    <a class="dish" style="--accent:var(--app-cred)" href="https://cred.blue">
+      <div class="line">
+        <span class="name">cred.blue</span><span class="dots"></span><span class="price">free</span>
+      </div>
+      <p class="desc">A Bluesky credibility score, your complete AT&nbsp;Protocol data footprint, and a way
+        to vibe-check strangers and new accounts before you follow them.</p>
+      <p class="contains"><b>Contains:</b> public APIs · account history · no signup required</p>
+    </a>
+
+    <a class="dish" style="--accent:var(--app-anisota)" href="https://anisota.net">
+      <div class="line">
+        <span class="name">anisota</span><span class="dots"></span><span class="price">free</span>
+      </div>
+      <p class="desc">A finite deck of post cards instead of an endless feed. Stamina instead of
+        doomscrolling, card rarity instead of like counts, and decks you can collect and share.</p>
+      <p class="contains"><b>Contains:</b> a whole client · a small game · a hard stop</p>
+    </a>
+  </section>
+
+  <section class="course">
+    <h2>Sides</h2>
+    <p class="note">Small, sharp, good with anything</p>
+
+    <a class="dish" style="--accent:var(--app-aturi)" href="https://aturi.to">
+      <div class="line">
+        <span class="name">aturi.to</span><span class="dots"></span><span class="price">free</span>
+      </div>
+      <p class="desc">Universal links for the ATmosphere. Wrap any record in one URL that opens in
+        whichever app the reader already uses.</p>
+      <p class="contains"><b>Contains:</b> at:// resolution · one paste · zero config</p>
+    </a>
+
+    <a class="dish" style="--accent:var(--app-flushes)" href="https://flushes.app">
+      <div class="line">
+        <span class="name">flushes</span><span class="dots"></span><span class="price">free</span>
+      </div>
+      <p class="desc">The decentralised toilet network of planet Earth. Post a flush from the bathroom
+        in sixty characters or fewer — a very silly app with a very real custom lexicon.</p>
+      <p class="contains"><b>Contains:</b> a custom lexicon · a custom AppView · approved emoji only</p>
+    </a>
+  </section>
+
+  <section class="course">
+    <h2>Reading</h2>
+    <p class="note">Slow food</p>
+
+    <a class="dish" style="--accent:var(--app-guide)" href="/guides/bluesky-for-brands">
+      <div class="line">
+        <span class="name">How to use Bluesky to grow your brand</span>
+        <span class="dots"></span><span class="price">~40 min</span>
+      </div>
+      <p class="desc">A comprehensive, jargon-free guide for companies, communities and creators
+        establishing a presence on Bluesky. Plain language, screenshots for every step, no prior
+        knowledge assumed.</p>
+      <p class="contains"><b>Contains:</b> feeds · labelers · starter packs · verification · handles</p>
+    </a>
+  </section>
+
+  <section class="kitchen">
+    <h2>In the test kitchen</h2>
+    <p>Not ready to serve. Prototyped in the open — no promises.</p>
+    <ul><li>anisota cocoon</li><li>mothing</li><li>habit tracker</li><li>types</li></ul>
+  </section>
+
+  <div class="footnote">
+    <p>Kitchen open around the clock. Everything on this menu is free, open source, and built on the
+      AT&nbsp;Protocol — so your data leaves with you.</p>
+    <div class="links">
+      <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+      <a href="https://tangled.sh/@atpota.to">tangled</a>
+      <a href="https://github.com/atpota-to">github</a>
+      <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.topline img, .head .potato').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

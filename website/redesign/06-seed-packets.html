@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 06 · Seed Packets — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --paper:#e8dcc0;            /* kraft rack */
+  --packet:#fdf8ec;           /* packet stock */
+  --ink:#2b2214; --muted:#6f6046; --faint:#a3937a;
+  --rule:#cbb894;
+  --app-cred:#2f80ed; --app-anisota:#7a5cc4; --app-aturi:#1f9e8f;
+  --app-flushes:#3aa0c9; --app-guide:#A58650;
+}
+[data-theme="dark"]{
+  --paper:#1b1710; --packet:#262019; --ink:#f3e9d6; --muted:#a4947a; --faint:#7a6c56;
+  --rule:#453a29;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); background:var(--paper);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(rgba(120,95,55,.14) 1px, transparent 1.3px),
+    radial-gradient(rgba(255,255,255,.4) 1px, transparent 1.3px);
+  background-size:7px 7px, 11px 11px; background-position:0 0, 4px 5px;
+}
+[data-theme="dark"] body{background-image:radial-gradient(rgba(255,255,255,.035) 1px, transparent 1.3px); background-size:8px 8px}
+a{color:inherit}
+.wrap{max-width:1080px; margin:0 auto; padding:0 22px 80px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* ---------- catalog masthead ---------- */
+.mast{padding:26px 0 0; display:flex; align-items:center; gap:12px}
+.mast img{width:34px; height:34px; object-fit:contain}
+.mast b{font-weight:900; letter-spacing:-.02em}
+.mast .sp{flex:1}
+.mast a{text-decoration:none; font-weight:700; font-size:.88rem; color:var(--muted); padding:6px 10px}
+.mast a:hover{color:var(--ink); text-decoration:underline}
+.tt{border:2px solid var(--ink); background:transparent; color:var(--ink); border-radius:0;
+  padding:5px 11px; cursor:pointer; font-family:inherit; font-weight:800; font-size:.8rem}
+
+.hero{text-align:center; padding:38px 0 34px; border-bottom:3px double var(--rule); margin-bottom:8px}
+.hero .est{font-size:.7rem; letter-spacing:.3em; text-transform:uppercase; color:var(--faint)}
+.hero h1{font-size:clamp(2.4rem,6.4vw,4.2rem); font-weight:900; letter-spacing:-.04em;
+  margin:12px 0 6px; color:var(--brown); line-height:.95}
+[data-theme="dark"] .hero h1{color:var(--sand)}
+.hero .sub{margin:0 auto; max-width:44ch; color:var(--muted); font-size:1.05rem}
+.hero .potato{width:96px; height:auto; display:block; margin:0 auto 6px}
+
+/* ---------- rack ---------- */
+.rack-label{display:flex; align-items:center; gap:14px; margin:40px 0 22px}
+.rack-label h2{margin:0; font-size:1.15rem; font-weight:900; letter-spacing:.02em;
+  text-transform:uppercase; color:var(--tan)}
+.rack-label::after{content:""; flex:1; height:3px; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule)}
+.rack-label span{font-size:.78rem; color:var(--faint); letter-spacing:.08em}
+
+.rack{display:grid; grid-template-columns:repeat(auto-fill,minmax(238px,1fr)); gap:26px 22px}
+
+.packet{
+  position:relative; background:var(--packet); text-decoration:none; display:flex; flex-direction:column;
+  border:1px solid var(--rule); padding:26px 20px 18px; min-height:330px;
+  box-shadow:3px 4px 0 rgba(90,68,32,.16);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+[data-theme="dark"] .packet{box-shadow:3px 4px 0 rgba(0,0,0,.5)}
+.packet:hover{transform:translateY(-7px) rotate(-.6deg); box-shadow:5px 9px 0 rgba(90,68,32,.22)}
+.packet:nth-child(even):hover{transform:translateY(-7px) rotate(.6deg)}
+
+/* tear-off strip + punch hole */
+.packet::before{
+  content:""; position:absolute; top:40px; left:0; right:0; height:0; pointer-events:none;
+  border-top:2px dashed var(--rule);
+}
+.packet::after{
+  content:""; position:absolute; top:11px; left:50%; translate:-50% 0; width:15px; height:15px;
+  border-radius:50%; background:var(--paper); border:1px solid var(--rule);
+}
+
+.band{
+  margin:22px -20px 16px; padding:12px 20px; background:var(--accent);
+  color:#fff; display:flex; align-items:baseline; gap:8px;
+}
+.band .n{font-size:.66rem; letter-spacing:.18em; opacity:.8}
+.band .sp{flex:1}
+.band .yield{font-size:.66rem; letter-spacing:.14em; opacity:.85}
+
+.packet h3{margin:0; font-size:1.5rem; font-weight:900; letter-spacing:-.03em; line-height:1.05}
+.variety{margin:3px 0 12px; font-size:.78rem; font-style:italic; color:var(--faint); letter-spacing:.02em}
+.instr{margin:0 0 16px; font-size:.92rem; color:var(--muted); line-height:1.5}
+.instr b{color:var(--ink); font-weight:700}
+
+.specs{margin-top:auto; border-top:1px dashed var(--rule); padding-top:11px;
+  display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:.7rem; color:var(--faint)}
+.specs dt{letter-spacing:.13em; text-transform:uppercase}
+.specs dd{margin:0; color:var(--muted); font-weight:700; text-align:right}
+.sow{position:absolute; left:20px; top:14px; font-size:.62rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint)}
+
+/* wide packet for the guide */
+.packet.wide{grid-column:span 2}
+@media(max-width:760px){ .packet.wide{grid-column:span 1} }
+
+/* ---------- unpacketed ---------- */
+.bin{margin-top:36px; border:2px dashed var(--rule); padding:24px; background:rgba(255,255,255,.28)}
+[data-theme="dark"] .bin{background:rgba(255,255,255,.02)}
+.bin h3{margin:0 0 5px; font-size:1rem; font-weight:900; text-transform:uppercase; letter-spacing:.06em; color:var(--tan)}
+.bin p{margin:0 0 14px; color:var(--muted); font-size:.93rem}
+.bin ul{list-style:none; margin:0; padding:0; display:flex; gap:9px; flex-wrap:wrap}
+.bin li{border:1px solid var(--rule); background:var(--packet); padding:6px 13px; font-size:.85rem;
+  font-weight:700; color:var(--muted)}
+
+/* ---------- footer ---------- */
+footer{margin-top:44px; border-top:3px double var(--rule); padding-top:24px;
+  display:flex; gap:18px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:.9rem}
+footer img{width:38px; height:38px; object-fit:contain}
+footer .sp{flex:1}
+footer a{color:var(--green-deep); text-decoration:none; font-weight:700}
+[data-theme="dark"] footer a{color:var(--green)}
+footer a:hover{text-decoration:underline}
+footer small{display:block; color:var(--faint); font-size:.78rem}
+
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <img src="/atpotato-normal.png" alt=""><b>atpotato</b>
+    <span class="sp"></span>
+    <a href="#rack">catalog</a>
+    <a href="mailto:contact@atpota.to">contact</a>
+    <button class="tt" id="tt">theme</button>
+  </div>
+
+  <header class="hero">
+    <img class="potato" src="/atpotato-normal.png" alt="The atpotato mascot">
+    <div class="est">Growers of open social software · est. 2025</div>
+    <h1>The atpotato<br>seed catalog</h1>
+    <p class="sub">Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.
+      Everything here is free, open, and grows in almost any conditions.</p>
+  </header>
+
+  <div class="rack-label" id="rack">
+    <h2>This season's varieties</h2>
+    <span>five packets · all hardy · all free</span>
+  </div>
+
+  <div class="rack">
+
+    <a class="packet" style="--accent:var(--app-cred)" href="https://cred.blue">
+      <span class="sow mono">no. 001</span>
+      <div class="band"><span class="n">VIGOROUS</span><span class="sp"></span><span class="yield">FLAGSHIP</span></div>
+      <h3>cred.blue</h3>
+      <p class="variety">Solanum credibilis · scoring type</p>
+      <p class="instr">Generate a Bluesky credibility score, discover your AT&nbsp;Protocol data footprint,
+        and <b>vibe-check strangers</b> before you follow them.</p>
+      <dl class="specs">
+        <dt>Sow</dt><dd>any account</dd>
+        <dt>Germinates</dt><dd>instantly</dd>
+        <dt>Hardiness</dt><dd>live</dd>
+      </dl>
+    </a>
+
+    <a class="packet" style="--accent:var(--app-anisota)" href="https://anisota.net">
+      <span class="sow mono">no. 002</span>
+      <div class="band"><span class="n">SLOW-GROWING</span><span class="sp"></span><span class="yield">CLIENT</span></div>
+      <h3>anisota</h3>
+      <p class="variety">Solanum finitum · card-bearing</p>
+      <p class="instr">A <b>finite deck</b> of post cards instead of an endless feed. Stamina instead of
+        doomscrolling, card rarity instead of like counts, decks you can collect and share.</p>
+      <dl class="specs">
+        <dt>Sow</dt><dd>evenings</dd>
+        <dt>Germinates</dt><dd>one deck</dd>
+        <dt>Hardiness</dt><dd>live</dd>
+      </dl>
+    </a>
+
+    <a class="packet" style="--accent:var(--app-aturi)" href="https://aturi.to">
+      <span class="sow mono">no. 003</span>
+      <div class="band"><span class="n">SPREADING</span><span class="sp"></span><span class="yield">TOOL</span></div>
+      <h3>aturi.to</h3>
+      <p class="variety">Solanum ubique · running type</p>
+      <p class="instr"><b>Universal links for the ATmosphere.</b> Wrap any record in one URL that opens in
+        whichever app the reader already uses.</p>
+      <dl class="specs">
+        <dt>Sow</dt><dd>anywhere</dd>
+        <dt>Germinates</dt><dd>one paste</dd>
+        <dt>Hardiness</dt><dd>live</dd>
+      </dl>
+    </a>
+
+    <a class="packet" style="--accent:var(--app-flushes)" href="https://flushes.app">
+      <span class="sow mono">no. 004</span>
+      <div class="band"><span class="n">NOVELTY</span><span class="sp"></span><span class="yield">LEXICON</span></div>
+      <h3>flushes</h3>
+      <p class="variety">Solanum ridiculum · porcelain-loving</p>
+      <p class="instr">The decentralised toilet network. A very silly app with a <b>very real custom
+        lexicon</b> — proof that atproto is for more than microblogging.</p>
+      <dl class="specs">
+        <dt>Sow</dt><dd>the bathroom</dd>
+        <dt>Germinates</dt><dd>60 characters</dd>
+        <dt>Hardiness</dt><dd>live</dd>
+      </dl>
+    </a>
+
+    <a class="packet wide" style="--accent:var(--app-guide)" href="/guides/bluesky-for-brands">
+      <span class="sow mono">no. 005</span>
+      <div class="band"><span class="n">PERENNIAL</span><span class="sp"></span><span class="yield">READING</span></div>
+      <h3>How to use Bluesky to grow your brand</h3>
+      <p class="variety">Guide · for companies, communities and creators</p>
+      <p class="instr">A comprehensive, jargon-free guide for anyone establishing a presence on Bluesky —
+        plain language, screenshots for every step, and <b>no prior knowledge assumed</b>. About forty
+        minutes to read, free forever.</p>
+      <dl class="specs">
+        <dt>Sow</dt><dd>day one</dd>
+        <dt>Germinates</dt><dd>~40 min</dd>
+        <dt>Hardiness</dt><dd>evergreen</dd>
+      </dl>
+    </a>
+
+  </div>
+
+  <div class="bin">
+    <h3>Not yet packeted</h3>
+    <p>Varieties still being trialled. Watch the beds on Tangled or GitHub.</p>
+    <ul>
+      <li>anisota cocoon</li>
+      <li>mothing</li>
+      <li>habit tracker</li>
+      <li>types</li>
+    </ul>
+  </div>
+
+  <footer>
+    <img src="/atpotato-normal.png" alt="">
+    <div><strong>atpotato</strong><small>cultivating knowledge, equipping individuals, growing community.</small></div>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">tangled</a>
+    <a href="https://github.com/atpota-to">github</a>
+    <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.mast img, .hero .potato, footer img').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

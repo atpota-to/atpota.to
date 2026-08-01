@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 08 · Growth Stages — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --bg:#f8f4ea; --card:#fffdf7; --ink:#241e15; --muted:#6d6151; --faint:#9d907c;
+  --line:#e5dac2;
+  --app-cred:#2f80ed; --app-anisota:#7a5cc4; --app-aturi:#1f9e8f;
+  --app-flushes:#3aa0c9; --app-guide:#A58650;
+  --stage-1:#5aa84f; --stage-2:#b98a3d; --stage-3:#7a5cc4;
+}
+[data-theme="dark"]{
+  --bg:#12100c; --card:#1c1913; --ink:#f2ebdd; --muted:#a0947f; --faint:#786c58;
+  --line:#2e2820; --brown:#c9a86a;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.wrap{max-width:1040px; margin:0 auto; padding:0 22px 80px}
+.label{font-size:.68rem; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); font-weight:800}
+
+/* ---------- nav ---------- */
+.nav{display:flex; align-items:center; gap:12px; padding:20px 0 8px}
+.nav img{width:32px; height:32px; object-fit:contain}
+.nav b{font-weight:900; letter-spacing:-.02em}
+.nav .sp{flex:1}
+.nav a{text-decoration:none; color:var(--muted); font-weight:700; font-size:.88rem; padding:6px 10px;
+  border-radius:999px}
+.nav a:hover{color:var(--ink); background:var(--line)}
+.tt{border:1px solid var(--line); background:var(--card); border-radius:999px; padding:6px 13px;
+  cursor:pointer; font-family:inherit; font-weight:800; font-size:.8rem; color:var(--muted)}
+
+/* ---------- hero ---------- */
+.hero{padding:46px 0 34px; text-align:center}
+.hero img{width:104px; height:auto; display:block; margin:0 auto 14px}
+.hero h1{font-size:clamp(2.1rem,5.2vw,3.4rem); font-weight:900; letter-spacing:-.035em;
+  margin:0 0 12px; line-height:1.02; color:var(--brown)}
+[data-theme="dark"] .hero h1{color:var(--sand)}
+.hero p{margin:0 auto; max-width:52ch; color:var(--muted); font-size:1.06rem}
+
+/* ---------- stage picker ---------- */
+.picker{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:34px 0 8px}
+.pick{
+  border:2px solid var(--line); background:var(--card); border-radius:16px; padding:20px 18px;
+  cursor:pointer; text-align:left; font-family:inherit; color:inherit; position:relative;
+  transition:border-color .18s ease, transform .18s ease; display:flex; flex-direction:column; gap:6px;
+}
+.pick:hover{transform:translateY(-3px)}
+.pick .bug{font-size:1.9rem; line-height:1}
+.pick h2{margin:2px 0 0; font-size:1.18rem; font-weight:900; letter-spacing:-.02em; color:var(--stage)}
+.pick p{margin:0; font-size:.9rem; color:var(--muted); line-height:1.45}
+.pick[aria-pressed="true"]{border-color:var(--stage); background:color-mix(in srgb,var(--stage) 8%, var(--card))}
+.pick .count{position:absolute; top:16px; right:18px; font-size:.68rem; font-weight:800;
+  letter-spacing:.12em; color:var(--faint)}
+
+.stem{display:flex; align-items:center; gap:12px; margin:22px 0 26px; color:var(--faint)}
+.stem .bar{flex:1; height:2px; background:linear-gradient(90deg,var(--stage-1),var(--stage-2),var(--stage-3))}
+.stem span{font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; font-weight:800}
+.reset{background:none; border:0; color:var(--green-deep); font-family:inherit; font-weight:800;
+  font-size:.8rem; cursor:pointer; letter-spacing:.06em; text-transform:uppercase; padding:0}
+[data-theme="dark"] .reset{color:var(--green)}
+.reset[hidden]{display:none}
+
+/* ---------- results ---------- */
+.results{display:flex; flex-direction:column; gap:14px}
+.item{
+  display:grid; grid-template-columns:172px minmax(0,1fr) auto; gap:20px; align-items:center;
+  background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 22px;
+  text-decoration:none; transition:border-color .18s ease, transform .18s ease;
+}
+.item:hover{border-color:var(--accent); transform:translateY(-2px)}
+.item[hidden]{display:none}
+.stagepill{
+  display:inline-flex; align-items:center; gap:6px; font-size:.68rem; font-weight:800;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--stagecol);
+  border:1px solid color-mix(in srgb,var(--stagecol) 40%, transparent);
+  background:color-mix(in srgb,var(--stagecol) 10%, transparent);
+  padding:5px 11px; border-radius:999px; text-align:center; line-height:1.3;
+}
+.item h3{margin:0 0 4px; font-size:1.28rem; font-weight:900; letter-spacing:-.025em; color:var(--accent)}
+.item p{margin:0; color:var(--muted); font-size:.95rem}
+.item .why{margin:8px 0 0; font-size:.86rem; color:var(--faint); font-style:italic}
+.item .go{font-weight:900; font-size:.88rem; color:var(--accent); white-space:nowrap}
+
+.empty{padding:26px; border:1px dashed var(--line); border-radius:16px; color:var(--muted);
+  text-align:center; font-size:.95rem}
+.empty[hidden]{display:none}
+
+/* ---------- everything else ---------- */
+.more{margin-top:40px; border-top:1px solid var(--line); padding-top:28px}
+.more h2{margin:0 0 6px; font-size:1.25rem; font-weight:900; letter-spacing:-.02em; color:var(--tan)}
+.more p{margin:0 0 16px; color:var(--muted); font-size:.95rem}
+.chips{display:flex; gap:8px; flex-wrap:wrap}
+.chip{border:1px solid var(--line); background:var(--card); border-radius:999px; padding:7px 14px;
+  font-size:.85rem; font-weight:700; color:var(--muted)}
+
+footer{margin-top:40px; border-top:1px solid var(--line); padding-top:26px; display:flex; gap:18px;
+  align-items:center; flex-wrap:wrap; color:var(--muted); font-size:.9rem}
+footer img{width:38px; height:38px; object-fit:contain}
+footer .sp{flex:1}
+footer a{color:var(--green-deep); text-decoration:none; font-weight:700}
+[data-theme="dark"] footer a{color:var(--green)}
+footer a:hover{text-decoration:underline}
+footer small{display:block; color:var(--faint); font-size:.78rem}
+
+@media(max-width:780px){
+  .picker{grid-template-columns:1fr}
+  .item{grid-template-columns:1fr; gap:12px}
+  .item .go{justify-self:start}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important; scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="nav">
+    <img src="/atpotato-normal.png" alt=""><b>atpotato</b>
+    <span class="sp"></span>
+    <a href="/guides/bluesky-for-brands">guides</a>
+    <a href="https://tangled.sh/@atpota.to">source</a>
+    <a href="mailto:contact@atpota.to">contact</a>
+    <button class="tt" id="tt">theme</button>
+  </div>
+
+  <header class="hero">
+    <img src="/atpotato-normal.png" alt="The atpotato mascot">
+    <h1>Where are you in the ATmosphere?</h1>
+    <p>We make fun apps, helpful tools, and approachable content for atproto and Bluesky.
+      Tell us roughly where you're standing and we'll point you at the right ones.</p>
+  </header>
+
+  <div class="picker">
+    <button class="pick" style="--stage:var(--stage-1)" data-stage="caterpillar" aria-pressed="false">
+      <span class="bug">🐛</span>
+      <span class="count">3 things</span>
+      <h2>Caterpillar</h2>
+      <p>Just arrived, or still working out what a handle even is.</p>
+    </button>
+    <button class="pick" style="--stage:var(--stage-2)" data-stage="chrysalis" aria-pressed="false">
+      <span class="bug">🌿</span>
+      <span class="count">3 things</span>
+      <h2>Chrysalis</h2>
+      <p>Comfortable posting, now curious about feeds, labelers and what else is out here.</p>
+    </button>
+    <button class="pick" style="--stage:var(--stage-3)" data-stage="butterfly" aria-pressed="false">
+      <span class="bug">🦋</span>
+      <span class="count">3 things</span>
+      <h2>Butterfly</h2>
+      <p>Building on the protocol, or deep enough in to have opinions about lexicons.</p>
+    </button>
+  </div>
+
+  <div class="stem">
+    <span id="stemlabel">Showing everything</span>
+    <span class="bar"></span>
+    <button class="reset" id="reset" hidden>Show everything</button>
+  </div>
+
+  <div class="results" id="results">
+
+    <a class="item" style="--accent:var(--app-guide); --stagecol:var(--stage-1)"
+       href="/guides/bluesky-for-brands" data-stages="caterpillar chrysalis">
+      <span class="stagepill">🐛 start here</span>
+      <div>
+        <h3>How to use Bluesky to grow your brand</h3>
+        <p>A comprehensive, jargon-free guide for companies, communities and creators — plain language,
+          screenshots for every step, about forty minutes.</p>
+        <p class="why">Assumes you know nothing. That's the point.</p>
+      </div>
+      <span class="go">Read →</span>
+    </a>
+
+    <a class="item" style="--accent:var(--app-cred); --stagecol:var(--stage-1)"
+       href="https://cred.blue" data-stages="caterpillar chrysalis butterfly">
+      <span class="stagepill">🐛 good first stop</span>
+      <div>
+        <h3>cred.blue</h3>
+        <p>Generate a Bluesky credibility score, discover your AT&nbsp;Protocol data footprint, and
+          vibe-check strangers and new accounts before you follow them.</p>
+        <p class="why">The fastest way to see that your account is data you own.</p>
+      </div>
+      <span class="go">Open ↗</span>
+    </a>
+
+    <a class="item" style="--accent:var(--app-flushes); --stagecol:var(--stage-1)"
+       href="https://flushes.app" data-stages="caterpillar butterfly">
+      <span class="stagepill">🐛 the fun one</span>
+      <div>
+        <h3>flushes.app</h3>
+        <p>The decentralised toilet network. Post a flush from the bathroom in sixty characters or fewer.</p>
+        <p class="why">Silly on purpose — and the easiest proof that atproto isn't just Bluesky.</p>
+      </div>
+      <span class="go">Open ↗</span>
+    </a>
+
+    <a class="item" style="--accent:var(--app-anisota); --stagecol:var(--stage-2)"
+       href="https://anisota.net" data-stages="chrysalis butterfly">
+      <span class="stagepill">🌿 try a new client</span>
+      <div>
+        <h3>anisota.net</h3>
+        <p>A finite deck of post cards instead of an endless feed. Stamina instead of doomscrolling,
+          card rarity instead of like counts, decks you can collect and share.</p>
+        <p class="why">Where you find out your timeline doesn't have to look like the app you got it from.</p>
+      </div>
+      <span class="go">Open ↗</span>
+    </a>
+
+    <a class="item" style="--accent:var(--app-aturi); --stagecol:var(--stage-2)"
+       href="https://aturi.to" data-stages="chrysalis butterfly">
+      <span class="stagepill">🌿 share anywhere</span>
+      <div>
+        <h3>aturi.to</h3>
+        <p>Universal links for the ATmosphere. Wrap any record in one URL that opens in whichever app
+          the reader already uses.</p>
+        <p class="why">The moment sharing across the ecosystem stops being annoying.</p>
+      </div>
+      <span class="go">Open ↗</span>
+    </a>
+
+    <a class="item" style="--accent:var(--app-flushes); --stagecol:var(--stage-3)"
+       href="https://github.com/atpota-to/flushes.app" data-stages="butterfly">
+      <span class="stagepill">🦋 lexicon reference</span>
+      <div>
+        <h3>The flushes lexicon</h3>
+        <p>A working custom lexicon and custom AppView you can read, integrate, and copy — including
+          showing flush counts on profiles in your own client.</p>
+        <p class="why">A complete, small example of building past microblogging.</p>
+      </div>
+      <span class="go">Read the source ↗</span>
+    </a>
+
+    <a class="item" style="--accent:var(--green-deep); --stagecol:var(--stage-3)"
+       href="https://tangled.sh/@atpota.to" data-stages="butterfly">
+      <span class="stagepill">🦋 source</span>
+      <div>
+        <h3>Everything, open</h3>
+        <p>All four apps live on Tangled first and mirror to GitHub, alongside the half-finished
+          things — cocoon, mothing, habit tracker, types.</p>
+        <p class="why">Read the commits, fork the ugly middle part.</p>
+      </div>
+      <span class="go">Browse ↗</span>
+    </a>
+
+  </div>
+
+  <div class="empty" id="empty" hidden>Nothing tagged for that stage yet — try another.</div>
+
+  <section class="more">
+    <h2>Still in the ground</h2>
+    <p>Prototyped in the open. No promises, no launch dates.</p>
+    <div class="chips">
+      <span class="chip">🦋 anisota cocoon</span>
+      <span class="chip">🌙 mothing</span>
+      <span class="chip">📊 habit tracker</span>
+      <span class="chip">🔤 types</span>
+    </div>
+  </section>
+
+  <footer>
+    <img src="/atpotato-normal.png" alt="">
+    <div><strong>atpotato</strong><small>cultivating knowledge, equipping individuals, growing community.</small></div>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">tangled</a>
+    <a href="https://github.com/atpota-to">github</a>
+    <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+
+  var picks   = [].slice.call(document.querySelectorAll('.pick'));
+  var items   = [].slice.call(document.querySelectorAll('.item'));
+  var stemLbl = document.getElementById('stemlabel');
+  var reset   = document.getElementById('reset');
+  var empty   = document.getElementById('empty');
+  var names   = {caterpillar:'Caterpillar', chrysalis:'Chrysalis', butterfly:'Butterfly'};
+  var current = null;
+
+  // label each picker with a real count
+  picks.forEach(function(p){
+    var s = p.getAttribute('data-stage');
+    var n = items.filter(function(i){ return i.getAttribute('data-stages').split(' ').indexOf(s) > -1; }).length;
+    p.querySelector('.count').textContent = n + (n === 1 ? ' thing' : ' things');
+  });
+
+  function apply(stage){
+    current = stage;
+    var shown = 0;
+    items.forEach(function(i){
+      var ok = !stage || i.getAttribute('data-stages').split(' ').indexOf(stage) > -1;
+      i.hidden = !ok;
+      if (ok) shown++;
+    });
+    picks.forEach(function(p){
+      p.setAttribute('aria-pressed', String(p.getAttribute('data-stage') === stage));
+    });
+    stemLbl.textContent = stage ? ('Showing ' + shown + ' for ' + names[stage]) : 'Showing everything';
+    reset.hidden = !stage;
+    empty.hidden = shown > 0;
+  }
+
+  picks.forEach(function(p){
+    p.addEventListener('click', function(){
+      var s = p.getAttribute('data-stage');
+      apply(current === s ? null : s);
+    });
+  });
+  reset.addEventListener('click', function(){ apply(null); });
+
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.nav img, .hero img, footer img').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>

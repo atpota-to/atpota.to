@@ -27,6 +27,10 @@ h1{font-size:clamp(2rem,5vw,2.9rem); font-weight:900; letter-spacing:-.035em; ma
 .lede{color:var(--muted); max-width:62ch; margin:0 0 8px}
 .note{color:var(--muted); font-size:.9rem; max-width:62ch; margin:0 0 36px}
 .list{display:flex; flex-direction:column; gap:16px}
+.group{font-size:.78rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--muted); margin:34px 0 14px; display:flex; align-items:center; gap:10px}
+.group::after{content:""; flex:1; height:1px; background:var(--line)}
+.group span{font-weight:700; letter-spacing:.04em; text-transform:none; color:var(--muted); opacity:.8}
 .item{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px;
   display:grid; grid-template-columns:64px 1fr; gap:20px; text-decoration:none;
   transition:transform .16s ease, border-color .16s ease}
@@ -54,12 +58,14 @@ h1{font-size:clamp(2rem,5vw,2.9rem); font-weight:900; letter-spacing:-.035em; ma
     <button class="tt" id="tt">theme</button>
   </div>
 
-  <h1>Five redesign directions</h1>
+  <h1>Ten redesign directions</h1>
   <p class="lede">Working prototypes of the atpota.to homepage, each one a different answer to the same
     brief: show off the apps under the brand umbrella instead of listing them as links.</p>
-  <p class="note">All five use the real mascot, the real brand palette, and real copy for cred.blue,
+  <p class="note">All ten use the real mascot, the real brand palette, and real copy for cred.blue,
     anisota, aturi.to, flushes and the guides. Per-app accent colours are placeholders — swap them for
     each app's actual brand colour. Every page has a working light/dark toggle.</p>
+
+  <h2 class="group">Round one <span>· 01 and 03 are the keepers</span></h2>
 
   <div class="list">
 
@@ -69,7 +75,7 @@ h1{font-size:clamp(2rem,5vw,2.9rem); font-weight:900; letter-spacing:-.035em; ma
         <h2>Produce Stand</h2>
         <p>Warm indie-studio layout. Sticky nav, mascot hero, then a card grid where cred.blue and
           anisota get double-width feature cards. Reads instantly, scales to a dozen apps without redesign.</p>
-        <div class="tags"><span class="tag best">safest bet</span><span class="tag">card grid</span><span class="tag">low risk</span></div>
+        <div class="tags"><span class="tag best">you liked this</span><span class="tag">card grid</span><span class="tag">low risk</span></div>
         <span class="go">Open direction 01 →</span>
       </div>
     </a>
@@ -91,7 +97,7 @@ h1{font-size:clamp(2rem,5vw,2.9rem); font-weight:900; letter-spacing:-.035em; ma
         <h2>Root System</h2>
         <p>The potato metaphor, taken literally. Sky above the fold, then you dig into the soil where each
           app hangs off an animated taproot. The most memorable, and the most work to maintain.</p>
-        <div class="tags"><span class="tag">highest personality</span><span class="tag">illustrated</span><span class="tag">scroll animation</span></div>
+        <div class="tags"><span class="tag best">you liked this</span><span class="tag">illustrated</span><span class="tag">scroll animation</span></div>
         <span class="go">Open direction 03 →</span>
       </div>
     </a>
@@ -115,6 +121,71 @@ h1{font-size:clamp(2rem,5vw,2.9rem); font-weight:900; letter-spacing:-.035em; ma
           the mascot's expressions. Playful, mobile-friendly, endlessly extendable — add a tile per app.</p>
         <div class="tags"><span class="tag">most fun</span><span class="tag">bento grid</span><span class="tag">easy to extend</span></div>
         <span class="go">Open direction 05 →</span>
+      </div>
+    </a>
+
+  </div>
+
+  <h2 class="group">Round two <span>· five more in the same lane</span></h2>
+
+  <div class="list">
+
+    <a class="item" style="--accent:#8d6f3d" href="06-seed-packets">
+      <div class="n">06</div>
+      <div>
+        <h2>Seed Packets</h2>
+        <p>Every app becomes an illustrated seed packet on a catalog rack — serrated top edge, punch hole,
+          coloured header band, and planting instructions in place of a description. Keeps 01's grid, swaps
+          the flat cards for a physical object.</p>
+        <div class="tags"><span class="tag">01 + a real object</span><span class="tag">scales freely</span><span class="tag">very on-brand</span></div>
+        <span class="go">Open direction 06 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#1f9e8f" href="07-anatomy-plate">
+      <div class="n">07</div>
+      <div>
+        <h2>Anatomy Plate</h2>
+        <p>One botanical specimen plate: the potato in the middle, leader lines out to each app labelled
+          fig. a through fig. e. Hovering a label lights its line and its point on the mascot. 03's
+          illustration instinct, compressed into a single screen.</p>
+        <div class="tags"><span class="tag">03 without the scroll</span><span class="tag">single screen</span><span class="tag">caps at ~6 apps</span></div>
+        <span class="go">Open direction 07 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#5aa84f" href="08-growth-stages">
+      <div class="n">08</div>
+      <div>
+        <h2>Growth Stages</h2>
+        <p>The only direction that changes the structure rather than the surface. Caterpillar, chrysalis or
+          butterfly — pick where you are and the page filters to the apps and guides meant for you, with a
+          line on each explaining why it's there.</p>
+        <div class="tags"><span class="tag">uses your brand doc</span><span class="tag">real filtering</span><span class="tag">needs the copy</span></div>
+        <span class="go">Open direction 08 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#725B36" href="09-staple-food">
+      <div class="n">09</div>
+      <div>
+        <h2>Staple Food</h2>
+        <p>The other half of the potato metaphor: a printed menu. Mains, sides, reading, test kitchen —
+          dish names with dot leaders out to a price that's always "free", and an ingredients line under
+          each one.</p>
+        <div class="tags"><span class="tag">food not garden</span><span class="tag">narrow + calm</span><span class="tag">no images needed</span></div>
+        <span class="go">Open direction 09 →</span>
+      </div>
+    </a>
+
+    <a class="item" style="--accent:#39B54A" href="10-farmstand">
+      <div class="n">10</div>
+      <div>
+        <h2>Farmstand</h2>
+        <p>Hand-painted market signage. Thick outlines, hard offset shadows that collapse when you press a
+          card, a scrolling "now growing" ticker along the top. The loudest direction, still warm.</p>
+        <div class="tags"><span class="tag">most graphic</span><span class="tag">chunky + loud</span><span class="tag">bold call</span></div>
+        <span class="go">Open direction 10 →</span>
       </div>
     </a>
 

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Direction 10 · Farmstand — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+<style>
+:root{
+  --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --bg:#f3e4c2; --board:#fffaee; --ink:#22190c; --muted:#5f5236;
+  --line:var(--ink); --shadow:var(--ink);
+  --app-cred:#2f80ed; --app-anisota:#7a5cc4; --app-aturi:#1f9e8f;
+  --app-flushes:#3aa0c9; --app-guide:#b07f33;
+}
+[data-theme="dark"]{
+  --bg:#1a1409; --board:#241c10; --ink:#f7ecd4; --muted:#b3a385;
+  --line:#f7ecd4; --shadow:#000000;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"eigerdals",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.wrap{max-width:1080px; margin:0 auto; padding:0 20px 80px}
+
+/* ---------- marquee ---------- */
+.ticker{
+  background:var(--green-deep); color:#fff; border-bottom:3px solid var(--line);
+  overflow:hidden; white-space:nowrap; padding:9px 0;
+}
+.ticker-track{display:inline-flex; gap:0; animation:roll 26s linear infinite; will-change:transform}
+.ticker span{font-weight:900; letter-spacing:.12em; text-transform:uppercase; font-size:.82rem;
+  padding:0 18px}
+@keyframes roll{from{transform:translateX(0)} to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){
+  .ticker-track{animation:none}
+  .ticker{white-space:normal}
+}
+
+/* ---------- top ---------- */
+.top{display:flex; align-items:center; gap:12px; padding:18px 0}
+.top img{width:36px; height:36px; object-fit:contain}
+.top b{font-weight:900; letter-spacing:-.02em; font-size:1.05rem}
+.top .sp{flex:1}
+.btn{
+  display:inline-block; border:3px solid var(--line); background:var(--board); color:var(--ink);
+  font-family:inherit; font-weight:900; font-size:.82rem; letter-spacing:.08em; text-transform:uppercase;
+  padding:8px 15px; border-radius:999px; cursor:pointer; text-decoration:none;
+  box-shadow:3px 3px 0 var(--shadow); transition:transform .12s ease, box-shadow .12s ease;
+}
+.btn:hover{transform:translate(3px,3px); box-shadow:0 0 0 var(--shadow)}
+
+/* ---------- sign ---------- */
+.sign{
+  border:4px solid var(--line); background:var(--board); border-radius:26px; padding:38px 34px;
+  box-shadow:9px 9px 0 var(--shadow); position:relative; margin-top:6px; overflow:hidden;
+  display:grid; grid-template-columns:1.1fr auto; gap:26px; align-items:center;
+}
+.sign::before{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background:repeating-linear-gradient(135deg, transparent 0 22px, rgba(120,95,45,.06) 22px 44px);
+}
+.sign h1{
+  margin:0 0 12px; font-size:clamp(2.5rem,7vw,4.6rem); font-weight:900; letter-spacing:-.045em;
+  line-height:.9; color:var(--brown);
+}
+[data-theme="dark"] .sign h1{color:var(--sand)}
+.sign .kick{
+  display:inline-block; background:var(--green); color:#08210e; border:3px solid var(--line);
+  border-radius:999px; padding:5px 14px; font-size:.75rem; font-weight:900; letter-spacing:.14em;
+  text-transform:uppercase; margin-bottom:16px;
+}
+.sign p{margin:0 0 20px; font-size:1.12rem; color:var(--muted); max-width:34ch}
+.sign .cta{display:flex; gap:12px; flex-wrap:wrap}
+.btn-green{background:var(--green); color:#08210e}
+.sign .potato{width:min(210px,40vw); height:auto; display:block; position:relative; z-index:1}
+
+/* ---------- stalls ---------- */
+.stall-head{display:flex; align-items:center; gap:14px; margin:48px 0 20px}
+.stall-head h2{margin:0; font-size:1.6rem; font-weight:900; letter-spacing:-.03em}
+.stall-head .rule{flex:1; height:4px; background:var(--line); border-radius:4px}
+.stall-head .count{font-size:.78rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted)}
+
+.stalls{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:22px}
+.stall{
+  border:4px solid var(--line); background:var(--board); border-radius:20px; padding:24px;
+  text-decoration:none; box-shadow:7px 7px 0 var(--shadow); position:relative;
+  transition:transform .13s ease, box-shadow .13s ease; display:flex; flex-direction:column; gap:10px;
+}
+.stall:hover{transform:translate(7px,7px); box-shadow:0 0 0 var(--shadow)}
+.stall .tagshape{
+  align-self:flex-start; background:var(--accent); color:#fff; border:3px solid var(--line);
+  border-radius:999px; padding:4px 13px; font-size:.7rem; font-weight:900; letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.stall h3{margin:2px 0 0; font-size:1.75rem; font-weight:900; letter-spacing:-.035em; line-height:1}
+.stall p{margin:0; color:var(--muted); font-size:.96rem; line-height:1.45}
+.stall .foot{margin-top:auto; padding-top:14px; display:flex; align-items:center; gap:8px;
+  border-top:3px dashed color-mix(in srgb,var(--line) 30%, transparent)}
+.stall .foot .go{font-weight:900; font-size:.88rem; letter-spacing:.06em; text-transform:uppercase}
+.stall .foot .sp{flex:1}
+.stall .foot .free{font-size:.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted)}
+.stall.big{grid-column:span 2}
+@media(max-width:720px){ .stall.big{grid-column:span 1} }
+
+/* ---------- crate ---------- */
+.crate{
+  margin-top:30px; border:4px dashed var(--line); border-radius:20px; padding:24px; text-align:center;
+}
+.crate h3{margin:0 0 6px; font-size:1.2rem; font-weight:900; letter-spacing:-.02em}
+.crate p{margin:0 0 16px; color:var(--muted); font-size:.95rem}
+.crate ul{list-style:none; margin:0; padding:0; display:flex; gap:10px; flex-wrap:wrap; justify-content:center}
+.crate li{border:3px solid var(--line); border-radius:999px; padding:6px 14px; font-size:.85rem;
+  font-weight:900; background:var(--board)}
+
+/* ---------- footer ---------- */
+footer{
+  margin-top:44px; border:4px solid var(--line); border-radius:20px; background:var(--green-deep);
+  color:#fff; padding:26px; box-shadow:7px 7px 0 var(--shadow);
+  display:flex; gap:18px; align-items:center; flex-wrap:wrap;
+}
+footer img{width:44px; height:44px; object-fit:contain}
+footer strong{display:block; font-weight:900; letter-spacing:-.02em}
+footer small{display:block; opacity:.8; font-size:.82rem}
+footer .sp{flex:1}
+footer a{color:#fff; text-decoration:none; font-weight:900; font-size:.82rem; letter-spacing:.1em;
+  text-transform:uppercase; border-bottom:3px solid rgba(255,255,255,.45); padding-bottom:2px}
+footer a:hover{border-bottom-color:#fff}
+
+@media(max-width:760px){
+  .sign{grid-template-columns:1fr; text-align:center; padding:30px 22px}
+  .sign p{margin-inline:auto}
+  .sign .cta{justify-content:center}
+  .sign .potato{order:-1; margin:0 auto}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important; scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="ticker">
+  <div class="ticker-track" id="track">
+    <span>Now growing ·</span><span>cred.blue ·</span><span>anisota ·</span><span>aturi.to ·</span>
+    <span>flushes ·</span><span>guides ·</span><span>all free ·</span><span>all open source ·</span>
+    <span>Now growing ·</span><span>cred.blue ·</span><span>anisota ·</span><span>aturi.to ·</span>
+    <span>flushes ·</span><span>guides ·</span><span>all free ·</span><span>all open source ·</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="top">
+    <img src="/atpotato-normal.png" alt=""><b>atpotato</b>
+    <span class="sp"></span>
+    <a class="btn" href="#stalls">The stalls</a>
+    <button class="btn" id="tt">Theme</button>
+  </div>
+
+  <header class="sign">
+    <div>
+      <span class="kick">🥔 Open daily · atpota.to</span>
+      <h1>Fresh apps,<br>picked today.</h1>
+      <p>Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.
+        Nothing here costs anything.</p>
+      <div class="cta">
+        <a class="btn btn-green" href="#stalls">See what's growing</a>
+        <a class="btn" href="https://bsky.app/profile/atpota.to">Follow along</a>
+      </div>
+    </div>
+    <img class="potato" src="/atpotato-normal.png" alt="The atpotato mascot">
+  </header>
+
+  <div class="stall-head" id="stalls">
+    <h2>The stalls</h2>
+    <span class="rule"></span>
+    <span class="count">4 apps · 1 guide</span>
+  </div>
+
+  <div class="stalls">
+
+    <a class="stall big" style="--accent:var(--app-cred)" href="https://cred.blue">
+      <span class="tagshape">Live · flagship</span>
+      <h3>cred.blue</h3>
+      <p>Generate a Bluesky credibility score, discover your AT&nbsp;Protocol data footprint, and
+        vibe-check strangers and new accounts before you follow them.</p>
+      <div class="foot"><span class="go">Open ↗</span><span class="sp"></span><span class="free">No signup</span></div>
+    </a>
+
+    <a class="stall" style="--accent:var(--app-anisota)" href="https://anisota.net">
+      <span class="tagshape">Live</span>
+      <h3>anisota</h3>
+      <p>A finite deck of post cards instead of an endless feed. Stamina, card rarity, collectable decks.</p>
+      <div class="foot"><span class="go">Open ↗</span><span class="sp"></span><span class="free">Client + game</span></div>
+    </a>
+
+    <a class="stall" style="--accent:var(--app-aturi)" href="https://aturi.to">
+      <span class="tagshape">Live</span>
+      <h3>aturi.to</h3>
+      <p>Universal links for the ATmosphere. One URL for any record, opening in whichever app the
+        reader already uses.</p>
+      <div class="foot"><span class="go">Open ↗</span><span class="sp"></span><span class="free">One paste</span></div>
+    </a>
+
+    <a class="stall" style="--accent:var(--app-flushes)" href="https://flushes.app">
+      <span class="tagshape">Live</span>
+      <h3>flushes</h3>
+      <p>The decentralised toilet network. A very silly app with a very real custom lexicon.</p>
+      <div class="foot"><span class="go">Open ↗</span><span class="sp"></span><span class="free">60 characters</span></div>
+    </a>
+
+    <a class="stall" style="--accent:var(--app-guide)" href="/guides/bluesky-for-brands">
+      <span class="tagshape">Reading</span>
+      <h3>Guides</h3>
+      <p>How to use Bluesky to grow your brand — a jargon-free guide for companies, communities and
+        creators. About forty minutes.</p>
+      <div class="foot"><span class="go">Read →</span><span class="sp"></span><span class="free">Free forever</span></div>
+    </a>
+
+  </div>
+
+  <div class="crate">
+    <h3>🌱 Still in the ground</h3>
+    <p>Prototyped in the open. No promises, no launch dates.</p>
+    <ul><li>anisota cocoon</li><li>mothing</li><li>habit tracker</li><li>types</li></ul>
+  </div>
+
+  <footer>
+    <img src="/atpotato-normal.png" alt="">
+    <div><strong>atpotato</strong><small>Cultivating knowledge, equipping individuals, growing community.</small></div>
+    <span class="sp"></span>
+    <a href="https://bsky.app/profile/atpota.to">Bluesky</a>
+    <a href="https://tangled.sh/@atpota.to">Tangled</a>
+    <a href="https://github.com/atpota-to">GitHub</a>
+    <a href="mailto:contact@atpota.to">Email</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tt').onclick = function(){
+    t = t === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+  var faces = ['/atpotato-dead.png','/atpotato-waow.png','/atpotato-scawy.png','/atpotato-kawaii.png'];
+  document.querySelectorAll('.top img, .sign .potato, footer img').forEach(function(img){
+    img.addEventListener('mouseenter', function(){ img.src = faces[Math.floor(Math.random()*faces.length)]; });
+    img.addEventListener('mouseleave', function(){ img.src = '/atpotato-normal.png'; });
+  });
+})();
+</script>
+</body>
+</html>
