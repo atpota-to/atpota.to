@@ -54,7 +54,7 @@
   --soil-rim:#7A6038; --soil-lip:#96794A;
   --bedrock:#2A2620; --bedrock-facet:#4E5148; --bedrock-facet-lit:#5E6258;
   --stone:#8A7048; --stone-lit:#B4AA98;
-  --soil-ink:#F3E4C0; --soil-ink-2:#C4B08A;
+  --soil-ink:#F3E4C0; --soil-ink-2:#E0D0AC;
 
   /* the root is cream, never green */
   --root:#E8DCC0; --root-lit:#F6EEDC; --root-shade:#C7B694;
@@ -300,7 +300,6 @@ h1{
 .row:hover h3 .ul path, .row:focus-visible h3 .ul path{ stroke-dashoffset:0 }
 .one{ font-size:1.0625rem; font-weight:700; line-height:1.4; color:var(--tag); margin:10px 0 12px }
 .body{ font-size:17px; line-height:1.55; max-width:46ch; color:var(--soil-ink-2) }
-.row.deep .body{ color:var(--soil-ink) }
 .depth{ display:block; margin-top:16px; color:var(--soil-ink-2) }
 
 .js .row .text > *{ transform:translateY(14px); transition:transform .46s cubic-bezier(.22,.61,.36,1) }
@@ -532,7 +531,7 @@ body.on-soil .theme{ color:var(--soil-ink); border-color:rgba(227,206,144,.32) }
 <a class="skip" href="#apps">Skip to the apps</a>
 
 <!-- ═══════════════════════════════════════════════════════════════ air ══ -->
-<section class="air">
+<section class="air" id="top">
   <div class="air-grain"></div>
   <div class="sky-life" aria-hidden="true">
     <svg class="bird bird-1" viewBox="0 0 40 14"><path d="M2 10 Q10 1 19 9 Q28 1 38 10"/></svg>
