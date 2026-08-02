@@ -27,7 +27,8 @@ class TableOfContents {
         // Create toggle button
         const toggleButton = document.createElement('button');
         toggleButton.className = 'toc-toggle';
-        toggleButton.innerHTML = '📑';
+        toggleButton.innerHTML = '&#9776;';
+        toggleButton.setAttribute('aria-label', 'Table of contents');
         toggleButton.onclick = () => this.showMobileToc();
         document.body.appendChild(toggleButton);
 
@@ -204,7 +205,7 @@ class ReadingTimeEstimator {
     displayReadingTime(minutes) {
         const readingTimeElement = document.querySelector('.reading-time');
         if (readingTimeElement) {
-            readingTimeElement.innerHTML = `📚 ${minutes} min read`;
+            readingTimeElement.textContent = `${minutes} min read`;
         }
     }
 }
@@ -213,7 +214,7 @@ class ReadingTimeEstimator {
 document.addEventListener('DOMContentLoaded', () => {
     // Wait for markdown content to be loaded
     const checkContent = setInterval(() => {
-        const content = document.querySelector('.guide-content');
+        const content = document.querySelector('#markdown-content');
         if (content && content.children.length > 0) {
             clearInterval(checkContent);
             

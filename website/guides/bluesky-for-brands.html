@@ -1,76 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How to use Bluesky to grow your brand - atpotato</title>
-    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="guide-styles.css">
-    
-    <!-- Favicon -->
-    <link rel="icon" href="/favicon.png" type="image/png">
-    
-    <!-- Primary Meta Tags -->
-    <meta name="title" content="How to use Bluesky to grow your brand - atpotato">
-    <meta name="description" content="A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.">
-    
-    <!-- Open Graph -->
-    <meta property="og:type" content="article">
-    <meta property="og:url" content="https://atpota.to/guides/bluesky-for-brands">
-    <meta property="og:title" content="How to use Bluesky to grow your brand - atpotato">
-    <meta property="og:description" content="A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.">
-    <meta property="og:image" content="/bsky-guide-og.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to use Bluesky to grow your brand — atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="stylesheet" href="guide-styles.css">
+<link rel="icon" href="/favicon.png" type="image/png">
 
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="../theme.js"></script>
-    <script defer src="../logo-hover.js"></script>
+<meta name="title" content="How to use Bluesky to grow your brand — atpotato">
+<meta name="description" content="A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.">
+<meta name="theme-color" content="#f6f4e6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141a1a" media="(prefers-color-scheme: dark)">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://atpota.to/guides/bluesky-for-brands">
+<meta property="og:title" content="How to use Bluesky to grow your brand — atpotato">
+<meta property="og:description" content="A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.">
+<meta property="og:image" content="https://atpota.to/bsky-guide-og.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<script>
+  /* theme before first paint, so nothing flashes */
+  (function () {
+    var d = document.documentElement;
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      d.setAttribute('data-theme', t);
+    } catch (e) { d.setAttribute('data-theme', 'light'); }
+  })();
+</script>
 </head>
 <body>
-    <div class="guide-container">
-        <main class="guide-content">
-            <header class="guide-header">
-                <h1>How to use Bluesky to grow your brand</h1>
-                <h2>A comprehensive guide for companies, communities, and creators</h2>
-                <div class="guide-meta">
-                    <span class="reading-time">📚 calculating...</span>
-                    <span class="meta-separator">·</span>
-                    <span class="guide-author">written by <a href="https://bsky.app/profile/dame.is" target="_blank">@dame.is</a></span>
-                </div>
-                <p class="support-thanks"><em>Thanks to <a href="https://bsky.app/profile/protocollabs.bsky.social" target="_blank">Protocol Labs</a> for their support in helping make this guide possible.</em></p>
-            </header>
 
-            <div id="markdown-content">
-                <!-- Markdown content will be inserted here -->
-            </div>
-        </main>
-        <!-- Table of contents will be inserted here by JavaScript -->
-    </div>
+<a class="skip" href="#markdown-content">Skip to the guide</a>
 
-    <div class="button-backdrop"></div>
-    <a href="/" class="home-button">
-        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
+<div class="guide-hero">
+  <div class="topbar">
+    <a class="home" href="/">
+      <img class="mark" src="/atpotato-normal.png" alt="" width="32" height="32"><b>atpotato</b>
     </a>
+    <span class="sp"></span>
+    <a class="nav" href="/#underground">apps</a>
+    <a class="nav" href="/">home</a>
+    <a class="nav" href="mailto:contact@atpota.to">contact</a>
+    <button class="tt" id="tt" type="button" aria-label="Toggle light and dark">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <g class="sun"><circle cx="12" cy="12" r="4.4"/>
+          <path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></g>
+        <g class="moon"><path d="M19 14.8A8 8 0 0 1 9.2 5a7.4 7.4 0 1 0 9.8 9.8Z"/></g>
+      </svg>
+    </button>
+  </div>
 
-    <!-- Markdown processing -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="guide-components.js"></script>
-    <script>
-        // Configure marked options
-        marked.setOptions({
-            headerIds: true,
-            gfm: true
-        });
+  <header class="guide-header">
+    <h1>How to use Bluesky to grow your brand</h1>
+    <h2>A comprehensive guide for companies, communities, and creators</h2>
+    <div class="guide-meta">
+      <span class="reading-time">calculating…</span>
+      <span class="meta-separator">·</span>
+      <span class="guide-author">written by <a href="https://bsky.app/profile/dame.is">@dame.is</a></span>
+    </div>
+    <p class="support-thanks">Thanks to <a href="https://bsky.app/profile/protocollabs.bsky.social" class="nb">Protocol Labs</a>
+      for their support in helping make this guide possible.</p>
+  </header>
+</div>
 
-        // Fetch and render markdown
-        fetch('how-to-use-bluesky-to-grow-your-brand.md')
-            .then(response => response.text())
-            .then(markdown => {
-                document.getElementById('markdown-content').innerHTML = marked.parse(markdown);
-            });
-    </script>
+<div class="guide-container">
+  <main class="guide-content">
+    <div id="markdown-content"><!-- markdown is rendered in here --></div>
+  </main>
+  <!-- the table of contents is inserted here by guide-components.js -->
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <img src="/atpotato-normal.png" alt="" width="42" height="42">
+    <div>
+      <strong>atpotato</strong>
+      <small>cultivating knowledge, equipping individuals, growing community.</small>
+    </div>
+    <span class="sp"></span>
+    <nav class="foot-links" aria-label="atpotato elsewhere">
+      <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+      <a href="https://tangled.sh/@atpota.to">tangled</a>
+      <a href="https://github.com/atpota-to">github</a>
+      <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('tt').addEventListener('click', function () {
+    var d = document.documentElement;
+    var next = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+</script>
+
+<!-- vendored so the guide does not depend on a CDN being up at read time -->
+<script src="marked.min.js"></script>
+<script src="guide-components.js"></script>
+<script>
+  marked.setOptions({ headerIds: true, gfm: true });
+  fetch('how-to-use-bluesky-to-grow-your-brand.md')
+    .then(function (r) { return r.text(); })
+    .then(function (md) {
+      document.getElementById('markdown-content').innerHTML = marked.parse(md);
+    })
+    .catch(function () {
+      document.getElementById('markdown-content').innerHTML =
+        '<p>Sorry — the guide failed to load. ' +
+        '<a href="how-to-use-bluesky-to-grow-your-brand.md">Read the raw text instead</a>.</p>';
+    });
+</script>
 </body>
-</html> 
+</html>

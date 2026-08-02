@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "serve .",
-    "build": "mkdir -p public && cp -r index.html styles.css theme.js logo-hover.js guides redesign public/ && (cp -r *.png *.jpg *.JPG public/ 2>/dev/null || true)",
+    "build": "mkdir -p public && cp -r index.html guides redesign public/ && (cp -r *.png *.jpg *.JPG public/ 2>/dev/null || true)",
     "start": "serve public"
   },
   "devDependencies": {
