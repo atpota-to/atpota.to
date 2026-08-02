@@ -6,6 +6,7 @@
 :root{
   color-scheme: light;
   --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
+  --tan-ink:#7d6236;   /* --tan taken down far enough to read as body-size text */
   --sky-1:#e9f4ff; --sky-2:#f6f4e6;
   --soil-1:#6b5333; --soil-2:#4a3a22; --soil-3:#171207;
   --ink:#2b2418; --muted:#6f6553;
@@ -16,13 +17,15 @@
   --toc: 240px;
   --bar: 80px;          /* height the fixed orbs occupy */
 }
+/* Same warm brown family as the homepage — see the note there. */
 [data-theme="dark"]{
   color-scheme: dark;
-  --sky-1:#0e1626; --sky-2:#141a1a;
-  --soil-1:#2e2517; --soil-2:#221b10; --soil-3:#0f0b05;
-  --ink:#f3ede2; --muted:#a89d89;
-  --card:#241d13; --card-line:#3b3121;
-  --soil-ink:#f0e5cf; --soil-muted:#bfae90;
+  --sky-1:#140f09; --sky-2:#1e1710;
+  --soil-1:#302316; --soil-2:#221a10; --soil-3:#120c06;
+  --ink:#f7f0e2; --muted:#b3a48a;
+  --card:#3a2c1c; --card-line:#553f27;
+  --soil-ink:#f4e9d3; --soil-muted:#c8b795;
+  --tan-ink:#d4b47c;
 }
 
 *,*::before,*::after{ box-sizing:border-box }
@@ -142,11 +145,13 @@ a{ color:inherit }
 }
 .guide-content h3{
   margin:40px 0 10px; font-size:1.2rem; font-weight:900; letter-spacing:-.02em;
-  color:var(--ink); scroll-margin-top:80px;
+  color:var(--ink); scroll-margin-top:calc(var(--bar) + 20px);
 }
+/* --tan is the brand swatch and only reaches 3.1:1 on the page; --tan-ink is
+   the same colour taken far enough down to be readable at this size */
 .guide-content h4{
-  margin:28px 0 8px; font-size:1.02rem; font-weight:700; color:var(--tan);
-  scroll-margin-top:80px;
+  margin:28px 0 8px; font-size:1.02rem; font-weight:700; color:var(--tan-ink);
+  scroll-margin-top:calc(var(--bar) + 20px);
 }
 [data-theme="dark"] .guide-content h4{ color:var(--sand) }
 

@@ -10,7 +10,7 @@
 <meta name="title" content="atpotato">
 <meta name="description" content="Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem.">
 <meta name="theme-color" content="#f6f4e6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141a1a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#1e1710" media="(prefers-color-scheme: dark)">
 
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://atpota.to/">
@@ -52,13 +52,18 @@
   --root:#39B54A;
   --bar: 80px;          /* height the fixed orbs occupy */
 }
+/* Dark is the same ground at night, not a different palette: one warm brown
+   hue family top to bottom. The sky darkens upward into night and warms as it
+   nears the horizon; the soil runs from topsoil down to almost black. Cards
+   are the one thing lighter than what surrounds them, so they still read as
+   raised. */
 [data-theme="dark"]{
   color-scheme: dark;
-  --sky-1:#0e1626; --sky-2:#141a1a;
-  --soil-1:#2e2517; --soil-2:#221b10; --soil-3:#0f0b05;
-  --ink:#f3ede2; --muted:#a89d89;
-  --card:#241d13; --card-line:#3b3121;
-  --soil-ink:#f0e5cf; --soil-muted:#bfae90;
+  --sky-1:#140f09; --sky-2:#1e1710;
+  --soil-1:#302316; --soil-2:#221a10; --soil-3:#120c06;
+  --ink:#f7f0e2; --muted:#b3a48a;
+  --card:#3a2c1c; --card-line:#553f27;
+  --soil-ink:#f4e9d3; --soil-muted:#c8b795;
 }
 
 *,*::before,*::after{ box-sizing:border-box }
@@ -86,7 +91,7 @@ h1,h2,h3,p{ margin:0 }
 }
 .clouds{ position:absolute; inset:0; pointer-events:none }
 .cloud{ position:absolute; background:#fff; border-radius:999px; filter:blur(18px); opacity:.6 }
-[data-theme="dark"] .cloud{ background:#dce8ff; opacity:.06 }
+[data-theme="dark"] .cloud{ background:#f0d9ae; opacity:.05 }
 .c1{ width:240px; height:60px; top:16%; left:6% }
 .c2{ width:170px; height:46px; top:31%; left:70% }
 .c3{ width:130px; height:38px; top:62%; left:20% }
@@ -186,6 +191,9 @@ h1,h2,h3,p{ margin:0 }
 .js .row.grown .card{ opacity:1; transform:none }
 .js .row.grown .card:hover{ transform:translateY(-3px) }
 .card h3{ font-size:1.35rem; font-weight:900; letter-spacing:-.02em; color:var(--accent) }
+/* Each app's own colour was picked against near-white. On a brown card it
+   needs a lighter reading of the same hue, set alongside --accent per row. */
+[data-theme="dark"] .card h3{ color:var(--accent-dark, var(--accent)) }
 .card p{ margin-top:6px; font-size:.96rem; color:var(--muted) }
 .chips{ display:flex; gap:7px; flex-wrap:wrap; margin-top:14px }
 .chip{
@@ -193,7 +201,8 @@ h1,h2,h3,p{ margin:0 }
   border:1px solid var(--card-line); border-radius:999px; padding:4px 10px; color:var(--muted);
 }
 .chip.live{ color:var(--green-deep); border-color:rgba(57,181,74,.4); background:rgba(57,181,74,.1) }
-[data-theme="dark"] .chip.live{ color:var(--green) }
+/* this one sits on its own green tint, so it needs to be lighter than --green */
+[data-theme="dark"] .chip.live{ color:#5fd06f; border-color:rgba(95,208,111,.42) }
 
 .seeds{ margin-top:56px; text-align:center }
 .seeds h3{ font-size:1.15rem; font-weight:900; color:var(--sand); margin-bottom:4px }
@@ -290,7 +299,7 @@ h1,h2,h3,p{ margin:0 }
     <div class="roots" id="roots">
       <svg class="rootlayer" id="rootlayer" aria-hidden="true" focusable="false"></svg>
 
-      <div class="row" style="--accent:#2f80ed">
+      <div class="row" style="--accent:#2a72d4; --accent-dark:#6aa6ff">
         <a class="card" href="https://cred.blue">
           <h3>cred.blue</h3>
           <p>Generate a Bluesky credibility score, map your <span class="nb">AT Protocol</span> data footprint, and
@@ -299,7 +308,7 @@ h1,h2,h3,p{ margin:0 }
         </a>
       </div>
 
-      <div class="row right" style="--accent:#7a5cc4">
+      <div class="row right" style="--accent:#7a5cc4; --accent-dark:#b79aec">
         <a class="card" href="https://anisota.net">
           <h3>anisota.net</h3>
           <p>A finite deck of post cards instead of an endless feed. Stamina, card rarity,
@@ -308,7 +317,7 @@ h1,h2,h3,p{ margin:0 }
         </a>
       </div>
 
-      <div class="row" style="--accent:#1f9e8f">
+      <div class="row" style="--accent:#188c7e; --accent-dark:#46c9b6">
         <a class="card" href="https://aturi.to">
           <h3>aturi.to</h3>
           <p>Universal links for the ATmosphere. One URL for any record, opening in whichever app
@@ -317,7 +326,7 @@ h1,h2,h3,p{ margin:0 }
         </a>
       </div>
 
-      <div class="row right" style="--accent:#3aa0c9">
+      <div class="row right" style="--accent:#2380a6; --accent-dark:#6cc6e6">
         <a class="card" href="https://flushes.app">
           <h3>flushes.app</h3>
           <p>The decentralised toilet network. A very silly app with a very real custom lexicon —
@@ -326,7 +335,7 @@ h1,h2,h3,p{ margin:0 }
         </a>
       </div>
 
-      <div class="row" style="--accent:#A58650">
+      <div class="row" style="--accent:#8a6d3c; --accent-dark:#d4b47c">
         <a class="card" href="/guides/bluesky-for-brands">
           <h3>Guides</h3>
           <p>Long-form, jargon-free writing for people arriving in the ecosystem. Start with
