@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
+
+<meta name="title" content="atpotato">
+<meta name="description" content="Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem. Free, open, and yours to take with you.">
+<meta name="theme-color" content="#F2EBD8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14140F" media="(prefers-color-scheme: dark)">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://atpota.to/">
+<meta property="og:title" content="atpotato">
+<meta property="og:description" content="Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem. Free, open, and yours to take with you.">
+<meta property="og:image" content="https://atpota.to/og-image.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preload" as="image" href="/atpotato-normal.png">
+<link rel="preload" as="image" href="/atpotato-waow.png">
+
+<script>
+  /* Set the theme and the js flag before first paint so nothing flashes. */
+  (function(){
+    var d = document.documentElement;
+    d.className = 'js';
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      d.setAttribute('data-theme', t);
+    } catch (e) { d.setAttribute('data-theme', 'light'); }
+  })();
+</script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════ tokens ══ */
+@property --p { syntax: '<number>'; inherits: true;  initial-value: 0; }
+@property --s { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --e { syntax: '<number>'; inherits: false; initial-value: 1; }
+
+:root{
+  color-scheme: light;
+  --p: 0;
+
+  /* air */
+  --air-top:#E7EEF2; --air-bot:#F2EBD8; --air-warm:#F7EFDC;
+  --ink:#221C12; --ink-2:#6A6151; --rule:#DED5BF;
+
+  /* ground */
+  --soil-0:#6B5333; --soil-1:#4A3A22; --soil-2:#33280F; --soil-3:#1E1709;
+  --soil-rim:#7A6038; --soil-lip:#96794A;
+  --bedrock:#2A2620; --bedrock-facet:#4E5148; --bedrock-facet-lit:#5E6258;
+  --stone:#8A7048; --stone-lit:#B4AA98;
+  --soil-ink:#F3E4C0; --soil-ink-2:#C4B08A;
+
+  /* the root is cream, never green */
+  --root:#E8DCC0; --root-lit:#F6EEDC; --root-shade:#C7B694;
+  --root-new:#FFFBEF; --root-hair:#FFF6E0;
+
+  --tuber:#D8BF8E; --tuber-lit:#E8D4A6; --tuber-shade:#8E6E3E;
+  --tuber-eye:#7A5C30; --tuber-flesh:#F6ECCF; --tuber-flesh-ring:#E4D2A8;
+
+  --tag:#E3CE90; --tag-edge:#C6AF74; --tag-string:#A58650; --tag-ink:#5A4522;
+
+  --green:#39B54A; --green-deep:#006837; --leaf:#39B54A; --leaf-dark:#006837; --leaf-dry:#5E8A3C;
+  --worm:#D9A28C; --worm-saddle:#C4826C; --beetle:#3A2B1A; --beetle-lit:#5E4A2E;
+  --daylight:#FFF6D8; --daylight-a:.30;
+  --grain-op:.085; --grain-blend:overlay; --air-grain-op:.06;
+  --noise-fine:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --noise-coarse:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+
+  --pxcm: 26px;
+  --shell: 1280px;
+  --band: 560px;
+  --off: 190px;
+}
+[data-theme="dark"]{
+  color-scheme: dark;
+  --air-top:#0D1114; --air-bot:#14140F; --air-warm:#1A1810;
+  --ink:#EFE9DC; --ink-2:#9E9179; --rule:rgba(227,206,144,.22);
+
+  --soil-0:#3A2E1B; --soil-1:#221A0E; --soil-2:#17110A; --soil-3:#0E0A05;
+  --soil-rim:#4A3A22; --soil-lip:#5E4A2C;
+  --bedrock:#141613; --bedrock-facet:#3A3E36; --bedrock-facet-lit:#4E5248;
+  --stone:#5A4A30; --stone-lit:#7A6E58;
+  --soil-ink:#EFE0BC; --soil-ink-2:#B8A47E;
+
+  --root:#D9C9A4; --root-lit:#F0E3C3; --root-shade:#8E7B56;
+  --root-new:#FDF8EA; --root-hair:#EFE0BC;
+
+  --tuber:#C0A87A; --tuber-lit:#D3BC8C; --tuber-shade:#7A5C33;
+  --tuber-eye:#6A5330; --tuber-flesh:#E9DCBB; --tuber-flesh-ring:#CBBB92;
+
+  --tag:#CBB77E; --tag-edge:#A58650; --tag-ink:#3A2C14;
+  --daylight:#CFE0FF; --daylight-a:.18;
+  --grain-op:.13; --grain-blend:soft-light; --air-grain-op:.05;
+}
+
+*,*::before,*::after{ box-sizing:border-box }
+html{ -webkit-text-size-adjust:100% }
+body{
+  margin:0; background:var(--air-bot); color:var(--ink);
+  font-family:"eigerdals", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:17px; line-height:1.55; font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+a{ color:inherit; text-decoration:none }
+h1,h2,h3,p{ margin:0 }
+img{ max-width:100% }
+:focus-visible{ outline:2px solid var(--green); outline-offset:3px; border-radius:2px }
+
+.shell{ width:100%; max-width:var(--shell); margin:0 auto; padding:0 32px }
+
+.eyebrow{
+  font-size:11px; font-weight:900; letter-spacing:.18em; text-transform:uppercase;
+  font-variant-numeric:tabular-nums;
+}
+
+.skip{
+  position:absolute; left:12px; top:-60px; z-index:100; background:var(--air-bot); color:var(--ink);
+  border:1px solid var(--rule); padding:10px 16px; font-weight:700; transition:top .18s ease;
+}
+.skip:focus{ top:12px }
+
+/* ══════════════════════════════════════════════════════════════ topbar ══ */
+.topbar{
+  position:relative; z-index:6; height:84px; display:flex; align-items:center; gap:10px;
+}
+.topbar .mark{ width:26px; height:26px; object-fit:contain }
+.topbar .word{ font-size:17px; font-weight:900; letter-spacing:-.02em }
+
+/* ═════════════════════════════════════════════════════════════════ air ══ */
+.air{
+  position:relative; min-height:88vh; padding-bottom:40px;
+  display:flex; flex-direction:column;
+  background:linear-gradient(180deg, var(--air-top) 0%, var(--air-bot) 78%);
+}
+.air::after{                                   /* the warm band that sits over the ground */
+  content:""; position:absolute; left:0; right:0; bottom:0; height:180px; pointer-events:none;
+  background:linear-gradient(180deg, transparent, var(--air-warm)); opacity:.5;
+}
+.air-grain{
+  position:absolute; inset:0; pointer-events:none; opacity:var(--air-grain-op);
+  background-image:var(--noise-coarse); mix-blend-mode:var(--grain-blend);
+}
+.air .shell{ position:relative; z-index:5 }
+.hero{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:24px 0 0 }
+.hero .eyebrow{ color:var(--green-deep) }
+[data-theme="dark"] .hero .eyebrow{ color:var(--green) }
+h1{
+  font-size:clamp(2.5rem, 5.6vw, 4.75rem); font-weight:900; letter-spacing:-.035em;
+  line-height:.95; margin:18px 0 20px; max-width:15ch;
+}
+.deck{
+  font-size:clamp(1.0625rem, 1.5vw, 1.3125rem); line-height:1.5; max-width:42ch; color:var(--ink-2);
+}
+.js .hero{ opacity:0; animation:fade .52s ease .08s forwards }
+@keyframes fade{ to{ opacity:1 } }
+
+.sky-life{ position:absolute; inset:0; pointer-events:none; z-index:2; overflow:hidden }
+.sky-life svg{ position:absolute; overflow:visible }
+.bird{ fill:none; stroke:var(--ink-2); stroke-width:1.6; stroke-linecap:round; opacity:.45 }
+.bird-1{ top:16%; left:72%; width:34px }
+.bird-2{ top:22%; left:79%; width:22px }
+.flutter{ top:30%; left:16%; width:26px }
+.bfly-wing{ fill:var(--tag); stroke:var(--tag-string); stroke-width:1 }
+.bfly-body{ fill:var(--tag-string) }
+.js .flutter{ animation:drift 96s ease-in-out infinite alternate }
+@keyframes drift{ to{ transform:translate(46vw, -6vh) } }
+
+.soil-line-label{
+  position:relative; z-index:5; display:flex; align-items:center; gap:12px;
+  color:var(--ink-2); padding-bottom:10px;
+}
+.soil-line-label .sprout{ width:20px; height:34px; overflow:visible; flex:none }
+.sprout path{ fill:none; stroke:var(--green); stroke-width:5; stroke-linecap:round }
+.sprout .leafy{ fill:var(--green-deep); stroke:none }
+.js .sprout .stemline{ stroke-dasharray:40; stroke-dashoffset:40; animation:draw .7s cubic-bezier(.2,.7,.3,1) .4s forwards }
+@keyframes draw{ to{ stroke-dashoffset:0 } }
+
+/* ════════════════════════════════════════════════════════════ contact ══ */
+.contact{
+  position:relative; height:max(168px, 13.4vw); overflow:hidden;
+  background:linear-gradient(180deg, var(--air-bot) 0%, var(--air-bot) 34%, var(--soil-0) 34%);
+}
+.horizon-art{ position:absolute; inset:0; width:100%; height:100%; display:block }
+.h-layer-back{ z-index:1 }
+.h-layer-front{ z-index:3 }
+.h-back{ fill:var(--soil-1) }
+.h-mid{ fill:var(--soil-0) }
+.h-lip{ fill:none; stroke:var(--soil-lip); stroke-width:3; stroke-linejoin:round }
+.crumb{ fill:var(--soil-0) }
+.crumb-dark{ fill:var(--soil-1) }
+.pebble{ fill:var(--stone) }
+.pebble-lit{ fill:var(--stone-lit); opacity:.45 }
+.blade{ fill:var(--leaf) }
+.blade-dark{ fill:var(--leaf-dark) }
+.blade-dry{ fill:var(--leaf-dry) }
+.h-foliage .stem{ fill:none; stroke:var(--leaf-dark); stroke-width:2.6; stroke-linecap:round }
+.h-foliage .leaf{ fill:var(--leaf) }
+.cat circle{ fill:#8FBF3F }
+.cat .cat-head{ fill:#79A92F }
+.chry path{ fill:var(--tag-string) }
+.chry .chry-line{ fill:none; stroke:var(--tuber-eye); stroke-width:1 }
+.fluff{ fill:none; stroke:var(--tag); stroke-width:1.4; stroke-linecap:round }
+.clover .leaf{ fill:var(--leaf-dry) }
+.filament{ fill:none; stroke:var(--root-hair); stroke-width:.9; opacity:.45; stroke-linecap:round }
+
+.buried{
+  position:absolute; z-index:2; left:50%; bottom:-4%;
+  width:min(268px, 46vw); height:auto; translate:-50% 0;
+  filter:drop-shadow(0 10px 14px rgba(60,44,20,.30));
+}
+.js .buried{ will-change:transform }
+
+/* ══════════════════════════════════════════════════════════ underground ══ */
+.under{
+  position:relative; z-index:1; overflow:hidden;
+  background:linear-gradient(180deg,
+    var(--soil-0) 0%, var(--soil-1) 18%, var(--soil-2) 52%, var(--soil-3) 84%, var(--soil-3) 100%);
+  color:var(--soil-ink);
+  padding-bottom:1px;
+}
+.daylight{
+  position:absolute; inset:0 0 auto 0; height:72%;
+  pointer-events:none; z-index:0; mix-blend-mode:screen;
+  background:radial-gradient(40% 80% at 50% 0%, var(--daylight) 0%, transparent 78%);
+  opacity:calc(var(--daylight-a) * (1 - var(--p)));
+}
+.rootlayer{
+  position:absolute; inset:0; width:100%; height:100%; overflow:visible;
+  pointer-events:none; z-index:1;
+}
+.under .shell{ position:relative; z-index:2 }
+
+/* --- root ink -------------------------------------------------------- */
+.rootlayer use{
+  fill:none; stroke-linecap:round; stroke-dasharray:1;
+  stroke-dashoffset:clamp(0, calc((var(--e) - var(--p)) / (var(--e) - var(--s))), 1);
+}
+.no-js .rootlayer use, .rootlayer use.static{ stroke-dashoffset:0 }
+.r-cast{ stroke:#1E1509; opacity:.34 }          /* contact shadow into the soil  */
+.r-body{ stroke:var(--root) }                    /* the root itself              */
+.r-rim { stroke:var(--root-lit); opacity:.5 }    /* light from the upper left    */
+.r-tip { stroke:var(--root-new); stroke-dasharray:.05 1;
+  stroke-dashoffset:clamp(0, calc((var(--e) - var(--p)) / (var(--e) - var(--s))), 1);
+  /* fade out the moment this segment finishes, so the leading edge is a tip,
+     not a bead on every join */
+  opacity:clamp(0, calc((var(--e) - var(--p)) / .03), 1); }
+.r-crown{ stroke:url(#crownGrad) }
+.hairs{
+  fill:none; stroke:var(--root-hair); stroke-linecap:round;
+  opacity:calc(clamp(0, (var(--p) - var(--s)) / (var(--e) - var(--s)), 1) * .34);
+}
+.no-js .hairs{ opacity:.34 }
+.stone-a{ fill:var(--stone) } .stone-b{ fill:var(--stone-lit); opacity:.4 }
+
+/* --- crown ----------------------------------------------------------- */
+.crown{ position:relative; padding:56px 0 0 }
+.crown h2{
+  font-size:clamp(2rem, 6vw, 3.25rem); font-weight:900; letter-spacing:-.03em; line-height:1.0;
+  max-width:min(18ch, 44%); color:var(--soil-ink); text-wrap:balance;
+}
+
+/* --- rows ------------------------------------------------------------ */
+.rows{ position:relative }
+.row{
+  position:relative; display:grid; grid-template-columns:1fr var(--band) 1fr;
+  align-items:center; align-content:center; column-gap:0;
+  min-height:calc(var(--gap, 16) * var(--pxcm));
+}
+.crown{ min-height:calc(6 * var(--pxcm)) }
+.row > .text{ grid-row:1; grid-column:3; max-width:46ch; padding-left:28px }
+.row.side-left > .text{ grid-column:1; text-align:right; justify-self:end; padding:0 28px 0 0 }
+.row > .art{ grid-row:1; grid-column:2; position:relative; display:flex; justify-content:center; align-items:center }
+
+.kicker{ color:var(--tag); margin-bottom:10px }
+.row h3{
+  font-size:clamp(1.625rem, 3.2vw, 2.6rem); font-weight:900; letter-spacing:-.03em; line-height:1.0;
+  color:var(--soil-ink); position:relative; display:inline-block;
+}
+.row h3 .ul{
+  position:absolute; left:0; right:0; bottom:-.14em; height:8px; overflow:visible;
+  pointer-events:none;
+}
+.row h3 .ul path{
+  fill:none; stroke:var(--green); stroke-width:2.4; stroke-linecap:round;
+  stroke-dasharray:1; stroke-dashoffset:1; transition:stroke-dashoffset .2s ease;
+}
+.row:hover h3 .ul path, .row:focus-visible h3 .ul path{ stroke-dashoffset:0 }
+.one{ font-size:1.0625rem; font-weight:700; line-height:1.4; color:var(--tag); margin:10px 0 12px }
+.body{ font-size:17px; line-height:1.55; max-width:46ch; color:var(--soil-ink-2) }
+.row.deep .body{ color:var(--soil-ink) }
+.depth{ display:block; margin-top:16px; color:var(--soil-ink-2) }
+
+.js .row .text > *{ transform:translateY(14px); transition:transform .46s cubic-bezier(.22,.61,.36,1) }
+.js .row.grown .text > *{ transform:none }
+.js .row .text > :nth-child(2){ transition-delay:.05s }
+.js .row .text > :nth-child(3){ transition-delay:.1s }
+.js .row .text > :nth-child(4){ transition-delay:.15s }
+.js .row .text > :nth-child(5){ transition-delay:.2s }
+
+.tuber{ display:block; overflow:visible; width:var(--tw, 150px); height:auto }
+.row[data-tw='168'] .tuber{--tw:168px} .row[data-tw='140'] .tuber{--tw:140px}
+.row[data-tw='124'] .tuber{--tw:124px} .row[data-tw='116'] .tuber{--tw:116px}
+.row[data-tw='150'] .tuber{--tw:150px}
+.js .row .tuber{ opacity:0; transform:scale(.86);
+  transition:opacity .3s ease, transform .52s cubic-bezier(.34,1.4,.64,1) }
+.js .row.grown .tuber{ opacity:1; transform:none }
+.art .holder{ position:relative; display:inline-block;
+  transition:transform .26s cubic-bezier(.2,.9,.3,1);
+  translate:calc(var(--dir, 1) * var(--off)) 0 }
+.node{ position:absolute; width:0; height:0; top:50%; left:0 }
+.row.side-right .node{ left:-4px }
+.row.side-left  .node{ left:calc(100% + 4px) }
+.wip .holder{ width:1px; height:1px }
+.row.side-right{ --dir:1 }
+.row.side-left { --dir:-1 }
+.row:hover .art .holder, .row:focus-visible .art .holder{ transform:translateY(-3px) rotate(2deg) }
+.row:hover .tb-fill, .row:focus-visible .tb-fill{ fill:var(--tuber-lit) }
+
+.tb-fill{ fill:var(--tuber); transition:fill .26s ease }
+.tb-shade{ fill:none; stroke:var(--tuber-shade); stroke-width:3; opacity:.7;
+  stroke-dasharray:200 600; stroke-dashoffset:-46 }
+.tb-lit{ fill:var(--tuber-lit); opacity:.5 }
+.tb-swirl{ fill:none; stroke:var(--tag-string); stroke-width:3; stroke-linecap:round; opacity:.4 }
+.eye{ fill:var(--tuber-eye) }
+.brow{ fill:none; stroke:var(--tuber-lit); stroke-width:1.4; opacity:.75 }
+.sp-stem{ fill:none; stroke:var(--green); stroke-width:6; stroke-linecap:round;
+  transition:transform .26s ease }
+.sp-leaf{ fill:var(--green-deep) }
+.cut-face{ fill:var(--tuber-flesh) }
+.cut-ring{ fill:none; stroke:var(--tuber-flesh-ring); stroke-width:3 }
+.cut-swirl{ stroke:#C7A96B; opacity:.5 }
+.anno path{ fill:none; stroke:var(--soil-ink-2); stroke-width:1; opacity:.7 }
+.node{ position:absolute; width:0; height:0; top:50%; left:0 }
+
+/* kraft nursery tag on a string */
+.ktag{
+  position:absolute; z-index:3; transform-origin:calc(100% - 12px) 4px; top:calc(100% - 22px);
+  right:100%; margin-right:-26px;
+  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%);
+  padding:5px 14px 5px 10px;
+  display:flex; align-items:center; gap:6px;
+  background:var(--tag); border:1px solid var(--tag-edge); color:var(--tag-ink);
+  font-size:11px; font-weight:900; letter-spacing:.10em; text-transform:uppercase;
+  padding:5px 10px 5px 8px; white-space:nowrap;
+  clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+  padding-left:14px;
+}
+.ktag::before{
+  content:""; position:absolute; right:4px; top:50%; width:4px; height:4px; margin-top:-2px;
+  border-radius:50%; background:var(--tag-ink); opacity:.5;
+}
+.ktag .live{ width:6px; height:6px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 0 1px rgba(0,0,0,.15) }
+.row.side-left .ktag{ right:auto; left:100%; margin:0 0 0 -26px;
+  clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+  padding:5px 10px 5px 14px; transform-origin:12px 4px }
+.row.side-left .ktag::before{ right:auto; left:4px }
+.js .ktag{ animation:sway var(--sway, 6s) ease-in-out infinite alternate }
+@keyframes sway{ from{ rotate:-.8deg } to{ rotate:.8deg } }
+.row:hover .ktag, .row:focus-visible .ktag{ rotate:4deg; transition:rotate .38s ease }
+
+/* crumbs puffed by a hover */
+.puff{ position:absolute; inset:0; pointer-events:none; overflow:visible }
+.puff i{
+  position:absolute; width:4px; height:4px; border-radius:50%; background:var(--soil-0);
+  opacity:0; left:50%; top:60%;
+}
+.row:hover .puff i, .row:focus-visible .puff i{ animation:puff .42s ease-out forwards }
+.row:hover .puff i:nth-child(2), .row:focus-visible .puff i:nth-child(2){ animation-delay:.05s }
+.row:hover .puff i:nth-child(3), .row:focus-visible .puff i:nth-child(3){ animation-delay:.1s }
+@keyframes puff{
+  from{ opacity:1; translate:0 0 }
+  to{ opacity:0; translate:var(--dx, 16px) var(--dy, -14px) }
+}
+
+/* --- critters -------------------------------------------------------- */
+.critter{ position:absolute; z-index:2; pointer-events:none; overflow:visible }
+.worm-seg{ fill:var(--worm) } .worm-saddle{ fill:var(--worm-saddle) }
+.burrow{ fill:none; stroke:var(--soil-3); stroke-width:9; opacity:.5; stroke-linecap:round }
+.beetle-body{ fill:var(--beetle) } .beetle-lit{ fill:var(--beetle-lit) }
+.beetle-leg{ stroke:var(--beetle); stroke-width:1.4; fill:none; stroke-linecap:round }
+.tunnel{ fill:none; stroke:var(--soil-3); stroke-width:22; opacity:.55; stroke-linecap:round }
+.scratch{ fill:none; stroke:var(--soil-1); stroke-width:1.6; stroke-linecap:round; opacity:.8 }
+
+/* --- still in the ground --------------------------------------------- */
+.wip{ position:relative }
+.wip .lede{ max-width:46ch; color:var(--soil-ink-2); margin-bottom:22px }
+.nubs{ display:flex; align-items:flex-end; gap:26px; flex-wrap:wrap; margin-bottom:8px }
+.nub{ display:block; overflow:visible }
+.nub-path{ fill:var(--tuber); fill-opacity:.55; stroke:var(--tuber); stroke-width:1.4;
+  stroke-dasharray:5 4; opacity:.85 }
+.nub-item{ text-align:center }
+.nub-item span{ display:block; margin-top:8px; color:var(--soil-ink-2) }
+.key{ margin-top:30px; padding-top:16px; border-top:1px solid rgba(227,206,144,.2);
+  display:grid; gap:5px; color:var(--soil-ink-2); max-width:46ch }
+.peeker{ position:absolute; width:44px; height:auto; z-index:0; opacity:.95 }
+
+/* --- gauge ------------------------------------------------------------ */
+.gauge{
+  position:fixed; left:0; top:0; bottom:0; width:76px; z-index:4; pointer-events:none;
+  opacity:0; transition:opacity .24s ease;
+}
+.gauge.on{ opacity:1 }
+.gauge .rule{ position:absolute; left:34px; top:0; bottom:0; width:1px;
+  background:var(--root-shade); opacity:.3 }
+.gauge .tick{ position:absolute; left:34px; height:1px; background:var(--root-shade) }
+.gauge .tick.minor{ width:6px; opacity:.35 }
+.gauge .tick.major{ width:14px; opacity:.7 }
+.gauge .num{ position:absolute; left:52px; color:var(--soil-ink-2); translate:0 -50%;
+  font-size:11px; font-weight:900; letter-spacing:.18em }
+.gauge .read{
+  position:fixed; left:0; top:50vh; translate:0 -50%; width:76px; padding-left:8px;
+  color:var(--soil-ink); font-size:11px; font-weight:900; letter-spacing:.18em;
+}
+.gauge .read::before{ content:""; position:absolute; left:8px; top:50%; width:58px; height:1px;
+  background:var(--soil-ink); opacity:.55 }
+.gauge .read span{ position:relative; top:-10px }
+
+/* --- bedrock ---------------------------------------------------------- */
+.bedrock{ position:relative; background:var(--bedrock); color:var(--soil-ink); padding:0 0 72px;
+  overflow:hidden }
+.facets{ position:absolute; inset:0 0 auto 0; height:150px; width:100%; display:block }
+.facet{ fill:var(--bedrock); stroke:var(--bedrock-facet); stroke-width:1.2 }
+.js .facet{ transition:stroke .7s ease }
+.bedrock.lit .facet{ stroke:var(--bedrock-facet-lit) }
+.bedrock .shell{ position:relative; z-index:2; padding-top:150px }
+.bedrock h2{ font-size:clamp(2rem, 6vw, 3.25rem); font-weight:900; letter-spacing:-.03em;
+  line-height:1; margin-bottom:8px }
+.bedrock .thesis{ max-width:52ch; margin-top:20px; color:var(--soil-ink-2) }
+.finale{ margin-top:44px; padding-top:26px; border-top:1px solid rgba(227,206,144,.18) }
+.finale .n{ font-size:4rem; font-weight:900; line-height:1; letter-spacing:-.04em }
+.finale .said{ color:var(--soil-ink-2); margin-top:6px }
+.promise{ margin-top:34px; font-size:1.125rem }
+.strings{ margin-top:34px; position:relative; padding-top:26px;
+  display:flex; gap:14px; flex-wrap:wrap }
+.strings::before{ content:""; position:absolute; left:0; right:0; top:8px; height:1px;
+  background:var(--tag-string); opacity:.5 }
+.strings a{ position:relative }
+.strings a .ktag{ position:static; animation:none; margin:0; right:auto;
+  clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%); padding:5px 12px 5px 16px }
+.strings a .ktag::before{ right:auto; left:5px }
+.strings a:hover .ktag{ rotate:4deg; transition:rotate .38s ease }
+.colophon{ margin-top:38px; font-size:13px; color:var(--soil-ink-2); max-width:60ch }
+.return{ margin-top:26px; text-align:right; color:var(--soil-ink-2) }
+
+/* --- theme toggle ------------------------------------------------------ */
+.theme{
+  position:fixed; right:22px; bottom:22px; z-index:20; width:32px; height:32px; border-radius:50%;
+  border:1px solid var(--rule); background:transparent; cursor:pointer; padding:0;
+  display:grid; place-items:center; color:var(--ink);
+}
+body.on-soil .theme{ color:var(--soil-ink); border-color:rgba(227,206,144,.32) }
+.theme svg{ width:18px; height:18px; overflow:visible }
+.theme .sun, .theme .moon{ transition:opacity .26s ease }
+.theme .sun{ opacity:1 } .theme .moon{ opacity:0 }
+[data-theme="dark"] .theme .sun{ opacity:0 } [data-theme="dark"] .theme .moon{ opacity:1 }
+.theme path, .theme circle{ fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round }
+.theme .moon circle{ fill:currentColor; stroke:none; opacity:.5 }
+
+/* --- global grain ------------------------------------------------------ */
+.grain{
+  position:fixed; inset:0; pointer-events:none; z-index:30;
+  opacity:var(--grain-op); mix-blend-mode:var(--grain-blend);
+  background-image:var(--noise-fine);
+}
+
+/* ══════════════════════════════════════════════════════════ responsive ══ */
+@media (max-width:1023px){
+  :root{ --band:330px; --shell:940px; --off:96px }
+  .gauge{ width:44px }
+  .gauge .num{ display:none }
+  .gauge .read{ width:auto; left:8px; padding-left:0 }
+  .gauge .read::before{ width:30px }
+}
+@media (max-width:759px){
+  :root{ --pxcm:22px; --band:0px; --off:0px }
+  body{ font-size:16px }
+  .shell{ padding:0 20px 0 76px }
+  .topbar .shell, .air .shell{ padding-left:20px }
+  .row{ grid-template-columns:1fr; padding-left:0 }
+  .row > .text, .row.side-left > .text{
+    grid-row:auto; grid-column:1; text-align:left; justify-self:start; padding:0; max-width:none }
+  .row > .art{ grid-row:auto; grid-column:1; justify-content:flex-start; margin-bottom:18px }
+  .row > .art .holder{ margin-left:26px }
+  .row .ktag, .row.side-left .ktag{
+    right:auto; left:100%; margin:0 0 0 -26px; transform-origin:12px 4px;
+    clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+    padding:5px 10px 5px 14px }
+  .row .ktag::before, .row.side-left .ktag::before{ right:auto; left:4px }
+  .art .holder{ translate:0 0 }
+  .row.side-left .node{ left:0 }
+  .row .depth{ margin-top:12px }
+  .gauge{ width:24px }
+  .gauge .rule{ left:12px } .gauge .tick{ left:12px }
+  .gauge .read{ position:fixed; top:auto; bottom:20px; left:20px; translate:0 0; width:auto }
+  .gauge .read::before{ display:none }
+  .gauge .read span{ top:0 }
+  .crown h2{ max-width:none }
+  .buried{ width:min(190px, 48vw) }
+  .peeker{ display:none }
+}
+
+/* ══════════════════════════════════════════════════ reduced motion ══════ */
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important }
+  html{ --p:1 }
+  .js .hero{ opacity:1 }
+  .js .row .text > *{ transform:none }
+  .js .row .tuber{ opacity:1; transform:none }
+  .rootlayer use{ stroke-dashoffset:0 }
+  .r-tip{ display:none }   /* nothing is growing, so nothing has a growing tip */
+  .hairs{ opacity:.34 }
+  .daylight{ opacity:calc(var(--daylight-a) * .5) }
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#apps">Skip to the apps</a>
+
+<!-- ═══════════════════════════════════════════════════════════════ air ══ -->
+<section class="air">
+  <div class="air-grain"></div>
+  <div class="sky-life" aria-hidden="true">
+    <svg class="bird bird-1" viewBox="0 0 40 14"><path d="M2 10 Q10 1 19 9 Q28 1 38 10"/></svg>
+    <svg class="bird bird-2" viewBox="0 0 40 14"><path d="M2 10 Q10 2 19 9 Q28 2 38 10"/></svg>
+    <svg class="flutter" viewBox="0 0 40 30">
+      <path class="bfly-wing" d="M20 15 C10 2 0 6 4 15 C0 24 10 28 20 15Z"/>
+      <path class="bfly-wing" d="M20 15 C30 2 40 6 36 15 C40 24 30 28 20 15Z"/>
+      <ellipse class="bfly-body" cx="20" cy="15" rx="1.6" ry="6"/>
+    </svg>
+  </div>
+
+  <div class="shell">
+    <header class="topbar">
+      <img class="mark" src="/atpotato-normal.png" alt="" width="26" height="26">
+      <span class="word">atpotato</span>
+    </header>
+  </div>
+
+  <div class="shell hero">
+    <p class="eyebrow">Independent · Open source · Built on the AT Protocol</p>
+    <h1>atpotato</h1>
+    <p class="deck">Fun apps, helpful tools, and approachable content for the atproto and bsky
+      ecosystem. Free, open, and yours to take with you.</p>
+  </div>
+
+  <div class="shell soil-line-label">
+    <svg class="sprout" viewBox="0 0 20 34" aria-hidden="true">
+      <path class="stemline" d="M10 34 C10 24 9 18 10 10"/>
+      <path class="leafy" d="M10 12 C4 4 -2 8 2 14 C5 18 8 18 10 12Z"/>
+      <path class="leafy" d="M10 10 C16 3 22 7 18 13 C15 17 12 16 10 10Z"/>
+    </svg>
+    <span class="eyebrow">The soil line — 0 cm</span>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ contact ══ -->
+<div class="contact">
+  {{HORIZON_BACK}}
+  <img class="buried" id="buried" src="/atpotato-normal.png"
+       alt="The atpotato mascot, standing half-buried at the soil line">
+  {{HORIZON_FRONT}}
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ underground ══ -->
+<main class="under" id="apps">
+  <div class="daylight" aria-hidden="true"></div>
+  <svg class="rootlayer" id="rootlayer" aria-hidden="true" focusable="false" role="presentation">
+    <defs>
+      <linearGradient id="crownGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#39B54A"/>
+        <stop offset="45%" stop-color="#A58650"/>
+        <stop offset="100%" stop-color="var(--root)"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <section class="shell crown">
+    <h2>Everything we make grows off one thing.</h2>
+  </section>
+
+  <div class="rows shell" id="rows">
+
+    <a class="row side-right" href="https://cred.blue" data-cm="13" data-tw="168" data-side="right" style="--gap:16">
+      <div class="art">
+        <span class="holder"><span class="node"></span>{{TUBER_CRED}}
+          <span class="ktag" style="--sway:5.5s">cred.blue <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:18px;--dy:-16px"></i><i style="--dx:-14px;--dy:-12px"></i><i style="--dx:8px;--dy:-22px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Scoring · Live</p>
+        <h3>cred.blue<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 5 C18 2.4 34 6.6 52 4.2 C68 2 84 6 99 3.6"/></svg></h3>
+        <p class="one">A credibility score for any Bluesky account.</p>
+        <p class="body">Generate your score, see the shape of your AT&nbsp;Protocol data footprint, and
+          vibe-check strangers before you follow them. No signup, nothing stored.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-left" href="https://anisota.net" data-cm="31" data-tw="140" data-side="left" style="--gap:20">
+      <div class="art">
+        <span class="holder"><span class="node"></span>{{TUBER_ANISOTA}}
+          <span class="ktag" style="--sway:6.1s">anisota.net <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:-18px;--dy:-16px"></i><i style="--dx:14px;--dy:-12px"></i><i style="--dx:-8px;--dy:-22px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Client · Game · Live</p>
+        <h3>anisota<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 4.4 C16 6.8 32 2.2 50 5 C66 7 82 3 99 5.4"/></svg></h3>
+        <p class="one">A finite deck instead of an endless feed.</p>
+        <p class="body">Flip through post cards until your stamina runs out. Card rarity instead of like
+          counts, decks you can collect and share, and a hard stop when you're done.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-right" href="https://aturi.to" data-cm="48" data-tw="124" data-side="right" style="--gap:16">
+      <div class="art">
+        <span class="holder"><span class="node"></span>{{TUBER_ATURI}}
+          <span class="ktag" style="--sway:6.7s">aturi.to <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:18px;--dy:-14px"></i><i style="--dx:-12px;--dy:-18px"></i><i style="--dx:6px;--dy:-20px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Utility · Live</p>
+        <h3>aturi.to<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 5.2 C18 3 34 6.4 52 3.8 C70 1.8 84 5.6 99 4"/></svg></h3>
+        <p class="one">Universal links for the ATmosphere.</p>
+        <p class="body">Wrap any AT&nbsp;Protocol record in a single link that opens in whichever app the
+          reader already uses — no more "sorry, wrong client".</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-left deep" href="https://flushes.app" data-cm="66" data-tw="116" data-side="left" style="--gap:20">
+      <div class="art">
+        <span class="holder"><span class="node"></span>{{TUBER_FLUSHES}}
+          <span class="ktag" style="--sway:7.3s">flushes.app <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:-16px;--dy:-18px"></i><i style="--dx:12px;--dy:-14px"></i><i style="--dx:-6px;--dy:-22px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Lexicon demo · Live</p>
+        <h3>flushes<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 4 C17 6.6 33 2.6 51 5.2 C67 7.2 83 3.4 99 5"/></svg></h3>
+        <p class="one">The decentralised toilet network of planet Earth.</p>
+        <p class="body">Post a flush from the bathroom in sixty characters or fewer. Very silly — and
+          underneath it, a complete custom lexicon and AppView anyone can integrate.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-right deep" href="/guides/bluesky-for-brands" data-cm="81" data-tw="150" data-side="right" style="--gap:12">
+      <div class="art">
+        <span class="holder"><span class="node"></span>{{TUBER_HALF}}
+          <span class="ktag" style="--sway:8.2s">~40 min · free</span>
+          <span class="puff" aria-hidden="true"><i style="--dx:18px;--dy:-16px"></i><i style="--dx:-12px;--dy:-14px"></i><i style="--dx:8px;--dy:-20px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Writing · Free forever</p>
+        <h3>Guides<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 5 C19 2.6 35 6.2 53 4 C69 2.2 85 5.8 99 4.2"/></svg></h3>
+        <p class="one">How to use Bluesky to grow your brand.</p>
+        <p class="body">A comprehensive, jargon-free guide for companies, communities and creators.
+          Plain language, screenshots for every step, about forty minutes, no prior knowledge assumed.
+          Start with <em>How to use Bluesky to grow your brand</em>.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <section class="row side-left wip deep" data-cm="93" data-side="left" style="--gap:6">
+      <div class="art">
+        <span class="holder"><span class="node"></span></span>
+        <img class="peeker" src="/atpotato-waow.png" alt="" width="44" height="36">
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Still in the ground</p>
+        <p class="lede">Prototyped in the open. No promises, no launch dates — but you can read the
+          commits.</p>
+        <div class="nubs">{{NUBS}}</div>
+        <div class="key eyebrow">
+          <span>Solid — shipped</span>
+          <span>Dashed — still growing</span>
+          <span>Stone — something we routed around</span>
+        </div>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════ bedrock ══ -->
+<footer class="bedrock" id="bedrock">
+  <svg class="facets" viewBox="0 0 1440 150" preserveAspectRatio="none" aria-hidden="true">
+    <path class="facet" d="M0 44 L188 12 L372 58 L246 150 L0 150Z"/>
+    <path class="facet" d="M188 12 L468 34 L620 0 L372 58Z"/>
+    <path class="facet" d="M372 58 L620 0 L836 46 L654 150 L246 150Z"/>
+    <path class="facet" d="M620 0 L900 18 L1044 62 L836 46Z"/>
+    <path class="facet" d="M836 46 L1044 62 L1230 22 L1180 150 L654 150Z"/>
+    <path class="facet" d="M1044 62 L1230 22 L1440 40 L1440 150 L1180 150Z"/>
+  </svg>
+
+  <div class="shell">
+    <h2>atproto</h2>
+    <p class="eyebrow" style="color:var(--soil-ink-2)">Bedrock — the layer everything else sits on</p>
+    <p class="thesis">Every app above is an app on the AT&nbsp;Protocol. Same accounts, same records,
+      same open network. That isn't a feature list — it's the ground.</p>
+
+    <div class="finale">
+      <p class="n">100 cm</p>
+      <p class="said">you dug a metre. thanks for coming down.</p>
+    </div>
+
+    <p class="promise">Cultivating knowledge, equipping individuals, growing community.</p>
+
+    <nav class="strings" aria-label="atpotato elsewhere">
+      <a href="https://bsky.app/profile/atpota.to"><span class="ktag" style="--sway:5.9s">Bluesky</span></a>
+      <a href="https://tangled.sh/@atpota.to"><span class="ktag" style="--sway:6.4s">Tangled</span></a>
+      <a href="https://github.com/atpota-to"><span class="ktag" style="--sway:7.1s">GitHub</span></a>
+      <a href="mailto:contact@atpota.to"><span class="ktag" style="--sway:7.9s">contact@atpota.to</span></a>
+    </nav>
+
+    <p class="colophon">Everything here is free and open source. Built on the AT&nbsp;Protocol, so your
+      data leaves with you.</p>
+    <p class="return eyebrow"><a href="#top">Return to surface · 0 cm</a></p>
+  </div>
+</footer>
+
+<button class="theme" id="theme" type="button" aria-label="Toggle light and dark">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <g class="sun">
+      <circle cx="12" cy="12" r="4.6"/>
+      <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/>
+    </g>
+    <g class="moon">
+      <path d="M19 14.8A8 8 0 0 1 9.2 5a7.4 7.4 0 1 0 9.8 9.8Z"/>
+      <circle cx="10" cy="15" r="1.2"/><circle cx="13.6" cy="17" r=".8"/><circle cx="7.6" cy="12" r=".7"/>
+    </g>
+  </svg>
+</button>
+
+<div class="gauge" id="gauge" aria-hidden="true">
+  <div class="rule"></div>
+  <div class="read"><span id="readout">0 cm</span></div>
+</div>
+
+<div class="grain" aria-hidden="true"></div>
+
+{{SCRIPT}}
+</body>
+</html>

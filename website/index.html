@@ -1,62 +1,1231 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>atpotato</title>
-    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
 
-    <!-- Favicon -->
-    <link rel="icon" href="/favicon.png" type="image/png">
-    
-    <!-- Primary Meta Tags -->
-    <meta name="title" content="atpotato">
-    <meta name="description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
-    
-    <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://atpota.to/">
-    <meta property="og:title" content="atpotato">
-    <meta property="og:description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
-    <meta property="og:image" content="/og-image.jpg">
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="theme.js"></script>
-    <script defer src="logo-hover.js"></script>
+<meta name="title" content="atpotato">
+<meta name="description" content="Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem. Free, open, and yours to take with you.">
+<meta name="theme-color" content="#F2EBD8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14140F" media="(prefers-color-scheme: dark)">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://atpota.to/">
+<meta property="og:title" content="atpotato">
+<meta property="og:description" content="Fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem. Free, open, and yours to take with you.">
+<meta property="og:image" content="https://atpota.to/og-image.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preload" as="image" href="/atpotato-normal.png">
+<link rel="preload" as="image" href="/atpotato-waow.png">
+
+<script>
+  /* Set the theme and the js flag before first paint so nothing flashes. */
+  (function(){
+    var d = document.documentElement;
+    d.className = 'js';
+    try {
+      var t = localStorage.getItem('theme');
+      if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      d.setAttribute('data-theme', t);
+    } catch (e) { d.setAttribute('data-theme', 'light'); }
+  })();
+</script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════ tokens ══ */
+@property --p { syntax: '<number>'; inherits: true;  initial-value: 0; }
+@property --s { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --e { syntax: '<number>'; inherits: false; initial-value: 1; }
+
+:root{
+  color-scheme: light;
+  --p: 0;
+
+  /* air */
+  --air-top:#E7EEF2; --air-bot:#F2EBD8; --air-warm:#F7EFDC;
+  --ink:#221C12; --ink-2:#6A6151; --rule:#DED5BF;
+
+  /* ground */
+  --soil-0:#6B5333; --soil-1:#4A3A22; --soil-2:#33280F; --soil-3:#1E1709;
+  --soil-rim:#7A6038; --soil-lip:#96794A;
+  --bedrock:#2A2620; --bedrock-facet:#4E5148; --bedrock-facet-lit:#5E6258;
+  --stone:#8A7048; --stone-lit:#B4AA98;
+  --soil-ink:#F3E4C0; --soil-ink-2:#C4B08A;
+
+  /* the root is cream, never green */
+  --root:#E8DCC0; --root-lit:#F6EEDC; --root-shade:#C7B694;
+  --root-new:#FFFBEF; --root-hair:#FFF6E0;
+
+  --tuber:#D8BF8E; --tuber-lit:#E8D4A6; --tuber-shade:#8E6E3E;
+  --tuber-eye:#7A5C30; --tuber-flesh:#F6ECCF; --tuber-flesh-ring:#E4D2A8;
+
+  --tag:#E3CE90; --tag-edge:#C6AF74; --tag-string:#A58650; --tag-ink:#5A4522;
+
+  --green:#39B54A; --green-deep:#006837; --leaf:#39B54A; --leaf-dark:#006837; --leaf-dry:#5E8A3C;
+  --worm:#D9A28C; --worm-saddle:#C4826C; --beetle:#3A2B1A; --beetle-lit:#5E4A2E;
+  --daylight:#FFF6D8; --daylight-a:.30;
+  --grain-op:.085; --grain-blend:overlay; --air-grain-op:.06;
+  --noise-fine:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --noise-coarse:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+
+  --pxcm: 26px;
+  --shell: 1280px;
+  --band: 560px;
+  --off: 190px;
+}
+[data-theme="dark"]{
+  color-scheme: dark;
+  --air-top:#0D1114; --air-bot:#14140F; --air-warm:#1A1810;
+  --ink:#EFE9DC; --ink-2:#9E9179; --rule:rgba(227,206,144,.22);
+
+  --soil-0:#3A2E1B; --soil-1:#221A0E; --soil-2:#17110A; --soil-3:#0E0A05;
+  --soil-rim:#4A3A22; --soil-lip:#5E4A2C;
+  --bedrock:#141613; --bedrock-facet:#3A3E36; --bedrock-facet-lit:#4E5248;
+  --stone:#5A4A30; --stone-lit:#7A6E58;
+  --soil-ink:#EFE0BC; --soil-ink-2:#B8A47E;
+
+  --root:#D9C9A4; --root-lit:#F0E3C3; --root-shade:#8E7B56;
+  --root-new:#FDF8EA; --root-hair:#EFE0BC;
+
+  --tuber:#C0A87A; --tuber-lit:#D3BC8C; --tuber-shade:#7A5C33;
+  --tuber-eye:#6A5330; --tuber-flesh:#E9DCBB; --tuber-flesh-ring:#CBBB92;
+
+  --tag:#CBB77E; --tag-edge:#A58650; --tag-ink:#3A2C14;
+  --daylight:#CFE0FF; --daylight-a:.18;
+  --grain-op:.13; --grain-blend:soft-light; --air-grain-op:.05;
+}
+
+*,*::before,*::after{ box-sizing:border-box }
+html{ -webkit-text-size-adjust:100% }
+body{
+  margin:0; background:var(--air-bot); color:var(--ink);
+  font-family:"eigerdals", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:17px; line-height:1.55; font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+a{ color:inherit; text-decoration:none }
+h1,h2,h3,p{ margin:0 }
+img{ max-width:100% }
+:focus-visible{ outline:2px solid var(--green); outline-offset:3px; border-radius:2px }
+
+.shell{ width:100%; max-width:var(--shell); margin:0 auto; padding:0 32px }
+
+.eyebrow{
+  font-size:11px; font-weight:900; letter-spacing:.18em; text-transform:uppercase;
+  font-variant-numeric:tabular-nums;
+}
+
+.skip{
+  position:absolute; left:12px; top:-60px; z-index:100; background:var(--air-bot); color:var(--ink);
+  border:1px solid var(--rule); padding:10px 16px; font-weight:700; transition:top .18s ease;
+}
+.skip:focus{ top:12px }
+
+/* ══════════════════════════════════════════════════════════════ topbar ══ */
+.topbar{
+  position:relative; z-index:6; height:84px; display:flex; align-items:center; gap:10px;
+}
+.topbar .mark{ width:26px; height:26px; object-fit:contain }
+.topbar .word{ font-size:17px; font-weight:900; letter-spacing:-.02em }
+
+/* ═════════════════════════════════════════════════════════════════ air ══ */
+.air{
+  position:relative; min-height:88vh; padding-bottom:40px;
+  display:flex; flex-direction:column;
+  background:linear-gradient(180deg, var(--air-top) 0%, var(--air-bot) 78%);
+}
+.air::after{                                   /* the warm band that sits over the ground */
+  content:""; position:absolute; left:0; right:0; bottom:0; height:180px; pointer-events:none;
+  background:linear-gradient(180deg, transparent, var(--air-warm)); opacity:.5;
+}
+.air-grain{
+  position:absolute; inset:0; pointer-events:none; opacity:var(--air-grain-op);
+  background-image:var(--noise-coarse); mix-blend-mode:var(--grain-blend);
+}
+.air .shell{ position:relative; z-index:5 }
+.hero{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:24px 0 0 }
+.hero .eyebrow{ color:var(--green-deep) }
+[data-theme="dark"] .hero .eyebrow{ color:var(--green) }
+h1{
+  font-size:clamp(2.5rem, 5.6vw, 4.75rem); font-weight:900; letter-spacing:-.035em;
+  line-height:.95; margin:18px 0 20px; max-width:15ch;
+}
+.deck{
+  font-size:clamp(1.0625rem, 1.5vw, 1.3125rem); line-height:1.5; max-width:42ch; color:var(--ink-2);
+}
+.js .hero{ opacity:0; animation:fade .52s ease .08s forwards }
+@keyframes fade{ to{ opacity:1 } }
+
+.sky-life{ position:absolute; inset:0; pointer-events:none; z-index:2; overflow:hidden }
+.sky-life svg{ position:absolute; overflow:visible }
+.bird{ fill:none; stroke:var(--ink-2); stroke-width:1.6; stroke-linecap:round; opacity:.45 }
+.bird-1{ top:16%; left:72%; width:34px }
+.bird-2{ top:22%; left:79%; width:22px }
+.flutter{ top:30%; left:16%; width:26px }
+.bfly-wing{ fill:var(--tag); stroke:var(--tag-string); stroke-width:1 }
+.bfly-body{ fill:var(--tag-string) }
+.js .flutter{ animation:drift 96s ease-in-out infinite alternate }
+@keyframes drift{ to{ transform:translate(46vw, -6vh) } }
+
+.soil-line-label{
+  position:relative; z-index:5; display:flex; align-items:center; gap:12px;
+  color:var(--ink-2); padding-bottom:10px;
+}
+.soil-line-label .sprout{ width:20px; height:34px; overflow:visible; flex:none }
+.sprout path{ fill:none; stroke:var(--green); stroke-width:5; stroke-linecap:round }
+.sprout .leafy{ fill:var(--green-deep); stroke:none }
+.js .sprout .stemline{ stroke-dasharray:40; stroke-dashoffset:40; animation:draw .7s cubic-bezier(.2,.7,.3,1) .4s forwards }
+@keyframes draw{ to{ stroke-dashoffset:0 } }
+
+/* ════════════════════════════════════════════════════════════ contact ══ */
+.contact{
+  position:relative; height:max(168px, 13.4vw); overflow:hidden;
+  background:linear-gradient(180deg, var(--air-bot) 0%, var(--air-bot) 34%, var(--soil-0) 34%);
+}
+.horizon-art{ position:absolute; inset:0; width:100%; height:100%; display:block }
+.h-layer-back{ z-index:1 }
+.h-layer-front{ z-index:3 }
+.h-back{ fill:var(--soil-1) }
+.h-mid{ fill:var(--soil-0) }
+.h-lip{ fill:none; stroke:var(--soil-lip); stroke-width:3; stroke-linejoin:round }
+.crumb{ fill:var(--soil-0) }
+.crumb-dark{ fill:var(--soil-1) }
+.pebble{ fill:var(--stone) }
+.pebble-lit{ fill:var(--stone-lit); opacity:.45 }
+.blade{ fill:var(--leaf) }
+.blade-dark{ fill:var(--leaf-dark) }
+.blade-dry{ fill:var(--leaf-dry) }
+.h-foliage .stem{ fill:none; stroke:var(--leaf-dark); stroke-width:2.6; stroke-linecap:round }
+.h-foliage .leaf{ fill:var(--leaf) }
+.cat circle{ fill:#8FBF3F }
+.cat .cat-head{ fill:#79A92F }
+.chry path{ fill:var(--tag-string) }
+.chry .chry-line{ fill:none; stroke:var(--tuber-eye); stroke-width:1 }
+.fluff{ fill:none; stroke:var(--tag); stroke-width:1.4; stroke-linecap:round }
+.clover .leaf{ fill:var(--leaf-dry) }
+.filament{ fill:none; stroke:var(--root-hair); stroke-width:.9; opacity:.45; stroke-linecap:round }
+
+.buried{
+  position:absolute; z-index:2; left:50%; bottom:-4%;
+  width:min(268px, 46vw); height:auto; translate:-50% 0;
+  filter:drop-shadow(0 10px 14px rgba(60,44,20,.30));
+}
+.js .buried{ will-change:transform }
+
+/* ══════════════════════════════════════════════════════════ underground ══ */
+.under{
+  position:relative; z-index:1; overflow:hidden;
+  background:linear-gradient(180deg,
+    var(--soil-0) 0%, var(--soil-1) 18%, var(--soil-2) 52%, var(--soil-3) 84%, var(--soil-3) 100%);
+  color:var(--soil-ink);
+  padding-bottom:1px;
+}
+.daylight{
+  position:absolute; inset:0 0 auto 0; height:72%;
+  pointer-events:none; z-index:0; mix-blend-mode:screen;
+  background:radial-gradient(40% 80% at 50% 0%, var(--daylight) 0%, transparent 78%);
+  opacity:calc(var(--daylight-a) * (1 - var(--p)));
+}
+.rootlayer{
+  position:absolute; inset:0; width:100%; height:100%; overflow:visible;
+  pointer-events:none; z-index:1;
+}
+.under .shell{ position:relative; z-index:2 }
+
+/* --- root ink -------------------------------------------------------- */
+.rootlayer use{
+  fill:none; stroke-linecap:round; stroke-dasharray:1;
+  stroke-dashoffset:clamp(0, calc((var(--e) - var(--p)) / (var(--e) - var(--s))), 1);
+}
+.no-js .rootlayer use, .rootlayer use.static{ stroke-dashoffset:0 }
+.r-cast{ stroke:#1E1509; opacity:.34 }          /* contact shadow into the soil  */
+.r-body{ stroke:var(--root) }                    /* the root itself              */
+.r-rim { stroke:var(--root-lit); opacity:.5 }    /* light from the upper left    */
+.r-tip { stroke:var(--root-new); stroke-dasharray:.05 1;
+  stroke-dashoffset:clamp(0, calc((var(--e) - var(--p)) / (var(--e) - var(--s))), 1);
+  /* fade out the moment this segment finishes, so the leading edge is a tip,
+     not a bead on every join */
+  opacity:clamp(0, calc((var(--e) - var(--p)) / .03), 1); }
+.r-crown{ stroke:url(#crownGrad) }
+.hairs{
+  fill:none; stroke:var(--root-hair); stroke-linecap:round;
+  opacity:calc(clamp(0, (var(--p) - var(--s)) / (var(--e) - var(--s)), 1) * .34);
+}
+.no-js .hairs{ opacity:.34 }
+.stone-a{ fill:var(--stone) } .stone-b{ fill:var(--stone-lit); opacity:.4 }
+
+/* --- crown ----------------------------------------------------------- */
+.crown{ position:relative; padding:56px 0 0 }
+.crown h2{
+  font-size:clamp(2rem, 6vw, 3.25rem); font-weight:900; letter-spacing:-.03em; line-height:1.0;
+  max-width:min(18ch, 44%); color:var(--soil-ink); text-wrap:balance;
+}
+
+/* --- rows ------------------------------------------------------------ */
+.rows{ position:relative }
+.row{
+  position:relative; display:grid; grid-template-columns:1fr var(--band) 1fr;
+  align-items:center; align-content:center; column-gap:0;
+  min-height:calc(var(--gap, 16) * var(--pxcm));
+}
+.crown{ min-height:calc(6 * var(--pxcm)) }
+.row > .text{ grid-row:1; grid-column:3; max-width:46ch; padding-left:28px }
+.row.side-left > .text{ grid-column:1; text-align:right; justify-self:end; padding:0 28px 0 0 }
+.row > .art{ grid-row:1; grid-column:2; position:relative; display:flex; justify-content:center; align-items:center }
+
+.kicker{ color:var(--tag); margin-bottom:10px }
+.row h3{
+  font-size:clamp(1.625rem, 3.2vw, 2.6rem); font-weight:900; letter-spacing:-.03em; line-height:1.0;
+  color:var(--soil-ink); position:relative; display:inline-block;
+}
+.row h3 .ul{
+  position:absolute; left:0; right:0; bottom:-.14em; height:8px; overflow:visible;
+  pointer-events:none;
+}
+.row h3 .ul path{
+  fill:none; stroke:var(--green); stroke-width:2.4; stroke-linecap:round;
+  stroke-dasharray:1; stroke-dashoffset:1; transition:stroke-dashoffset .2s ease;
+}
+.row:hover h3 .ul path, .row:focus-visible h3 .ul path{ stroke-dashoffset:0 }
+.one{ font-size:1.0625rem; font-weight:700; line-height:1.4; color:var(--tag); margin:10px 0 12px }
+.body{ font-size:17px; line-height:1.55; max-width:46ch; color:var(--soil-ink-2) }
+.row.deep .body{ color:var(--soil-ink) }
+.depth{ display:block; margin-top:16px; color:var(--soil-ink-2) }
+
+.js .row .text > *{ transform:translateY(14px); transition:transform .46s cubic-bezier(.22,.61,.36,1) }
+.js .row.grown .text > *{ transform:none }
+.js .row .text > :nth-child(2){ transition-delay:.05s }
+.js .row .text > :nth-child(3){ transition-delay:.1s }
+.js .row .text > :nth-child(4){ transition-delay:.15s }
+.js .row .text > :nth-child(5){ transition-delay:.2s }
+
+.tuber{ display:block; overflow:visible; width:var(--tw, 150px); height:auto }
+.row[data-tw='168'] .tuber{--tw:168px} .row[data-tw='140'] .tuber{--tw:140px}
+.row[data-tw='124'] .tuber{--tw:124px} .row[data-tw='116'] .tuber{--tw:116px}
+.row[data-tw='150'] .tuber{--tw:150px}
+.js .row .tuber{ opacity:0; transform:scale(.86);
+  transition:opacity .3s ease, transform .52s cubic-bezier(.34,1.4,.64,1) }
+.js .row.grown .tuber{ opacity:1; transform:none }
+.art .holder{ position:relative; display:inline-block;
+  transition:transform .26s cubic-bezier(.2,.9,.3,1);
+  translate:calc(var(--dir, 1) * var(--off)) 0 }
+.node{ position:absolute; width:0; height:0; top:50%; left:0 }
+.row.side-right .node{ left:-4px }
+.row.side-left  .node{ left:calc(100% + 4px) }
+.wip .holder{ width:1px; height:1px }
+.row.side-right{ --dir:1 }
+.row.side-left { --dir:-1 }
+.row:hover .art .holder, .row:focus-visible .art .holder{ transform:translateY(-3px) rotate(2deg) }
+.row:hover .tb-fill, .row:focus-visible .tb-fill{ fill:var(--tuber-lit) }
+
+.tb-fill{ fill:var(--tuber); transition:fill .26s ease }
+.tb-shade{ fill:none; stroke:var(--tuber-shade); stroke-width:3; opacity:.7;
+  stroke-dasharray:200 600; stroke-dashoffset:-46 }
+.tb-lit{ fill:var(--tuber-lit); opacity:.5 }
+.tb-swirl{ fill:none; stroke:var(--tag-string); stroke-width:3; stroke-linecap:round; opacity:.4 }
+.eye{ fill:var(--tuber-eye) }
+.brow{ fill:none; stroke:var(--tuber-lit); stroke-width:1.4; opacity:.75 }
+.sp-stem{ fill:none; stroke:var(--green); stroke-width:6; stroke-linecap:round;
+  transition:transform .26s ease }
+.sp-leaf{ fill:var(--green-deep) }
+.cut-face{ fill:var(--tuber-flesh) }
+.cut-ring{ fill:none; stroke:var(--tuber-flesh-ring); stroke-width:3 }
+.cut-swirl{ stroke:#C7A96B; opacity:.5 }
+.anno path{ fill:none; stroke:var(--soil-ink-2); stroke-width:1; opacity:.7 }
+.node{ position:absolute; width:0; height:0; top:50%; left:0 }
+
+/* kraft nursery tag on a string */
+.ktag{
+  position:absolute; z-index:3; transform-origin:calc(100% - 12px) 4px; top:calc(100% - 22px);
+  right:100%; margin-right:-26px;
+  clip-path:polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%);
+  padding:5px 14px 5px 10px;
+  display:flex; align-items:center; gap:6px;
+  background:var(--tag); border:1px solid var(--tag-edge); color:var(--tag-ink);
+  font-size:11px; font-weight:900; letter-spacing:.10em; text-transform:uppercase;
+  padding:5px 10px 5px 8px; white-space:nowrap;
+  clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+  padding-left:14px;
+}
+.ktag::before{
+  content:""; position:absolute; right:4px; top:50%; width:4px; height:4px; margin-top:-2px;
+  border-radius:50%; background:var(--tag-ink); opacity:.5;
+}
+.ktag .live{ width:6px; height:6px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 0 1px rgba(0,0,0,.15) }
+.row.side-left .ktag{ right:auto; left:100%; margin:0 0 0 -26px;
+  clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+  padding:5px 10px 5px 14px; transform-origin:12px 4px }
+.row.side-left .ktag::before{ right:auto; left:4px }
+.js .ktag{ animation:sway var(--sway, 6s) ease-in-out infinite alternate }
+@keyframes sway{ from{ rotate:-.8deg } to{ rotate:.8deg } }
+.row:hover .ktag, .row:focus-visible .ktag{ rotate:4deg; transition:rotate .38s ease }
+
+/* crumbs puffed by a hover */
+.puff{ position:absolute; inset:0; pointer-events:none; overflow:visible }
+.puff i{
+  position:absolute; width:4px; height:4px; border-radius:50%; background:var(--soil-0);
+  opacity:0; left:50%; top:60%;
+}
+.row:hover .puff i, .row:focus-visible .puff i{ animation:puff .42s ease-out forwards }
+.row:hover .puff i:nth-child(2), .row:focus-visible .puff i:nth-child(2){ animation-delay:.05s }
+.row:hover .puff i:nth-child(3), .row:focus-visible .puff i:nth-child(3){ animation-delay:.1s }
+@keyframes puff{
+  from{ opacity:1; translate:0 0 }
+  to{ opacity:0; translate:var(--dx, 16px) var(--dy, -14px) }
+}
+
+/* --- critters -------------------------------------------------------- */
+.critter{ position:absolute; z-index:2; pointer-events:none; overflow:visible }
+.worm-seg{ fill:var(--worm) } .worm-saddle{ fill:var(--worm-saddle) }
+.burrow{ fill:none; stroke:var(--soil-3); stroke-width:9; opacity:.5; stroke-linecap:round }
+.beetle-body{ fill:var(--beetle) } .beetle-lit{ fill:var(--beetle-lit) }
+.beetle-leg{ stroke:var(--beetle); stroke-width:1.4; fill:none; stroke-linecap:round }
+.tunnel{ fill:none; stroke:var(--soil-3); stroke-width:22; opacity:.55; stroke-linecap:round }
+.scratch{ fill:none; stroke:var(--soil-1); stroke-width:1.6; stroke-linecap:round; opacity:.8 }
+
+/* --- still in the ground --------------------------------------------- */
+.wip{ position:relative }
+.wip .lede{ max-width:46ch; color:var(--soil-ink-2); margin-bottom:22px }
+.nubs{ display:flex; align-items:flex-end; gap:26px; flex-wrap:wrap; margin-bottom:8px }
+.nub{ display:block; overflow:visible }
+.nub-path{ fill:var(--tuber); fill-opacity:.55; stroke:var(--tuber); stroke-width:1.4;
+  stroke-dasharray:5 4; opacity:.85 }
+.nub-item{ text-align:center }
+.nub-item span{ display:block; margin-top:8px; color:var(--soil-ink-2) }
+.key{ margin-top:30px; padding-top:16px; border-top:1px solid rgba(227,206,144,.2);
+  display:grid; gap:5px; color:var(--soil-ink-2); max-width:46ch }
+.peeker{ position:absolute; width:44px; height:auto; z-index:0; opacity:.95 }
+
+/* --- gauge ------------------------------------------------------------ */
+.gauge{
+  position:fixed; left:0; top:0; bottom:0; width:76px; z-index:4; pointer-events:none;
+  opacity:0; transition:opacity .24s ease;
+}
+.gauge.on{ opacity:1 }
+.gauge .rule{ position:absolute; left:34px; top:0; bottom:0; width:1px;
+  background:var(--root-shade); opacity:.3 }
+.gauge .tick{ position:absolute; left:34px; height:1px; background:var(--root-shade) }
+.gauge .tick.minor{ width:6px; opacity:.35 }
+.gauge .tick.major{ width:14px; opacity:.7 }
+.gauge .num{ position:absolute; left:52px; color:var(--soil-ink-2); translate:0 -50%;
+  font-size:11px; font-weight:900; letter-spacing:.18em }
+.gauge .read{
+  position:fixed; left:0; top:50vh; translate:0 -50%; width:76px; padding-left:8px;
+  color:var(--soil-ink); font-size:11px; font-weight:900; letter-spacing:.18em;
+}
+.gauge .read::before{ content:""; position:absolute; left:8px; top:50%; width:58px; height:1px;
+  background:var(--soil-ink); opacity:.55 }
+.gauge .read span{ position:relative; top:-10px }
+
+/* --- bedrock ---------------------------------------------------------- */
+.bedrock{ position:relative; background:var(--bedrock); color:var(--soil-ink); padding:0 0 72px;
+  overflow:hidden }
+.facets{ position:absolute; inset:0 0 auto 0; height:150px; width:100%; display:block }
+.facet{ fill:var(--bedrock); stroke:var(--bedrock-facet); stroke-width:1.2 }
+.js .facet{ transition:stroke .7s ease }
+.bedrock.lit .facet{ stroke:var(--bedrock-facet-lit) }
+.bedrock .shell{ position:relative; z-index:2; padding-top:150px }
+.bedrock h2{ font-size:clamp(2rem, 6vw, 3.25rem); font-weight:900; letter-spacing:-.03em;
+  line-height:1; margin-bottom:8px }
+.bedrock .thesis{ max-width:52ch; margin-top:20px; color:var(--soil-ink-2) }
+.finale{ margin-top:44px; padding-top:26px; border-top:1px solid rgba(227,206,144,.18) }
+.finale .n{ font-size:4rem; font-weight:900; line-height:1; letter-spacing:-.04em }
+.finale .said{ color:var(--soil-ink-2); margin-top:6px }
+.promise{ margin-top:34px; font-size:1.125rem }
+.strings{ margin-top:34px; position:relative; padding-top:26px;
+  display:flex; gap:14px; flex-wrap:wrap }
+.strings::before{ content:""; position:absolute; left:0; right:0; top:8px; height:1px;
+  background:var(--tag-string); opacity:.5 }
+.strings a{ position:relative }
+.strings a .ktag{ position:static; animation:none; margin:0; right:auto;
+  clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%); padding:5px 12px 5px 16px }
+.strings a .ktag::before{ right:auto; left:5px }
+.strings a:hover .ktag{ rotate:4deg; transition:rotate .38s ease }
+.colophon{ margin-top:38px; font-size:13px; color:var(--soil-ink-2); max-width:60ch }
+.return{ margin-top:26px; text-align:right; color:var(--soil-ink-2) }
+
+/* --- theme toggle ------------------------------------------------------ */
+.theme{
+  position:fixed; right:22px; bottom:22px; z-index:20; width:32px; height:32px; border-radius:50%;
+  border:1px solid var(--rule); background:transparent; cursor:pointer; padding:0;
+  display:grid; place-items:center; color:var(--ink);
+}
+body.on-soil .theme{ color:var(--soil-ink); border-color:rgba(227,206,144,.32) }
+.theme svg{ width:18px; height:18px; overflow:visible }
+.theme .sun, .theme .moon{ transition:opacity .26s ease }
+.theme .sun{ opacity:1 } .theme .moon{ opacity:0 }
+[data-theme="dark"] .theme .sun{ opacity:0 } [data-theme="dark"] .theme .moon{ opacity:1 }
+.theme path, .theme circle{ fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round }
+.theme .moon circle{ fill:currentColor; stroke:none; opacity:.5 }
+
+/* --- global grain ------------------------------------------------------ */
+.grain{
+  position:fixed; inset:0; pointer-events:none; z-index:30;
+  opacity:var(--grain-op); mix-blend-mode:var(--grain-blend);
+  background-image:var(--noise-fine);
+}
+
+/* ══════════════════════════════════════════════════════════ responsive ══ */
+@media (max-width:1023px){
+  :root{ --band:330px; --shell:940px; --off:96px }
+  .gauge{ width:44px }
+  .gauge .num{ display:none }
+  .gauge .read{ width:auto; left:8px; padding-left:0 }
+  .gauge .read::before{ width:30px }
+}
+@media (max-width:759px){
+  :root{ --pxcm:22px; --band:0px; --off:0px }
+  body{ font-size:16px }
+  .shell{ padding:0 20px 0 76px }
+  .topbar .shell, .air .shell{ padding-left:20px }
+  .row{ grid-template-columns:1fr; padding-left:0 }
+  .row > .text, .row.side-left > .text{
+    grid-row:auto; grid-column:1; text-align:left; justify-self:start; padding:0; max-width:none }
+  .row > .art{ grid-row:auto; grid-column:1; justify-content:flex-start; margin-bottom:18px }
+  .row > .art .holder{ margin-left:26px }
+  .row .ktag, .row.side-left .ktag{
+    right:auto; left:100%; margin:0 0 0 -26px; transform-origin:12px 4px;
+    clip-path:polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+    padding:5px 10px 5px 14px }
+  .row .ktag::before, .row.side-left .ktag::before{ right:auto; left:4px }
+  .art .holder{ translate:0 0 }
+  .row.side-left .node{ left:0 }
+  .row .depth{ margin-top:12px }
+  .gauge{ width:24px }
+  .gauge .rule{ left:12px } .gauge .tick{ left:12px }
+  .gauge .read{ position:fixed; top:auto; bottom:20px; left:20px; translate:0 0; width:auto }
+  .gauge .read::before{ display:none }
+  .gauge .read span{ top:0 }
+  .crown h2{ max-width:none }
+  .buried{ width:min(190px, 48vw) }
+  .peeker{ display:none }
+}
+
+/* ══════════════════════════════════════════════════ reduced motion ══════ */
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important }
+  html{ --p:1 }
+  .js .hero{ opacity:1 }
+  .js .row .text > *{ transform:none }
+  .js .row .tuber{ opacity:1; transform:none }
+  .rootlayer use{ stroke-dashoffset:0 }
+  .r-tip{ display:none }   /* nothing is growing, so nothing has a growing tip */
+  .hairs{ opacity:.34 }
+  .daylight{ opacity:calc(var(--daylight-a) * .5) }
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <section class="profile">
-            <div class="logo-container">
-                <img src="/atpotato-normal.png" alt="atpotato logo" class="logo">
-            </div>
-            <h1>atpotato</h1>
-            <p class="subtitle">https://atpota.to</p>
-            <p class="tagline">creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem</p>
-            <div class="buttons">
-                <a href="https://bsky.app/profile/atpota.to" class="button" target="_blank">bluesky</a>
-                <a href="https://tangled.sh/@atpota.to" class="button" target="_blank">tangled</a>
-                <a href="https://github.com/atpota-to" class="button" target="_blank">github</a>
-            </div>
-            <p class="email">contact@atpota.to</p>
-        </section>
-        <section class="projects">
-            <div class="project-list">
-                <a href="https://anisota.net" class="project-link" target="_blank">anisota.net</a>
-                <a href="https://aturi.to" class="project-link" target="_blank">aturi.to</a>
-                <a href="https://flushes.app" class="project-link" target="_blank">flushes.app</a>
-                <a href="/guides/bluesky-for-brands" class="project-link">How to use Bluesky to grow your brand</a>
-                <p class="coming-soon">...more coming soon</p>
-            </div>
-        </section>
+
+<a class="skip" href="#apps">Skip to the apps</a>
+
+<!-- ═══════════════════════════════════════════════════════════════ air ══ -->
+<section class="air">
+  <div class="air-grain"></div>
+  <div class="sky-life" aria-hidden="true">
+    <svg class="bird bird-1" viewBox="0 0 40 14"><path d="M2 10 Q10 1 19 9 Q28 1 38 10"/></svg>
+    <svg class="bird bird-2" viewBox="0 0 40 14"><path d="M2 10 Q10 2 19 9 Q28 2 38 10"/></svg>
+    <svg class="flutter" viewBox="0 0 40 30">
+      <path class="bfly-wing" d="M20 15 C10 2 0 6 4 15 C0 24 10 28 20 15Z"/>
+      <path class="bfly-wing" d="M20 15 C30 2 40 6 36 15 C40 24 30 28 20 15Z"/>
+      <ellipse class="bfly-body" cx="20" cy="15" rx="1.6" ry="6"/>
+    </svg>
+  </div>
+
+  <div class="shell">
+    <header class="topbar">
+      <img class="mark" src="/atpotato-normal.png" alt="" width="26" height="26">
+      <span class="word">atpotato</span>
+    </header>
+  </div>
+
+  <div class="shell hero">
+    <p class="eyebrow">Independent · Open source · Built on the AT Protocol</p>
+    <h1>atpotato</h1>
+    <p class="deck">Fun apps, helpful tools, and approachable content for the atproto and bsky
+      ecosystem. Free, open, and yours to take with you.</p>
+  </div>
+
+  <div class="shell soil-line-label">
+    <svg class="sprout" viewBox="0 0 20 34" aria-hidden="true">
+      <path class="stemline" d="M10 34 C10 24 9 18 10 10"/>
+      <path class="leafy" d="M10 12 C4 4 -2 8 2 14 C5 18 8 18 10 12Z"/>
+      <path class="leafy" d="M10 10 C16 3 22 7 18 13 C15 17 12 16 10 10Z"/>
+    </svg>
+    <span class="eyebrow">The soil line — 0 cm</span>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ contact ══ -->
+<div class="contact">
+  <svg class="horizon-art h-layer-back" viewBox="0 0 1440 170" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false"><path class="h-back" d="M-30 170 L-30 54 Q-9.2 40.7 11.6 47.7 Q43.1 40.3 74.5 47.6 Q89 43.7 103.5 53.5 Q127.9 47.7 152.3 54.2 Q183.3 45.8 214.4 51.4 Q233.1 43.1 251.8 50.2 Q269.5 43 287.1 56.6 Q315.5 45.4 344 59 Q374.9 47.6 405.8 54.5 Q425.9 47.9 446 61.7 Q476.1 49.4 506.3 58 Q523.2 55.1 540 57.9 Q560.8 49.3 581.5 59.1 Q611.1 39.5 640.7 47.2 Q659.7 44 678.8 56.1 Q710.8 45.5 742.8 51.8 Q768.3 43.6 793.8 56.8 Q811.2 51.7 828.6 59.2 Q845.8 46.5 862.9 53.6 Q881.5 40.5 900.1 48.2 Q930.1 42 960 61.6 Q982.7 41 1005.3 48 Q1036.9 41.4 1068.5 48.5 Q1086.5 43.4 1104.4 60.8 Q1134.3 41.3 1164.1 47.2 Q1182.2 43.9 1200.4 52.6 Q1220.8 46.7 1241.2 52.4 Q1261.9 49.2 1282.6 55.8 Q1298.4 50.1 1314.2 56.4 Q1345 46.9 1375.8 53.7 Q1396.8 47.1 1417.8 56.8 Q1449.1 45.4 1480.4 57.3 L1480.4 170 Z"/></svg>
+  <img class="buried" id="buried" src="/atpotato-normal.png"
+       alt="The atpotato mascot, standing half-buried at the soil line">
+  <svg class="horizon-art h-layer-front" viewBox="0 0 1440 170" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false"><path class="h-mid" d="M-30 170 L-30 86 Q-18.1 82.2 -6.2 84.8 Q13.5 80 33.3 89.4 Q46 85 58.7 88.8 Q78.5 80.4 98.2 85.9 Q108.6 84.2 118.9 87 Q132.7 77.9 146.6 80.2 Q161.9 75.7 177.1 91 Q197.9 75.8 218.8 82.2 Q236.8 76.5 254.9 83.3 Q265.5 80.8 276.1 87.6 Q286.5 82.2 297 85 Q315.2 76.1 333.4 80.8 Q352.5 74 371.5 80 Q392.7 72.4 414 81.5 Q425.9 77.1 437.8 89.4 Q448.6 86.9 459.4 91.8 Q473.7 86 488 88.9 Q509.1 82.8 530.3 87.2 Q539.4 80.1 548.6 82.9 Q562.6 78.5 576.6 85.1 Q597 80.2 617.4 89.7 Q630.9 85.3 644.5 89.5 Q660.3 82.4 676.1 88.4 Q696.4 79.7 716.6 82.9 Q737 76.7 757.3 84.5 Q773.8 81.8 790.4 85.5 Q802 81.3 813.6 90.2 Q823.9 78.6 834.2 82.5 Q855.8 75.6 877.5 88.5 Q888.8 83.7 900 85.7 Q918.6 82.3 937.1 87.3 Q948.1 83.6 959.1 91.9 Q968.9 83.5 978.7 85.7 Q998 81.3 1017.3 91.7 Q1033.8 83.4 1050.3 86.3 Q1065.3 81 1080.3 83.9 Q1096.8 76.2 1113.3 82.3 Q1124.3 80.2 1135.2 87 Q1149.7 79.3 1164.3 82.6 Q1174.7 79.7 1185.1 85.7 Q1205.6 75.4 1226.1 80.4 Q1243 76.3 1259.9 87.5 Q1276 76.7 1292.2 81.1 Q1309.8 75.3 1327.4 87 Q1344 80.3 1360.6 88.9 Q1374 86.7 1387.5 89.4 Q1398.6 83.5 1409.7 86.8 Q1431.2 77.3 1452.6 85.5 Q1473.2 78.6 1493.8 88.1 L1493.8 170 Z"/><path class="h-lip" d="M-30 86 Q-18.1 82.2 -6.2 84.8 Q13.5 80 33.3 89.4 Q46 85 58.7 88.8 Q78.5 80.4 98.2 85.9 Q108.6 84.2 118.9 87 Q132.7 77.9 146.6 80.2 Q161.9 75.7 177.1 91 Q197.9 75.8 218.8 82.2 Q236.8 76.5 254.9 83.3 Q265.5 80.8 276.1 87.6 Q286.5 82.2 297 85 Q315.2 76.1 333.4 80.8 Q352.5 74 371.5 80 Q392.7 72.4 414 81.5 Q425.9 77.1 437.8 89.4 Q448.6 86.9 459.4 91.8 Q473.7 86 488 88.9 Q509.1 82.8 530.3 87.2 Q539.4 80.1 548.6 82.9 Q562.6 78.5 576.6 85.1 Q597 80.2 617.4 89.7 Q630.9 85.3 644.5 89.5 Q660.3 82.4 676.1 88.4 Q696.4 79.7 716.6 82.9 Q737 76.7 757.3 84.5 Q773.8 81.8 790.4 85.5 Q802 81.3 813.6 90.2 Q823.9 78.6 834.2 82.5 Q855.8 75.6 877.5 88.5 Q888.8 83.7 900 85.7 Q918.6 82.3 937.1 87.3 Q948.1 83.6 959.1 91.9 Q968.9 83.5 978.7 85.7 Q998 81.3 1017.3 91.7 Q1033.8 83.4 1050.3 86.3 Q1065.3 81 1080.3 83.9 Q1096.8 76.2 1113.3 82.3 Q1124.3 80.2 1135.2 87 Q1149.7 79.3 1164.3 82.6 Q1174.7 79.7 1185.1 85.7 Q1205.6 75.4 1226.1 80.4 Q1243 76.3 1259.9 87.5 Q1276 76.7 1292.2 81.1 Q1309.8 75.3 1327.4 87 Q1344 80.3 1360.6 88.9 Q1374 86.7 1387.5 89.4 Q1398.6 83.5 1409.7 86.8 Q1431.2 77.3 1452.6 85.5 Q1473.2 78.6 1493.8 88.1"/><g class="h-pebbles"><path class="pebble" d="M1363.5 118.4 C1363.5 122.1 1359.9 124 1356.7 124 C1353 124 1350.4 121.2 1350.4 118.4 C1350.4 115.2 1353.4 110.9 1356.7 110.9 C1360.6 110.9 1363.5 115.8 1363.5 118.4Z"/><path class="pebble-lit" d="M1359 116.5 C1359 118 1357.2 119.1 1355.1 119.1 C1353.4 119.1 1351.1 118.1 1351.1 116.5 C1351.1 115.2 1352.8 113.6 1355.1 113.6 C1357.4 113.6 1359 115.4 1359 116.5Z"/><path class="pebble" d="M353.9 111 C353.9 117.2 347.4 127.8 339.9 127.8 C331.2 127.8 326.8 118.5 326.8 111 C326.8 103.8 332 97.5 339.9 97.5 C348.8 97.5 353.9 103.5 353.9 111Z"/><path class="pebble-lit" d="M345.1 107.4 C345.1 110.5 341.5 111.7 336.8 111.7 C332.2 111.7 329.3 110.3 329.3 107.4 C329.3 104.2 333 101.6 336.8 101.6 C340.9 101.6 345.1 105 345.1 107.4Z"/><path class="pebble" d="M212.3 123.7 C212.3 128.8 206.4 132.8 199.7 132.8 C192.7 132.8 189.5 128.7 189.5 123.7 C189.5 119 193.7 114.8 199.7 114.8 C205.8 114.8 212.3 120.1 212.3 123.7Z"/><path class="pebble-lit" d="M204 120.7 C204 122.8 200.8 124.6 197.1 124.6 C193.9 124.6 190.9 123.1 190.9 120.7 C190.9 118.6 193.9 116 197.1 116 C200.6 116 204 118.4 204 120.7Z"/><path class="pebble" d="M850.4 156.5 C850.4 160.5 845 164.2 839 164.2 C834.2 164.2 827.2 160.4 827.2 156.5 C827.2 152.8 833.7 145.1 839 145.1 C844.4 145.1 850.4 152.3 850.4 156.5Z"/><path class="pebble-lit" d="M842.1 153.7 C842.1 155.3 839.7 157 836.6 157 C834.2 157 830.9 155.7 830.9 153.7 C830.9 151.7 834.2 149.7 836.6 149.7 C840 149.7 842.1 151.9 842.1 153.7Z"/><path class="pebble" d="M421.7 104.9 C421.7 108.9 418 110.6 412.4 110.6 C407.5 110.6 403.3 109.1 403.3 104.9 C403.3 101.4 406 97.4 412.4 97.4 C418.2 97.4 421.7 101.3 421.7 104.9Z"/><path class="pebble-lit" d="M414.8 102.4 C414.8 104 413.4 105.7 410.3 105.7 C407.6 105.7 405.8 104 405.8 102.4 C405.8 100.5 408.1 98.1 410.3 98.1 C413.4 98.1 414.8 100.6 414.8 102.4Z"/><path class="pebble" d="M561.2 147.4 C561.2 151.9 558.6 154.6 552 154.6 C545.8 154.6 537.9 150.3 537.9 147.4 C537.9 143.9 545.4 140.9 552 140.9 C558.1 140.9 561.2 143.9 561.2 147.4Z"/><path class="pebble-lit" d="M555.6 144.9 C555.6 146.5 552.7 148.7 549.8 148.7 C546.5 148.7 544.9 146.7 544.9 144.9 C544.9 142.9 547.4 140.8 549.8 140.8 C553 140.8 555.6 142.6 555.6 144.9Z"/><path class="pebble" d="M443 141.9 C443 149.5 433.3 152.6 424 152.6 C416.7 152.6 411.3 149.3 411.3 141.9 C411.3 135 414.7 130.4 424 130.4 C433 130.4 443 133.9 443 141.9Z"/><path class="pebble-lit" d="M427.3 138.3 C427.3 141.1 424.7 143.2 421 143.2 C416.8 143.2 413.1 140.6 413.1 138.3 C413.1 135.9 417.7 132.5 421 132.5 C425 132.5 427.3 135.6 427.3 138.3Z"/><path class="pebble" d="M226.4 123 C226.4 127 222.8 135 215.7 135 C208.5 135 203.8 128.4 203.8 123 C203.8 117.2 208.3 113.8 215.7 113.8 C222.7 113.8 226.4 117.3 226.4 123Z"/><path class="pebble-lit" d="M218.6 120.1 C218.6 122.3 217.1 123.5 213.2 123.5 C209.9 123.5 207.5 121.7 207.5 120.1 C207.5 118.4 210.6 115.6 213.2 115.6 C216.3 115.6 218.6 117.6 218.6 120.1Z"/><path class="pebble" d="M332 145.7 C332 152.4 324.4 158.4 317.2 158.4 C308.5 158.4 302.1 150.8 302.1 145.7 C302.1 141.3 310.3 135.7 317.2 135.7 C324.4 135.7 332 138.9 332 145.7Z"/><path class="pebble-lit" d="M321.5 141.7 C321.5 144.6 317.5 146.9 313.7 146.9 C309.3 146.9 306.3 144.8 306.3 141.7 C306.3 139.1 309.9 135 313.7 135 C318.5 135 321.5 138.7 321.5 141.7Z"/></g><g class="h-filaments"><path class="filament" d="M623.5 168 C638.5 120 608.4 83.6 632.5 57.6"/><path class="filament" d="M629.7 168 C643.5 120 615.8 79 638 53"/><path class="filament" d="M615 168 C610.2 120 619.8 75.2 612.1 49.2"/><path class="filament" d="M765.8 168 C758.5 120 773.1 85.7 761.4 59.7"/><path class="filament" d="M770.4 168 C784.7 120 756.2 97.9 779 71.9"/><path class="filament" d="M629 168 C633.3 120 624.8 79.7 631.6 53.7"/><path class="filament" d="M732.9 168 C733.6 120 732.2 95.5 733.3 69.5"/><path class="filament" d="M696.5 168 C706.6 120 686.4 73.1 702.5 47.1"/><path class="filament" d="M751.7 168 C743.5 120 759.9 70.7 746.7 44.7"/><path class="filament" d="M752.5 168 C757 120 748.1 96.8 755.2 70.8"/><path class="filament" d="M739.8 168 C726 120 753.6 84.9 731.5 58.9"/></g><g class="h-crumbs"><path class="crumb crumb-dark" d="M24.8 64.7 C24.8 68 19.3 71.2 12.9 71.2 C7.2 71.2 -3.2 68.1 -3.2 64.7 C-3.2 61.4 7.4 57.6 12.9 57.6 C18.2 57.6 24.8 61.1 24.8 64.7Z"/><path class="crumb crumb-dark" d="M85.7 61.6 C85.7 66.7 81.7 68.7 75.3 68.7 C70.8 68.7 62.4 65 62.4 61.6 C62.4 57.9 69.3 55 75.3 55 C80.2 55 85.7 57 85.7 61.6Z"/><path class="crumb" d="M160 67.3 C160 72.4 151.4 76.7 144.4 76.7 C139 76.7 131.6 73.8 131.6 67.3 C131.6 61.9 137.5 57.6 144.4 57.6 C149.6 57.6 160 62.8 160 67.3Z"/><path class="crumb" d="M50.4 83.8 C50.4 88.3 45.7 92.4 38.5 92.4 C31.5 92.4 25.9 89.9 25.9 83.8 C25.9 79.8 32.8 70.7 38.5 70.7 C44.1 70.7 50.4 78 50.4 83.8Z"/><path class="crumb" d="M83.6 69.1 C83.6 71.6 79.8 73.3 76.2 73.3 C72.8 73.3 70.3 72.1 70.3 69.1 C70.3 66.8 73.1 64 76.2 64 C79.3 64 83.6 66.2 83.6 69.1Z"/><path class="crumb" d="M155.6 62.6 C155.6 65.3 151.8 67.9 149 67.9 C146.3 67.9 142.1 65.6 142.1 62.6 C142.1 59.6 145.9 55.4 149 55.4 C153 55.4 155.6 60.3 155.6 62.6Z"/><path class="crumb crumb-dark" d="M40.3 81.8 C40.3 85.4 35.4 91.4 28.4 91.4 C22.3 91.4 17.8 86.6 17.8 81.8 C17.8 77.2 22 73.5 28.4 73.5 C33.8 73.5 40.3 78.3 40.3 81.8Z"/><path class="crumb crumb-dark" d="M109.9 87 C109.9 90.3 106.6 95 101.8 95 C98.5 95 94.4 90.3 94.4 87 C94.4 83.7 96.9 82 101.8 82 C105.9 82 109.9 83.8 109.9 87Z"/><path class="crumb" d="M308.4 86.9 C308.4 89.9 303.5 91.2 299.5 91.2 C295.4 91.2 292.5 89.3 292.5 86.9 C292.5 83.6 294.5 81.2 299.5 81.2 C303.5 81.2 308.4 83.6 308.4 86.9Z"/><path class="crumb" d="M267 85.6 C267 91.2 258.5 96.6 251.7 96.6 C244.8 96.6 240.7 90.4 240.7 85.6 C240.7 80.6 244.5 75.6 251.7 75.6 C258.7 75.6 267 79.8 267 85.6Z"/><path class="crumb crumb-dark" d="M437.6 66.3 C437.6 71.8 430.2 76 424.7 76 C416.8 76 414.3 70.2 414.3 66.3 C414.3 61 418.3 54.2 424.7 54.2 C432.1 54.2 437.6 60.6 437.6 66.3Z"/><path class="crumb" d="M476.6 77.8 C476.6 81.7 471.6 83.4 466.1 83.4 C461.6 83.4 457.6 81.1 457.6 77.8 C457.6 74.7 460.7 72.4 466.1 72.4 C469.8 72.4 476.6 74.7 476.6 77.8Z"/><path class="crumb crumb-dark" d="M389.2 82.4 C389.2 87.4 381.4 90.5 375.4 90.5 C368 90.5 363.6 87.8 363.6 82.4 C363.6 76.8 370 74.9 375.4 74.9 C383 74.9 389.2 77.7 389.2 82.4Z"/><path class="crumb" d="M406 84.5 C406 87 402.7 88.3 398.9 88.3 C395.6 88.3 389.3 86.5 389.3 84.5 C389.3 82.6 396 80.3 398.9 80.3 C403.3 80.3 406 82.4 406 84.5Z"/><path class="crumb" d="M433.9 66.2 C433.9 70.5 427.7 77.6 422.5 77.6 C418 77.6 413 70.7 413 66.2 C413 61.2 415.9 59 422.5 59 C428.7 59 433.9 61.2 433.9 66.2Z"/><path class="crumb" d="M534.3 66.8 C534.3 70.4 530.5 73.8 525.7 73.8 C520.5 73.8 517.2 71.1 517.2 66.8 C517.2 62.3 522.3 57.8 525.7 57.8 C530.2 57.8 534.3 62.5 534.3 66.8Z"/><path class="crumb" d="M654.3 81.4 C654.3 86 650.6 91 646.5 91 C641.6 91 637.3 85.3 637.3 81.4 C637.3 77.3 641.7 74.4 646.5 74.4 C652.3 74.4 654.3 77.3 654.3 81.4Z"/><path class="crumb" d="M617 77.1 C617 80 613.6 84.7 609.6 84.7 C604.9 84.7 601.3 81 601.3 77.1 C601.3 73.8 605.6 71.5 609.6 71.5 C614.4 71.5 617 74.1 617 77.1Z"/><path class="crumb" d="M550.7 81.9 C550.7 84.8 548.6 87.4 545.1 87.4 C541 87.4 537.7 84.4 537.7 81.9 C537.7 79.3 541.1 76.7 545.1 76.7 C549 76.7 550.7 79.2 550.7 81.9Z"/><path class="crumb" d="M533.8 75.6 C533.8 80 530.5 82.5 523.7 82.5 C518.1 82.5 510.7 79.9 510.7 75.6 C510.7 70.9 516.2 67.9 523.7 67.9 C530.9 67.9 533.8 71.2 533.8 75.6Z"/><path class="crumb" d="M1132.3 73.8 C1132.3 76.2 1130.5 77.4 1126.7 77.4 C1124 77.4 1118.9 75.7 1118.9 73.8 C1118.9 72.1 1123.6 70.3 1126.7 70.3 C1129.3 70.3 1132.3 71.8 1132.3 73.8Z"/><path class="crumb crumb-dark" d="M1188.4 77.4 C1188.4 82.3 1180.6 84.8 1175.8 84.8 C1168.5 84.8 1164.7 83.1 1164.7 77.4 C1164.7 73.1 1169.1 66.4 1175.8 66.4 C1181.5 66.4 1188.4 73.5 1188.4 77.4Z"/><path class="crumb crumb-dark" d="M1038.2 81.1 C1038.2 84.6 1036.1 88.5 1029.3 88.5 C1023.1 88.5 1015.2 85 1015.2 81.1 C1015.2 76.9 1024.2 74.8 1029.3 74.8 C1035.4 74.8 1038.2 77.1 1038.2 81.1Z"/><path class="crumb" d="M1001.2 75.4 C1001.2 80.2 997.7 85.9 990.5 85.9 C983.8 85.9 974.6 81.8 974.6 75.4 C974.6 70.8 984.4 64.4 990.5 64.4 C997.5 64.4 1001.2 69.9 1001.2 75.4Z"/><path class="crumb crumb-dark" d="M1082.8 83.1 C1082.8 85 1081 86.9 1077.5 86.9 C1074.3 86.9 1071.6 85.6 1071.6 83.1 C1071.6 81.3 1074.1 78.2 1077.5 78.2 C1080.8 78.2 1082.8 81 1082.8 83.1Z"/><path class="crumb" d="M1009.5 61.1 C1009.5 65.3 1000.5 68.7 995.2 68.7 C987.9 68.7 983.4 64.2 983.4 61.1 C983.4 57.1 987.7 53.7 995.2 53.7 C1000.7 53.7 1009.5 56.5 1009.5 61.1Z"/><path class="crumb crumb-dark" d="M1042.3 67.7 C1042.3 71.5 1034.9 76 1031 76 C1026.1 76 1023.4 71.2 1023.4 67.7 C1023.4 63.8 1026.3 59.9 1031 59.9 C1035 59.9 1042.3 63 1042.3 67.7Z"/><path class="crumb crumb-dark" d="M1315.7 77.4 C1315.7 79.3 1311.7 82.2 1308.9 82.2 C1306.1 82.2 1302.8 79.6 1302.8 77.4 C1302.8 74.4 1305.6 72.3 1308.9 72.3 C1311.9 72.3 1315.7 74.7 1315.7 77.4Z"/><path class="crumb" d="M1393.3 88 C1393.3 91.4 1385.1 96 1380.1 96 C1373.1 96 1369.3 91.3 1369.3 88 C1369.3 83.2 1373.9 81.7 1380.1 81.7 C1385.5 81.7 1393.3 83.9 1393.3 88Z"/><path class="crumb crumb-dark" d="M1262.5 75.1 C1262.5 77.3 1260.8 80 1257.7 80 C1255 80 1251 78.1 1251 75.1 C1251 71.9 1254.6 70.8 1257.7 70.8 C1260.2 70.8 1262.5 72.6 1262.5 75.1Z"/><path class="crumb" d="M1359.6 89.5 C1359.6 92.9 1355 96.1 1349.4 96.1 C1341.8 96.1 1333.5 93.3 1333.5 89.5 C1333.5 85.4 1342.1 81.8 1349.4 81.8 C1356.3 81.8 1359.6 86.3 1359.6 89.5Z"/><path class="crumb" d="M1361.7 70 C1361.7 72.5 1357.8 74.7 1353.7 74.7 C1348.8 74.7 1346.9 72.8 1346.9 70 C1346.9 67.5 1348.9 63.2 1353.7 63.2 C1357.9 63.2 1361.7 67.1 1361.7 70Z"/></g><g class="h-grass"><path class="blade" d="M833.1 79.3 Q831 62.4 825.5 48.5 Q834.6 62.4 840.3 79.3 Z"/><path class="blade" d="M871 81.4 Q866.5 56.3 856.5 35.8 Q869.9 56.3 877.8 81.4 Z"/><path class="blade blade-dark" d="M657.6 88.4 Q663.7 67 673.6 49.5 Q666.7 67 663.7 88.4 Z"/><path class="blade blade-dark" d="M584.3 82.1 Q588.5 57.7 595.3 37.7 Q590.9 57.7 589 82.1 Z"/><path class="blade" d="M615.4 87.1 Q621.8 67.2 632.1 50.8 Q625.4 67.2 622.5 87.1 Z"/><path class="blade blade-dry" d="M992.8 82.2 Q994.9 69 997.1 58.3 Q998.8 69 1000.6 82.2 Z"/><path class="blade" d="M232 79.5 Q230.4 70.4 225.8 62.9 Q234.4 70.4 239.9 79.5 Z"/><path class="blade blade-dark" d="M517.1 75.4 Q521.3 61.8 528.1 50.7 Q524 61.8 522.3 75.4 Z"/><path class="blade blade-dark" d="M643.5 77.6 Q649.6 52.3 659.2 31.7 Q653.7 52.3 651.6 77.6 Z"/><path class="blade" d="M1236.4 85.7 Q1237 74 1236.5 64.4 Q1241.2 74 1244.6 85.7 Z"/><path class="blade blade-dark" d="M479.7 88.4 Q477.3 69.5 471.2 54.1 Q481 69.5 487.2 88.4 Z"/><path class="blade blade-dark" d="M251.4 88.9 Q258.4 64 270.1 43.7 Q261.5 64 257.6 88.9 Z"/><path class="blade" d="M1199.3 80.9 Q1197.8 64.9 1193.4 51.9 Q1201.5 64.9 1206.7 80.9 Z"/><path class="blade" d="M801.8 76.5 Q798.2 61.9 790.1 49.9 Q801.1 61.9 807.8 76.5 Z"/><path class="blade" d="M875.4 82.6 Q874.7 69.5 872.5 58.8 Q877.3 69.5 880.4 82.6 Z"/></g><g class="h-foliage"><path class="stem" d="M742 88 C746 54 764 36 788 32"/><path class="leaf" d="M788 32 C808 20 828 26 834 37 C820 47 798 45 788 32Z"/><g class="cat" transform="translate(802 33)"><circle cx="0" cy="0" r="4"/><circle cx="7" cy="1.4" r="3.6"/><circle cx="14" cy="1.3" r="3.3"/><circle cx="21" cy="-0.3" r="3"/><circle cx="28" cy="-1.5" r="2.6"/><circle class="cat-head" cx="-6" cy="0" r="4.4"/></g><g class="chry" transform="translate(756 50) rotate(8)"><path d="M0 0 C7 2 8 12 4 20 C1 25 -3 25 -5 20 C-8 12 -6 3 0 0Z"/><path class="chry-line" d="M-1 6 L2 16"/></g><g class="dand" transform="translate(1180 74)"><path class="stem" d="M0 18 C-2 8 0 2 1 -4"/><path class="fluff" d="M1 -4 L-7.5 -7.1"/><path class="fluff" d="M1 -4 L-6.3 -9.3"/><path class="fluff" d="M1 -4 L-4.5 -11.1"/><path class="fluff" d="M1 -4 L-2.4 -12.3"/><path class="fluff" d="M1 -4 L0.1 -13"/><path class="fluff" d="M1 -4 L2.6 -12.9"/><path class="fluff" d="M1 -4 L4.9 -12.1"/><path class="fluff" d="M1 -4 L7 -10.7"/><path class="fluff" d="M1 -4 L8.6 -8.8"/><path class="fluff" d="M1 -4 L9.7 -6.5"/><path class="fluff" d="M1 -4 L10 -4"/></g><g class="clover" transform="translate(342 76)"><ellipse class="leaf" rx="6" ry="4.4" transform="rotate(0) translate(6 0)"/><ellipse class="leaf" rx="6" ry="4.4" transform="rotate(120) translate(6 0)"/><ellipse class="leaf" rx="6" ry="4.4" transform="rotate(240) translate(6 0)"/><path class="stem" d="M0 2 C1 10 0 14 -1 18"/></g></g></svg>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ underground ══ -->
+<main class="under" id="apps">
+  <div class="daylight" aria-hidden="true"></div>
+  <svg class="rootlayer" id="rootlayer" aria-hidden="true" focusable="false" role="presentation">
+    <defs>
+      <linearGradient id="crownGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#39B54A"/>
+        <stop offset="45%" stop-color="#A58650"/>
+        <stop offset="100%" stop-color="var(--root)"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <section class="shell crown">
+    <h2>Everything we make grows off one thing.</h2>
+  </section>
+
+  <div class="rows shell" id="rows">
+
+    <a class="row side-right" href="https://cred.blue" data-cm="13" data-tw="168" data-side="right" style="--gap:16">
+      <div class="art">
+        <span class="holder"><span class="node"></span><svg class="tuber" viewBox="0 0 200 140" width="200" height="140" aria-hidden="true" focusable="false">
+<g transform="rotate(-6 100 70)"><path class="sp-stem" d="M63.8 25.2 Q47.8 16.7 49.7 -1.3"/><g transform="translate(49.7 -1.3) rotate(-28) scale(1.15)"><path class="sp-leaf" d="M0 6 C-9 -4 -3 -13 0 -7 C3 -13 9 -4 0 6Z"/></g><path class="sp-stem" d="M147.5 30 Q161.3 25.6 162.2 11.1"/><g transform="translate(162.2 11.1) rotate(38) scale(0.92)"><path class="sp-leaf" d="M0 6 C-9 -4 -3 -13 0 -7 C3 -13 9 -4 0 6Z"/></g><path class="tb-fill" d="M195.7 70 C195.7 103.3 149.1 126.2 100 126.2 C57 126.2 16 96.3 16 70 C16 34.1 48.9 22.4 100 22.4 C143 22.4 195.7 39.6 195.7 70Z"/><path class="tb-shade" d="M195.7 70 C195.7 103.3 149.1 126.2 100 126.2 C57 126.2 16 96.3 16 70 C16 34.1 48.9 22.4 100 22.4 C143 22.4 195.7 39.6 195.7 70Z"/><ellipse class="tb-lit" cx="72.1" cy="48.4" rx="32.8" ry="18.4"/><path class="tb-swirl" d="M106 69.1 L107.4 68.9 L109 69 L110.5 69.5 L111.9 70.5 L113.1 71.9 L113.9 73.6 L114.2 75.5 L113.9 77.6 L113.1 79.6 L111.6 81.5 L109.6 82.9 L107.2 83.9 L104.4 84.3 L101.6 84 L98.8 83 L96.2 81.3 L94.2 78.9 L92.8 76 L92.3 72.9 L92.6 69.5 L93.8 66.3 L96 63.3 L98.9 60.9 L102.5 59.3 L106.6 58.5 L110.8 58.7 L114.9 60 L118.7 62.2 L121.8 65.4 L124.1 69.2 L125.2 73.6 L125.1 78.3 L123.8 82.8 L121.2 87 L117.5 90.5 L112.9 93.1 L107.6 94.6 L102 94.7 L96.5 93.5 L91.3 91 L86.9 87.2 L83.6 82.5 L81.6 77 L81.1 71.1 L82.2 65.2 L85 59.6 C99.3 67.4 101.1 84.3 89.6 87.2"/><g transform="translate(56.4 93.3) rotate(139.5)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(120.7 81.2) rotate(35)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(131.1 73.8) rotate(25.2)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(96.5 87.4) rotate(105.9)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(144.3 77.9) rotate(-9.8)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(48.8 84.4) rotate(153.2)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(98.6 31.9) rotate(275.8)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g></g>
+</svg>
+          <span class="ktag" style="--sway:5.5s">cred.blue <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:18px;--dy:-16px"></i><i style="--dx:-14px;--dy:-12px"></i><i style="--dx:8px;--dy:-22px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Scoring · Live</p>
+        <h3>cred.blue<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 5 C18 2.4 34 6.6 52 4.2 C68 2 84 6 99 3.6"/></svg></h3>
+        <p class="one">A credibility score for any Bluesky account.</p>
+        <p class="body">Generate your score, see the shape of your AT&nbsp;Protocol data footprint, and
+          vibe-check strangers before you follow them. No signup, nothing stored.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-left" href="https://anisota.net" data-cm="31" data-tw="140" data-side="left" style="--gap:20">
+      <div class="art">
+        <span class="holder"><span class="node"></span><svg class="tuber" viewBox="0 0 200 140" width="200" height="140" aria-hidden="true" focusable="false">
+<g transform="rotate(11 100 70)"><path class="sp-stem" d="M91.9 19.5 Q78.7 3.8 88.4 -14.3"/><g transform="translate(88.4 -14.3) rotate(-6) scale(1.3)"><path class="sp-leaf" d="M0 6 C-9 -4 -3 -13 0 -7 C3 -13 9 -4 0 6Z"/></g><path class="tb-fill" d="M173.5 70 C173.5 105.9 141.2 140.1 100 140.1 C57.4 140.1 18.3 96.9 18.3 70 C18.3 42 51.4 21.9 100 21.9 C139.3 21.9 173.5 43.9 173.5 70Z"/><path class="tb-shade" d="M173.5 70 C173.5 105.9 141.2 140.1 100 140.1 C57.4 140.1 18.3 96.9 18.3 70 C18.3 42 51.4 21.9 100 21.9 C139.3 21.9 173.5 43.9 173.5 70Z"/><ellipse class="tb-lit" cx="72.1" cy="48.4" rx="32.8" ry="18.4"/><path class="tb-swirl" d="M96 67.1 L97.4 66.9 L99 67 L100.5 67.5 L101.9 68.5 L103.1 69.9 L103.9 71.6 L104.2 73.5 L103.9 75.6 L103.1 77.6 L101.6 79.5 L99.6 80.9 L97.2 81.9 L94.4 82.3 L91.6 82 L88.8 81 L86.2 79.3 L84.2 76.9 L82.8 74 L82.3 70.9 L82.6 67.5 L83.8 64.3 L86 61.3 L88.9 58.9 L92.5 57.3 L96.6 56.5 L100.8 56.7 L104.9 58 L108.7 60.2 L111.8 63.4 L114.1 67.2 L115.2 71.6 L115.1 76.3 L113.8 80.8 L111.2 85 L107.5 88.5 L102.9 91.1 L97.6 92.6 L92 92.7 L86.5 91.5 L81.3 89 L76.9 85.2 L73.6 80.5 L71.6 75 L71.1 69.1 L72.2 63.2 L75 57.6 C89.3 65.4 91.1 82.3 79.6 85.2"/><g transform="translate(63.4 48) rotate(209.4)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(71.2 69.5) rotate(206.3)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(82.1 87) rotate(139.8)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(133.9 86.2) rotate(33.3)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(94.5 51.8) rotate(280.4)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g></g>
+</svg>
+          <span class="ktag" style="--sway:6.1s">anisota.net <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:-18px;--dy:-16px"></i><i style="--dx:14px;--dy:-12px"></i><i style="--dx:-8px;--dy:-22px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Client · Game · Live</p>
+        <h3>anisota<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 4.4 C16 6.8 32 2.2 50 5 C66 7 82 3 99 5.4"/></svg></h3>
+        <p class="one">A finite deck instead of an endless feed.</p>
+        <p class="body">Flip through post cards until your stamina runs out. Card rarity instead of like
+          counts, decks you can collect and share, and a hard stop when you're done.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-right" href="https://aturi.to" data-cm="48" data-tw="124" data-side="right" style="--gap:16">
+      <div class="art">
+        <span class="holder"><span class="node"></span><svg class="tuber" viewBox="0 0 200 140" width="200" height="140" aria-hidden="true" focusable="false">
+<g transform="rotate(-3 100 70)"><path class="tb-fill" d="M191.9 70 C191.9 103.8 148.4 124.2 100 124.2 C57.5 124.2 -1.2 95.5 -1.2 70 C-1.2 42 54.8 16.5 100 16.5 C146.9 16.5 191.9 42.2 191.9 70Z"/><path class="tb-shade" d="M191.9 70 C191.9 103.8 148.4 124.2 100 124.2 C57.5 124.2 -1.2 95.5 -1.2 70 C-1.2 42 54.8 16.5 100 16.5 C146.9 16.5 191.9 42.2 191.9 70Z"/><ellipse class="tb-lit" cx="72.1" cy="48.4" rx="32.8" ry="18.4"/><path class="tb-swirl" d="M102 65.1 L103.4 64.9 L105 65 L106.5 65.5 L107.9 66.5 L109.1 67.9 L109.9 69.6 L110.2 71.5 L109.9 73.6 L109.1 75.6 L107.6 77.5 L105.6 78.9 L103.2 79.9 L100.4 80.3 L97.6 80 L94.8 79 L92.2 77.3 L90.2 74.9 L88.8 72 L88.3 68.9 L88.6 65.5 L89.8 62.3 L92 59.3 L94.9 56.9 L98.5 55.3 L102.6 54.5 L106.8 54.7 L110.9 56 L114.7 58.2 L117.8 61.4 L120.1 65.2 L121.2 69.6 L121.1 74.3 L119.8 78.8 L117.2 83 L113.5 86.5 L108.9 89.1 L103.6 90.6 L98 90.7 L92.5 89.5 L87.3 87 L82.9 83.2 L79.6 78.5 L77.6 73 L77.1 67.1 L78.2 61.2 L81 55.6 C95.3 63.4 97.1 80.3 85.6 83.2"/><g transform="translate(78.7 45.8) rotate(224.5)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(123 63.3) rotate(338.5)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(63.8 57.4) rotate(201.8)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(94.4 43.5) rotate(287.6)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g></g>
+</svg>
+          <span class="ktag" style="--sway:6.7s">aturi.to <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:18px;--dy:-14px"></i><i style="--dx:-12px;--dy:-18px"></i><i style="--dx:6px;--dy:-20px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Utility · Live</p>
+        <h3>aturi.to<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 5.2 C18 3 34 6.4 52 3.8 C70 1.8 84 5.6 99 4"/></svg></h3>
+        <p class="one">Universal links for the ATmosphere.</p>
+        <p class="body">Wrap any AT&nbsp;Protocol record in a single link that opens in whichever app the
+          reader already uses — no more "sorry, wrong client".</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-left deep" href="https://flushes.app" data-cm="66" data-tw="116" data-side="left" style="--gap:20">
+      <div class="art">
+        <span class="holder"><span class="node"></span><svg class="tuber" viewBox="0 0 200 140" width="200" height="140" aria-hidden="true" focusable="false">
+<g transform="rotate(17 100 70)"><path class="sp-stem" d="M126.4 22.3 Q123.4 10.6 133.2 3.5"/><g transform="translate(133.2 3.5) rotate(20) scale(0.77)"><path class="sp-leaf" d="M0 6 C-9 -4 -3 -13 0 -7 C3 -13 9 -4 0 6Z"/></g><path class="tb-fill" d="M178.6 70 C178.6 105 147.7 118.7 100 118.7 C54.9 118.7 12.8 96.7 12.8 70 C12.8 42.2 64.3 4 100 4 C154.5 4 178.6 44.8 178.6 70Z"/><path class="tb-shade" d="M178.6 70 C178.6 105 147.7 118.7 100 118.7 C54.9 118.7 12.8 96.7 12.8 70 C12.8 42.2 64.3 4 100 4 C154.5 4 178.6 44.8 178.6 70Z"/><ellipse class="tb-lit" cx="72.1" cy="48.4" rx="32.8" ry="18.4"/><path class="tb-swirl" d="M100 70.1 L101.4 69.9 L103 70 L104.5 70.5 L105.9 71.5 L107.1 72.9 L107.9 74.6 L108.2 76.5 L107.9 78.6 L107.1 80.6 L105.6 82.5 L103.6 83.9 L101.2 84.9 L98.4 85.3 L95.6 85 L92.8 84 L90.2 82.3 L88.2 79.9 L86.8 77 L86.3 73.9 L86.6 70.5 L87.8 67.3 L90 64.3 L92.9 61.9 L96.5 60.3 L100.6 59.5 L104.8 59.7 L108.9 61 L112.7 63.2 L115.8 66.4 L118.1 70.2 L119.2 74.6 L119.1 79.3 L117.8 83.8 L115.2 88 L111.5 91.5 L106.9 94.1 L101.6 95.6 L96 95.7 L90.5 94.5 L85.3 92 L80.9 88.2 L77.6 83.5 L75.6 78 L75.1 72.1 L76.2 66.2 L79 60.6 C93.3 68.4 95.1 85.3 83.6 88.2"/><g transform="translate(114.2 49) rotate(290.9)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(106.6 36.6) rotate(279.1)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(68.9 43.1) rotate(225.7)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(56.1 77.8) rotate(154.2)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(92 96.9) rotate(123.4)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g><g transform="translate(100.3 51.2) rotate(287.8)"><ellipse class="eye" rx="5.2" ry="2.7"/><path class="brow" d="M-5.6 -3.4 Q0 -6.4 5.6 -3.4"/></g></g>
+</svg>
+          <span class="ktag" style="--sway:7.3s">flushes.app <i class="live"></i></span>
+          <span class="puff" aria-hidden="true"><i style="--dx:-16px;--dy:-18px"></i><i style="--dx:12px;--dy:-14px"></i><i style="--dx:-6px;--dy:-22px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Lexicon demo · Live</p>
+        <h3>flushes<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 4 C17 6.6 33 2.6 51 5.2 C67 7.2 83 3.4 99 5"/></svg></h3>
+        <p class="one">The decentralised toilet network of planet Earth.</p>
+        <p class="body">Post a flush from the bathroom in sixty characters or fewer. Very silly — and
+          underneath it, a complete custom lexicon and AppView anyone can integrate.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <a class="row side-right deep" href="/guides/bluesky-for-brands" data-cm="81" data-tw="150" data-side="right" style="--gap:12">
+      <div class="art">
+        <span class="holder"><span class="node"></span><svg class="tuber tuber-cut" viewBox="0 0 200 140" width="200" height="140" aria-hidden="true" focusable="false">
+<g transform="rotate(-7 100 70)">
+<path class="tb-fill" d="M168 70 C168 106 140.5 119.8 100 119.8 C49.8 119.8 21.3 99.9 21.3 70 C21.3 40.5 56.9 -7.4 100 -7.4 C137.1 -7.4 168 38.8 168 70Z"/>
+<path class="tb-shade" d="M168 70 C168 106 140.5 119.8 100 119.8 C49.8 119.8 21.3 99.9 21.3 70 C21.3 40.5 56.9 -7.4 100 -7.4 C137.1 -7.4 168 38.8 168 70Z"/>
+<path class="cut-face" d="M168.6 70 C168.6 92.8 132.4 130.8 100 130.8 C72.1 130.8 31.7 90.7 31.7 70 C31.7 47.8 64.2 30.1 100 30.1 C130.4 30.1 168.6 47.1 168.6 70Z"/>
+<path class="cut-ring" d="M168.6 70 C168.6 92.8 132.4 130.8 100 130.8 C72.1 130.8 31.7 90.7 31.7 70 C31.7 47.8 64.2 30.1 100 30.1 C130.4 30.1 168.6 47.1 168.6 70Z"/>
+<path class="tb-swirl cut-swirl" d="M100 66.2 L101.1 66 L102.3 66.1 L103.5 66.6 L104.6 67.3 L105.5 68.4 L106.1 69.7 L106.3 71.2 L106.1 72.8 L105.4 74.3 L104.3 75.7 L102.8 76.9 L100.9 77.6 L98.8 77.9 L96.6 77.7 L94.4 76.9 L92.5 75.6 L90.9 73.8 L89.9 71.6 L89.4 69.1 L89.7 66.6 L90.6 64.1 L92.3 61.8 L94.6 59.9 L97.3 58.7 L100.4 58.1 L103.7 58.2 L106.9 59.2 L109.8 60.9 L112.2 63.4 L113.9 66.3 L114.8 69.7 L114.7 73.3 L113.7 76.8 L111.7 80 L108.9 82.7 L105.3 84.7 L101.3 85.8 L97 85.9 L92.7 85 L88.7 83.1 L85.3 80.2 L82.7 76.5 L81.2 72.3 L80.8 67.8 L81.7 63.2 L83.8 58.9 C94.8 64.9 96.2 77.9 87.4 80.1"/>
+<g class="anno">
+<path d="M138 42 L176 26"/><path d="M146 70 L188 70"/><path d="M136 100 L174 116"/>
+</g>
+</g>
+</svg>
+          <span class="ktag" style="--sway:8.2s">~40 min · free</span>
+          <span class="puff" aria-hidden="true"><i style="--dx:18px;--dy:-16px"></i><i style="--dx:-12px;--dy:-14px"></i><i style="--dx:8px;--dy:-20px"></i></span>
+        </span>
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Writing · Free forever</p>
+        <h3>Guides<svg class="ul" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 5 C19 2.6 35 6.2 53 4 C69 2.2 85 5.8 99 4.2"/></svg></h3>
+        <p class="one">How to use Bluesky to grow your brand.</p>
+        <p class="body">A comprehensive, jargon-free guide for companies, communities and creators.
+          Plain language, screenshots for every step, about forty minutes, no prior knowledge assumed.
+          Start with <em>How to use Bluesky to grow your brand</em>.</p>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </a>
+
+    <section class="row side-left wip deep" data-cm="93" data-side="left" style="--gap:6">
+      <div class="art">
+        <span class="holder"><span class="node"></span></span>
+        <img class="peeker" src="/atpotato-waow.png" alt="" width="44" height="36">
+      </div>
+      <div class="text">
+        <p class="kicker eyebrow">Still in the ground</p>
+        <p class="lede">Prototyped in the open. No promises, no launch dates — but you can read the
+          commits.</p>
+        <div class="nubs"><span class="nub-item"><svg class="nub" viewBox="0 0 120 84" width="40" height="28" aria-hidden="true" focusable="false">
+<path class="nub-path" d="M100.7 42 C100.7 58.3 80.9 70.3 60 70.3 C33.3 70.3 4.2 56.3 4.2 42 C4.2 25.6 31.3 15.2 60 15.2 C84.8 15.2 100.7 28.9 100.7 42Z"/>
+</svg><span class="eyebrow">anisota cocoon</span></span><span class="nub-item"><svg class="nub" viewBox="0 0 120 84" width="34" height="23.8" aria-hidden="true" focusable="false">
+<path class="nub-path" d="M98.3 42 C98.3 59.5 84.9 70.3 60 70.3 C41 70.3 8.6 58.5 8.6 42 C8.6 26.8 37.4 11.6 60 11.6 C89.2 11.6 98.3 24.3 98.3 42Z"/>
+</svg><span class="eyebrow">mothing</span></span><span class="nub-item"><svg class="nub" viewBox="0 0 120 84" width="30" height="21" aria-hidden="true" focusable="false">
+<path class="nub-path" d="M109.3 42 C109.3 56.6 86.3 69.8 60 69.8 C38.3 69.8 -1.7 56.7 -1.7 42 C-1.7 26.7 40.9 12.7 60 12.7 C80 12.7 109.3 25 109.3 42Z"/>
+</svg><span class="eyebrow">habit tracker</span></span><span class="nub-item"><svg class="nub" viewBox="0 0 120 84" width="26" height="18.2" aria-hidden="true" focusable="false">
+<path class="nub-path" d="M103.7 42 C103.7 60.6 89.6 72.5 60 72.5 C34.7 72.5 0 56.4 0 42 C0 22.4 36.4 13.3 60 13.3 C86.3 13.3 103.7 24.4 103.7 42Z"/>
+</svg><span class="eyebrow">types</span></span></div>
+        <div class="key eyebrow">
+          <span>Solid — shipped</span>
+          <span>Dashed — still growing</span>
+          <span>Stone — something we routed around</span>
+        </div>
+        <span class="depth eyebrow" data-depth></span>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════ bedrock ══ -->
+<footer class="bedrock" id="bedrock">
+  <svg class="facets" viewBox="0 0 1440 150" preserveAspectRatio="none" aria-hidden="true">
+    <path class="facet" d="M0 44 L188 12 L372 58 L246 150 L0 150Z"/>
+    <path class="facet" d="M188 12 L468 34 L620 0 L372 58Z"/>
+    <path class="facet" d="M372 58 L620 0 L836 46 L654 150 L246 150Z"/>
+    <path class="facet" d="M620 0 L900 18 L1044 62 L836 46Z"/>
+    <path class="facet" d="M836 46 L1044 62 L1230 22 L1180 150 L654 150Z"/>
+    <path class="facet" d="M1044 62 L1230 22 L1440 40 L1440 150 L1180 150Z"/>
+  </svg>
+
+  <div class="shell">
+    <h2>atproto</h2>
+    <p class="eyebrow" style="color:var(--soil-ink-2)">Bedrock — the layer everything else sits on</p>
+    <p class="thesis">Every app above is an app on the AT&nbsp;Protocol. Same accounts, same records,
+      same open network. That isn't a feature list — it's the ground.</p>
+
+    <div class="finale">
+      <p class="n">100 cm</p>
+      <p class="said">you dug a metre. thanks for coming down.</p>
     </div>
 
-    <div class="button-backdrop"></div>
-    <a href="/" class="home-button">
-        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
-    </a>
+    <p class="promise">Cultivating knowledge, equipping individuals, growing community.</p>
+
+    <nav class="strings" aria-label="atpotato elsewhere">
+      <a href="https://bsky.app/profile/atpota.to"><span class="ktag" style="--sway:5.9s">Bluesky</span></a>
+      <a href="https://tangled.sh/@atpota.to"><span class="ktag" style="--sway:6.4s">Tangled</span></a>
+      <a href="https://github.com/atpota-to"><span class="ktag" style="--sway:7.1s">GitHub</span></a>
+      <a href="mailto:contact@atpota.to"><span class="ktag" style="--sway:7.9s">contact@atpota.to</span></a>
+    </nav>
+
+    <p class="colophon">Everything here is free and open source. Built on the AT&nbsp;Protocol, so your
+      data leaves with you.</p>
+    <p class="return eyebrow"><a href="#top">Return to surface · 0 cm</a></p>
+  </div>
+</footer>
+
+<button class="theme" id="theme" type="button" aria-label="Toggle light and dark">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <g class="sun">
+      <circle cx="12" cy="12" r="4.6"/>
+      <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/>
+    </g>
+    <g class="moon">
+      <path d="M19 14.8A8 8 0 0 1 9.2 5a7.4 7.4 0 1 0 9.8 9.8Z"/>
+      <circle cx="10" cy="15" r="1.2"/><circle cx="13.6" cy="17" r=".8"/><circle cx="7.6" cy="12" r=".7"/>
+    </g>
+  </svg>
+</button>
+
+<div class="gauge" id="gauge" aria-hidden="true">
+  <div class="rule"></div>
+  <div class="read"><span id="readout">0 cm</span></div>
+</div>
+
+<div class="grain" aria-hidden="true"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ─────────────────────────────────────────────────────────────── theme ── */
+  var root = document.documentElement;
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+
+  /* ───────────────────────────────────── authored control-point table ──── */
+  /* Fractions of the underground height. Non-periodic on purpose: a wave
+     reads as a decoration, a drift reads as a thing that grew. */
+  var DRIFT = [
+    [0.00,   0], [0.12,  10], [0.26,  -8], [0.41,  11],
+    [0.58,  -9], [0.74,   7], [0.92,  -3], [1.00,   0]
+  ];
+  var TRUNK_W = [34, 27, 21, 16, 12, 8.5, 6, 4, 2.5];
+  var LAT_W   = [14, 10, 6.5, 3.5];
+  var SEC_W   = [6, 3.5, 2];
+  var KINKS   = [{ f: 0.42, dx: 9, w: 44, h: 30 }, { f: 0.72, dx: -6, w: 22, h: 16 }];
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function el(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  var f1 = function (v) { return Math.round(v * 10) / 10; };
+
+  /* Catmull-Rom through the drift anchors → one smooth centreline. */
+  function centreline(spineX, top, bottom) {
+    var pts = DRIFT.map(function (d) {
+      return { x: spineX + d[1], y: top + (bottom - top) * d[0] };
+    });
+    // two authored kinks routing the root around stones
+    KINKS.forEach(function (k) {
+      pts.push({ x: spineX + k.dx, y: top + (bottom - top) * k.f, kink: true });
+    });
+    pts.sort(function (a, b) { return a.y - b.y; });
+
+    var d = 'M' + f1(pts[0].x) + ' ' + f1(pts[0].y);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
+      d += ' C' + f1(p1.x + (p2.x - p0.x) / 6) + ' ' + f1(p1.y + (p2.y - p0.y) / 6) +
+           ' ' + f1(p2.x - (p3.x - p1.x) / 6) + ' ' + f1(p2.y - (p3.y - p1.y) / 6) +
+           ' ' + f1(p2.x) + ' ' + f1(p2.y);
+    }
+    return d;
+  }
+
+  /* Sample an arc-length slice of a path back out as its own path. */
+  function slice(path, l0, l1, steps) {
+    var d = '', i, p;
+    for (i = 0; i <= steps; i++) {
+      p = path.getPointAtLength(l0 + (l1 - l0) * (i / steps));
+      d += (i ? ' L' : 'M') + f1(p.x) + ' ' + f1(p.y);
+    }
+    return d;
+  }
+
+  function xAtY(path, y) {
+    var L = path.getTotalLength(), lo = 0, hi = L, m, p;
+    for (var i = 0; i < 22; i++) {
+      m = (lo + hi) / 2; p = path.getPointAtLength(m);
+      if (p.y < y) lo = m; else hi = m;
+    }
+    p = path.getPointAtLength((lo + hi) / 2);
+    return { x: p.x, y: p.y, frac: ((lo + hi) / 2) / L };
+  }
+
+  /* ──────────────────────────────────────────────────── the root system ── */
+  var svg = document.getElementById('rootlayer');
+  var under = document.querySelector('.under');
+  var rowsWrap = document.getElementById('rows');
+  var defs = svg.querySelector('defs');
+  var grad = defs.querySelector('linearGradient');
+  var uid = 0;
+
+  function buildRoot() {
+    // ---- one batched read phase; never interleave reads and writes --------
+    var W = under.clientWidth;
+    var H = under.offsetHeight;
+    var uTop = under.getBoundingClientRect().top + window.scrollY;
+    var bandW = parseFloat(getComputedStyle(root).getPropertyValue('--band')) || 0;
+    var rw = rowsWrap.getBoundingClientRect();
+    var uLeft0 = function () { return under.getBoundingClientRect().left; };
+    var spineX = bandW > 0
+      ? (rw.left + rw.width / 2 - uLeft0())
+      : 46;
+    if (bandW <= 0) spineX = 46;
+
+    var uLeft = under.getBoundingClientRect().left;
+    var nodes = [].map.call(document.querySelectorAll('.row .node'), function (n) {
+      var r = n.getBoundingClientRect();
+      return {
+        x: r.left - uLeft,
+        y: r.top + window.scrollY - uTop,
+        side: n.closest('.row').getAttribute('data-side')
+      };
+    });
+
+    // ---- write phase ------------------------------------------------------
+    // keep <defs> and the crown gradient; drop everything else by reference,
+    // never by index — whitespace text nodes make index arithmetic a trap.
+    [].slice.call(svg.childNodes).forEach(function (nd) {
+      if (nd !== defs) svg.removeChild(nd);
+    });
+    [].slice.call(defs.childNodes).forEach(function (nd) {
+      if (nd !== grad) defs.removeChild(nd);
+    });
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    // deliberately NO viewBox: 1 user unit === 1 CSS pixel at every width and DPR.
+
+    var layerCast = el('g', {}), layerHair = el('g', {}), layerBody = el('g', {});
+    var rnd = mulberry32(0x9E3779B9);
+
+    /* helper: register a stroked segment as three <use> passes ------------- */
+    function seg(d, width, s, e, cls) {
+      var id = 'r' + (uid++);
+      defs.appendChild(el('path', { id: id, d: d, pathLength: 1 }));
+      var common = { href: '#' + id, style: '--s:' + f1(s * 1000) / 1000 + ';--e:' + f1(e * 1000) / 1000 };
+
+      var cast = el('use', common);
+      cast.setAttribute('class', 'r-cast');
+      cast.setAttribute('stroke-width', width * 1.3);
+      cast.setAttribute('transform', 'translate(3,4)');
+      layerCast.appendChild(cast);
+
+      var body = el('use', common);
+      body.setAttribute('class', cls || 'r-body');
+      body.setAttribute('stroke-width', width);
+      layerBody.appendChild(body);
+
+      if (width > 5) {
+        var rim = el('use', common);
+        rim.setAttribute('class', 'r-rim');
+        rim.setAttribute('stroke-width', width * 0.45);
+        rim.setAttribute('transform', 'translate(-2.5,-1.5)');
+        layerBody.appendChild(rim);
+
+        var tip = el('use', common);
+        tip.setAttribute('class', 'r-tip');
+        tip.setAttribute('stroke-width', width * 0.6);
+        layerBody.appendChild(tip);
+      }
+      return id;
+    }
+
+    /* helper: fibrous hairs along a path, concatenated into ONE element ---- */
+    function hairs(path, s, e, density, skipTail) {
+      var L = path.getTotalLength(), d = '', step = density;
+      for (var l = step; l < L - (skipTail || 0); l += step) {
+        if (rnd() < 0.42) continue;
+        var p = path.getPointAtLength(l), q = path.getPointAtLength(Math.min(L, l + 2));
+        var tx = q.x - p.x, ty = q.y - p.y, m = Math.hypot(tx, ty) || 1;
+        var nx = -ty / m, ny = tx / m;
+        var dir = rnd() < 0.5 ? 1 : -1;
+        var len = 4 + rnd() * 10;
+        var ax = nx * dir, ay = ny * dir;
+        // 55–75° off the normal, so hairs trail downward like real ones
+        var k = 0.5 + rnd() * 0.5;
+        d += 'M' + f1(p.x) + ' ' + f1(p.y) +
+             ' Q' + f1(p.x + ax * len * 0.6) + ' ' + f1(p.y + ay * len * 0.6 + len * 0.2) +
+             ' ' + f1(p.x + ax * len) + ' ' + f1(p.y + ay * len + len * k);
+      }
+      if (!d) return;
+      var h = el('path', { d: d, class: 'hairs', 'stroke-width': 1.3 });
+      h.style.setProperty('--s', s);
+      h.style.setProperty('--e', e);
+      layerHair.appendChild(h);
+    }
+
+    /* ---- trunk ---------------------------------------------------------- */
+    var trunk = el('path', { d: centreline(spineX, 0, H - 60), fill: 'none', stroke: 'none' });
+    svg.appendChild(trunk);
+    var TL = trunk.getTotalLength();
+    var nSeg = TRUNK_W.length;
+
+    for (var i = 0; i < nSeg; i++) {
+      var l0 = TL * (i / nSeg), l1 = TL * ((i + 1) / nSeg);
+      var d = slice(trunk, l0, l1, 14);
+      // the crown — and only the crown — carries brand green
+      seg(d, TRUNK_W[i], i / nSeg, (i + 1) / nSeg, i === 0 ? 'r-body r-crown' : 'r-body');
+      var tmp = el('path', { d: d });
+      svg.appendChild(tmp);
+      hairs(tmp, i / nSeg, (i + 1) / nSeg, 11, i === nSeg - 1 ? 200 : 0);
+      svg.removeChild(tmp);
+    }
+
+    /* ---- laterals to every tuber ---------------------------------------- */
+    nodes.forEach(function (nd, idx) {
+      var att = xAtY(trunk, Math.max(4, nd.y - 30));
+      var dx = nd.x - att.x, dy = nd.y - att.y;
+      var d = 'M' + f1(att.x) + ' ' + f1(att.y) +
+              ' C' + f1(att.x + dx * 0.30) + ' ' + f1(att.y + dy * 0.10) +
+              ' ' + f1(att.x + dx * 0.55) + ' ' + f1(nd.y + 10) +
+              ' ' + f1(nd.x) + ' ' + f1(nd.y);
+      var lp = el('path', { d: d, fill: 'none', stroke: 'none' });
+      svg.appendChild(lp);
+      var LL = lp.getTotalLength();
+      var s0 = Math.min(0.97, att.frac + 0.006);
+      var s1 = Math.min(1, s0 + 0.075);
+
+      for (var j = 0; j < LAT_W.length; j++) {
+        var a = LL * (j / LAT_W.length), b = LL * ((j + 1) / LAT_W.length);
+        seg(slice(lp, a, b, 10), LAT_W[j],
+            s0 + (s1 - s0) * (j / LAT_W.length),
+            s0 + (s1 - s0) * ((j + 1) / LAT_W.length));
+      }
+      hairs(lp, s0, s1, 13, 40);
+
+      /* two secondaries off each lateral, never mirrored ------------------ */
+      for (var k = 0; k < 2; k++) {
+        var at = LL * (0.34 + k * 0.3);
+        var p = lp.getPointAtLength(at);
+        var up = (idx + k) % 3 === 0 ? -1 : 1;                 // a few curve back upward
+        var out = (nd.side === 'right' ? 1 : -1) * (k ? 0.7 : 1);
+        var len = 44 + rnd() * 46;
+        var sd = 'M' + f1(p.x) + ' ' + f1(p.y) +
+                 ' Q' + f1(p.x + out * len * 0.5) + ' ' + f1(p.y + up * len * 0.34) +
+                 ' ' + f1(p.x + out * len) + ' ' + f1(p.y + up * len * 0.8);
+        var sp = el('path', { d: sd, fill: 'none', stroke: 'none' });
+        svg.appendChild(sp);
+        var SL = sp.getTotalLength();
+        for (var m2 = 0; m2 < SEC_W.length; m2++) {
+          seg(slice(sp, SL * (m2 / 3), SL * ((m2 + 1) / 3), 8), SEC_W[m2],
+              s1 - 0.02 + 0.02 * (m2 / 3), s1 + 0.02);
+        }
+        hairs(sp, s1 - 0.02, s1 + 0.02, 15, 26);
+        svg.removeChild(sp);
+      }
+      svg.removeChild(lp);
+    });
+
+    /* ---- eleven rootlets so the deep column is never bare --------------- */
+    for (var q = 0; q < 11; q++) {
+      var fy = 0.08 + (q / 11) * 0.86 + (rnd() - 0.5) * 0.03;
+      var pt = trunk.getPointAtLength(TL * fy);
+      var dir2 = rnd() < 0.5 ? 1 : -1;
+      var ln = 40 + rnd() * 70;
+      var rd = 'M' + f1(pt.x) + ' ' + f1(pt.y) +
+               ' Q' + f1(pt.x + dir2 * ln * 0.55) + ' ' + f1(pt.y + ln * 0.18) +
+               ' ' + f1(pt.x + dir2 * ln) + ' ' + f1(pt.y + ln * 0.66);
+      var rp = el('path', { d: rd, fill: 'none', stroke: 'none' });
+      svg.appendChild(rp);
+      var RL = rp.getTotalLength();
+      seg(slice(rp, 0, RL * 0.55, 8), 5, fy, fy + 0.03);
+      seg(slice(rp, RL * 0.55, RL, 8), 2.6, fy + 0.02, fy + 0.05);
+      hairs(rp, fy, fy + 0.05, 16, 22);
+      svg.removeChild(rp);
+    }
+
+    /* ---- the two stones the root routes around -------------------------- */
+    KINKS.forEach(function (k) {
+      var p = trunk.getPointAtLength(TL * k.f);
+      var sx = p.x + (k.dx > 0 ? -1 : 1) * (k.w * 0.75), sy = p.y;
+      var g = el('g', { transform: 'translate(' + f1(sx) + ' ' + f1(sy) + ') rotate(' + f1(rnd() * 40 - 20) + ')' });
+      g.appendChild(el('path', {
+        class: 'stone-a',
+        d: 'M' + (-k.w / 2) + ' 0 L' + (-k.w * 0.3) + ' ' + (-k.h / 2) + ' L' + (k.w * 0.34) + ' ' + (-k.h * 0.42) +
+           ' L' + (k.w / 2) + ' ' + (k.h * 0.12) + ' L' + (k.w * 0.1) + ' ' + (k.h / 2) + ' L' + (-k.w * 0.36) + ' ' + (k.h * 0.4) + 'Z'
+      }));
+      g.appendChild(el('path', {
+        class: 'stone-b',
+        d: 'M' + (-k.w * 0.42) + ' ' + (-k.h * 0.08) + ' L' + (-k.w * 0.28) + ' ' + (-k.h * 0.42) +
+           ' L' + (k.w * 0.2) + ' ' + (-k.h * 0.34) + ' L' + (-k.w * 0.05) + ' ' + (k.h * 0.02) + 'Z'
+      }));
+      layerCast.appendChild(g);
+    });
+
+    /* ---- exactly two critters, and one absence -------------------------- */
+    (function critters() {
+      var wy = H * 0.30, wx = spineX - 150;
+      var w = el('g', { class: 'critter' });
+      w.appendChild(el('path', { class: 'burrow', d: 'M' + f1(wx - 60) + ' ' + f1(wy + 26) + ' Q' + f1(wx + 10) + ' ' + f1(wy - 10) + ' ' + f1(wx + 70) + ' ' + f1(wy + 18) }));
+      for (var i2 = 0; i2 < 12; i2++) {
+        var t = i2 / 11;
+        var x = wx - 46 + t * 96, y = wy + 20 - Math.sin(t * Math.PI) * 26;
+        w.appendChild(el('ellipse', {
+          class: i2 === 5 || i2 === 6 ? 'worm-saddle' : 'worm-seg',
+          cx: f1(x), cy: f1(y), rx: f1(6 - Math.abs(t - 0.5) * 3), ry: 4.6
+        }));
+      }
+      layerBody.appendChild(w);
+
+      var by = H * 0.66, bx = spineX + 120;
+      var b = el('g', { class: 'critter', transform: 'translate(' + f1(bx) + ' ' + f1(by) + ') rotate(8)' });
+      b.appendChild(el('path', { class: 'beetle-leg', d: 'M-6 4 l-7 5 M0 5 l-2 7 M6 4 l7 5' }));
+      b.appendChild(el('ellipse', { class: 'beetle-body', cx: 0, cy: 0, rx: 9, ry: 6 }));
+      b.appendChild(el('ellipse', { class: 'beetle-lit', cx: -2.5, cy: -2, rx: 3.6, ry: 2.2 }));
+      b.appendChild(el('circle', { class: 'beetle-body', cx: 0, cy: -7, r: 3.4 }));
+      layerBody.appendChild(b);
+
+      // a mole tunnel with no mole in it
+      var my = H * 0.86;
+      var t2 = el('g', { class: 'critter' });
+      t2.appendChild(el('path', { class: 'tunnel', d: 'M-30 ' + f1(my) + ' Q' + f1(spineX * 0.42) + ' ' + f1(my - 26) + ' ' + f1(spineX * 0.74) + ' ' + f1(my + 6) }));
+      t2.appendChild(el('path', { class: 'scratch', d: 'M' + f1(spineX * 0.55) + ' ' + f1(my - 14) + ' l14 -7 M' + f1(spineX * 0.58) + ' ' + f1(my - 6) + ' l15 -5' }));
+      layerCast.appendChild(t2);
+    })();
+
+    svg.removeChild(trunk);
+    svg.appendChild(layerCast);
+    svg.appendChild(layerHair);
+    svg.appendChild(layerBody);
+  }
+
+  /* ──────────────────────────────────────────── honest depth reporting ── */
+  var readout = document.getElementById('readout');
+  var gauge = document.getElementById('gauge');
+  var geom = { top: 0, h: 1 };
+
+  function measure() {
+    var r = under.getBoundingClientRect();
+    geom.top = r.top + window.scrollY;
+    geom.h = under.offsetHeight;
+
+    // ticks, drawn once against the measured box
+    [].forEach.call(gauge.querySelectorAll('.tick,.num'), function (n) { n.remove(); });
+    for (var cm = 4; cm < 100; cm += 4) {
+      var t = document.createElement('div');
+      t.className = 'tick ' + (cm % 20 === 0 ? 'major' : 'minor');
+      t.style.top = (cm) + '%';
+      gauge.appendChild(t);
+    }
+    for (var maj = 20; maj <= 100; maj += 20) {
+      var n2 = document.createElement('div');
+      n2.className = 'num';
+      n2.style.top = maj + '%';
+      n2.textContent = maj;
+      gauge.appendChild(n2);
+    }
+
+    // every printed depth is derived from where the row actually is
+    [].forEach.call(document.querySelectorAll('.row'), function (row) {
+      var node = row.querySelector('.node');
+      var y = node.getBoundingClientRect().top + window.scrollY - geom.top;
+      var cmv = Math.round(Math.max(0, Math.min(100, (y / geom.h) * 100)));
+      var slot = row.querySelector('[data-depth]');
+      if (slot) slot.textContent = cmv + ' cm below the surface';
+      var authored = Number(row.getAttribute('data-cm'));
+      // the authored value is the desktop target; narrow viewports legitimately
+      // compress the descent, so this only guards against gross desync
+      if (authored && Math.abs(authored - cmv) > 12) {
+        console.warn('[root] row drifted from its authored depth', row.href || row.className, authored, '->', cmv);
+      }
+    });
+  }
+
+  /* ────────────────────────────────────────────────────── scroll driver ── */
+  var ticking = false, lastCm = -1, swapped = false;
+  var buried = document.getElementById('buried');
+  var bedrock = document.getElementById('bedrock');
+
+  function frame() {
+    ticking = false;
+    var y = window.scrollY, vh = window.innerHeight;
+
+    var p = (y + vh * 0.75 - geom.top) / geom.h;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    root.style.setProperty('--p', Math.round(p * 1000) / 1000);
+
+    var d = (y + vh * 0.5 - geom.top) / geom.h;
+    var on = d > -0.02 && d < 1.06;
+    gauge.classList.toggle('on', on);
+    if (on) {
+      var cm = Math.round(Math.max(0, Math.min(100, d * 100)));
+      if (cm !== lastCm) { lastCm = cm; readout.textContent = cm + ' cm'; }
+    }
+
+    // the mascot lags the scroll for its first stretch — felt, never noticed
+    if (y < 300) buried.style.transform = 'translate(-50%, ' + (y * 0.06).toFixed(1) + 'px)';
+
+    if (!swapped && p > 0.02) { swapped = true; buried.src = '/atpotato-waow.png'; }
+
+    document.body.classList.toggle('on-soil', y + vh * 0.65 > geom.top);
+
+    if (!bedrock.classList.contains('lit') &&
+        bedrock.getBoundingClientRect().top < vh * 0.8) bedrock.classList.add('lit');
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(frame); } }
+
+  /* ──────────────────────────────────────────────────────── row reveals ── */
+  function watchRows() {
+    if (!('IntersectionObserver' in window)) {
+      [].forEach.call(document.querySelectorAll('.row'), function (r) { r.classList.add('grown'); });
+      return;
+    }
+    // never unobserved: scrolling back up genuinely reverses the reveal
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { e.target.classList.toggle('grown', e.isIntersecting); });
+    }, { threshold: 0, rootMargin: '0px 0px -22% 0px' });
+    [].forEach.call(document.querySelectorAll('.row'), function (r) { io.observe(r); });
+  }
+
+  /* ─────────────────────────────────────────────────────────────── boot ── */
+  function layout() { buildRoot(); measure(); frame(); }
+
+  function boot() {
+    if (reduce.matches) {
+      // complete, not degraded: everything is already drawn by CSS
+      [].forEach.call(document.querySelectorAll('.row'), function (r) { r.classList.add('grown'); });
+      buildRoot(); measure();
+      // the gauge is information, not decoration — it keeps working
+      addEventListener('scroll', function () {
+        if (ticking) return; ticking = true;
+        requestAnimationFrame(function () {
+          ticking = false;
+          var d = (window.scrollY + innerHeight * 0.5 - geom.top) / geom.h;
+          gauge.classList.toggle('on', d > -0.02 && d < 1.06);
+          var cm = Math.round(Math.max(0, Math.min(100, d * 100)));
+          if (cm !== lastCm) { lastCm = cm; readout.textContent = cm + ' cm'; }
+        });
+      }, { passive: true });
+      buried.addEventListener('mouseenter', function () { buried.src = '/atpotato-waow.png'; });
+      buried.addEventListener('mouseleave', function () { buried.src = '/atpotato-normal.png'; });
+      return;
+    }
+    layout();
+    watchRows();
+    addEventListener('scroll', onScroll, { passive: true });
+
+    var rt;
+    function relayout() { clearTimeout(rt); rt = setTimeout(layout, 140); }
+    addEventListener('resize', relayout);
+    if ('ResizeObserver' in window) new ResizeObserver(relayout).observe(under);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  }
+
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
 </body>
 </html>
