@@ -40,6 +40,9 @@
 :root{
   color-scheme: light;
   --p: 0;
+  /* scroll arrives in discrete jumps; interpolating the single driving
+     property smooths every derived dashoffset at once */
+  transition:--p .16s linear;
   --green:#39B54A; --green-deep:#006837; --sand:#E3CE90; --tan:#A58650; --brown:#725B36;
   --sky-1:#e9f4ff; --sky-2:#f6f4e6;
   --soil-1:#6b5333; --soil-2:#4a3a22; --soil-3:#171207;
@@ -154,10 +157,10 @@ h1,h2,h3,p{ margin:0 }
   pointer-events:none; z-index:0;
 }
 .rootlayer path{
-  fill:none; stroke:var(--root); stroke-width:2.5; stroke-linecap:round; stroke-dasharray:1;
+  fill:none; stroke:var(--root); stroke-width:4; stroke-linecap:round; stroke-dasharray:1;
   stroke-dashoffset:clamp(0, calc((var(--e) - var(--p)) / (var(--e) - var(--s))), 1);
 }
-.rootlayer .branch{ stroke-width:2 }
+.rootlayer .branch{ stroke-width:3 }
 .no-js .rootlayer path{ stroke-dashoffset:0 }
 
 .row{
@@ -203,11 +206,16 @@ h1,h2,h3,p{ margin:0 }
 .foot strong{ display:block; color:var(--soil-ink) }
 .foot small{ display:block; font-size:.83rem }
 .foot .sp{ flex:1 }
+.foot-links{ display:flex; gap:18px; flex-wrap:wrap }
 .foot a{ color:var(--sand); font-weight:700 }
 .foot a:hover{ text-decoration:underline }
 
 @media (max-width:760px){
   .hero{ padding:30px 0 130px }
+  .foot .wrap{ flex-direction:column; align-items:flex-start; gap:18px }
+  .foot .sp{ display:none }
+  .foot-links{ gap:12px 20px }
+  .foot-links a[href^="mailto"]{ flex-basis:100% }
   .row{ grid-template-columns:56px 1fr; margin:18px 0 }
   .row .card, .row.right .card{ grid-column:2 }
   .topbar a{ display:none }
@@ -340,10 +348,12 @@ h1,h2,h3,p{ margin:0 }
       <small>cultivating knowledge, equipping individuals, growing community.</small>
     </div>
     <span class="sp"></span>
-    <a href="https://bsky.app/profile/atpota.to">bluesky</a>
-    <a href="https://tangled.sh/@atpota.to">tangled</a>
-    <a href="https://github.com/atpota-to">github</a>
-    <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+    <nav class="foot-links" aria-label="atpotato elsewhere">
+      <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+      <a href="https://tangled.sh/@atpota.to">tangled</a>
+      <a href="https://github.com/atpota-to">github</a>
+      <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+    </nav>
   </div>
 </footer>
 
@@ -362,7 +372,8 @@ h1,h2,h3,p{ margin:0 }
   var svg = document.getElementById('rootlayer');
   var roots = document.getElementById('roots');
   var reduce = matchMedia('(prefers-reduced-motion: reduce)');
-  var f = function (v) { return Math.round(v * 10) / 10; };
+  var f = function (v) { return Math.round(v * 10) / 10; };          // pixels
+  var f4 = function (v) { return Math.round(v * 10000) / 10000; };  // 0..1 progress
 
   function el(name, attrs) {
     var n = document.createElementNS(NS, name);
@@ -383,7 +394,7 @@ h1,h2,h3,p{ margin:0 }
       var c = row.querySelector('.card').getBoundingClientRect();
       var toRight = narrow ? true : row.classList.contains('right');
       return {
-        x: toRight ? c.left - box.left - 2 : c.right - box.left + 2,
+        x: toRight ? c.left - box.left + 3 : c.right - box.left - 3,
         y: c.top - box.top + c.height / 2,
         dir: toRight ? 1 : -1
       };
@@ -396,26 +407,47 @@ h1,h2,h3,p{ margin:0 }
     // exactly 2.5px wide at every viewport size
 
     var bottom = Math.max(1, H - 24);
-    svg.appendChild(el('path', {
+    var trunk = el('path', {
       d: 'M' + f(spine) + ' 0' +
          ' C' + f(spine + 8) + ' ' + f(H * 0.3) +
          ' ' + f(spine - 8) + ' ' + f(H * 0.68) +
          ' ' + f(spine) + ' ' + f(bottom),
       pathLength: 1, style: '--s:0;--e:1'
-    }));
+    });
+    svg.appendChild(trunk);
+
+    // The trunk drifts a few px either side of the spine, so a branch that
+    // started at the spine would leave a gap. Find the point ON the trunk at
+    // the height we want, and start there.
+    var TL = trunk.getTotalLength();
+    function onTrunk(y) {
+      var lo = 0, hi = TL, mid, pt;
+      for (var i = 0; i < 20; i++) {
+        mid = (lo + hi) / 2;
+        pt = trunk.getPointAtLength(mid);
+        if (pt.y < y) lo = mid; else hi = mid;
+      }
+      mid = (lo + hi) / 2;
+      pt = trunk.getPointAtLength(mid);
+      return { x: pt.x, y: pt.y, frac: mid / TL };
+    }
+
+    // one window length in scroll terms, so every branch draws at the same
+    // rate no matter how tall the section is
+    var win = Math.max(0.05, Math.min(0.16, 150 / H));
 
     anchors.forEach(function (a) {
-      var at = Math.max(0, Math.min(0.94, a.y / bottom));
-      var sx = spine + a.dir * 2;
-      var dx = a.x - sx;
+      var from = onTrunk(Math.max(0, a.y - 26));
+      var dx = a.x - from.x;
       svg.appendChild(el('path', {
         'class': 'branch',
-        d: 'M' + f(sx) + ' ' + f(a.y - 26) +
-           ' C' + f(sx + dx * 0.35) + ' ' + f(a.y - 22) +
-           ' ' + f(sx + dx * 0.6) + ' ' + f(a.y) +
+        d: 'M' + f(from.x) + ' ' + f(from.y) +
+           ' C' + f(from.x + dx * 0.35) + ' ' + f(from.y + 4) +
+           ' ' + f(from.x + dx * 0.6) + ' ' + f(a.y) +
            ' ' + f(a.x) + ' ' + f(a.y),
         pathLength: 1,
-        style: '--s:' + f(at) + ';--e:' + f(at + 0.06)
+        // start exactly when the trunk's drawn tip reaches the junction
+        style: '--s:' + f4(from.frac) + ';--e:' + f4(Math.min(1, from.frac + win))
       }));
     });
   }
