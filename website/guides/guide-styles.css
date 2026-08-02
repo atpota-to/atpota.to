@@ -14,7 +14,7 @@
 
   --measure: 680px;
   --toc: 240px;
-  --bar: 64px;          /* height of the fixed topbar */
+  --bar: 80px;          /* height the fixed orbs occupy */
 }
 [data-theme="dark"]{
   color-scheme: dark;
@@ -44,56 +44,46 @@ a{ color:inherit }
 .skip:focus{ top:12px }
 
 /* ──────────────────────────────────────────────────────────────── topbar ── */
-/* Same bar as the homepage: fixed, transparent until you scroll, then a
-   tinted blur so the mark stays legible over whatever is passing beneath. */
-.topbar{
-  position:fixed; inset:0 0 auto 0; z-index:50;
-  border-bottom:1px solid transparent;
-  transition:background .22s ease, border-color .22s ease, box-shadow .22s ease;
-}
-.topbar .inner{
-  display:flex; align-items:center; gap:11px;
-  max-width:1160px; margin:0 auto; padding:14px 24px; height:var(--bar);
-}
-.topbar .home{ display:flex; align-items:center; gap:11px; text-decoration:none; border-radius:8px }
-.topbar .mark{ width:32px; height:32px; object-fit:contain }
-.topbar b{ font-weight:900; letter-spacing:-.02em }
+/* Same two orbs as the homepage. The bar itself takes no pointer events, or
+   it would swallow clicks on the first 80px of the article. */
+.topbar{ position:fixed; inset:0 0 auto 0; z-index:50; pointer-events:none }
+.topbar .inner{ display:flex; align-items:center; padding:14px 18px; height:var(--bar) }
 .topbar .sp{ flex:1 }
+.orb{
+  pointer-events:auto; flex:none; width:52px; height:52px; border-radius:50%;
+  display:grid; place-items:center; padding:0; text-decoration:none;
+  background:var(--card); border:1px solid var(--card-line); color:var(--muted);
+  box-shadow:0 14px 30px -18px rgba(40,28,10,.7);
+}
+.topbar .mark{ width:31px; height:31px; object-fit:contain }
 
-/* Opaque, not frosted: screenshots pass under this bar and a translucent one
-   smears them behind the wordmark. On the guide the page is --sky-2 anyway,
-   so all you see is the hairline and the progress line growing along it. */
-.topbar.stuck{
-  background:var(--sky-2);
-  border-bottom-color:var(--card-line);
-  box-shadow:0 14px 34px -28px rgba(40,28,10,.9);
+/* This page is one flat colour all the way down, so a scrim in that same
+   colour lets a line of text dissolve as it reaches the orbs instead of
+   sliding out from behind them. Only workable where the backdrop never
+   changes — which is why the homepage has no equivalent. */
+.topbar::before{
+  content:""; position:absolute; inset:0 0 -40px 0; z-index:-1; opacity:0;
+  background:linear-gradient(var(--sky-2) 62%, transparent);
+  transition:opacity .22s ease;
 }
-.tt{
-  width:36px; height:36px; border-radius:50%; border:1px solid var(--card-line);
-  background:var(--card); color:var(--muted); cursor:pointer; display:grid; place-items:center;
-  padding:0; flex:none;
-}
+.topbar.stuck::before{ opacity:1 }
+
+.tt{ cursor:pointer }
 .tt:hover{ color:var(--ink) }
-.tt svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round }
+.tt svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round }
 .tt .moon{ display:none }
 [data-theme="dark"] .tt .sun{ display:none }
 [data-theme="dark"] .tt .moon{ display:block }
 
 /* ───────────────────────────────────────────────────── reading progress ── */
-/* Not a strip laid over the page — it is the bottom edge of the topbar, a root
-   creeping along as you read. It sits on the border so the hairline is
-   progressively replaced by green rather than doubled up. */
-.reading-progress{
-  position:absolute; left:0; right:0; bottom:-1px; height:2px;
-  pointer-events:none; overflow:hidden;
-}
-.progress-bar{
-  display:block; height:100%; width:100%;
-  background:linear-gradient(90deg, var(--green-deep), var(--green));
-  transform:scaleX(0); transform-origin:left center;
-}
-[data-theme="dark"] .progress-bar{
-  background:linear-gradient(90deg, var(--green), #7ede8b);
+/* Not a strip laid over the page: a ring closing around the mark, so the
+   potato fills up as you read. --rp is written by guide-components.js. */
+.topbar .home{ position:relative }
+.topbar .home::after{
+  content:""; position:absolute; inset:-6px; border-radius:50%; pointer-events:none;
+  background:conic-gradient(var(--green) calc(var(--rp, 0) * 1turn), transparent 0);
+  -webkit-mask:radial-gradient(closest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+          mask:radial-gradient(closest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
 }
 
 /* ─────────────────────────────────────────────────────────────── header ── */
@@ -281,8 +271,11 @@ a{ color:inherit }
   .toc-toggle{ display:block }
 }
 @media (max-width:640px){
+  :root{ --bar:72px }
   body{ font-size:16px }
-  .topbar .inner{ padding:14px 20px }
+  .orb{ width:48px; height:48px }
+  .topbar .mark{ width:28px; height:28px }
+  .topbar .inner{ padding:12px 14px }
   .guide-header{ padding:26px 20px 44px }
   .guide-container{ padding:0 20px 80px }
   .guide-content{ padding-top:40px }

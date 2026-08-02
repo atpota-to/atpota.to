@@ -149,15 +149,14 @@ class TableOfContents {
     }
 }
 
-// Reading Progress — the growing bottom edge of the topbar. Measured against
-// the article itself, so it reads 100% at the end of the guide rather than at
-// the end of the footer.
+// Reading Progress — a ring closing around the mark in the topbar. This only
+// writes --rp; the ring itself is drawn in CSS. Measured against the article,
+// so it reads 100% at the end of the guide rather than at the end of the footer.
 class ReadingProgress {
     constructor(contentSelector = '.guide-content') {
         this.content = document.querySelector(contentSelector);
-        this.bar = document.querySelector('.progress-bar');
         this.ticking = false;
-        if (!this.content || !this.bar) return;
+        if (!this.content) return;
         this.init();
     }
 
@@ -181,7 +180,9 @@ class ReadingProgress {
             ? (window.scrollY - start) / (end - start)
             : (window.scrollY >= start ? 1 : 0);
 
-        this.bar.style.transform = `scaleX(${Math.min(1, Math.max(0, p))})`;
+        document.documentElement.style.setProperty(
+            '--rp', Math.round(Math.min(1, Math.max(0, p)) * 1000) / 1000
+        );
     }
 }
 
