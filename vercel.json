@@ -1,0 +1,50 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "cd website && npm run build",
+  "outputDirectory": "website/public",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://roomy.chat/-/atproto.garden",
+      "permanent": false,
+      "has": [
+        {
+          "type": "host",
+          "value": "atproto.garden"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "destination": "https://roomy.chat/-/atproto.garden",
+      "permanent": false,
+      "has": [
+        {
+          "type": "host",
+          "value": "www.atproto.garden"
+        }
+      ]
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "atproto.garden"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    }
+  ]
+}

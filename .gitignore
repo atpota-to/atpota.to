@@ -35,3 +35,6 @@ yarn-error.log*
 .vercel/ 
 # generated build artifact for the homepage (regenerate with tools/gen-art.js)
 website/tools/art.json
+
+# Build output
+website/public/
