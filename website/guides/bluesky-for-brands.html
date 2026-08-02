@@ -36,15 +36,12 @@
 
 <a class="skip" href="#markdown-content">Skip to the guide</a>
 
-<div class="guide-hero">
-  <div class="topbar">
-    <a class="home" href="/">
+<nav class="topbar" id="topbar" aria-label="Primary">
+  <div class="inner">
+    <a class="home" href="/" aria-label="atpotato — home">
       <img class="mark" src="/atpotato-normal.png" alt="" width="32" height="32"><b>atpotato</b>
     </a>
     <span class="sp"></span>
-    <a class="nav" href="/#underground">apps</a>
-    <a class="nav" href="/">home</a>
-    <a class="nav" href="mailto:contact@atpota.to">contact</a>
     <button class="tt" id="tt" type="button" aria-label="Toggle light and dark">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <g class="sun"><circle cx="12" cy="12" r="4.4"/>
@@ -53,7 +50,10 @@
       </svg>
     </button>
   </div>
+  <div class="reading-progress" aria-hidden="true"><i class="progress-bar"></i></div>
+</nav>
 
+<div class="guide-hero">
   <header class="guide-header">
     <h1>How to use Bluesky to grow your brand</h1>
     <h2>A comprehensive guide for companies, communities, and creators</h2>
@@ -98,6 +98,16 @@
     d.setAttribute('data-theme', next);
     try { localStorage.setItem('theme', next); } catch (e) {}
   });
+
+  /* lift the bar off the page as soon as anything has scrolled under it */
+  (function () {
+    var bar = document.getElementById('topbar'), ticking = false;
+    function frame() { ticking = false; bar.classList.toggle('stuck', window.scrollY > 8); }
+    addEventListener('scroll', function () {
+      if (!ticking) { ticking = true; requestAnimationFrame(frame); }
+    }, { passive: true });
+    frame();
+  })();
 </script>
 
 <!-- vendored so the guide does not depend on a CDN being up at read time -->

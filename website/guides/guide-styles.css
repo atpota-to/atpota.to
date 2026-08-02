@@ -14,6 +14,7 @@
 
   --measure: 680px;
   --toc: 240px;
+  --bar: 64px;          /* height of the fixed topbar */
 }
 [data-theme="dark"]{
   color-scheme: dark;
@@ -43,20 +44,30 @@ a{ color:inherit }
 .skip:focus{ top:12px }
 
 /* ──────────────────────────────────────────────────────────────── topbar ── */
+/* Same bar as the homepage: fixed, transparent until you scroll, then a
+   tinted blur so the mark stays legible over whatever is passing beneath. */
 .topbar{
-  position:relative; z-index:5; display:flex; align-items:center; gap:11px;
-  max-width:1160px; margin:0 auto; padding:20px 24px;
+  position:fixed; inset:0 0 auto 0; z-index:50;
+  border-bottom:1px solid transparent;
+  transition:background .22s ease, border-color .22s ease, box-shadow .22s ease;
 }
+.topbar .inner{
+  display:flex; align-items:center; gap:11px;
+  max-width:1160px; margin:0 auto; padding:14px 24px; height:var(--bar);
+}
+.topbar .home{ display:flex; align-items:center; gap:11px; text-decoration:none; border-radius:8px }
 .topbar .mark{ width:32px; height:32px; object-fit:contain }
 .topbar b{ font-weight:900; letter-spacing:-.02em }
-.topbar .home{ display:flex; align-items:center; gap:11px; text-decoration:none }
 .topbar .sp{ flex:1 }
-.topbar a.nav{
-  font-weight:700; font-size:.9rem; color:var(--muted); padding:7px 11px; border-radius:999px;
-  text-decoration:none;
+
+/* Opaque, not frosted: screenshots pass under this bar and a translucent one
+   smears them behind the wordmark. On the guide the page is --sky-2 anyway,
+   so all you see is the hairline and the progress line growing along it. */
+.topbar.stuck{
+  background:var(--sky-2);
+  border-bottom-color:var(--card-line);
+  box-shadow:0 14px 34px -28px rgba(40,28,10,.9);
 }
-.topbar a.nav:hover{ color:var(--ink); background:rgba(0,0,0,.05) }
-[data-theme="dark"] .topbar a.nav:hover{ background:rgba(255,255,255,.07) }
 .tt{
   width:36px; height:36px; border-radius:50%; border:1px solid var(--card-line);
   background:var(--card); color:var(--muted); cursor:pointer; display:grid; place-items:center;
@@ -69,16 +80,25 @@ a{ color:inherit }
 [data-theme="dark"] .tt .moon{ display:block }
 
 /* ───────────────────────────────────────────────────── reading progress ── */
-/* a thin green line that grows as you read, echoing the root on the homepage */
+/* Not a strip laid over the page — it is the bottom edge of the topbar, a root
+   creeping along as you read. It sits on the border so the hairline is
+   progressively replaced by green rather than doubled up. */
 .reading-progress{
-  position:fixed; top:0; left:0; right:0; height:3px; z-index:70; pointer-events:none;
-  background:transparent;
+  position:absolute; left:0; right:0; bottom:-1px; height:2px;
+  pointer-events:none; overflow:hidden;
 }
-.progress-bar{ height:100%; width:0; background:var(--green); border-radius:0 3px 3px 0 }
+.progress-bar{
+  display:block; height:100%; width:100%;
+  background:linear-gradient(90deg, var(--green-deep), var(--green));
+  transform:scaleX(0); transform-origin:left center;
+}
+[data-theme="dark"] .progress-bar{
+  background:linear-gradient(90deg, var(--green), #7ede8b);
+}
 
 /* ─────────────────────────────────────────────────────────────── header ── */
 .guide-hero{
-  position:relative; overflow:hidden;
+  position:relative; overflow:hidden; padding-top:var(--bar);
   background:linear-gradient(180deg, var(--sky-1), var(--sky-2));
 }
 .guide-header{
@@ -122,7 +142,8 @@ a{ color:inherit }
 
 .guide-content h2{
   margin:64px 0 16px; font-size:clamp(1.5rem, 2.6vw, 1.95rem); font-weight:900;
-  letter-spacing:-.025em; line-height:1.15; color:var(--brown); scroll-margin-top:80px;
+  letter-spacing:-.025em; line-height:1.15; color:var(--brown);
+  scroll-margin-top:calc(var(--bar) + 20px);
 }
 [data-theme="dark"] .guide-content h2{ color:var(--sand) }
 .guide-content h2::after{
@@ -190,8 +211,8 @@ a{ color:inherit }
 
 /* ─────────────────────────────────────────────────── table of contents ─── */
 .toc-container{
-  position:sticky; top:40px; align-self:start; padding-top:56px;
-  max-height:calc(100vh - 80px); overflow-y:auto;
+  position:sticky; top:calc(var(--bar) + 28px); align-self:start; padding-top:56px;
+  max-height:calc(100vh - var(--bar) - 56px); overflow-y:auto;
 }
 .toc-container h2{
   margin:0 0 14px; font-size:.78rem; font-weight:900; letter-spacing:.12em;
@@ -261,6 +282,7 @@ a{ color:inherit }
 }
 @media (max-width:640px){
   body{ font-size:16px }
+  .topbar .inner{ padding:14px 20px }
   .guide-header{ padding:26px 20px 44px }
   .guide-container{ padding:0 20px 80px }
   .guide-content{ padding-top:40px }

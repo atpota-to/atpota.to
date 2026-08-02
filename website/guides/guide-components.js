@@ -149,37 +149,39 @@ class TableOfContents {
     }
 }
 
-// Reading Progress
+// Reading Progress — the growing bottom edge of the topbar. Measured against
+// the article itself, so it reads 100% at the end of the guide rather than at
+// the end of the footer.
 class ReadingProgress {
     constructor(contentSelector = '.guide-content') {
         this.content = document.querySelector(contentSelector);
-        this.progressBar = null;
+        this.bar = document.querySelector('.progress-bar');
+        this.ticking = false;
+        if (!this.content || !this.bar) return;
         this.init();
     }
 
     init() {
-        this.createProgressBar();
-        window.addEventListener('scroll', () => this.updateProgress());
-    }
-
-    createProgressBar() {
-        const container = document.createElement('div');
-        container.className = 'reading-progress';
-        
-        this.progressBar = document.createElement('div');
-        this.progressBar.className = 'progress-bar';
-        
-        container.appendChild(this.progressBar);
-        document.body.insertBefore(container, document.body.firstChild);
+        const request = () => {
+            if (this.ticking) return;
+            this.ticking = true;
+            requestAnimationFrame(() => { this.ticking = false; this.updateProgress(); });
+        };
+        window.addEventListener('scroll', request, { passive: true });
+        window.addEventListener('resize', request, { passive: true });
+        this.updateProgress();
     }
 
     updateProgress() {
-        const windowHeight = window.innerHeight;
-        const documentHeight = document.documentElement.scrollHeight - windowHeight;
-        const scrolled = window.scrollY;
-        const progress = (scrolled / documentHeight) * 100;
-        
-        this.progressBar.style.width = `${progress}%`;
+        const start = this.content.getBoundingClientRect().top + window.scrollY;
+        const end = start + this.content.offsetHeight - window.innerHeight;
+        // a short article can end above where it starts; then it is simply
+        // unread until you pass its top, and read once you do
+        const p = end > start
+            ? (window.scrollY - start) / (end - start)
+            : (window.scrollY >= start ? 1 : 0);
+
+        this.bar.style.transform = `scaleX(${Math.min(1, Math.max(0, p))})`;
     }
 }
 
