@@ -224,8 +224,9 @@ function horizon(){
     `<path class="leaf" d="M${stemX + 46} 32 C${stemX + 66} 20 ${stemX + 86} 26 ${stemX + 92} 37 C${stemX + 78} 47 ${stemX + 56} 45 ${stemX + 46} 32Z"/>` +
     // caterpillar on the leaf
     `<g class="cat" transform="translate(${stemX + 60} 33)">` +
-      [0,1,2,3,4].map(i => `<circle cx="${i * 7}" cy="${n(Math.sin(i * 1.1) * 1.6)}" r="${n(4 - i * 0.35)}"/>`).join('') +
-      `<circle class="cat-head" cx="-6" cy="0" r="4.4"/>` +
+      [0,1,2,3,4,5].map(i => `<circle cx="${i * 4.4}" cy="${n(Math.sin(i * 1.15) * 1.1)}" r="${n(2.7 - i * 0.22)}"/>`).join('') +
+      `<circle class="cat-head" cx="-4" cy="0" r="3"/>` +
+      `<path class="cat-head" d="M-5.6 -2.6 l-1.6 -3 M-3.4 -3 l0 -3.2"/>` +
     `</g>` +
     // chrysalis hanging off the bend
     `<g class="chry" transform="translate(${stemX + 14} 50) rotate(8)">` +
