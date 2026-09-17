@@ -2,8 +2,9 @@
 
 ## The one-sentence version
 
-A potato that lives in the corner of atpota.to, knows how to read anything in the
-Atmosphere, and answers "what even is this" without making you feel stupid.
+A potato that lives in the corner of atpota.to and in Bluesky replies, knows how
+to read anything in the Atmosphere, and answers "what even is this" without
+making you feel stupid.
 
 ## Why this, why now
 
@@ -47,13 +48,33 @@ treatment.
 5. **Hand off gracefully.** Every answer that refers to a piece of content ends
    with a universal aturi.to link so the person can open it in whatever client
    they use.
+6. **Answer in public.** An @ mention or a reply on Bluesky gets a short answer
+   in thread with somewhere to read more. Same knowledge, 300 characters, and a
+   much harsher set of rules about when to stay quiet. See
+   [`09-bluesky-channel.md`](09-bluesky-channel.md).
+
+## Two surfaces, one agent
+
+The website panel is a private conversation with one visitor who chose to open
+it. Bluesky is public, adversarial, permanent, and rate-limited by someone
+else's server. Same tools and same voice, different rules about length, about
+when to speak, and about how much to trust the input.
+
+Only the surface-specific rules differ, and they live in channel-scoped
+instructions rather than in the main prompt.
 
 ## Explicit non-goals for v1
 
-- **No writes.** The Aturi MCP is read-only and the agent stays read-only. It
-  does not post, follow, block, mute, label, or change settings. This is a
-  feature: it means no OAuth, no account linking, no write-scope consent screen,
-  no destructive-action approval gates in the first release.
+- **No writes from the agent, ever.** The Aturi MCP is read-only and the agent
+  has no write tool. The one record it ever causes to exist is a Bluesky reply,
+  and even that it does not write: it returns text, and the droplet decides
+  whether that text becomes a record. It does not follow, block, mute, label, or
+  change anyone's settings, and it never offers to.
+- **No standalone posting.** It replies when spoken to. It does not post on its
+  own schedule, quote, repost, or start threads. A weekly digest post is a
+  plausible later feature with a completely different risk profile.
+- **No DMs.** Different lexicon, different privacy expectations, and not covered
+  by the read-only tools.
 - **No sign-in.** Anonymous sessions only. Nothing to store, nothing to breach.
 - **No "personalized feed" claims.** It has no idea who you are unless you tell
   it your handle in the conversation.
@@ -75,6 +96,9 @@ help works when the help is actually good.
 
 **What we're refusing.** From the memory of what made Clippy hated (Office 97
 through XP, off by default in XP, gone by 2007) the failure modes were:
+
+These rules bind harder on Bluesky than on the website, because a reply nobody
+wanted is a notification, and a notification nobody wanted is a mute.
 
 | Clippy's failure | Our rule |
 | --- | --- |

@@ -22,6 +22,7 @@ coding agent) so the thing that gets built is the thing you wanted.
 | [`06-ui-spec.md`](06-ui-spec.md) | The on-page surface: where the potato sits, when it speaks, how you shut it up |
 | [`07-build-plan.md`](07-build-plan.md) | eve project layout, milestones, deploy path, open questions |
 | [`08-evals.md`](08-evals.md) | Scored prompts, including the ones it should refuse or hedge on |
+| [`09-bluesky-channel.md`](09-bluesky-channel.md) | The Bluesky account: Jetstream detection, the gate layer, thread-to-session mapping, and the posting path |
 
 ## Assumptions worth checking before building
 
@@ -30,8 +31,13 @@ coding agent) so the thing that gets built is the thing you wanted.
    adding tools. If that's wrong, treat the MCP as a third-party dependency and
    add the usual defensive caching.
 2. **Aturi's MCP is beta and read-only.** 38 tools, no API key, no published
-   rate limits. The prompt in `03` states the read-only boundary explicitly so
-   the agent never promises to post, follow, or edit.
+   rate limits. The agent itself has no write tool at any point, including on
+   Bluesky: it drafts, and the droplet in `09` decides whether the draft becomes
+   a record.
+
+   That split is the load-bearing safety decision in this whole package. The
+   inbound Bluesky surface is a public text field, so the gates that matter live
+   in code rather than in the prompt.
 3. **eve is beta.** Everything here was written against eve.dev's published docs
    as of September 2026. Once you have a project, `node_modules/eve/docs/`
    matches your installed version and wins over anything written here.
