@@ -84,7 +84,9 @@ right to you.
 
 ### What this needs configuring
 
-1. **A second Vercel project** from this same repository, root directory `bot/`.
+1. **A second Vercel project**, created from the eve CLI rather than the
+   dashboard, then pointed at root directory `bot/`. See
+   [How the Vercel project actually gets created](#how-the-vercel-project-actually-gets-created).
    eve deploys using Vercel Workflow and Vercel Sandbox, so read
    `docs/guides/deployment/vercel.md` before that project's first deploy.
 2. **An ignored build step on both projects**, so a copy tweak to the site does
@@ -110,6 +112,64 @@ right to you.
 4. **Node version per project.** eve needs 24 or newer, which is a per-project
    Vercel setting, so the site is unaffected.
 
+### How the Vercel project actually gets created
+
+Not from the dashboard. Vercel's dashboard flow for creating an agent starts
+from a template, which is why it will not let you point at an existing
+repository. It is a different product surface from eve deployment, and it is not
+the path here.
+
+An eve project creates and links its Vercel project from the CLI:
+
+```bash
+# from the repository root
+npx eve@latest init bot
+rm -rf bot/.git          # eve init runs git init; you do not want a nested repo
+
+cd bot
+eve link                 # pick a team, then create a project or link an existing one
+eve deploy               # installs dependencies, runs vercel deploy --prod, pulls env
+```
+
+`eve link` gives you a picker: create a project named for the agent, or link an
+existing one, with search across the team's projects. It then pulls that
+project's environment so an AI Gateway credential (`VERCEL_OIDC_TOKEN` or
+`AI_GATEWAY_API_KEY`) lands in `.env.local`. Running it again re-links, and the
+new choice wins.
+
+The nested `.git` is a real gotcha rather than a hypothetical one. `eve init`
+initializes a repository as part of scaffolding, which inside this repository
+would give you a second one. Remove it before the first commit.
+
+### Adding push-to-deploy afterwards
+
+Git-connected deploys work; you just cannot start from there. Once `eve link`
+has created the project:
+
+1. **Settings, Git**: connect `atpota-to/atpota.to`.
+2. **Root Directory**: `bot/`.
+3. **Build Command**: `eve build`. This is the part the dashboard cannot infer,
+   because the framework preset knows nothing about eve. On a hosted build eve
+   detects `VERCEL` and writes the deployment bundle under `.vercel/output`.
+4. **Ignored Build Step**: as above, so the site and the agent stop rebuilding
+   each other.
+
+One uncertainty worth checking rather than trusting: eve's docs do not say
+whether `eve link` sets the project's build command for you. Look at the project
+settings after linking. If the first Git-triggered build fails because Vercel
+does not know how to build the directory, step 3 is the answer.
+
+### You do not need any of this yet
+
+eve's own getting-started is explicit that you do not need a Vercel project to
+start chatting. `npx eve@latest init bot`, then `npm run dev`, gives you the
+terminal UI and a working agent with no deployment anywhere.
+
+Phase 1 and Phase 2 below need no Vercel project at all. Deployment first
+matters in Phase 4, when the droplet needs a URL to call. Leaving it until then
+is the right order: you will have changed the prompt fifty times by that point,
+and none of those iterations wanted a deploy.
+
 ### The one genuine exception
 
 The droplet service does not deploy from Vercel at all, may not be in the same
@@ -130,8 +190,12 @@ matters more than which directory it lands in.
 - Mint an app password. It goes on the droplet and nowhere else. Not in either
   repository, not in the Vercel project.
 - `npx eve@latest init bot` from the repository root, giving `bot/`. Node 24 or
-  newer.
-- Model API key into the eve project's environment.
+  newer. Delete the `bot/.git` that `eve init` creates.
+- A model credential. You may not need a provider API key at all: a string model
+  ID routes through the Vercel AI Gateway and authenticates over project OIDC.
+  The terminal UI will connect a Vercel account, an AI Gateway key, or an
+  Anthropic or OpenAI key, whichever you prefer.
+- No Vercel project yet. It is not needed until Phase 4.
 - Read `node_modules/eve/docs/`. Those match your installed version; eve.dev
   documents the latest release and eve is in beta, so they will drift. Where
   they disagree with this spec, they win.
@@ -145,7 +209,7 @@ Build the whole knowledge layer and drive it from the terminal.
 - `agent/instructions.md` from `03-system-prompt.md`.
 - `agent/connections/atmosphere.ts` from `04-aturi-connection.md`.
 - The seven skills from `skills/`.
-- `eve dev`, then the terminal UI.
+- `npm run dev`, then the terminal UI. No Vercel project, no deploy, no URL.
 
 **Done when:** you paste an `at://` URI and get a correct resolution with a
 working link, ask a lexicon question and get the real schema, ask what a DID is
@@ -197,6 +261,12 @@ work and deserves most of your attention.
 ## Phase 4. Draft, and still post nothing
 
 Connect the two halves. Nothing reaches Bluesky.
+
+This is where the agent first needs to be deployed, because the droplet needs a
+URL to call. `eve link` then `eve deploy`, per
+[How the Vercel project actually gets created](#how-the-vercel-project-actually-gets-created).
+Add push-to-deploy here too if you want it, once one manual deploy has proved
+the build works.
 
 - `agent/channels/bluesky.ts`: the inbound route, the auth block carrying the
   author DID, the draft callback.
