@@ -7,8 +7,10 @@ deployed to Vercel, reading the Atmosphere through the
 [Aturi MCP server](https://aturi.to/mcp).
 
 **The Bluesky account is the product.** People @ mention it or reply to it and
-get a short, useful answer with somewhere to read more. Start at
-[`07-build-plan.md`](07-build-plan.md), which is ordered for that build. The
+get a short, useful answer with somewhere to read more. The agent itself is
+built, in [`../bot/`](../bot/). To ship it, follow
+[`11-go-live.md`](11-go-live.md); for why it is shaped this way, read
+[`07-build-plan.md`](07-build-plan.md). The
 website panel in [`06-ui-spec.md`](06-ui-spec.md) is a separate project for
 later and nothing depends on it.
 
@@ -30,6 +32,8 @@ coding agent) so the thing that gets built is the thing you wanted.
 | [`08-evals.md`](08-evals.md) | Scored prompts, including the ones it should refuse or hedge on |
 | [`09-bluesky-channel.md`](09-bluesky-channel.md) | The Bluesky account: Jetstream detection, the gate layer, thread-to-session mapping, and the posting path |
 | [`10-memory.md`](10-memory.md) | What it remembers about whom, how the scope is keyed, and how forgetting works |
+| [`11-go-live.md`](11-go-live.md) | **The runbook.** Nothing to live, in order, with what to check at each step |
+| [`../mentions/SPEC.md`](../mentions/SPEC.md) | Standalone build brief for the droplet service. Self-contained, meant to be handed off on its own |
 
 ## Assumptions worth checking before building
 
