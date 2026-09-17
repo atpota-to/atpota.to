@@ -174,13 +174,17 @@ message interrupts the running turn. That is right for a chat box and wrong here
 two people replying in the same thread at once should get two answers, not one
 merged one.
 
-Sketch:
+Sketch, with the parts that were checked marked as such. Verified against the
+eve **0.58.1** docs installed at `bot/node_modules/eve/docs/`:
 
 ```ts title="agent/channels/bluesky.ts"
 import { defineChannel, POST } from "eve/channels";
 
 export default defineChannel({
   turnPolicy: "queue",
+
+  // Accumulate assistant text as it finalizes, then send once per turn.
+  state: { draft: "" },
 
   routes: [
     POST("/bluesky/mention", async (request, { from, waitUntil }) => {
@@ -203,21 +207,66 @@ export default defineChannel({
   ],
 
   events: {
-    async "message.completed"(event, channel, ctx) {
+    "message.completed"(event, channel) {
+      channel.state.draft = event.message;
+    },
+    async "turn.completed"(event, channel, ctx) {
+      const draft = channel.state.draft;
+      channel.state.draft = "";
+      if (!draft) return;
       await postDraftToDroplet({
-        key: `${ctx.session.id}:${event.messageId}`,
+        key: `${ctx.session.id}:${event.turnId}`,
         threadRoot: channel.continuation.token,
-        text: event.message,
+        text: draft,
       });
     },
   },
 });
 ```
 
-Treat that as shape, not as working code. Check the event names and payload
-fields against `node_modules/eve/docs/` for your installed version. The callback
-needs a stable idempotency key, because eve's docs are explicit that channel
-event handlers are at-least-once.
+### Why `turn.completed` and not `message.completed`
+
+This is the one place the earlier draft of this document was wrong, and it
+matters because the failure is a wrong public post rather than an error.
+
+`message.completed` is **a finalized assistant text block**, not a finished
+turn. A single turn can emit several, so sending the draft from that handler
+risks posting the first paragraph of an answer, or posting twice.
+
+Worse, eve's own streaming documentation says that when a model provider fails
+after partial output and eve retries, **the durable stream keeps events from
+both attempts**, and a completed block does not mean its attempt succeeded. So
+`message.completed` can carry text from an abandoned attempt. For a chat UI that
+is a cosmetic flicker. For a bot with a posting credential behind it, it is a
+published sentence from a run that never finished.
+
+Accumulating on `message.completed` and sending at `turn.completed` avoids both.
+The droplet's duplicate gate covers the rest.
+
+### What was checked, and what was not
+
+Verified in the installed 0.58.1 docs:
+
+- `defineChannel` with `POST()` routes, and `from(address).send(message, opts)`.
+- The `auth` object shape: `{ authenticator, principalType, principalId,
+  attributes }`. This is the same shape the memory scope resolver in
+  [`10-memory.md`](10-memory.md) reads through
+  `ctx.session.auth.current?.attributes`, which is also confirmed.
+- Handler signature `(eventData, channel, ctx)`, `channel.continuation.token`,
+  and `turnPolicy: "queue"` on the channel definition.
+- Both `message.completed` and `turn.completed` exist as channel events.
+
+Still unverified, because no run has happened yet:
+
+- The exact field names on each event payload. `event.message` appears in eve's
+  own `message.completed` example; `event.turnId` on `turn.completed` is
+  inferred from the turn events carrying a turn ID elsewhere. Log one real turn
+  before relying on either.
+- Whether `state` plus `channel.state` is the right place to accumulate across
+  handlers in a durable, replay-safe way. The alternative is reading the final
+  message from the session at `turn.completed`.
+- Everything about how this behaves under a parked or replayed turn.
+
 
 ## The inbound prompt envelope
 

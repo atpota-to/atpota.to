@@ -345,8 +345,11 @@ Tables, roughly: `cursor`, `seen(did, rkey)`, `queue`, `replies`, `denylist`,
 
 ## The three things I would verify before trusting this plan
 
-1. **The eve channel API shape.** The sketches in `09` are doc-derived, not
-   run. Phase 4 finds out.
+1. **The eve channel API shape.** Partly resolved: the route, auth and event
+   surfaces in `09` were checked against the 0.58.1 docs installed in `bot/`,
+   and one real error was found and fixed (the draft callback belongs on
+   `turn.completed`, not `message.completed`). Event payload field names are
+   still unverified until a turn actually runs. Phase 4 finishes it.
 2. **Post firehose volume on the droplet.** Filtering every post on the network
    to find a handful of mentions is the real cost of the Jetstream approach.
    Phase 3 measures it, and if it is unpleasant, the `listNotifications` sweep
