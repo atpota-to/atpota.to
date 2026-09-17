@@ -19,6 +19,7 @@ skill name.
 | `builder-lookup` | Lexicon schemas, API methods, NSIDs | Precision-mode behavior that would flatten the voice if it were always on |
 | `find-your-people` | Feeds, starter packs, lists, labelers | Discovery has its own etiquette, especially around labelers |
 | `bluesky-reply` | Always on for Bluesky sessions, loadable elsewhere | Length and etiquette rules that are wrong on the website, so they are channel-scoped rather than carried in the main prompt |
+| `house-facts` | Ecosystem facts the tools do not return well | Not yet written. This is where curated shared knowledge lives instead of in a shared memory slot, for the reasons in [`10-memory.md`](10-memory.md) |
 
 ## The routing tradeoff
 

@@ -35,6 +35,8 @@ atpotato/
 │   │   └── atmosphere.ts            # the Aturi MCP connection, 04
 │   ├── channels/
 │   │   └── bluesky.ts               # inbound mention route, draft callback, 09
+│   ├── memory/
+│   │   └── person.ts                # DID-scoped slot, file provider, 10
 │   └── skills/
 │       ├── resolve-anything.md
 │       ├── explain-to-a-newcomer.md
@@ -97,6 +99,16 @@ not rushing, because it is the last one where mistakes are free.
 low like 10 per hour, and the kill switch tested. Raise the ceiling when the
 review queue has been boring for a week.
 
+**M8. Memory.** Only once M7 is live and dull. `eve add memory/file` provisions
+the Blob store, then the `person` slot from `10-memory.md`, the DID assertion in
+the droplet's auth block, and the "forget me" path including the whole-scope
+delete. Ship the deletion path in the same release as the saving path, not
+after. Update the profile bio in the same deploy, because the bio is the
+disclosure.
+
+Memory goes last on purpose. Its mistakes are the only ones in this system that
+are both permanent and personal.
+
 ## Deploy
 
 eve deploys to Vercel using Vercel Workflow and Vercel Sandbox. Read
@@ -117,10 +129,10 @@ behavior right, then try to move down. The work here is many small tool calls an
 short answers, which is the shape that usually survives a downgrade well. Measure
 with the eval suite rather than guessing.
 
-**Memory.** eve supports cross-session memory through Supermemory, a built-in
-file provider, or your own. Do not add it for v1. An anonymous public assistant
-that remembers you is a privacy surface with no user-facing benefit yet. Revisit
-if you later add sign-in.
+**Memory.** Specced in `10-memory.md` and scheduled at M8. The decisions still
+open there: the retention window for an untouched fact, whether the website ever
+gets memory (which needs atproto OAuth sign-in), and when curated ecosystem
+facts graduate from a repo file to a recall-only provider.
 
 **Sandbox.** Static markdown skills do not need one; dynamic skills and packaged
 skill files do. Everything here is static markdown, so skip it.

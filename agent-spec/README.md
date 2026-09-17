@@ -23,6 +23,7 @@ coding agent) so the thing that gets built is the thing you wanted.
 | [`07-build-plan.md`](07-build-plan.md) | eve project layout, milestones, deploy path, open questions |
 | [`08-evals.md`](08-evals.md) | Scored prompts, including the ones it should refuse or hedge on |
 | [`09-bluesky-channel.md`](09-bluesky-channel.md) | The Bluesky account: Jetstream detection, the gate layer, thread-to-session mapping, and the posting path |
+| [`10-memory.md`](10-memory.md) | What it remembers about whom, how the scope is keyed, and how forgetting works |
 
 ## Assumptions worth checking before building
 

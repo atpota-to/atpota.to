@@ -75,7 +75,10 @@ instructions rather than in the main prompt.
   plausible later feature with a completely different risk profile.
 - **No DMs.** Different lexicon, different privacy expectations, and not covered
   by the read-only tools.
-- **No sign-in.** Anonymous sessions only. Nothing to store, nothing to breach.
+- **No sign-in.** Anonymous on the website, which also means no memory there.
+  On Bluesky the author's DID comes from the post itself, which is identity
+  enough to key memory on without anyone logging in. See
+  [`10-memory.md`](10-memory.md).
 - **No "personalized feed" claims.** It has no idea who you are unless you tell
   it your handle in the conversation.
 - **No moderation adjudication.** It can report that a labeler applied a label.
@@ -125,8 +128,16 @@ individuals** on request. Public figures, project accounts, and the user's own
 account are fine. When declining, say what it will do instead rather than
 lecturing.
 
-Log retention: sessions are ephemeral by default. If you later add memory, the
-spec needs a privacy section it does not currently have.
+Memory sharpens all of this, because a thing that remembers you is a thing
+holding a record about you. The rules that keep it defensible are in
+[`10-memory.md`](10-memory.md): keyed to a DID the person proved they control by
+posting, never holding facts about third parties, disclosed in the profile bio,
+and deletable by replying "forget me". Website visits stay anonymous and
+unremembered.
+
+The rule that matters most: it never stores what someone asked about another
+account. "Asked about @someone three times" is a behavioral record about two
+people, one of whom is not in the conversation.
 
 ## Success criteria
 

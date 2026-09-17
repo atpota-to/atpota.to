@@ -124,7 +124,7 @@ exists because a bot without it has embarrassed someone.
 | Per-account rate | 5 replies per account per hour |
 | Global rate | A ceiling well under the PDS write limit. See the budget below |
 | Denylist | A manual list. Honor it permanently, no appeal flow in v1 |
-| Opt-out | A reply containing a stop phrase adds that DID to the denylist. Announce this in the profile bio |
+| Opt-out | A reply containing a stop phrase adds that DID to the denylist. `forget me` also deletes that DID's memory scope (`10-memory.md`). Announce both in the profile bio |
 | Staleness | Ignore anything whose `createdAt` is more than 15 minutes old at processing time. Stops a backfill from replying to three weeks of history at once |
 | Language | `record.langs` outside what you support gets silence, not a reply in English explaining that you only speak English |
 | Substance | No question mark, no identifier, no recognizable request, and the post is under some short length: drop it. A bare mention inside a conversation between two other people is not addressed to you |
@@ -186,7 +186,18 @@ export default defineChannel({
     POST("/bluesky/mention", async (request, { from, waitUntil }) => {
       // Verify the shared secret before anything else.
       const event = await request.json();
-      waitUntil(from(event.threadRoot).send(buildPrompt(event), { auth: null }));
+      waitUntil(
+        from(event.threadRoot).send(buildPrompt(event), {
+          // The DID comes off the signed record, never out of post text.
+          // It is what the memory slot in 10-memory.md scopes on.
+          auth: {
+            authenticator: "atpotato-droplet",
+            principalType: "user",
+            principalId: event.authorDid,
+            attributes: { did: event.authorDid, handle: event.authorHandle },
+          },
+        }),
+      );
       return new Response(null, { status: 202 });
     }),
   ],
@@ -268,6 +279,9 @@ The profile bio needs to say it is an AI, how to stop it, and where the website
 is. eve adds no disclosure automatically and their docs put that on the deployer.
 Something like: "an AI potato that answers questions about atproto. reply 'stop'
 and i'll leave you alone. atpota.to".
+
+Once memory ships, the bio has to say that too, because the bio is where the
+disclosure lives. See the disclosure section of [`10-memory.md`](10-memory.md).
 
 ## The write budget
 
