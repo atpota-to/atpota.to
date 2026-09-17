@@ -16,6 +16,10 @@ without supervision, when to stay quiet.
 | **The service** | Jetstream consumer, matcher, gates, queue, poster, admin CLI | The droplet | The atproto credential, the dedup and queue database, the denylist |
 | **The panel** | Browser chat UI | Later | Nothing yet |
 
+Three deployables, not three repositories. The agent and the service are two
+directories in this repository, deployed by two different mechanisms. See
+[Where the code lives](#where-the-code-lives).
+
 Most of the code is on the droplet, not in the agent. The agent is a prompt, a
 connection, seven skills, and one channel file. The service is a real program
 with state, retries, and a kill switch. Budget accordingly: the interesting part
@@ -23,16 +27,101 @@ is the agent and the work is the service.
 
 ## Decisions before any code
 
-Four of these block the first commit.
+The first three block the first commit. The other two can wait for the phase
+that needs them.
 
 | Decision | Recommendation | Why it matters now |
 | --- | --- | --- |
 | **Which account posts** | A new account, not `@atpota.to` | Blocking. If the org account is the bot, every casual mention of atpotato becomes a trigger, and people mention brands without asking them anything. A separate handle means a mention is unambiguously addressed to the bot |
 | **Where the account lives** | `pds.atpota.to` | You already run it. It makes the bot a demo of the thing it explains, and it puts the write limits under your control |
-| **Where the eve project lives** | Its own repository | It has its own deploy, its own secrets, and its own release cadence. Putting it in the website repo couples two things that have nothing to do with each other |
-| **Where the service lives** | Its own repository, on the droplet | Same reasoning, plus this is the one holding the credential |
+| **Where the code lives** | This repository | See below. An earlier draft said separate repositories and the reasoning did not survive contact |
 | **Language for the service** | Whatever the existing consumer is written in | You already run a Jetstream consumer. Extending it beats starting a second one. If it is Go, the first-party Jetstream Go SDK applies; if TypeScript, `@bsky/jetstream` |
 | **Model** | The strongest you will pay for, then measure down | Many small tool calls and short answers is the shape that usually survives a downgrade. The eval suite tells you, guessing does not |
+
+## Where the code lives
+
+In this repository, alongside `website/`, `branding/`, and these specs.
+
+An earlier draft of this plan said separate repositories, on the grounds of
+separate deploys, separate secrets, and separate release cadence. Two of those
+three do not hold up:
+
+- **Secrets were the weakest argument.** The app password lives in the droplet's
+  environment and the model key lives in Vercel's. Neither sits in a repository
+  under either layout, so a repository boundary was protecting nothing.
+- **Deploy cadence is a project setting, not a repository boundary.** Vercel
+  already scopes the site to `website/`, and `ignoreCommand` handles the rest.
+- **Separate deploys survives, and does not need separate repositories.** Two
+  Vercel projects can point at two directories in one repository.
+
+What keeping it together buys is worth more than any of that: the specs in
+`agent-spec/` sit next to the thing they describe, so a prompt change and the
+document explaining it are one commit rather than two repositories drifting; the
+potato art for the bot's avatar is already here; and for a small team, two
+repositories is coordination overhead with no payoff.
+
+```text
+atpota.to/
+├── README.md
+├── branding/
+├── website/            Vercel project 1, root directory website/
+├── agent-spec/         these documents
+├── bot/                Vercel project 2, root directory bot/
+│   ├── package.json    its own, with eve and Node 24
+│   ├── agent/
+│   │   ├── instructions.md
+│   │   ├── instructions/
+│   │   ├── connections/atmosphere.ts
+│   │   ├── channels/bluesky.ts
+│   │   ├── memory/person.ts
+│   │   └── skills/
+│   └── evals/
+└── mentions/           the droplet service, if it does not already have a home
+```
+
+Names are a preference. `bot/` and `mentions/` are descriptive; pick what reads
+right to you.
+
+### What this needs configuring
+
+1. **A second Vercel project** from this same repository, root directory `bot/`.
+   eve deploys using Vercel Workflow and Vercel Sandbox, so read
+   `docs/guides/deployment/vercel.md` before that project's first deploy.
+2. **An ignored build step on both projects**, so a copy tweak to the site does
+   not redeploy the agent and a prompt change does not rebuild the site.
+   Vercel's documented form, which runs relative to the project's root
+   directory:
+
+   ```json
+   { "ignoreCommand": "git diff --quiet HEAD^ HEAD ./" }
+   ```
+
+   Exit code 0 ignores the build, 1 continues it. `HEAD^` is wrong when a push
+   contains several commits; Vercel exposes `VERCEL_GIT_PREVIOUS_SHA` for that
+   case, and it is populated only once an ignored build step is configured. Test
+   whichever form you use, because a broken ignore command fails in the
+   direction of never deploying.
+
+   Adding this to `website/vercel.json` changes an existing production
+   configuration. Do it deliberately and watch the next site deploy.
+3. **No root `package.json` and no workspace.** `bot/` keeps its own dependency
+   tree. The website is a static site with one devDependency and should stay
+   that way. A workspace would couple their installs for no benefit.
+4. **Node version per project.** eve needs 24 or newer, which is a per-project
+   Vercel setting, so the site is unaffected.
+
+### The one genuine exception
+
+The droplet service does not deploy from Vercel at all, may not be in the same
+language, and **already partly exists**: you have a Jetstream consumer running
+today. If that consumer already lives in a repository, extend it there and
+ignore the `mentions/` directory above. The question is not where to put new
+code, it is whether to grow the service you have or stand a sibling next to it.
+Growing the one you have is almost always right.
+
+If it currently exists only as something running on the droplet with nothing
+behind it, then `mentions/` here beats that, and getting it into version control
+matters more than which directory it lands in.
 
 ## Phase 0. Accounts and keys
 
@@ -40,7 +129,8 @@ Four of these block the first commit.
   and a bio that discloses it is an AI and names the stop phrase.
 - Mint an app password. It goes on the droplet and nowhere else. Not in either
   repository, not in the Vercel project.
-- `npx eve@latest init atpotato` in the new repo. Node 24 or newer.
+- `npx eve@latest init bot` from the repository root, giving `bot/`. Node 24 or
+  newer.
 - Model API key into the eve project's environment.
 - Read `node_modules/eve/docs/`. Those match your installed version; eve.dev
   documents the latest release and eve is in beta, so they will drift. Where
