@@ -1,62 +1,722 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>atpotato</title>
-    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>atpotato</title>
+<link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+<link rel="icon" href="/favicon.png" type="image/png">
 
-    <!-- Favicon -->
-    <link rel="icon" href="/favicon.png" type="image/png">
-    
-    <!-- Primary Meta Tags -->
-    <meta name="title" content="atpotato">
-    <meta name="description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
-    
-    <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://atpota.to/">
-    <meta property="og:title" content="atpotato">
-    <meta property="og:description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
-    <meta property="og:image" content="/og-image.jpg">
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="theme.js"></script>
-    <script defer src="logo-hover.js"></script>
+<meta name="description" content="A creative studio growing fun apps, helpful tools, and approachable writing for the atproto and Bluesky ecosystem.">
+<meta name="theme-color" content="#f6f4e6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1e1710" media="(prefers-color-scheme: dark)">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://atpota.to/">
+<meta property="og:title" content="atpotato">
+<meta property="og:description" content="A creative studio growing fun apps, helpful tools, and approachable writing for the atproto and Bluesky ecosystem.">
+<meta property="og:image" content="https://atpota.to/og-image.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<script>
+  /* theme + js flag before first paint, so nothing flashes */
+  (function () {
+    var d = document.documentElement;
+    d.className = 'js';
+    try {
+      var t = localStorage.getItem('theme');
+      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      d.setAttribute('data-theme', t);
+    } catch (e) { d.setAttribute('data-theme', 'light'); }
+  })();
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+
+<style>
+/* --p is the one number the scroll writes. Everything underground (the
+   taproot, each branch, each tuber, each card) is derived from it in CSS, so
+   smoothing this single property smooths the whole dig. */
+@property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+:root{
+  color-scheme: light;
+  --p: 0;
+  transition: --p .18s linear;
+
+  /* the five colours of the mascot, verbatim */
+  --sand:#E3CE90; --tan:#A58650; --bark:#725B36; --sprout:#39B54A; --sprout-deep:#006837;
+
+  --sky-1:#DCEDFB; --sky-2:#F6F4E6;
+  --sun: radial-gradient(640px 420px at 84% -8%, rgba(255,241,200,.95), rgba(255,241,200,0) 70%);
+  --cloud:#fff; --cloud-op:.75;
+
+  --paper:#F6F4E6; --card:#FFFDF6; --line:#E3D9BF; --line-strong:#CDBF9C;
+  --ink:#2B2418; --muted:#6A6050;
+  --wordmark:#6B5432;
+
+  --soil-1:#62492C; --soil-2:#4A3922; --soil-3:#2C2113; --soil-4:#171207;
+  --soil-ink:#F4EAD4; --soil-muted:#DACBA9; --soil-line:rgba(227,206,144,.22);
+  --root:#EAD8A6; --tuber:#E3CE90; --tuber-line:#8C6F45;
+
+  --btn-bg:#6B5432; --btn-ink:#FBF6E8;
+  --bar-bg:rgba(246,244,230,.72);
+  --shadow:0 18px 36px -22px rgba(48,34,14,.6);
+  --focus:#1E8E3A;
+}
+/* Night is the same ground after dark, not a second palette: sky and soil
+   both keep the one warm brown family, only darker. */
+[data-theme="dark"], .dark{
+  color-scheme: dark;
+  --sky-1:#110C07; --sky-2:#1E1710;
+  --sun: radial-gradient(360px 360px at 84% 10%, rgba(255,236,190,.09), rgba(255,236,190,0) 70%);
+  --cloud:#F0D9AE; --cloud-op:.06;
+
+  --paper:#1E1710; --card:#33271A; --line:#4A3A27; --line-strong:#6B5638;
+  --ink:#F7F0E2; --muted:#B9AA90;
+  --wordmark:#E3CE90;
+
+  --soil-1:#2E2216; --soil-2:#221910; --soil-3:#170F08; --soil-4:#0F0904;
+  --soil-ink:#F4EAD4; --soil-muted:#C4B294; --soil-line:rgba(227,206,144,.16);
+  --root:#D9C48F; --tuber:#D9C48F; --tuber-line:#5E4A2C;
+
+  --btn-bg:#E3CE90; --btn-ink:#2B2418;
+  --bar-bg:rgba(30,23,16,.66);
+  --shadow:0 18px 36px -22px rgba(0,0,0,.8);
+  --focus:#5FD06F;
+}
+
+*,*::before,*::after{ box-sizing:border-box }
+html{ scroll-behavior:smooth }
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"eigerdals", "Nunito", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+  font-size:17px; line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  text-rendering:optimizeLegibility;
+}
+a{ color:inherit; text-decoration:none }
+h1,h2,h3,p,ul{ margin:0 }
+ul{ padding:0; list-style:none }
+button{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer }
+img{ display:block; max-width:100% }
+:focus-visible{ outline:2px solid var(--focus); outline-offset:3px; border-radius:6px }
+.wrap{ width:100%; max-width:1064px; margin:0 auto; padding:0 24px }
+.page{ container-type:inline-size; position:relative }
+
+.skip{
+  position:absolute; left:12px; top:-64px; z-index:80; background:var(--card); color:var(--ink);
+  border:1px solid var(--line); border-radius:10px; padding:10px 16px; font-weight:800;
+}
+.skip:focus{ top:12px }
+
+.eyebrow{
+  display:inline-block; font-size:.76rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+}
+
+/* ─────────────────────────────────────────────────────────────── bar ── */
+.bar{ position:fixed; inset:0 0 auto 0; z-index:60; padding:12px 16px; pointer-events:none }
+.bar-in{
+  pointer-events:auto; max-width:1064px; margin:0 auto; height:56px; padding:0 10px 0 12px;
+  display:flex; align-items:center; gap:8px; border-radius:999px;
+  background:var(--bar-bg); border:1px solid var(--line);
+  -webkit-backdrop-filter:blur(14px) saturate(1.2); backdrop-filter:blur(14px) saturate(1.2);
+  box-shadow:var(--shadow);
+}
+.brand{ display:flex; align-items:center; gap:10px; padding:6px 8px 6px 4px; border-radius:999px; font-weight:900; letter-spacing:-.02em; font-size:1.15rem; color:var(--wordmark) }
+.brand img{ width:34px; height:34px; object-fit:contain }
+.bar-links{ display:flex; gap:4px; margin-left:auto }
+.bar-links a{
+  display:inline-flex; align-items:center; height:40px; padding:0 14px; border-radius:999px;
+  font-weight:800; font-size:.95rem; color:var(--muted); transition:color .15s, background .15s;
+}
+.bar-links a:hover{ color:var(--ink); background:rgba(114,91,54,.1) }
+.tt{
+  width:44px; height:44px; border-radius:50%; display:grid; place-items:center; color:var(--muted);
+  transition:color .15s, background .15s;
+}
+.tt:hover{ color:var(--ink); background:rgba(114,91,54,.1) }
+.tt svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round }
+.tt .moon{ display:none }
+[data-theme="dark"] .tt .sun, .dark .tt .sun{ display:none }
+[data-theme="dark"] .tt .moon, .dark .tt .moon{ display:block }
+/* once the bar floats over soil it goes underground with everything else */
+.bar.under .bar-in{ background:rgba(28,20,12,.64); border-color:rgba(227,206,144,.16) }
+.bar.under .brand{ color:var(--sand) }
+.bar.under .bar-links a, .bar.under .tt{ color:#CDBB98 }
+.bar.under .bar-links a:hover, .bar.under .tt:hover{ color:var(--soil-ink); background:rgba(227,206,144,.1) }
+
+/* ─────────────────────────────────────────────────────────────── sky ── */
+.sky{
+  position:relative; overflow:hidden; isolation:isolate;
+  background:var(--sun), linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 82%);
+}
+.clouds{ position:absolute; inset:0; pointer-events:none; z-index:0 }
+.cloud{
+  position:absolute; display:block; background:var(--cloud); opacity:var(--cloud-op);
+  border-radius:999px; filter:blur(16px);
+}
+.c1{ width:260px; height:64px; top:18%; left:4% }
+.c2{ width:180px; height:48px; top:30%; left:72% }
+.c3{ width:140px; height:40px; top:58%; left:16% }
+.c4{ width:200px; height:52px; top:66%; left:78% }
+.js .cloud{ animation:drift 90s linear infinite alternate }
+.js .c2{ animation-duration:120s; animation-delay:-30s }
+.js .c3{ animation-duration:70s; animation-delay:-10s }
+.js .c4{ animation-duration:110s; animation-delay:-50s }
+@keyframes drift{ from{ transform:translateX(-40px) } to{ transform:translateX(60px) } }
+
+.hero{ position:relative; z-index:1; text-align:center; padding:132px 24px 170px }
+.mascot-btn{ display:block; margin:0 auto 6px; border-radius:50%; -webkit-tap-highlight-color:transparent }
+.mascot{
+  width:min(232px, 54vw); height:auto; margin:0 auto;
+  filter:drop-shadow(0 16px 22px rgba(70,55,30,.22));
+}
+.js .mascot{ animation:hover-float 5s ease-in-out infinite }
+@keyframes hover-float{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-7px) } }
+.mascot-btn:hover .mascot{ animation-play-state:paused }
+
+.kicker{ color:var(--sprout-deep); margin-bottom:12px }
+[data-theme="dark"] .kicker, .dark .kicker{ color:var(--sprout) }
+.hero h1{
+  font-size:clamp(3.4rem, 8.6vw, 5.6rem); font-weight:900; letter-spacing:-.035em; line-height:.95;
+  color:var(--wordmark); margin-bottom:18px;
+}
+.lede{ max-width:42ch; margin:0 auto; font-size:1.22rem; line-height:1.5; color:var(--muted); text-wrap:pretty }
+.actions{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:30px }
+.btn{
+  display:inline-flex; align-items:center; gap:8px; height:50px; padding:0 22px; border-radius:999px;
+  font-weight:800; font-size:1rem; border:1.5px solid var(--line-strong); color:var(--ink);
+  transition:transform .15s, box-shadow .15s, background .15s, border-color .15s;
+}
+.btn:hover{ transform:translateY(-1px); border-color:var(--bark) }
+.btn svg{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round }
+.btn.primary{ background:var(--btn-bg); color:var(--btn-ink); border-color:transparent; box-shadow:var(--shadow) }
+.btn.primary:hover{ box-shadow:0 20px 36px -20px rgba(48,34,14,.75) }
+.js .btn.primary svg{ animation:bob 2.2s ease-in-out infinite }
+@keyframes bob{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(3px) } }
+
+/* the soil line, with grass on it */
+.horizon{ position:absolute; left:0; right:0; bottom:-1px; z-index:2; line-height:0; pointer-events:none }
+.horizon svg{ display:block; width:100%; height:116px }
+.horizon .soil{ fill:var(--soil-1) }
+.horizon .tuft{ fill:none; stroke:var(--sprout-deep); stroke-width:2.4; stroke-linecap:round }
+.horizon .tuft.lt{ stroke:var(--sprout) }
+[data-theme="dark"] .horizon .tuft, .dark .horizon .tuft{ stroke:#2E6B3B }
+[data-theme="dark"] .horizon .tuft.lt, .dark .horizon .tuft.lt{ stroke:#3E8A4C }
+
+/* ─────────────────────────────────────────────────────── underground ── */
+.ground{
+  position:relative; overflow:hidden; color:var(--soil-ink); padding:12px 0 88px;
+  background:linear-gradient(180deg, var(--soil-1) 0%, var(--soil-2) 38%, var(--soil-3) 100%);
+  scroll-margin-top:72px;
+}
+/* grain, then a few pebbles */
+.ground::before{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.35;
+  background-image:radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.5px);
+  background-size:26px 26px;
+}
+.ground::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background-image:
+    radial-gradient(ellipse 18px 11px at 9% 14%, rgba(255,240,210,.09), transparent 72%),
+    radial-gradient(ellipse 10px 7px at 14% 31%, rgba(255,240,210,.07), transparent 72%),
+    radial-gradient(ellipse 22px 13px at 91% 22%, rgba(255,240,210,.08), transparent 72%),
+    radial-gradient(ellipse 12px 8px at 86% 47%, rgba(255,240,210,.06), transparent 72%),
+    radial-gradient(ellipse 16px 10px at 6% 63%, rgba(255,240,210,.06), transparent 72%),
+    radial-gradient(ellipse 13px 8px at 94% 74%, rgba(255,240,210,.06), transparent 72%),
+    radial-gradient(ellipse 20px 12px at 12% 88%, rgba(255,240,210,.05), transparent 72%);
+}
+.ground .wrap{ position:relative; z-index:2 }
+
+.ground-head{ text-align:center; padding:26px 0 6px }
+.ground-head .eyebrow{ color:var(--sprout); margin-bottom:10px }
+.ground-head h2{ font-size:clamp(1.9rem, 4vw, 2.4rem); font-weight:900; letter-spacing:-.025em; color:var(--sand); margin-bottom:8px }
+.ground-head p{ color:var(--soil-muted); font-size:1.05rem }
+
+.roots{ position:relative; padding:56px 0 8px }
+.rootlayer{
+  position:absolute; inset:0; width:100%; height:100%; overflow:visible;
+  pointer-events:none; z-index:3;
+}
+.rootlayer .trunk, .rootlayer .branch{
+  fill:none; stroke:var(--root); stroke-linecap:round; stroke-dasharray:1;
+  stroke-dashoffset:clamp(0, calc((var(--e) - var(--p)) / (var(--e) - var(--s))), 1);
+}
+.rootlayer .trunk{ stroke-width:6 }
+.rootlayer .branch{ stroke-width:4 }
+.rootlayer .tuber{
+  --k:clamp(0, calc((var(--p) - var(--e)) * 22 + 1), 1);
+  opacity:var(--k); transform:scale(var(--k)); transform-box:fill-box; transform-origin:center;
+}
+.rootlayer .tuber path{ fill:var(--tuber); stroke:var(--tuber-line); stroke-width:2; stroke-linejoin:round }
+.rootlayer .tuber circle{ fill:var(--tuber-line) }
+.no-js .rootlayer .trunk, .no-js .rootlayer .branch{ stroke-dashoffset:0 }
+.no-js .rootlayer .tuber{ opacity:1; transform:none }
+
+/* the depth ruler, desktop only */
+.ruler{
+  position:absolute; left:-72px; top:56px; bottom:8px; width:48px; display:none;
+  flex-direction:column; justify-content:space-between; align-items:flex-end;
+  font-size:.68rem; font-weight:800; letter-spacing:.1em; color:var(--soil-muted); opacity:.75;
+  border-right:1px dashed var(--soil-line); padding-right:10px;
+}
+.ruler span{ position:relative; line-height:1 }
+.ruler span::after{ content:""; position:absolute; right:-14px; top:50%; width:8px; height:1px; background:var(--soil-muted) }
+
+.row{
+  position:relative; z-index:2;
+  display:grid; grid-template-columns:1fr 150px 1fr; align-items:start; margin:0;
+}
+.row + .row{ margin-top:-56px }
+.row .card{ grid-column:1 }
+.row.right .card{ grid-column:3 }
+
+.card{
+  --k:clamp(0, calc((var(--p) - var(--reach, 0)) * 16 + 1), 1);
+  --lift:0px;
+  display:block; position:relative; background:var(--card); color:var(--ink);
+  border:1px solid var(--line); border-radius:20px; padding:20px 24px 22px;
+  box-shadow:var(--shadow);
+  opacity:var(--k);
+  transform:translateY(calc((1 - var(--k)) * 16px - var(--lift)));
+  transition:box-shadow .2s, border-color .2s;
+}
+.no-js .card{ opacity:1; transform:none }
+.card:hover{ --lift:3px; border-color:color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow:0 24px 40px -22px rgba(0,0,0,.6) }
+.card-top{ display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:.76rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--muted) }
+.card-top .status{ margin-left:auto; display:inline-flex; align-items:center; gap:6px; color:var(--sprout-deep) }
+[data-theme="dark"] .card-top .status, .dark .card-top .status{ color:#5FD06F }
+.card-top .status::before{ content:""; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 0 3px rgba(57,181,74,.18) }
+.card h3{
+  display:flex; align-items:baseline; gap:8px;
+  font-size:1.5rem; font-weight:900; letter-spacing:-.02em; line-height:1.15; color:var(--accent);
+}
+[data-theme="dark"] .card h3, .dark .card h3{ color:var(--accent-dark, var(--accent)) }
+.card h3 svg{ width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; opacity:.55; transition:transform .2s, opacity .2s; align-self:center }
+.card:hover h3 svg{ opacity:1; transform:translate(2px,-2px) }
+.card p{ margin-top:8px; font-size:.98rem; color:var(--muted); text-wrap:pretty }
+.card em{ font-style:italic }
+
+.seeds{ margin-top:64px; text-align:center }
+.seeds .eyebrow{ color:var(--sprout); margin-bottom:8px }
+.seeds h3{ font-size:1.35rem; font-weight:900; letter-spacing:-.02em; color:var(--sand); margin-bottom:4px }
+.seeds p{ color:var(--soil-muted); font-size:.98rem; margin-bottom:20px }
+.seed-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center }
+.seed{
+  display:inline-flex; align-items:center; gap:9px; font-size:.9rem; font-weight:800;
+  padding:9px 16px 9px 13px; border-radius:999px; border:1.5px dashed var(--soil-line); color:var(--soil-ink);
+}
+.seed::before{ content:""; width:7px; height:11px; border-radius:50%; background:var(--sand); transform:rotate(-24deg); opacity:.9 }
+
+/* ─────────────────────────────────────────────────────────── bedrock ── */
+.bedrock{
+  position:relative; background:var(--soil-4); color:var(--soil-ink); padding:72px 0 56px;
+  scroll-margin-top:72px;
+}
+.bedrock::before{
+  content:""; position:absolute; left:0; right:0; top:0; height:1px;
+  background:linear-gradient(90deg, transparent, var(--soil-line) 20%, var(--soil-line) 80%, transparent);
+}
+.bedrock-head{ text-align:center; margin-bottom:44px }
+.bedrock-head .eyebrow{ color:var(--tan); margin-bottom:10px }
+.bedrock-head h2{ font-size:clamp(1.7rem, 3.6vw, 2.2rem); font-weight:900; letter-spacing:-.025em; color:var(--sand) }
+.pillars{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:28px }
+.pillar{ padding:0 4px }
+.pillar .num{ display:block; font-size:.78rem; font-weight:800; letter-spacing:.14em; color:var(--tan); margin-bottom:12px }
+.pillar h3{ font-size:1.22rem; font-weight:900; letter-spacing:-.015em; color:var(--sand); margin-bottom:8px }
+.pillar p{ color:var(--soil-muted); font-size:.98rem; text-wrap:pretty }
+
+/* ────────────────────────────────────────────────────────────── foot ── */
+.foot{ background:var(--soil-4); color:var(--soil-muted); padding:12px 0 56px }
+.foot .wrap{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; font-size:.94rem; border-top:1px solid var(--soil-line); padding-top:32px }
+.foot img{ width:40px; height:40px; object-fit:contain }
+.foot strong{ display:block; color:var(--soil-ink); font-weight:900 }
+.foot small{ display:block; font-size:.86rem }
+.foot .sp{ flex:1 }
+.foot-links{ display:flex; gap:6px 20px; flex-wrap:wrap }
+.foot a{ color:var(--sand); font-weight:800 }
+.foot a:hover{ text-decoration:underline; text-underline-offset:3px }
+
+/* ─────────────────────────────────────────────────────── responsive ── */
+@container (min-width: 1200px){
+  .ruler{ display:flex }
+}
+@container (max-width: 760px){
+  .hero{ padding:112px 20px 128px }
+  .lede{ font-size:1.08rem }
+  .horizon svg{ height:96px }
+  .row{ grid-template-columns:52px 1fr }
+  .row + .row{ margin-top:14px }
+  .row .card, .row.right .card{ grid-column:2 }
+  .card{ padding:18px 20px 20px; border-radius:18px }
+  .card h3{ font-size:1.35rem }
+  .pillars{ grid-template-columns:1fr; gap:30px }
+  .bedrock{ padding:56px 0 64px }
+  .foot .wrap{ flex-direction:column; align-items:flex-start; gap:18px }
+  .foot .sp{ display:none }
+  .foot-links a[href^="mailto"]{ flex-basis:100% }
+}
+@container (max-width: 560px){
+  .bar{ padding:10px 10px }
+  .bar-in{ height:52px }
+  .brand-name{ display:none }
+  .bar-links a{ padding:0 11px; font-size:.9rem }
+}
+@media (max-width: 560px){
+  .bar{ padding:10px 10px }
+  .bar-in{ height:52px }
+  .brand-name{ display:none }
+  .bar-links a{ padding:0 11px; font-size:.9rem }
+}
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important }
+  html{ --p:1 }
+  .card{ opacity:1; transform:none }
+  .rootlayer .trunk, .rootlayer .branch{ stroke-dashoffset:0 }
+  .rootlayer .tuber{ opacity:1; transform:none }
+}
+</style>
 </head>
+
 <body>
-    <div class="container">
-        <section class="profile">
-            <div class="logo-container">
-                <img src="/atpotato-normal.png" alt="atpotato logo" class="logo">
-            </div>
-            <h1>atpotato</h1>
-            <p class="subtitle">https://atpota.to</p>
-            <p class="tagline">creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem</p>
-            <div class="buttons">
-                <a href="https://bsky.app/profile/atpota.to" class="button" target="_blank">bluesky</a>
-                <a href="https://tangled.sh/@atpota.to" class="button" target="_blank">tangled</a>
-                <a href="https://github.com/atpota-to" class="button" target="_blank">github</a>
-            </div>
-            <p class="email">contact@atpota.to</p>
-        </section>
-        <section class="projects">
-            <div class="project-list">
-                <a href="https://anisota.net" class="project-link" target="_blank">anisota.net</a>
-                <a href="https://aturi.to" class="project-link" target="_blank">aturi.to</a>
-                <a href="https://flushes.app" class="project-link" target="_blank">flushes.app</a>
-                <a href="/guides/bluesky-for-brands" class="project-link">How to use Bluesky to grow your brand</a>
-                <p class="coming-soon">...more coming soon</p>
-            </div>
-        </section>
+<a class="skip" href="#projects">Skip to the projects</a>
+
+<nav class="bar" aria-label="Primary">
+  <div class="bar-in">
+    <a class="brand" href="/" aria-label="atpotato home">
+      <img src="/atpotato-mascot.svg" alt="" width="34" height="34">
+      <span class="brand-name">atpotato</span>
+    </a>
+    <div class="bar-links">
+      <a href="#projects">Projects</a>
+      <a href="#ethos">Ethos</a>
+      <a href="/guides/bluesky-for-brands">Guides</a>
+    </div>
+    <button class="tt" id="tt" type="button" aria-label="Switch between light and dark">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <g class="sun"><circle cx="12" cy="12" r="4.2"/>
+          <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M5.3 18.7 7 17M17 7l1.7-1.7"/></g>
+        <g class="moon"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a7.6 7.6 0 1 0 10.1 10.1Z"/></g>
+      </svg>
+    </button>
+  </div>
+</nav>
+
+<div class="page">
+
+<header class="sky">
+  <div class="clouds" aria-hidden="true">
+    <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i><i class="cloud c4"></i>
+  </div>
+
+  <div class="hero">
+    <button class="mascot-btn" id="mascot" type="button" aria-label="Poke the potato">
+      <img class="mascot" src="/atpotato-normal.png" alt="" width="505" height="408">
+    </button>
+    <span class="kicker eyebrow">Everything good grows underground</span>
+    <h1>atpotato</h1>
+    <p class="lede">A creative studio growing fun apps, helpful tools, and approachable writing for the atproto and Bluesky ecosystem.</p>
+    <div class="actions">
+      <a class="btn primary" href="#projects">Dig in
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></a>
+      <a class="btn" href="/guides/bluesky-for-brands">Read the guide</a>
+    </div>
+  </div>
+
+  <div class="horizon" aria-hidden="true">
+    <svg viewBox="0 0 1440 116" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <g id="tuft">
+          <path d="M0 0C-1.5-6-5-11-10-15"/>
+          <path d="M0 0C.5-7 0-13-1-19"/>
+          <path d="M0 0C2.5-6 6-10 10-14"/>
+        </g>
+      </defs>
+      <path class="soil" d="M0 70Q90 52 180 70T360 70T540 70T720 70T900 70T1080 70T1260 70T1440 70V116H0Z"/>
+      <use class="tuft" href="#tuft" x="96" y="63" transform="translate(96 63) scale(.9) translate(-96 -63)"/>
+      <use class="tuft lt" href="#tuft" x="184" y="72"/>
+      <use class="tuft" href="#tuft" x="452" y="63" transform="translate(452 63) scale(1.15) translate(-452 -63)"/>
+      <use class="tuft lt" href="#tuft" x="546" y="72" transform="translate(546 72) scale(.85) translate(-546 -72)"/>
+      <use class="tuft" href="#tuft" x="628" y="63"/>
+      <use class="tuft lt" href="#tuft" x="722" y="72" transform="translate(722 72) scale(1.1) translate(-722 -72)"/>
+      <use class="tuft" href="#tuft" x="812" y="63" transform="translate(812 63) scale(.8) translate(-812 -63)"/>
+      <use class="tuft lt" href="#tuft" x="904" y="72"/>
+      <use class="tuft" href="#tuft" x="1172" y="63" transform="translate(1172 63) scale(1.05) translate(-1172 -63)"/>
+      <use class="tuft lt" href="#tuft" x="1262" y="72" transform="translate(1262 72) scale(.9) translate(-1262 -72)"/>
+      <use class="tuft" href="#tuft" x="1352" y="63"/>
+    </svg>
+  </div>
+</header>
+
+<main class="ground" id="projects">
+  <div class="wrap">
+    <div class="ground-head">
+      <span class="eyebrow">Below the surface</span>
+      <h2>The root system</h2>
+      <p>Four apps and a guide, all growing off the same taproot: atproto.</p>
     </div>
 
-    <div class="button-backdrop"></div>
-    <a href="/" class="home-button">
-        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
-    </a>
+    <div class="roots" id="roots">
+      <div class="ruler" aria-hidden="true">
+        <span>0 cm</span><span>20</span><span>40</span><span>60</span><span>80</span><span>1 m</span>
+      </div>
+      <svg class="rootlayer" id="rootlayer" aria-hidden="true" focusable="false"></svg>
+
+      <div class="row" style="--accent:#2A72D4; --accent-dark:#7DB1FF">
+        <a class="card" href="https://cred.blue">
+          <div class="card-top"><span>App · flagship</span><span class="status">Live</span></div>
+          <h3>cred.blue <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></h3>
+          <p>Generate a Bluesky credibility score, map your AT&nbsp;Protocol data footprint, and vibe-check strangers and new accounts.</p>
+        </a>
+      </div>
+
+      <div class="row right" style="--accent:#7A5CC4; --accent-dark:#B79AEC">
+        <a class="card" href="https://anisota.net">
+          <div class="card-top"><span>App · client &amp; game</span><span class="status">Live</span></div>
+          <h3>anisota.net <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></h3>
+          <p>A finite deck of post cards instead of an endless feed. Stamina, card rarity, collectable decks: a calmer way to read Bluesky.</p>
+        </a>
+      </div>
+
+      <div class="row" style="--accent:#188C7E; --accent-dark:#46C9B6">
+        <a class="card" href="https://aturi.to">
+          <div class="card-top"><span>App · utility</span><span class="status">Live</span></div>
+          <h3>aturi.to <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></h3>
+          <p>Universal links for the ATmosphere. One URL for any record, opening in whichever app the reader already uses.</p>
+        </a>
+      </div>
+
+      <div class="row right" style="--accent:#2380A6; --accent-dark:#6CC6E6">
+        <a class="card" href="https://flushes.app">
+          <div class="card-top"><span>App · lexicon demo</span><span class="status">Live</span></div>
+          <h3>flushes.app <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></h3>
+          <p>The decentralised toilet network. A very silly app with a very real custom lexicon, and proof that atproto is for more than microblogging.</p>
+        </a>
+      </div>
+
+      <div class="row" style="--accent:#8A6D3C; --accent-dark:#D4B47C">
+        <a class="card" href="/guides/bluesky-for-brands">
+          <div class="card-top"><span>Guide · 40 min read</span></div>
+          <h3>Bluesky for brands <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></h3>
+          <p>Long-form, jargon-free writing for people arriving in the ecosystem. Start here if you are setting up an account for a brand, a project or a team.</p>
+        </a>
+      </div>
+    </div>
+
+    <section class="seeds" aria-labelledby="seeds-h">
+      <span class="eyebrow">Not yet sprouted</span>
+      <h3 id="seeds-h">Seeds in the ground</h3>
+      <p>Prototyped in the open. No promises, but you can read the commits.</p>
+      <ul class="seed-row">
+        <li class="seed">anisota cocoon</li>
+        <li class="seed">mothing</li>
+        <li class="seed">habit tracker</li>
+        <li class="seed">types</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<section class="bedrock" id="ethos" aria-labelledby="ethos-h">
+  <div class="wrap">
+    <div class="bedrock-head">
+      <span class="eyebrow">Bedrock</span>
+      <h2 id="ethos-h">What everything here grows on</h2>
+    </div>
+    <div class="pillars">
+      <div class="pillar">
+        <span class="num">01</span>
+        <h3>Cultivating knowledge</h3>
+        <p>Plain-language guides for people arriving in the ecosystem, starting from the basics and skipping the jargon.</p>
+      </div>
+      <div class="pillar">
+        <span class="num">02</span>
+        <h3>Equipping individuals</h3>
+        <p>Small, focused apps and utilities that give people a little more say over their own data, feeds and identity.</p>
+      </div>
+      <div class="pillar">
+        <span class="num">03</span>
+        <h3>Growing community</h3>
+        <p>Built in the open, on a protocol anyone can build on, alongside the people who use it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap">
+    <img src="/atpotato-mascot.svg" alt="" width="40" height="40">
+    <div>
+      <strong>atpotato</strong>
+      <small>cultivating knowledge, equipping individuals, growing community.</small>
+    </div>
+    <span class="sp"></span>
+    <nav class="foot-links" aria-label="atpotato elsewhere">
+      <a href="https://bsky.app/profile/atpota.to">bluesky</a>
+      <a href="https://tangled.sh/@atpota.to">tangled</a>
+      <a href="https://github.com/atpota-to">github</a>
+      <a href="mailto:contact@atpota.to">contact@atpota.to</a>
+    </nav>
+  </div>
+</footer>
+
+</div><!-- /.page -->
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+
+  /* theme */
+  document.getElementById('tt').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (e) {}
+  });
+
+  /* the potato has moods */
+  var faces = ['/atpotato-kawaii.png', '/atpotato-waow.png', '/atpotato-scawy.png', '/atpotato-dead.png'];
+  var NORMAL = '/atpotato-normal.png';
+  var btn = document.getElementById('mascot'), img = btn.querySelector('img'), last = -1, back;
+  faces.forEach(function (s) { var i = new Image(); i.src = s; });
+  function pick() {
+    var i = Math.floor(Math.random() * (faces.length - 1));
+    if (i >= last) i += 1;
+    last = i; return faces[i];
+  }
+  function poke() {
+    img.src = pick(); clearTimeout(back);
+    back = setTimeout(function () { img.src = NORMAL; }, 1400);
+  }
+  btn.addEventListener('click', poke);
+  btn.addEventListener('mouseenter', function () { img.src = pick(); clearTimeout(back); });
+  btn.addEventListener('mouseleave', function () { clearTimeout(back); img.src = NORMAL; });
+
+  /* the root system */
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = document.getElementById('rootlayer');
+  var roots = document.getElementById('roots');
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  var f = function (v) { return Math.round(v * 10) / 10; };
+  var f4 = function (v) { return Math.round(v * 10000) / 10000; };
+  // a small potato, drawn around its own centre
+  var TUBER = 'M-12-4C-13-10-6-15 1-14 8-13 13-8 13-2 13 5 8 12 0 13-7 14-12 9-13 3-13 1-12-2-12-4Z';
+
+  function el(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  /* One trunk down the page and one branch out to each card. Branches are
+     built from the cards' measured positions, so they meet the card exactly
+     at any width and any content height. */
+  function build() {
+    var W = roots.clientWidth, H = roots.clientHeight;
+    var narrow = W < 700;
+    var spine = narrow ? 26 : W / 2;
+    var box = roots.getBoundingClientRect();
+
+    var anchors = [].map.call(roots.querySelectorAll('.row'), function (row) {
+      var c = row.querySelector('.card').getBoundingClientRect();
+      var toRight = narrow ? true : row.classList.contains('right');
+      return {
+        row: row,
+        x: toRight ? c.left - box.left : c.right - box.left,
+        y: c.top - box.top + Math.min(c.height / 2, 78),
+        dir: toRight ? 1 : -1
+      };
+    });
+
+    svg.textContent = '';
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    // no viewBox on purpose: 1 user unit is 1 CSS pixel at every viewport
+
+    var bottom = Math.max(1, H - 28);
+    var trunk = el('path', {
+      'class': 'trunk',
+      d: 'M' + f(spine) + ' 0' +
+         ' C' + f(spine + 9) + ' ' + f(H * 0.3) +
+         ' ' + f(spine - 9) + ' ' + f(H * 0.68) +
+         ' ' + f(spine) + ' ' + f(bottom),
+      pathLength: 1, style: '--s:0;--e:1'
+    });
+    svg.appendChild(trunk);
+
+    var TL = trunk.getTotalLength();
+    function onTrunk(y) {
+      var lo = 0, hi = TL, mid, pt;
+      for (var i = 0; i < 22; i++) {
+        mid = (lo + hi) / 2;
+        pt = trunk.getPointAtLength(mid);
+        if (pt.y < y) lo = mid; else hi = mid;
+      }
+      mid = (lo + hi) / 2;
+      pt = trunk.getPointAtLength(mid);
+      return { x: pt.x, y: pt.y, frac: mid / TL };
+    }
+
+    // a branch takes about one screen of scrolling to draw, whatever the
+    // section's height
+    var win = Math.max(0.05, Math.min(0.16, 170 / H));
+
+    anchors.forEach(function (a) {
+      var from = onTrunk(Math.max(0, a.y - 30));
+      var dx = a.x - from.x, dy = a.y - from.y;
+      var s = f4(from.frac), e = f4(Math.min(1, from.frac + win));
+      var limb = el('g', { 'class': 'limb', style: '--s:' + s + ';--e:' + e });
+      limb.appendChild(el('path', {
+        'class': 'branch', pathLength: 1,
+        d: 'M' + f(from.x) + ' ' + f(from.y) +
+           ' C' + f(from.x + dx * 0.32) + ' ' + f(from.y + dy * 0.15) +
+           ' ' + f(from.x + dx * 0.58) + ' ' + f(a.y) +
+           ' ' + f(a.x - a.dir * 8) + ' ' + f(a.y)
+      }));
+      // the tuber sits at the end of the branch, half over the card's edge
+      var pos = el('g', { transform: 'translate(' + f(a.x) + ' ' + f(a.y) + ') rotate(' + (a.dir > 0 ? -18 : 18) + ')' });
+      var tuber = el('g', { 'class': 'tuber' });
+      tuber.appendChild(el('path', { d: TUBER }));
+      tuber.appendChild(el('circle', { cx: -4, cy: -3, r: 1.5 }));
+      tuber.appendChild(el('circle', { cx: 4, cy: 2, r: 1.5 }));
+      tuber.appendChild(el('circle', { cx: -2, cy: 6, r: 1.2 }));
+      pos.appendChild(tuber);
+      limb.appendChild(pos);
+      svg.appendChild(limb);
+      // the card surfaces as its branch arrives
+      a.row.style.setProperty('--reach', e);
+    });
+  }
+
+  /* one rAF-gated scroll listener, writing one custom property */
+  var ticking = false, geom = { top: 0, h: 1 };
+  function measure() {
+    geom.top = roots.getBoundingClientRect().top + window.scrollY;
+    geom.h = roots.offsetHeight || 1;
+  }
+  var bar = document.querySelector('.bar'), sky = document.querySelector('.sky');
+  function frame() {
+    ticking = false;
+    bar.classList.toggle('under', window.scrollY > sky.offsetHeight - 96);
+    if (reduce.matches) return;
+    var p = (window.scrollY + window.innerHeight * 0.78 - geom.top) / geom.h;
+    root.style.setProperty('--p', Math.round(Math.max(0, Math.min(1, p)) * 1000) / 1000);
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(frame); } }
+  function layout() { build(); measure(); frame(); }
+
+  function boot() {
+    layout();
+    addEventListener('scroll', onScroll, { passive: true });
+    var t;
+    function relayout() { clearTimeout(t); t = setTimeout(layout, 120); }
+    addEventListener('resize', relayout);
+    if ('ResizeObserver' in window) new ResizeObserver(relayout).observe(roots);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  }
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
 </body>
 </html>
