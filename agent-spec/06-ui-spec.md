@@ -1,5 +1,12 @@
 # 06. The on-page surface
 
+> **Deferred.** The Bluesky account in [`09-bluesky-channel.md`](09-bluesky-channel.md)
+> is the product and ships first. Nothing in the build plan depends on this
+> document. It stays in the package because it is still the right design, and
+> because by the time you build it the agent will have months of real questions
+> behind it, which beats guessing at what a panel should do.
+
+
 ## Placement
 
 The site already has a floating potato: `.home-button` in the bottom corner,

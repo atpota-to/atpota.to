@@ -2,9 +2,12 @@
 
 ## The one-sentence version
 
-A potato that lives in the corner of atpota.to and in Bluesky replies, knows how
-to read anything in the Atmosphere, and answers "what even is this" without
-making you feel stupid.
+A potato with a Bluesky account that knows how to read anything in the
+Atmosphere and answers "what even is this" without making you feel stupid. You
+@ mention it, it replies in thread, short, with somewhere to read more.
+
+Later, the same agent behind a panel on atpota.to. That is a second project, not
+a second half of this one.
 
 ## Why this, why now
 
@@ -53,15 +56,18 @@ treatment.
    much harsher set of rules about when to stay quiet. See
    [`09-bluesky-channel.md`](09-bluesky-channel.md).
 
-## Two surfaces, one agent
+## Two surfaces, one agent, one at a time
 
-The website panel is a private conversation with one visitor who chose to open
-it. Bluesky is public, adversarial, permanent, and rate-limited by someone
-else's server. Same tools and same voice, different rules about length, about
-when to speak, and about how much to trust the input.
+Bluesky is public, adversarial, permanent, and rate-limited by someone else's
+server. The website panel is a private conversation with one visitor who chose
+to open it. Same tools and same voice; different rules about length, about when
+to speak, and about how much to trust the input.
 
-Only the surface-specific rules differ, and they live in channel-scoped
-instructions rather than in the main prompt.
+Bluesky is the harder of the two and it ships first, which is the right order:
+an agent that behaves well in public will behave well in a panel, and the
+reverse does not hold. The surface-specific rules live in channel-scoped
+instructions rather than in the main prompt, so adding the panel later changes
+nothing about how the account behaves.
 
 ## Explicit non-goals for v1
 

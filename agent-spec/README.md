@@ -6,6 +6,12 @@ and points people at the right client, built on [eve](https://eve.dev) and
 deployed to Vercel, reading the Atmosphere through the
 [Aturi MCP server](https://aturi.to/mcp).
 
+**The Bluesky account is the product.** People @ mention it or reply to it and
+get a short, useful answer with somewhere to read more. Start at
+[`07-build-plan.md`](07-build-plan.md), which is ordered for that build. The
+website panel in [`06-ui-spec.md`](06-ui-spec.md) is a separate project for
+later and nothing depends on it.
+
 Nothing here is code yet. These are the documents you hand to a builder (human or
 coding agent) so the thing that gets built is the thing you wanted.
 
@@ -19,8 +25,8 @@ coding agent) so the thing that gets built is the thing you wanted.
 | [`04-aturi-connection.md`](04-aturi-connection.md) | The eve MCP connection, the 38-tool inventory, and the intent-to-tool routing policy |
 | [`05-skills.md`](05-skills.md) | Which skills exist and why, plus the loading contract |
 | [`skills/`](skills/) | Drop-in `SKILL.md` bodies |
-| [`06-ui-spec.md`](06-ui-spec.md) | The on-page surface: where the potato sits, when it speaks, how you shut it up |
-| [`07-build-plan.md`](07-build-plan.md) | eve project layout, milestones, deploy path, open questions |
+| [`06-ui-spec.md`](06-ui-spec.md) | Deferred. The on-page surface: where the potato sits, when it speaks, how you shut it up |
+| [`07-build-plan.md`](07-build-plan.md) | **Start here to build.** Blocking decisions, seven phases, the droplet's components, and what to verify first |
 | [`08-evals.md`](08-evals.md) | Scored prompts, including the ones it should refuse or hedge on |
 | [`09-bluesky-channel.md`](09-bluesky-channel.md) | The Bluesky account: Jetstream detection, the gate layer, thread-to-session mapping, and the posting path |
 | [`10-memory.md`](10-memory.md) | What it remembers about whom, how the scope is keyed, and how forgetting works |
