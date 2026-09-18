@@ -90,7 +90,11 @@ Match on the facet DID, never on the string `@atpota.to` in the text. Facets are
 what the posting client actually resolved, text is just text, and the two can
 disagree either by accident or on purpose.
 
-**Reply:** `record.reply.parent.uri` begins with `at://<atpotato-did>/`.
+**Reply:** `record.reply.parent.uri` is a post the service itself wrote.
+
+Not "any post from atpotato's DID". The account is `@atpota.to` itself, shared
+with human posting, so a reply to an announcement is a conversation the bot is
+not in. `mentions/SPEC.md` has the reasoning.
 
 **Quote posts** embed atpotato's post at `embed.record.record.uri`. My
 recommendation for v1 is not to answer these. Quoting is often commentary about

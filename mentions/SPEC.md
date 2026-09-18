@@ -206,11 +206,50 @@ Match on the facet DID. **Never** match on the literal string `@atpota.to` in
 the text. Facets are what the posting client actually resolved; text is just
 text, and the two can disagree by accident or on purpose.
 
-**Reply:** `record.reply.parent.uri` starts with `at://<atpotato-did>/`.
+**Reply:** `record.reply.parent.uri` is a post **the service itself created**.
+
+That is narrower than "any post from atpotato's DID", and the difference is the
+whole ballgame on a shared account. See below.
 
 **Quote posts** embed our post at `embed.record.record.uri`. Do not answer
 these in v1. Quoting is usually commentary about you rather than a question to
 you, and replying reads as barging in.
+
+### Running on a shared human and bot account
+
+atpotato replies from `@atpota.to` itself (`did:plc:qntsxa2i4sb24noi45fx4np2`),
+not from a dedicated bot account. That is a deliberate product decision and it
+changes one thing structurally.
+
+On a dedicated account, "someone replied to me" and "someone is talking to the
+bot" are the same statement. On a shared account they are not. `@atpota.to` is a
+project account with 841 followers that posts announcements and reposts its
+sibling projects. People reply to those announcements to say nice things about
+them, not to ask a potato about lexicons.
+
+So **the reply trigger must be "a reply to a post the bot wrote", not "a reply
+to a post from this DID".** The service already records every reply it posts, so
+this is a table lookup rather than a heuristic:
+
+- A reply to a bot reply is a follow-up question. Answer it.
+- A reply to a human-authored post from the same account is a conversation the
+  bot is not in. Ignore it, always.
+- Before the bot has ever posted, no reply can match. That is correct: the only
+  way in is a mention.
+
+Reposts create no trigger. A reply to a reposted post carries the original
+author's DID in `parent.uri`, not atpotato's.
+
+That leaves **mentions as the main entry point, which puts the whole weight on
+the substance gate.** A project account gets mentioned conversationally all the
+time: by its own sibling accounts, by people recommending it, by people thanking
+it. None of those are questions. If you tune only one number during milestone 1,
+tune this one.
+
+If the false-positive rate stays uncomfortable after tuning, the next lever is
+an explicit wake phrase in the mention text rather than a cleverer heuristic.
+Requiring people to actually address the potato is a smaller cost than replying
+to someone who did not.
 
 ### The safety net
 
@@ -310,8 +349,8 @@ Environment, never committed:
 
 | Variable | What |
 | --- | --- |
-| `ATPOTATO_DID` | The bot's DID. Resolve once, hard-code, do not resolve at runtime |
-| `ATPOTATO_HANDLE` | For logging and for building links |
+| `ATPOTATO_DID` | `did:plc:qntsxa2i4sb24noi45fx4np2`. The main `@atpota.to` account, shared with its human posting. Hard-code it, do not resolve at runtime |
+| `ATPOTATO_HANDLE` | `atpota.to`. For logging and links only, never for matching |
 | `PDS_URL` | `https://pds.atpota.to` |
 | `ATPROTO_APP_PASSWORD` | The posting credential. Only this service ever holds it |
 | `AGENT_URL` | The deployed eve agent's base URL |
@@ -355,7 +394,11 @@ These are the ones that will actually save you:
 
 - A post mentioning atpotato by facet DID matches. A post containing the literal
   text `@atpota.to` with no mention facet does not.
-- A reply whose `parent.uri` is one of atpotato's posts matches.
+- A reply whose `parent.uri` is a post **the bot wrote** matches.
+- A reply whose `parent.uri` is a **human-authored** post from the same DID does
+  not match. This is the one that protects the brand account, so test it with a
+  real announcement post's URI.
+- A reply to a post atpotato **reposted** does not match.
 - The same event delivered twice produces one reply.
 - A thread already containing 3 atpotato posts produces none.
 - A post from atpotato's own DID produces none, under every code path.
