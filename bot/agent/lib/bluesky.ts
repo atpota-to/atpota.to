@@ -57,15 +57,44 @@ export function buildPrompt(event: MentionEvent): string {
   ].join("\n");
 }
 
+/** URLs as they appear inside a JSON-serialized tool result. */
+const URL_PATTERN = /https?:\/\/[^\s"'\\<>)\]}]+/g;
+
+/** Trailing punctuation that is prose, not part of the URL. */
+const TRAILING = /[.,;:!?]+$/;
+
+/**
+ * Pull every URL a tool actually returned out of one `action.result` event.
+ *
+ * This is what lets the droplet enforce "every link in the draft came back
+ * from a tool" rather than falling back to a host allowlist, which cannot
+ * catch an invented path on a real domain.
+ */
+export function linksFromToolResult(event: unknown): string[] {
+  const found = new Set<string>();
+  for (const match of JSON.stringify(event ?? null).matchAll(URL_PATTERN)) {
+    const url = match[0].replace(TRAILING, "");
+    if (url.length > 8) found.add(url);
+  }
+  return [...found];
+}
+
+/** Keeps one enormous tool result from unbounding durable channel state. */
+export const MAX_TRACKED_LINKS = 200;
+
 /**
  * Hand a finished draft back to the droplet, which decides whether it becomes
  * a record. `key` is an idempotency key: channel event handlers are
  * at-least-once, so this can fire twice for one turn.
+ *
+ * `links` is every URL this turn's tool results contained. The droplet rejects
+ * any draft containing a link that is not in it.
  */
 export async function postDraftToDroplet(draft: {
   key: string;
   threadRoot: string;
   text: string;
+  links: string[];
 }): Promise<void> {
   const url = process.env.DROPLET_CALLBACK_URL;
   const secret = process.env.DROPLET_SHARED_SECRET;

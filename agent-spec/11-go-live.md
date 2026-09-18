@@ -137,6 +137,22 @@ Its milestone 1 is detect-only and its cost is days of waiting, so **start it as
 early as you can**, in parallel with steps 1 and 2. It does not need the agent
 to exist.
 
+**Status as of 2026-09-18:** built and running at stage 1 on the droplet under
+systemd, consuming the firehose at roughly 46 posts/s. What that build fed back
+is already folded into the spec: use `us-west`, since `us-east` returns 503;
+v2's wire format and cursor semantics differ from v1 in ways that fail silently;
+a failed upgrade fires `error` and not `close`; and the substance gate needs a
+much higher length floor than it looks like it needs.
+
+Two things to settle before its stage 3, when the two halves first talk:
+
+- **Diff the contract against the code.** The service implemented it from the
+  brief without the agent repository on hand. `bot/agent/lib/bluesky.ts` is
+  authoritative, and the callback now carries `links`.
+- **Set `ATPROTO_APP_PASSWORD` on the droplet.** Without it the notification
+  sweep disables itself and Jetstream becomes the only detection path, which
+  gives up the safety net exactly where it matters.
+
 ## 6. Shadow
 
 Wire the two together with the poster disabled. Matches go to the agent, drafts

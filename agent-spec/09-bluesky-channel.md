@@ -141,7 +141,7 @@ After the model returns a draft, before `createRecord`:
 | --- | --- |
 | Length | 300 graphemes and 3000 bytes, confirmed from the live `app.bsky.feed.post` lexicon. Count graphemes, not `String.length`. Over limit is a hard reject, not a truncation |
 | Mentions | Reject any draft containing a mention facet for anyone other than the account being replied to. This is the anti-mass-tagging gate and it closes the ugliest injection outcome |
-| Links | At most two, and every link must appear in a tool result from that turn. A link the model composed is a link that can be wrong |
+| Links | At most two, and every link must appear in the `links` array the channel sends with the draft. A host allowlist is not good enough: it passes an invented path on a real domain |
 | Duplicates | Reject a draft byte-identical to the last reply sent to the same account |
 | Empty | Reject empty or whitespace drafts rather than posting a blank record |
 | Kill switch | A flag file or env var that makes the poster drop everything while the consumer keeps running. Being able to go quiet in ten seconds without redeploying is worth building on day one |
@@ -174,55 +174,31 @@ message interrupts the running turn. That is right for a chat box and wrong here
 two people replying in the same thread at once should get two answers, not one
 merged one.
 
-Sketch, with the parts that were checked marked as such. Verified against the
-eve **0.58.1** docs installed at `bot/node_modules/eve/docs/`:
+**This is implemented.** The channel lives at
+[`../bot/agent/channels/bluesky.ts`](../bot/agent/channels/bluesky.ts) and its
+helpers at [`../bot/agent/lib/bluesky.ts`](../bot/agent/lib/bluesky.ts). That
+code is the source of truth for the shape; this document explains why it is
+shaped that way. An earlier version of this section carried a sketch, which
+drifted from the code within a day.
 
-```ts title="agent/channels/bluesky.ts"
-import { defineChannel, POST } from "eve/channels";
+What it does, in order: verifies the droplet's shared secret with a timing-safe
+compare before anything else, validates the payload with zod, addresses the
+session by thread root, clears per-turn state at `turn.started`, accumulates
+every URL its tools return from `action.result`, keeps the last non-empty
+assistant text block, and hands the draft plus those links to the droplet once
+at `turn.completed`.
 
-export default defineChannel({
-  turnPolicy: "queue",
+It is written against eve **0.58.1**. Four things in the original sketch were
+wrong and were caught by the compiler rather than by reading the docs:
 
-  // Accumulate assistant text as it finalizes, then send once per turn.
-  state: { draft: "" },
-
-  routes: [
-    POST("/bluesky/mention", async (request, { from, waitUntil }) => {
-      // Verify the shared secret before anything else.
-      const event = await request.json();
-      waitUntil(
-        from(event.threadRoot).send(buildPrompt(event), {
-          // The DID comes off the signed record, never out of post text.
-          // It is what the memory slot in 10-memory.md scopes on.
-          auth: {
-            authenticator: "atpotato-droplet",
-            principalType: "user",
-            principalId: event.authorDid,
-            attributes: { did: event.authorDid, handle: event.authorHandle },
-          },
-        }),
-      );
-      return new Response(null, { status: 202 });
-    }),
-  ],
-
-  events: {
-    "message.completed"(event, channel) {
-      channel.state.draft = event.message;
-    },
-    async "turn.completed"(event, channel, ctx) {
-      const draft = channel.state.draft;
-      channel.state.draft = "";
-      if (!draft) return;
-      await postDraftToDroplet({
-        key: `${ctx.session.id}:${event.turnId}`,
-        threadRoot: channel.continuation.token,
-        text: draft,
-      });
-    },
-  },
-});
-```
+- The `channel` argument in event handlers comes from a `context(state)`
+  projection, not from `state` directly. Without it `channel.state` does not
+  exist at all.
+- `channel.continuation` is optional. No address means nothing to reply to, so
+  the draft is dropped rather than guessed.
+- `message.completed`'s `message` is nullable.
+- Channel identity in a dynamic resolver is `ctx.channel.kind`, not
+  `ctx.session.channel?.id`.
 
 ### Why `turn.completed` and not `message.completed`
 
@@ -245,7 +221,7 @@ The droplet's duplicate gate covers the rest.
 
 ### What was checked, and what was not
 
-Verified in the installed 0.58.1 docs:
+Verified by compiling against the installed 0.58.1 types, not only by reading:
 
 - `defineChannel` with `POST()` routes, and `from(address).send(message, opts)`.
 - The `auth` object shape: `{ authenticator, principalType, principalId,
@@ -266,6 +242,9 @@ Still unverified, because no run has happened yet:
   handlers in a durable, replay-safe way. The alternative is reading the final
   message from the session at `turn.completed`.
 - Everything about how this behaves under a parked or replayed turn.
+- Whether `action.result` fires for connection tools with the shape the link
+  extractor expects. The extractor was checked against real Aturi payloads by
+  hand, but never against a live event.
 
 
 ## The inbound prompt envelope

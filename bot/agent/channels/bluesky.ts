@@ -1,7 +1,9 @@
 import { defineChannel, POST } from "eve/channels";
 import {
+  MAX_TRACKED_LINKS,
   MentionEvent,
   buildPrompt,
+  linksFromToolResult,
   postDraftToDroplet,
   secretMatches,
 } from "../lib/bluesky";
@@ -14,7 +16,7 @@ export default defineChannel({
 
   // Assistant text accumulates here as blocks finalize, and is sent once the
   // turn completes. See the note in agent-spec/09 on why not message.completed.
-  state: { draft: "" },
+  state: { draft: "", links: [] as string[] },
 
   // `state` seeds durable adapter state; `context` builds the `channel`
   // argument handed to event handlers. eve writes mutations made through the
@@ -54,6 +56,23 @@ export default defineChannel({
   ],
 
   events: {
+    // Clear per-turn accumulation here rather than at turn.completed, so a
+    // failed or cancelled turn cannot leak its draft or its links into the
+    // next one in the same thread.
+    "turn.started"(_event, channel) {
+      channel.state.draft = "";
+      channel.state.links = [];
+    },
+
+    // Every URL a tool returned this turn. The droplet uses it to reject a
+    // draft containing a link the model composed rather than looked up.
+    "action.result"(event, channel) {
+      if (channel.state.links.length >= MAX_TRACKED_LINKS) return;
+      const merged = new Set(channel.state.links);
+      for (const url of linksFromToolResult(event)) merged.add(url);
+      channel.state.links = [...merged].slice(0, MAX_TRACKED_LINKS);
+    },
+
     "message.completed"(event, channel) {
       // `message` is nullable, and a turn can finalize several text blocks.
       // Keeping the last non-empty one treats it as the answer and drops any
@@ -64,7 +83,7 @@ export default defineChannel({
 
     async "turn.completed"(event, channel, ctx) {
       const text = channel.state.draft.trim();
-      channel.state.draft = "";
+      const links = channel.state.links;
       if (!text) return;
 
       // The continuation token is the address the droplet sent us, which is
@@ -80,6 +99,7 @@ export default defineChannel({
         key: `${ctx.session.id}:${event.turnId}`,
         threadRoot,
         text,
+        links,
       });
     },
   },

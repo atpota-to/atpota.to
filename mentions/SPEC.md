@@ -112,11 +112,19 @@ content-type: application/json
 {
   "key":        "<sessionId>:<turnId>",
   "threadRoot": "at://...",
-  "text":       "the draft reply"
+  "text":       "the draft reply",
+  "links":      ["https://aturi.to/...", "https://bsky.network/docs/..."]
 }
 ```
 
-Three things about this:
+Four things about this:
+
+- **`links` is every URL this turn's tool results contained**, deduplicated and
+  capped at 200. It exists so the link gate can enforce the real rule rather
+  than falling back to a host allowlist, which cannot catch an invented path on
+  a real domain. Reject any draft containing a link that is not in this array.
+  It is accumulated per turn and cleared at `turn.started`, so a link looked up
+  in an earlier turn of the same thread does not authorize a later one.
 
 - **`key` is an idempotency key.** eve's channel event handlers are
   at-least-once, so the same draft can arrive twice. Enforce a unique
@@ -133,10 +141,36 @@ Three things about this:
 
 ### Jetstream
 
-Use Jetstream v2: `wss://jetstream.us-east.bsky.network`, endpoint
-`xrpc/network.bsky.jetstream.subscribeEvents`. No auth for the live tail.
-Parameters are `collections`, `dids`, `kinds`, and `cursor`. There is a
-first-party TypeScript SDK (`@bsky/jetstream`) and a Go one.
+Use Jetstream v2, endpoint `xrpc/network.bsky.jetstream.subscribeEvents`. No
+auth for the live tail. Parameters are `collections`, `dids`, `kinds`, and
+`cursor`. There is a first-party TypeScript SDK (`@bsky/jetstream`) and a Go
+one.
+
+**Default to `wss://jetstream.us-west.bsky.network`.** As of 2026-09-18
+`jetstream.us-east.bsky.network` returns 503, verified from two unrelated
+networks, so it is the host and not your droplet. Keep east configured as a
+fallback and expect to flip between them.
+
+Four things about v2 that will cost you a day each if you meet them by
+surprise:
+
+- **The v2 wire format is not v1's.** v2 is flat under `payload` carrying `seq`
+  and `time`; v1 nests under `commit` with `time_us`. Code written against one
+  matches nothing against the other, and it fails silently rather than
+  erroring, because a shape that does not match is indistinguishable from a
+  post that does not mention you.
+- **A v1-style cursor handed to v2 does not error.** It resumes somewhere
+  unrelated. Store the cursor tagged with the version that produced it.
+- **v2 answers HTTP 400 to an aged-out cursor** rather than starting from the
+  oldest retained event. After a long outage that produces a connection which
+  can never succeed until you drop the cursor. Self-heal after a few
+  consecutive failures by clearing it and accepting the gap; the notification
+  sweep covers what you lose.
+- **A failed HTTP upgrade fires `error`, not `close`.** If your reconnect logic
+  hangs off `close` alone, a dead socket never retries, silently, for the life
+  of the process. On a healthy-looking service that consumes nothing, this is
+  the first thing to check. Node's WebSocket also hides the status code, so a
+  400 and a 503 arrive as the same error string.
 
 ```
 collections=app.bsky.feed.post
@@ -145,8 +179,13 @@ kinds=commit
 
 **You cannot use the `dids` filter.** It restricts the stream to specific
 accounts, and you do not know in advance who will mention you. So you are
-filtering the entire post firehose in your own process. That is the real cost of
-this approach, and measuring it is part of milestone 1.
+filtering the entire post firehose in your own process.
+
+Measured on the droplet, 2026-09-18: **46 posts/s, roughly 45 KB/s, so 4 to 5 GB
+per day.** CPU is 1.2% of a core and memory sits in the tens of megabytes.
+Bandwidth is the real cost here, not compute. That is comfortably inside a
+DigitalOcean transfer allowance, but it is not free, and it is the number to
+weigh if you ever reconsider Jetstream against notification polling alone.
 
 Operational requirements, all documented behavior rather than paranoia:
 
@@ -203,9 +242,18 @@ because a bot without it has embarrassed someone.
 | Substance | No question mark, no identifier, no recognizable request, and short: drop it. A bare mention inside a conversation between two other people is not addressed to you |
 
 That last gate is the most consequential thing in this service. Replying to a
-mention that was not a question is exactly what makes people mute a bot. The
-fraction of mentions that are real questions is the number milestone 1 exists to
-measure; if it is low, this gate deserves most of your attention.
+mention that was not a question is exactly what makes people mute a bot.
+
+It has since been measured against 27 real posts, and the result is worth
+knowing before you tune it. A 12 character floor passed 96% of them while only
+11% contained a question: the length signal was so permissive that it made the
+conjunction a no-op. Raising the floor to 80 helps, but even with length removed
+entirely 44% still pass, because a request-word list catches ordinary prose.
+
+Two cautions on that number. The sample was a political account's replies, not
+atpotato's mentions, so treat it as structure rather than as your threshold. And
+the real threshold should come from atpotato's own traffic during milestone 1,
+which is what the sensitivity table in `npm run stats` is for.
 
 ## Outbound gates
 
@@ -215,7 +263,7 @@ After the agent returns a draft, before `createRecord`:
 | --- | --- |
 | Length | 300 graphemes and 3000 bytes. Both, confirmed from the live `app.bsky.feed.post` lexicon. Count graphemes with a proper segmenter, not `String.length`. Over limit is a hard reject, not a truncation |
 | Mentions | Reject any draft containing a mention facet for anyone other than the account being replied to. This is the anti-mass-tagging gate and it closes the ugliest injection outcome |
-| Links | At most two, and every link must have appeared in a tool result from that turn. A link the model composed is a link that can be wrong |
+| Links | At most two, and every link must appear in the callback's `links` array. A link the model composed rather than looked up is a link that can be wrong. Do not settle for a host allowlist: it passes an invented path on a real domain, which is the failure that matters |
 | Duplicates | Reject a draft byte-identical to the last reply sent to the same account |
 | Empty | Reject empty or whitespace drafts rather than posting a blank record |
 | Kill switch | A flag that makes the poster drop everything while the consumer keeps running. Being able to go quiet in ten seconds without a deploy is worth building on day one |
