@@ -64,6 +64,26 @@ Then:
 npx eve deploy
 ```
 
+### Check deployment protection before wiring the droplet
+
+This is the one that will waste an afternoon if you meet it by surprise.
+
+The `atpotato` team has SSO protection enabled on the website project for
+production URLs and all previews. If the new agent project inherits that, Vercel
+rejects the droplet's `POST /bluesky/mention` at its own auth layer, before the
+request ever reaches the agent. The droplet is an external machine with no
+Vercel session, so it cannot pass an SSO check.
+
+In the agent project's settings, under Deployment Protection, either turn
+protection off for production, or generate a Protection Bypass for Automation
+secret and have the droplet send it as `x-vercel-protection-bypass` on every
+call. The bypass is the better option: it keeps the preview URLs protected while
+letting one known caller through.
+
+Either way, verify it with the `401` check below. If you instead get a Vercel
+login page or a `401` that mentions SSO rather than your own secret, protection
+is the thing in the way, not your shared secret.
+
 ## 2. Talk to the deployed agent
 
 This is the step that has never happened. The agent has been compiled and
