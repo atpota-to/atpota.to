@@ -13,7 +13,7 @@ post, by construction rather than by configuration.
 | Decision | Choice |
 | --- | --- |
 | Which account | `@atpota.to` itself, `did:plc:qntsxa2i4sb24noi45fx4np2`, shared with human posting |
-| Where it runs | Vercel, deployed from `bot/` |
+| Where it runs | Vercel, team `atpotato`, a new project deployed from `bot/` |
 | Model | `anthropic/claude-opus-5` through the Vercel AI Gateway, so no provider key |
 | Jetstream | `wss://jetstream.us-west.bsky.network`. East returns 503 |
 
@@ -22,6 +22,20 @@ the reply trigger has to mean "a reply to something the bot wrote", never "a
 reply to anything from this DID". Otherwise every reply to an announcement post
 gets answered by a potato. `mentions/SPEC.md` has the detail; confirm it is
 implemented before stage 3.
+
+## A note on the existing website project
+
+Before you start, so a red dashboard does not distract you mid-deploy.
+
+`atpota.to` production is healthy: the last production deployment is `READY` and
+serving. But **preview builds on the `atpota-to` project fail for every branch**,
+and have since at least August, on other people's branches as well as this work.
+The same commit that failed as a preview succeeded as production, which points
+at project settings rather than at the code.
+
+None of that blocks the agent, which is a separate Vercel project. It is worth
+fixing on its own, and until it is, pushes to any branch will keep producing
+failed preview builds on that project.
 
 ## 1. Deploy the agent
 
@@ -177,6 +191,32 @@ Then wait a week. If it has been boring, raise the ceiling.
 
 **Watch:** the rejection log, replies per hour, model spend, and the gap rate
 between Jetstream and the notification sweep.
+
+### Going quiet
+
+There are two levers and they do different jobs. Reach for both.
+
+| Lever | Where | Effect | Speed |
+| --- | --- | --- | --- |
+| Kill switch | Env var or `KILL` file, re-read on every post | Stops anything reaching Bluesky | Immediate, no restart |
+| `"globalPerHour": 0` | `gates.json`, re-read on mtime change | Stops anything reaching the agent | Immediate, no restart |
+| `STAGE` | Read once at module load | Not an incident lever | Needs a restart |
+
+**The kill switch does not stop the spend.** It gates the poster; the consumer
+and the agent keep running, so a viral thread at stage 4 is still burning model
+turns while you are silent. The global rate gate is an inbound gate, so setting
+it to zero means nothing reaches the agent at all. Use both together to go quiet
+*and* stop spending.
+
+**The kill switch drops, it does not pause.** A draft caught by it is recorded
+as rejected with the gate that caught it. Clearing the switch affects the next
+reply, not the backlog. That is the right behavior, since a stale answer posted
+twenty minutes late is worse than none, but it means the switch is not a resume
+button.
+
+**`STAGE` is not the fast lever.** It is read once at module load, so changing
+it needs a restart. That is by design: the thing you reach for in an incident
+should not be the same thing that defines the pipeline.
 
 **The kill switch is the first response to anything surprising.** Go quiet, then
 diagnose. A potato that stops talking is fine; a potato that keeps talking while
