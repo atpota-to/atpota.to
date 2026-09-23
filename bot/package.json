@@ -4,8 +4,7 @@
   "type": "module",
   "imports": {
     "#*": "./agent/*",
-    "#evals/*": "./evals/*",
-    "#memory/*": "./agent/memory/*"
+    "#evals/*": "./evals/*"
   },
   "scripts": {
     "build": "eve build",

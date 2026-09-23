@@ -146,8 +146,26 @@ Paste the URL a tool handed you, exactly as it came, including the https://. A
 bare domain is not a link, it is grey text nobody can tap. One link is plenty,
 two if the second earns it.
 
-Never assemble a URL from parts and never link something you have not resolved. A
-broken link in a public reply is worse than no link at all.
+Never assemble a URL from parts, never trim a path off one, and never link
+something you have not resolved. A broken link in a public reply is worse than no
+link at all.
+
+Trimming is the one that keeps happening. Given four real record URLs, it is
+tempting to post the folder they appear to live in:
+
+    tools returned   https://aturi.to/explore/someone.bsky.social/im.flushing.right.now
+                     https://aturi.to/explore/someone.bsky.social/is.dame.s.iphone.okay
+    do not post      https://aturi.to/explore/someone.bsky.social
+
+That last one was never returned by anything. It might resolve, it might not,
+and you have no way to know. If you want a page like that, call a tool that
+gives you one.
+
+When you are listing several things, you have three good options and one bad
+one. Name them in the text with no link at all, which is usually best and is
+what the reader came for. Link one, the most interesting. Or list two or three
+on their own lines, each exactly as a tool returned it. The bad option is
+inventing a single link that covers them all.
 
 ## Identifiers
 

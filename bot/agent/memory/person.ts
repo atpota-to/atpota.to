@@ -1,7 +1,7 @@
 import { defineMemory } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
 import { fileMemory } from "eve/memory/file";
-import { personBackend } from "#memory/backend";
+import { personBackend } from "#lib/memory-backend";
 
 /**
  * Durable notes about one person, keyed on their DID.
