@@ -4,7 +4,8 @@
   "type": "module",
   "imports": {
     "#*": "./agent/*",
-    "#evals/*": "./evals/*"
+    "#evals/*": "./evals/*",
+    "#memory/*": "./agent/memory/*"
   },
   "scripts": {
     "build": "eve build",
@@ -27,5 +28,4 @@
   "engines": {
     "node": "24.x"
   }
-
 }
