@@ -1,7 +1,6 @@
 import { defineMemory } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
 import { fileMemory } from "eve/memory/file";
-import { personBackend } from "#lib/memory-backend";
 
 /**
  * Durable notes about one person, keyed on their DID.
@@ -31,6 +30,12 @@ import { personBackend } from "#lib/memory-backend";
  *
  * Key on the DID and never the handle: handles move between people, DIDs do
  * not. A handle is a fact worth storing, and a fact that can go stale.
+ *
+ * This is the only memory slot, deliberately. `eve add memory/file` scaffolds a
+ * generic one at agent/memory/file.ts scoped straight to byPrincipal; running
+ * both would give the model two save tools and two remove tools, write two
+ * documents per person, and leave the generic slot without the guards below.
+ * If that file reappears after a future `eve add`, delete it again.
  */
 export default defineMemory({
   description:
@@ -38,7 +43,12 @@ export default defineMemory({
     "they build, how technical they are, their handle, and how they like to " +
     "be talked to. Never anything about a third party.",
 
-  provider: fileMemory({ backend: personBackend }),
+  // No explicit backend: fileMemory resolves one from the runtime, which after
+  // `eve add memory/file` is the private Vercel Blob store that flow
+  // provisioned. Hardcoding vercelBlob() here, as this did first, second-guesses
+  // a setup that knows more about the project's environment wiring than this
+  // file does.
+  provider: fileMemory(),
 
   scope(ctx) {
     const caller = ctx.session.auth.current;
