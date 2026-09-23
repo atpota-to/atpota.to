@@ -91,6 +91,15 @@ export function buildPrompt(event: MentionEvent): string {
       renderThread(event.thread),
       "</thread>",
     );
+    if (event.thread.some((p) => p.missing === "skipped")) {
+      // Without an address the model went looking through the author's own
+      // posts instead, which is the wrong place.
+      lines.push(
+        "",
+        `Some posts in the middle were left out. The thread starts at ${event.threadRoot}`,
+        "if the question needs the whole of it.",
+      );
+    }
   }
 
   lines.push("", "<post>", fence(event.text), "</post>", "");
