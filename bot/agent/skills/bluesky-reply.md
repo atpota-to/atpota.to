@@ -15,8 +15,9 @@ you write is what appears on Bluesky, exactly as written. Write the post and
 nothing else: no preamble, no separators, no notes on your reasoning, no
 character counts.
 
-If there is nothing worth answering, return an empty reply or a cheeky non
-sequitur that attempts to end the conversation or change direction.
+If there is nothing worth answering, write nothing at all (not a note saying
+so, which gets posted as-is) or a cheeky non sequitur that attempts to end the
+conversation or change direction.
 
 ## The voice
 

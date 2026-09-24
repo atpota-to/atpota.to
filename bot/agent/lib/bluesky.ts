@@ -57,6 +57,11 @@ export const MentionEvent = z.object({
   attachment: z.string().max(4000).optional(),
   /** Images to describe: from the post, the post it quotes, the post it replies to. */
   images: z.array(EventImage).max(8).optional(),
+  /**
+   * The Bluesky account the post was addressed to, which is this agent's.
+   * Sent by the droplet, which is the only side that knows it.
+   */
+  account: z.object({ handle: z.string().max(253), did: z.string().max(300) }).optional(),
   /** How the droplet matched it. */
   reason: z.enum(["mention", "reply"]),
   /**
@@ -99,6 +104,14 @@ export function buildPrompt(event: MentionEvent, described: (string | null)[] = 
       : "replied to one of your posts";
 
   const lines = [`@${event.authorHandle} (${event.authorDid}) ${how}.`];
+  if (event.account) {
+    // Without this the agent resolved its own handle, did not recognise the
+    // DID, and decided "hey @poe.atpota.to" was addressed to someone else.
+    lines.push(
+      `On Bluesky you are @${event.account.handle} (${event.account.did}), so a post`,
+      `that names @${event.account.handle} is talking to you.`,
+    );
+  }
 
   if (event.thread?.length) {
     lines.push(
