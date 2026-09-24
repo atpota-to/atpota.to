@@ -222,18 +222,22 @@ export function buildPrompt(event: MentionEvent, described: (string | null)[] = 
   }
   // Quotes and screenshots are full of handles now, and a draft that tags
   // anyone but the asker is refused and costs a whole second turn.
-  lines.push(
-    "Name anyone else without the @.",
-    "If there is no question and nothing addressed to you, reply with nothing.",
-  );
+  lines.push("Name anyone else without the @.");
+  // Not for a post from the people who run it: it is addressed to it by
+  // definition, and "remember: ..." is not a question. With this line in
+  // front of the acknowledgement below, a probe on 2026-09-24 replied
+  // "(no reply)" to a lesson.
+  if (!event.operator) {
+    lines.push("If there is no question and nothing addressed to you, reply with nothing.");
+  }
 
   if (event.lessonSaved) {
     lines.push(
       "",
       "They also asked you to remember something. It is saved now, and it will be",
       `in front of you in every conversation from here on: "${fence(event.lessonSaved)}"`,
-      "Say you've got it, in a line. If it corrects something you said in this",
-      "thread, put that right too.",
+      "Reply with one short line saying you've got it, so they know it landed. If",
+      "it corrects something you said in this thread, put that right too.",
     );
   }
 
