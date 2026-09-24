@@ -135,7 +135,9 @@ export function buildPrompt(event: MentionEvent, described: (string | null)[] = 
   if (seen.length) {
     lines.push(
       "",
-      "The images with it, described by a model that could see them:",
+      // Said plainly. Naming the describing model made the potato open with
+      // "the picture was described to me", which is plumbing, not an answer.
+      "What the images with it show:",
       "<images>",
       ...seen.map((line, i) => `${i + 1}, ${line}`),
       "</images>",
