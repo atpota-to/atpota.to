@@ -73,8 +73,14 @@ async function handOver(did: string, content: string, timeoutMs: number): Promis
   }
 }
 
+// Both slots use the existing private Blob store, but only person memory
+// hands writes to the droplet. The slot namespace keeps their documents apart.
+export function privateFileMemory(): MemoryProvider {
+  return fileMemory({ backend: store });
+}
+
 export function publishedFileMemory(): MemoryProvider {
-  const base = fileMemory({ backend: store });
+  const base = privateFileMemory();
   return defineMemoryProvider({
     recall: {
       async "turn.started"(ctx) {
