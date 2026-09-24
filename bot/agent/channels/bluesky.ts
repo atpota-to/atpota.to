@@ -7,6 +7,7 @@ import {
   postDraftToDroplet,
   secretMatches,
 } from "../lib/bluesky";
+import { describeImages } from "../lib/vision";
 
 export default defineChannel({
   // Two people replying in the same thread should get two answers, not one
@@ -37,18 +38,23 @@ export default defineChannel({
       const event = parsed.data;
 
       waitUntil(
-        from(event.threadRoot).send(buildPrompt(event), {
-          auth: {
-            authenticator: "atpotato-droplet",
-            principalType: "user",
-            principalId: event.authorDid,
-            attributes: {
-              did: event.authorDid,
-              handle: event.authorHandle,
-              postUri: event.postUri,
+        (async () => {
+          // Before the turn and outside it, so the thread's session only ever
+          // holds words. See lib/vision.ts.
+          const described = await describeImages(event.images ?? [], event.text);
+          await from(event.threadRoot).send(buildPrompt(event, described), {
+            auth: {
+              authenticator: "atpotato-droplet",
+              principalType: "user",
+              principalId: event.authorDid,
+              attributes: {
+                did: event.authorDid,
+                handle: event.authorHandle,
+                postUri: event.postUri,
+              },
             },
-          },
-        }),
+          });
+        })(),
       );
 
       return new Response(null, { status: 202 });
