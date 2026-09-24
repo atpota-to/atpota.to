@@ -1,6 +1,6 @@
 import { defineMemory } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
-import { fileMemory } from "eve/memory/file";
+import { publishedFileMemory } from "../lib/published-memory";
 
 /**
  * Durable notes about one person, keyed on their DID.
@@ -11,7 +11,10 @@ import { fileMemory } from "eve/memory/file";
  *
  * The cost is that a public bot remembering you is a surveillance surface
  * nobody opted into: tagging a potato in a thread is not the same as opening a
- * panel on a website. Three things keep it defensible.
+ * panel on a website. And since 2026-09-24 the notes are public too, published
+ * in the potato's own repo (lib/published-memory.ts), which makes it a choice
+ * made in the open rather than a file nobody can see. Three things keep it
+ * defensible.
  *
  *   Nothing is captured automatically. fileMemory gives the model
  *   person__save_memory and person__remove_memory and it decides what is worth
@@ -43,12 +46,10 @@ export default defineMemory({
     "they build, how technical they are, their handle, and how they like to " +
     "be talked to. Never anything about a third party.",
 
-  // No explicit backend: fileMemory resolves one from the runtime, which after
-  // `eve add memory/file` is the private Vercel Blob store that flow
-  // provisioned. Hardcoding vercelBlob() here, as this did first, second-guesses
-  // a setup that knows more about the project's environment wiring than this
-  // file does.
-  provider: fileMemory(),
+  // fileMemory on the same Vercel Blob store as before, with each saved
+  // version also handed to the droplet to publish. The Blob copy is what is
+  // recalled, so publishing can fail without costing a note or a reply.
+  provider: publishedFileMemory(),
 
   scope(ctx) {
     const caller = ctx.session.auth.current;
