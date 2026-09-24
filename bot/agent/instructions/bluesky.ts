@@ -13,7 +13,12 @@ const rules = skill.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
 
 export default defineDynamic({
   events: {
-    "session.started": async (_event, ctx) => {
+    // Every turn, not once per session. A session here is a whole Bluesky
+    // thread, and eve only guarantees a session.started result for the life of
+    // the session, so a change to the voice could skip a conversation already
+    // under way. A system-role result stays outside history, so resolving it
+    // each turn adds nothing to the thread; the text is identical turn to turn.
+    "turn.started": async (_event, ctx) => {
       if (ctx.channel.kind !== "bluesky") return null;
       return defineInstructions({ content: rules });
     },
