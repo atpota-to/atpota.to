@@ -51,7 +51,8 @@ export default defineChannel({
                 did: event.authorDid,
                 handle: event.authorHandle,
                 postUri: event.postUri,
-                operator: event.operator === true,
+                ...(event.attempt ? { attempt: String(event.attempt) } : {}),
+                operator: String(event.operator === true),
               },
             },
           });

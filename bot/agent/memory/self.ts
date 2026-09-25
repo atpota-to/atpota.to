@@ -14,7 +14,7 @@ export default defineMemory({
     recall: base.recall,
     async tools(ctx) {
       const caller = ctx.session.auth.current;
-      if (caller?.authenticator !== "atpotato-droplet" || caller.attributes?.operator !== true) {
+      if (caller?.authenticator !== "atpotato-droplet" || caller.attributes?.operator !== "true") {
         return null;
       }
       return (await base.tools?.(ctx)) ?? null;
