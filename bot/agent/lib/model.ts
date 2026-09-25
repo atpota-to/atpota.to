@@ -13,10 +13,10 @@
  * every turn erroring rather than as a deploy that refuses to start. Check the
  * id against the gateway before setting it.
  *
- * The reply voice in skills/bluesky-reply.md was written against
- * anthropic/claude-opus-5 and its samples came from that model. Voice is not
- * portable between models: changing this means re-reading real drafts before
- * trusting the tone.
+ * The sample replies in skills/bluesky-reply.md are real posts from
+ * 2026-09-24, from whichever model was live that day. Voice is not portable
+ * between models: changing this means re-reading real drafts before trusting
+ * the tone.
  *
  * Lives here rather than in agent.ts so the Bluesky channel can ask whether
  * this same model can see images.

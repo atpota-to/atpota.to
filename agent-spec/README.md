@@ -1,5 +1,14 @@
 # atpotato agent spec
 
+> **Historical.** These are the planning documents the agent was built from.
+> They are not loaded at runtime and have drifted from what runs. To change how
+> Poe sounds or behaves, edit [`../bot/agent/instructions.md`](../bot/agent/instructions.md)
+> (identity, rules, and the Voice section), [`../bot/agent/skills/bluesky-reply.md`](../bot/agent/skills/bluesky-reply.md)
+> (Bluesky format and real sample replies), and
+> [`../bot/agent/instructions/operator-dm.ts`](../bot/agent/instructions/operator-dm.ts)
+> (private DMs). The persona, system prompt, and skill copies in this folder
+> are out of date.
+
 Working specs and prompts for turning the atpotato mascot into an AI guide to the
 Atmosphere: a small, opinionated assistant that resolves things, explains things,
 and points people at the right client, built on [eve](https://eve.dev) and
