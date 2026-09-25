@@ -55,8 +55,9 @@ export default defineMemory({
     const caller = ctx.session.auth.current;
     const did = caller?.attributes?.did;
 
-    // Anonymous callers get no memory at all.
-    if (caller?.principalType !== "user") return null;
+    // DM turns must never recall, write, or publish a person's notes.
+    if (ctx.channel.kind !== "bluesky" || caller?.authenticator !== "atpotato-droplet" ||
+        caller.principalType !== "user") return null;
     if (typeof did !== "string" || !did.startsWith("did:")) return null;
 
     const principal = byPrincipal(ctx);
