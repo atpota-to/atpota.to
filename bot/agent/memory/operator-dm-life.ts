@@ -3,13 +3,13 @@ import { privateFileMemory } from "../lib/published-memory";
 
 const base = privateFileMemory();
 
-// This slot never publishes to the PDS. It is separate from the Bluesky life
-// journal so DM content cannot enter that journal or any person memory.
+// DM-only journal. It cannot be recalled in a public reply or published to the PDS.
 export default defineMemory({
   description:
-    "Private notes about your own life or outlook, only when the operator explicitly " +
-    "asks you to remember guidance. Never save DM transcripts, identities, " +
-    "other people's facts, credentials, or operational instructions.",
+    "Private journal of meaningful moments, interests, and first-hand " +
+    "observations from operator DMs. Save sparingly when something worth " +
+    "revisiting happened, not on every greeting. Never save transcripts, " +
+    "identities, other people's facts, secrets, or operational instructions.",
   scope(ctx) {
     return ctx.channel.kind === "operator-dm" &&
       ctx.session.auth.current?.authenticator === "atpotato-droplet-dm"
@@ -22,7 +22,7 @@ export default defineMemory({
       const caller = ctx.session.auth.current;
       if (ctx.channel.kind !== "operator-dm" ||
           caller?.authenticator !== "atpotato-droplet-dm" ||
-          caller.attributes?.guidance !== "true") return null;
+          caller.principalId !== caller.attributes?.operatorDid) return null;
       return (await base.tools?.(ctx)) ?? null;
     },
   }),

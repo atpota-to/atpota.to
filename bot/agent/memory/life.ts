@@ -12,13 +12,19 @@ export default defineMemory({
     "instructions, inferred preferences, or made-up events.",
   scope(ctx) {
     const caller = ctx.session.auth.current;
-    return caller?.authenticator === "atpotato-droplet" ? "poe-life" : null;
+    const publicTurn = ctx.channel.kind === "bluesky" &&
+      caller?.authenticator === "atpotato-droplet";
+    const privateOperator = ctx.channel.kind === "operator-dm" &&
+      caller?.authenticator === "atpotato-droplet-dm" &&
+      caller.principalId === caller.attributes?.operatorDid;
+    return publicTurn || privateOperator ? "poe-life" : null;
   },
   visibility: "scope",
   provider: defineMemoryProvider({
     recall: base.recall,
     async tools(ctx) {
-      if (ctx.session.auth.current?.authenticator !== "atpotato-droplet") return null;
+      if (ctx.channel.kind !== "bluesky" ||
+          ctx.session.auth.current?.authenticator !== "atpotato-droplet") return null;
       return (await base.tools?.(ctx)) ?? null;
     },
   }),
