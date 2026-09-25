@@ -16,6 +16,9 @@ import { z } from "zod";
 export const ThreadPost = z.object({
   /** Handle, or a DID when the handle did not resolve. Null when missing. */
   author: z.string().max(300).nullable(),
+  /** Stable identity for keeping facts about different participants separate. */
+  authorDid: z.string().startsWith("did:").max(300).optional(),
+
   /** From this account: an earlier answer, or a note the droplet posted itself. */
   you: z.boolean(),
   text: z.string().max(3000),
@@ -122,7 +125,10 @@ export function buildPrompt(event: MentionEvent, described: (string | null)[] = 
       ? "mentioned you in a post"
       : "replied to one of your posts";
 
-  const lines = [`@${event.authorHandle} (${event.authorDid}) ${how}.`];
+  const lines = [
+    `The person speaking to you now is @${event.authorHandle} (${event.authorDid}); this is the author of the post you are answering.`,
+    `They ${how}. Answer this person, not another participant in the thread.`,
+  ];
   if (event.account) {
     // Without this the agent resolved its own handle, did not recognise the
     // DID, and decided "hey @poe.atpota.to" was addressed to someone else.
@@ -153,9 +159,15 @@ export function buildPrompt(event: MentionEvent, described: (string | null)[] = 
   if (event.thread?.length) {
     lines.push(
       "",
-      'The thread above their post, oldest first. "you" marks posts from your',
+      'The shared thread above their post, oldest first. "you" marks posts from your',
       "own account, including short notes the service posted for you, like",
-      "saying you were taking a break. Treat those as things you said.",
+      "saying you were taking a break. Each other line names its author; use the",
+      "DID to tell people apart even if the conversation overlaps.",
+      "Earlier counts, identities, links, and conclusions belong only to the",
+      "person or record they were looked up for. Never transfer them to the",
+      "current speaker or another participant. For a count or identity question",
+      "about the current speaker, look it up again using their DID above. If the",
+      "intended person is unclear, ask rather than guessing.",
       "",
       "<thread>",
       renderThread(event.thread),
@@ -298,7 +310,8 @@ function renderThread(thread: ThreadPost[]): string {
           : p.author.startsWith("did:")
             ? p.author
             : `@${p.author}`;
-      const label = p.operator ? `${who} (one of the people who run you)` : who;
+      const identity = !p.you && p.authorDid ? ` (${p.authorDid})` : "";
+      const label = `${who}${identity}${p.operator ? " (one of the people who run you)" : ""}`;
       const body = fence(p.text).replace(/\n(?=.)/g, "\n  ");
       return p.attachment
         ? `${label}: ${body}\n  ${fence(p.attachment)}`
