@@ -42,7 +42,7 @@ export const EventImage = z.object({
 export type EventImage = z.infer<typeof EventImage>;
 
 export const MentionEvent = z.object({
-  /** at:// URI of the thread root. Used as the channel-local session address. */
+  /** at:// URI of the thread root. The session address is postUri, not this. */
   threadRoot: z.string().min(1),
   /** at:// URI of the post that mentioned or replied to us. */
   postUri: z.string().min(1),
@@ -82,7 +82,7 @@ export const MentionEvent = z.object({
   /** How the droplet matched it. */
   reason: z.enum(["mention", "reply"]),
   /** Dispatch generation, used to ignore late like proposals from an old turn. */
-  attempt: z.number().int().positive().optional(),
+  attempt: z.number().int().positive(),
   /**
    * Set only when the droplet is asking for one more attempt at a turn it has
    * already refused, and says why. Written by the droplet, never by a stranger:
@@ -91,10 +91,10 @@ export const MentionEvent = z.object({
    */
   retryNote: z.string().max(400).optional(),
   /**
-   * The posts above this one, oldest first. The session for a thread only
-   * holds the turns it was sent, so without this a reply like "how was your
-   * nap?" arrives with nothing to hang it on. Absent when the post starts a
-   * thread, or the droplet could not read it.
+   * The posts above this one, oldest first. Each incoming post has its own
+   * session, so without this a reply like "how was your nap?" arrives with
+   * nothing to hang it on. Absent when the post starts a thread, or the
+   * droplet could not read it.
    */
   thread: z.array(ThreadPost).max(40).optional(),
 });
@@ -343,6 +343,8 @@ export const MAX_TRACKED_LINKS = 200;
 export async function postDraftToDroplet(draft: {
   key: string;
   threadRoot: string;
+  postUri: string;
+  attempt: number;
   text: string;
   links: string[];
 }): Promise<void> {

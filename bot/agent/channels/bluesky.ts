@@ -42,7 +42,9 @@ export default defineChannel({
           // Before the turn and outside it, so the thread's session only ever
           // holds words. See lib/vision.ts.
           const described = await describeImages(event.images ?? [], event.text);
-          await from(event.threadRoot).send(buildPrompt(event, described), {
+          // One session per incoming post. A thread root can contain replies
+          // from several people; sharing its session mixes their conversations.
+          await from(event.postUri).send(buildPrompt(event, described), {
             auth: {
               authenticator: "atpotato-droplet",
               principalType: "user",
@@ -51,7 +53,8 @@ export default defineChannel({
                 did: event.authorDid,
                 handle: event.authorHandle,
                 postUri: event.postUri,
-                ...(event.attempt ? { attempt: String(event.attempt) } : {}),
+                threadRoot: event.threadRoot,
+                attempt: String(event.attempt),
                 operator: String(event.operator === true),
               },
             },
@@ -94,18 +97,25 @@ export default defineChannel({
       const links = channel.state.links;
       if (!text) return;
 
-      // The continuation token is the address the droplet sent us, which is
-      // the thread root. Without it there is nothing to reply to, so drop the
-      // draft rather than guess; the droplet's queue still holds the match.
-      const threadRoot = channel.continuation?.token;
-      if (!threadRoot) {
-        console.error("draft has no continuation address", ctx.session.id);
+      // The authenticated metadata is set by the droplet, not by the model.
+      // Reject callbacks from old root-scoped sessions after a deployment.
+      const caller = ctx.session.auth.current;
+      const postUri = caller?.attributes?.postUri;
+      const threadRoot = caller?.attributes?.threadRoot;
+      const attempt = Number(caller?.attributes?.attempt);
+      if (caller?.authenticator !== "atpotato-droplet" ||
+          typeof postUri !== "string" || typeof threadRoot !== "string" ||
+          !Number.isSafeInteger(attempt) || attempt < 1 ||
+          channel.continuation?.token !== postUri) {
+        console.error("draft has no verified post address", ctx.session.id);
         return;
       }
 
       await postDraftToDroplet({
         key: `${ctx.session.id}:${event.turnId}`,
         threadRoot,
+        postUri,
+        attempt,
         text,
         links,
       });
