@@ -4,12 +4,14 @@ import { defineMcpClientConnection } from "eve/connections";
  * Aturi's Atmosphere MCP server: https://aturi.to/mcp
  *
  * Public and intentionally unauthenticated, which is why there is no `auth`.
- * Every tool it serves is read-only, so there is no `approval` gate and no
- * `tools.allow` filter: nothing here can create, modify, delete, transmit or
- * message, and narrowing the surface would only make discovery worse.
+ * Read-only. Aturi's raw list_records is blocked from model discovery;
+ * the authored list_records tool allows up to 10 pages / 1,000 requested
+ * records per dispatch or session (at most 100 per page). Use scan_collection
+ * for counts and top_mentioned_posts for network-wide mention rankings.
  */
 export default defineMcpClientConnection({
   url: "https://aturi.to/api/mcp",
+  tools: { block: ["list_records"] },
   description:
     "The Atmosphere: AT Protocol identity, repositories, records, backlinks, " +
     "the Bluesky app layer, feeds, lists, labelers, lexicon schemas and " +
