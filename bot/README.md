@@ -36,6 +36,10 @@ eve reads that file after `.env.local`, so its values win, and every `.env*`
 file is gitignored. Without them the model falls back to the default in
 `agent/lib/model.ts`.
 
+If production has `ANTHROPIC_API_KEY` set, Claude models (`anthropic/...`) skip
+the AI Gateway and call Anthropic directly with that key. Copy it into the same
+file to match production; leave it out to keep local calls on the gateway.
+
 ### Chat with it
 
 ```bash
