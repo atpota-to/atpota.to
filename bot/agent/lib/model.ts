@@ -33,7 +33,13 @@ import { anthropic } from "eve/models/anthropic";
  * this same model can see images.
  */
 export const MODEL_ID = process.env.AGENT_MODEL ?? "deepseek/deepseek-v4.1-flash";
-export const MODEL: LanguageModel = direct(MODEL_ID) ?? MODEL_ID;
+export const MODEL: LanguageModel = languageModel(MODEL_ID);
+
+/** Any gateway id as a model, sent direct to Anthropic when the key allows. */
+export function languageModel(id: string): LanguageModel {
+  return direct(id) ?? id;
+}
+
 export const REASONING = (process.env.AGENT_REASONING ?? "high") as
   | "off"
   | "low"

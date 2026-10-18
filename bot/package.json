@@ -12,7 +12,10 @@
     "dev": "eve dev",
     "eval": "eve eval",
     "start": "eve start",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "dispatch:collect": "node scripts/dispatch-demo.ts collect",
+    "dispatch:write": "node scripts/dispatch-demo.ts write",
+    "dispatch:demo": "node scripts/dispatch-demo.ts demo"
   },
   "dependencies": {
     "@vercel/connect": "2.2.0",

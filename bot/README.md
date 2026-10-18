@@ -116,6 +116,35 @@ A 401 means the secret does not match (restart `eve dev` after editing env
 files). Tools that depend on the droplet, like Bluesky search, come back empty
 against the catcher.
 
+## Demo the weekly dispatch
+
+A test run of the weekly dispatch (see `../agent-spec/12-weekly-dispatch.md`):
+it collects the past 7 days from the feeds, lists and searches in
+`agent/lib/dispatch/sources.ts` and the lexicon numbers from UFOs and Aturi,
+then writes an issue with the analyst, writer and editor roles. Nothing is
+posted or published.
+
+```bash
+npm run dispatch:collect                                   # .dispatch/runs/<date>/
+npm run dispatch:write -- .dispatch/runs/<date> --label v1
+```
+
+Read `.dispatch/runs/<date>/drafts/v1/final.md`, then `editor.json` for what
+the editor changed and could not verify. To tune the voice, edit
+`agent/lib/dispatch/voice.md` and re-run only the writer and editor on the same
+findings:
+
+```bash
+npm run dispatch:write -- .dispatch/runs/<date> --label v2 --reuse v1
+```
+
+Models come from `DISPATCH_ANALYST_MODEL`, `DISPATCH_WRITER_MODEL` and
+`DISPATCH_EDITOR_MODEL`, falling back to `AGENT_MODEL` and then
+`anthropic/claude-opus-5.5`, read from the same env files as `eve dev`. A full
+run on Claude Opus 5.5 read about 740,000 input tokens in October 2026; a
+`--reuse` run is about a third of that. `.dispatch/` is gitignored because it
+holds other people's posts.
+
 ## Learn more
 
 To learn more about eve, explore these resources:
