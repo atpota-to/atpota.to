@@ -91,7 +91,7 @@ frozen and, if it is not, DMs the operator that collection failed.
 | --- | --- | --- | --- |
 | Builder posts | A Bluesky list owned by atpota.to | `getListFeed`, paged back to the window start | Daily |
 | Community feeds | 2 to 4 feeds the operator picks | `getFeed` | Daily, because some feed generators only serve recent posts |
-| Keyword posts | A fixed list of queries | The droplet's authenticated `/internal/bluesky-search`, `since`/`until` set to the window | Monday |
+| Keyword posts | A fixed list of queries | The droplet's authenticated `/internal/bluesky-search`, `since`/`until` set to the window. Unauthenticated search serves first pages only: on 2026-10-18 every cursor request was refused | Monday |
 | Releases | Repos the operator lists | GitHub `releases.atom` per repo (no auth needed) | Monday |
 | Lexicons | Aturi's weekly report | One HTTP call | Monday |
 | Engagement | Every collected post | `getPosts` in batches of 25, so counts reflect the week's end | Monday |
@@ -135,28 +135,57 @@ Measured against microcosm's UFOs API on 2026-10-18:
 Aturi should keep everything and flag, not drop. The 3-account cut becomes the
 analyst's default view of the list, and the full list stays available to it.
 
-### Storage
+### Storage: public on the PDS, private in Blob
 
-Vercel Blob, the store the bot already uses for memory:
+Decided 2026-10-18: as much as can be public lives in Poe's repo on
+`pds.atpota.to`. Anything on a PDS is public, so drafts and review notes stay
+private until they are approved.
+
+**In Poe's repo (public)**
+
+| Record | What it holds | Written by |
+| --- | --- | --- |
+| `net.anisota.feed.list`, one per week | "atmosphere week of oct 12": the posts Poe read | droplet, on the collector's request |
+| `net.anisota.feed.listItem` | one collected post, by at-uri | droplet, daily |
+| `to.atpota.dispatch.snapshot`, rkey = issue date | the lexicon report, releases, sources and counts | droplet, Monday |
+| `site.standard.document` | the published issue | droplet, after `approve` |
+
+The week list uses Anisota's list lexicon, so anyone can read what Poe read in
+Anisota, and the pipeline reads the same list back on Monday. List items are
+references, not copies. A post its author deletes drops out by itself, because
+the pipeline re-reads each post (`getPosts`) when it freezes the week, and a
+deleted post no longer comes back.
+
+Not everything is a post. Lexicon numbers and releases go in the weekly
+snapshot record. It holds bounded views (new lexicons above a small account
+floor, movers, the top 40, sampled schemas) so it stays well under any record
+size limit; the full lexicon history can be re-queried from Aturi.
+
+Two cautions. The list is public, so only posts that pass the privacy filter go
+in. And keyword searches match off-topic posts: on the demo week, 115 of the
+136 posts a "lexicon" search found had nothing atproto-related in their text or
+links, among them a political post and a sexual one. That query is gone now,
+but any keyword drifts. A relevance check before a post joins the public list
+keeps "posts poe read for the dispatch" honest; a cheap model call per post is
+enough. Whether rejected posts are kept privately is an open question.
+
+**In Vercel Blob (private)**
 
 ```
-dispatch/
-  issues/2026-10-12/              Monday the recapped week starts
-    manifest.json                 window, sources, counts, sha256 of each file, frozen flag
-    raw/posts-list.jsonl
-    raw/posts-feeds.jsonl
-    raw/posts-search.jsonl
-    raw/profiles.jsonl
-    raw/lexicons.json             Aturi's report
-    raw/releases.jsonl
-    lookups/                      Aturi results the subagents fetched during the run
-    findings/{lexicons,conversation,shipping}.json
-    drafts/v1.md  v1.final.md  reviews/v1.json
-    review-log.jsonl              operator notes and version events
+dispatch/issues/2026-10-12/
+  manifest.json          window, sources, counts, sha256 of each file, frozen flag
+  working/               the hydrated week, as the analysts read it
+  lookups/               Aturi results the subagents fetched during the run
+  findings/  drafts/  reviews/
+  review-log.jsonl       operator notes and version events
 ```
 
-Collector runs write in small steps and skip work already on file, so a run
-cut off by a function time limit can be re-run safely.
+Supabase is not needed. The private side is a few files per week, which Blob
+already handles, and history across weeks comes from Aturi and the PDS. It
+would earn a place if you later want SQL over months of issues.
+
+Collector runs write in small steps and skip work already done, so a run cut
+off by a function time limit can be re-run safely.
 
 ### Privacy filter
 
@@ -384,6 +413,68 @@ for our renderer. Publishing a schema for it is optional; doing so means a
   - voice: a judge checks against the voice guide and the banned list;
   - memory: nothing from person or DM memory appears.
 
+## Demo pipeline
+
+`bot/scripts/dispatch-demo.ts` collects the past 7 days for real and writes an
+issue from them with the three roles, so the format and voice can be tuned
+before the production pipeline exists. Nothing is posted or published.
+
+```
+cd bot
+npm run dispatch:collect                       # into .dispatch/runs/<date>/
+npm run dispatch:write -- .dispatch/runs/<date> --label v1
+npm run dispatch:write -- .dispatch/runs/<date> --label v2 --reuse v1
+npm run dispatch:write -- .dispatch/runs/<date> --label v3 --reuse v2 --rerun lexicons
+```
+
+`write` re-runs on the same collected week, so a change to
+`agent/lib/dispatch/voice.md` or `roles.ts` can be compared against the same
+data. `--reuse` takes the analysts' findings from an earlier run and re-runs
+only the writer and editor, which is the cheap loop for tuning voice and
+format: the analysts are about two thirds of a run's tokens. `--rerun` names
+analyst slices to run again anyway. Each run writes `findings.json`, `draft.md`, `final.md`, the editor's
+changes and open questions, lint results and token usage to
+`.dispatch/runs/<date>/drafts/<label>/`. `.dispatch/` is gitignored because
+it holds other people's posts.
+
+What it shares with production: the collectors (`agent/lib/dispatch/collect.ts`),
+the role prompts and output shapes (`roles.ts`), the voice guide, the lint
+(`lint.ts`), and model routing through `languageModel()` in `lib/model.ts`,
+with the same `DISPATCH_*_MODEL` variables.
+
+What differs: it reads local files instead of the PDS week list, it puts each
+analyst's slice in the prompt rather than in sandbox files, and it has no
+review loop.
+
+The first run, on 2026-10-18 with all three roles on Claude Opus 5.5 at high
+reasoning, read 1,311 posts. Each post-reading analyst used about 238,000
+input tokens and the lexicon analyst about 86,000. All three analysts ran in
+parallel and finished within two minutes; the whole run took about five
+minutes and used 740,000 input and 41,000 output tokens. A `--reuse` run used
+about 290,000 and 26,000.
+
+What the first three runs showed, and what changed because of it:
+
+- **Models miscount.** The lexicon analyst reported 12 new `app.sonasky.apollo`
+  NSIDs, "counted from new lexicons table"; the table had 10. Counts per
+  project are now computed by code and handed to the analyst, writer and
+  editor. This is the same reason production gives analysts files and a shell.
+- **Code miscounts too.** The first version of that grouping skipped NSIDs
+  flagged as odd-looking and turned 828 into 812. The flag was also wrong: it
+  rejected domain segments starting with a digit, which the NSID syntax
+  allows. Both are fixed and tested.
+- **The editor checks claims well.** In the first run it caught a paraphrase
+  that said more than the post, an inference about deleted records that the
+  counts could not support, and a deadline that applied only to round 1, and
+  it hedged four inferences. It cannot check what it is not given, so it
+  missed the miscount.
+- **Rules need a check behind them.** The writer kept "about 4,685" although
+  the guide asked for rounding; lint now flags unrounded estimates. The writer
+  assumed one person's pronouns; the guide now says they/them unless stated.
+- **A bad check does damage.** Lint flagged "delve" inside the NSID
+  `town.delve.feed.post`, and the editor cut a real lexicon to clear it. Phrase
+  checks now read prose only.
+
 ## Build phases
 
 **0. Inputs (operator).** The builders list, feeds, repos, keyword list,
@@ -442,7 +533,9 @@ Opt-out requests by DM.
 - `.well-known/site.standard.publication/dispatch`
 - A home page link
 
-**droplet** (not in this repo; `mentions/` holds only the spec)
+**droplet** (on DigitalOcean, not in this repo). The standalone brief is
+[`../mentions/DISPATCH.md`](../mentions/DISPATCH.md). In short:
+- Week list and snapshot writes to Poe's repo, on the collector's request
 - `POST /dispatch/draft`, the identifier check, DM delivery
 - Operator DM routing while a review is open; `approve` and `skip`
 - Accept the dispatch collector as a caller of `/internal/bluesky-search`
@@ -474,6 +567,11 @@ Opt-out requests by DM.
 10. How Leaflet, pckt and Offprint display a document from another
     publisher. They are likely to use `textContent` or link to the canonical
     URL; this is unverified.
+11. Posts that fail the relevance check: drop them, or keep them privately in
+    Blob so the analysts still see everything collected?
+12. Does Anisota's AppView offer a read endpoint for a list's items? Without
+    one, the pipeline pages Poe's `net.anisota.feed.listItem` collection
+    newest first and stops at the week's start.
 
 ## Sources
 
