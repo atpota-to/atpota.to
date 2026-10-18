@@ -42,6 +42,7 @@ coding agent) so the thing that gets built is the thing you wanted.
 | [`09-bluesky-channel.md`](09-bluesky-channel.md) | The Bluesky account: Jetstream detection, the gate layer, thread-to-session mapping, and the posting path |
 | [`10-memory.md`](10-memory.md) | What it remembers about whom, how the scope is keyed, and how forgetting works |
 | [`11-go-live.md`](11-go-live.md) | **The runbook.** Nothing to live, in order, with what to check at each step |
+| [`12-weekly-dispatch.md`](12-weekly-dispatch.md) | **Current plan, not historical.** The weekly Atmosphere dispatch: data collection, the analyst/writer/editor pipeline, DM review, Standard.site publishing, and the website pages |
 | [`../mentions/SPEC.md`](../mentions/SPEC.md) | Standalone build brief for the droplet service. Self-contained, meant to be handed off on its own |
 
 ## Assumptions worth checking before building
