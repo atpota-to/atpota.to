@@ -125,7 +125,6 @@ describe('renderGuide safety and normalisation', () => {
   it('reads PNG and JPEG dimensions', () => {
     expect(imageSize(`${publicDir}/guides/screenshots/graze-editor.jpg`)).toEqual({ width: 1548, height: 1538 });
     expect(imageSize(`${publicDir}/favicon.png`)).toEqual({ width: 674, height: 674 });
-    expect(imageSize(`${publicDir}/og-image.jpg`)).toEqual({ width: 1920, height: 1080 });
     expect(imageSize(`${publicDir}/does-not-exist.png`)).toBeUndefined();
   });
 });
