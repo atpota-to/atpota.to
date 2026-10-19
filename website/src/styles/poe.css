@@ -1,0 +1,967 @@
+/*
+ * Poe widget (src/poe/**): corner potato, nudge bubble, panel (desktop dialog,
+ * phone bottom sheet), leaf tab, highlight-to-ask pill. Uses the shared tokens
+ * only, so both themes come for free; the one widget-specific colour is the
+ * quoted-selection text inside the brown "you" bubble (--poe-quote), checked in
+ * tests/poe-styles.test.ts.
+ *
+ * Breakpoint: the phone sheet is max-width 639.98px, matching PHONE_QUERY in ui.ts.
+ */
+
+:root {
+  --poe-quote: #EADFC2;
+  --poe-shadow-bubble: 0 8px 24px rgba(61, 47, 27, 0.14);
+  --poe-shadow-sheet: 0 -10px 40px rgba(35, 26, 15, 0.25);
+  --poe-shadow-pill: 0 6px 16px rgba(61, 47, 27, 0.25);
+}
+
+html[data-theme="dark"] {
+  --poe-quote: #4A3A22;
+  --poe-shadow-bubble: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --poe-shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.55);
+  --poe-shadow-pill: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.poe [hidden] {
+  display: none !important;
+}
+
+.poe-sr {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.poe-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* ---------- corner potato (resting / curious) ---------- */
+
+.poe-potato {
+  position: fixed;
+  right: 26px;
+  bottom: -34px;
+  z-index: var(--z-poe);
+  width: 136px;
+  padding: 0;
+  border: 0;
+  border-radius: 64px 64px 16px 16px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    transform var(--dur) var(--ease-out),
+    opacity var(--dur) ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.poe-potato__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+.poe-potato__label {
+  position: absolute;
+  right: 48px;
+  bottom: calc(100% - 6px);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--soil);
+  color: var(--on-soil);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) ease,
+    transform var(--dur) var(--ease-out);
+}
+
+.poe-potato:focus-visible {
+  transform: translateY(-14px);
+}
+
+.poe-potato:focus-visible .poe-potato__label {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hover only where it is real: on touch screens :hover sticks after a tap and kept
+   the potato raised (label showing) after the panel closed. */
+@media (hover: hover) and (pointer: fine) {
+  .poe-potato:hover {
+    transform: translateY(-14px);
+  }
+
+  .poe-potato:hover .poe-potato__label {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.poe-potato:focus-visible {
+  outline-offset: 0;
+}
+
+/* The perched potato takes over while the panel is open. */
+.poe[data-open] .poe-potato {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(40px);
+}
+
+/* ---------- nudge bubble ---------- */
+
+.poe-nudge {
+  position: fixed;
+  right: 156px;
+  bottom: 78px;
+  z-index: var(--z-poe);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  padding: 8px 6px 8px 16px;
+  border: 2px solid var(--line);
+  border-radius: 20px 20px 4px 20px;
+  background: var(--card);
+  box-shadow: var(--poe-shadow-bubble);
+  color: var(--text);
+  /* never blocks a tap: taps go through to the page (and dismiss it) */
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--dur) ease,
+    transform var(--dur) var(--ease-out);
+}
+
+.poe-nudge.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.poe-nudge__text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.poe-nudge__close {
+  position: relative;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.poe-nudge__close::before {
+  /* 44px target around the 32px circle */
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.poe-nudge__close:hover {
+  background: var(--bg);
+}
+
+.poe-nudge__close .poe-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- leaf tab (tucked away) ---------- */
+
+.poe-tab {
+  position: fixed;
+  right: 0;
+  bottom: 28px;
+  z-index: var(--z-poe);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 64px;
+  padding: 0 0 0 2px;
+  border: 0;
+  border-radius: 16px 0 0 16px;
+  background: var(--brown);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: width var(--dur) var(--ease-out);
+}
+
+.poe-tab:hover,
+.poe-tab:focus-visible {
+  width: 52px;
+}
+
+.poe-tab__leaf {
+  width: 24px;
+  height: auto;
+  pointer-events: none;
+}
+
+/* ---------- highlight-to-ask pill ---------- */
+
+.poe-pill {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-poe);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 16px 6px 6px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--soil);
+  box-shadow: var(--poe-shadow-pill);
+  color: var(--on-soil);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transition:
+    opacity var(--dur-fast) ease,
+    transform var(--dur-fast) var(--ease-out);
+}
+
+html[data-theme="dark"] .poe-pill {
+  border-color: var(--line-strong);
+}
+
+.poe-pill.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.poe-pill__face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--flesh-tint);
+}
+
+.poe-pill__face img {
+  width: 26px;
+  height: auto;
+}
+
+/* ---------- scrim (phone sheet) ---------- */
+
+.poe-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-poe);
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity var(--dur) ease;
+}
+
+.poe-scrim.is-open {
+  opacity: 1;
+}
+
+/* ---------- panel ---------- */
+
+.poe-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: var(--z-poe);
+  display: flex;
+  flex-direction: column;
+  width: 392px;
+  max-width: calc(100vw - 32px);
+  max-height: min(680px, calc(100vh - 112px));
+  max-height: min(680px, calc(100dvh - 112px));
+  border: 2px solid var(--line);
+  border-radius: 30px;
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.45;
+  text-align: left;
+  opacity: 0;
+  transform: translateY(16px) scale(0.98);
+  transform-origin: 85% 100%;
+  transition:
+    opacity var(--dur) ease,
+    transform var(--dur) var(--ease-out);
+}
+
+.poe-panel.is-open {
+  opacity: 1;
+  transform: none;
+}
+
+.poe-panel:focus {
+  outline: none;
+}
+
+.poe-panel__potato {
+  position: absolute;
+  left: 16px;
+  top: -70px;
+  width: 112px;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  transform-origin: 50% 90%;
+}
+
+.poe[data-busy] .poe-panel__potato {
+  animation: poe-wiggle 1.4s ease-in-out infinite;
+}
+
+@keyframes poe-wiggle {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-2px);
+  }
+}
+
+.poe-panel__handle {
+  display: none;
+}
+
+.poe-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 30px 18px 12px 22px;
+}
+
+.poe-panel__title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.poe-panel__sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.poe-close {
+  flex: 0 0 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.poe-close:hover {
+  background: var(--line);
+}
+
+.poe-context {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 44px);
+  margin: 0 22px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.poe-context .poe-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- conversation ---------- */
+
+.poe-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 22px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  /* Scrolled bubbles fade out under the context chip instead of being cut flush. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 10px), transparent 100%);
+}
+
+.poe-log:focus-visible {
+  outline-offset: -3px;
+  border-radius: 12px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.poe-msg {
+  flex: none;
+  max-width: 90%;
+  padding: 11px 15px;
+  border: 1px solid transparent; /* visible in forced-colors mode */
+  border-radius: 18px;
+  overflow-wrap: anywhere;
+}
+
+.poe-msg p {
+  margin: 0;
+}
+
+.poe-msg--poe {
+  align-self: flex-start;
+  max-width: 100%; /* the mocks run poe's bubbles the full width of the log */
+  border-radius: 18px 18px 18px 6px;
+  background: var(--flesh-tint);
+  color: var(--text);
+}
+
+/* At night the bubble tint sits close to the card; a hairline keeps its shape. */
+html[data-theme="dark"] .poe-msg--poe:not(.poe-msg--note) {
+  border-color: var(--line-strong);
+}
+
+.poe-msg--you {
+  align-self: flex-end;
+  max-width: 84%;
+  border-radius: 18px 18px 6px 18px;
+  background: var(--brown);
+  color: var(--on-brown);
+}
+
+.poe-msg .poe-msg__quote {
+  margin: 0 0 4px;
+  padding-left: 10px;
+  border-left: 3px solid var(--flesh);
+  color: var(--poe-quote);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.poe-msg--note {
+  border: 2px dashed var(--dash);
+  background: var(--bg);
+}
+
+/* (0,2,0) so it beats the ".poe-msg p" / ".poe-msg ul" resets */
+.poe-msg .poe-msg__body > * + * {
+  margin-top: 8px;
+}
+
+.poe-msg__body--plain {
+  white-space: pre-wrap;
+}
+
+.poe-msg ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.poe-msg li + li {
+  margin-top: 4px;
+}
+
+.poe-msg code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  overflow-wrap: anywhere;
+}
+
+.poe-msg pre {
+  max-width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.poe-msg pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.poe-msg .poe-id {
+  color: var(--text);
+}
+
+.poe-link {
+  color: var(--link);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.poe-link:hover {
+  color: var(--link-hover);
+}
+
+.poe-url {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.poe-face {
+  white-space: nowrap;
+}
+
+.poe-msg .poe-chip--action {
+  margin-top: 10px;
+}
+
+/* status line while digging */
+.poe-status {
+  flex: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--flesh-tint);
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.poe-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.poe-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brown);
+  animation: poe-dot 1s ease-in-out infinite;
+}
+
+.poe-dots i:nth-child(2) {
+  background: var(--skin);
+  animation-delay: 0.15s;
+}
+
+.poe-dots i:nth-child(3) {
+  background: var(--flesh);
+  animation-delay: 0.3s;
+}
+
+@keyframes poe-dot {
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------- suggestion chips ---------- */
+
+.poe-chips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 0 4px;
+}
+
+.poe-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+
+.poe-chip:hover {
+  border-color: var(--dash);
+  background: var(--bg);
+}
+
+/* ---------- input ---------- */
+
+.poe-form {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 0 18px;
+}
+
+.poe-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 50px;
+  padding: 0 18px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* 16px keeps iOS from zooming */
+}
+
+.poe-input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.poe-input:focus-visible {
+  border-color: var(--focus);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+.poe-send {
+  flex: 0 0 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brown);
+  color: var(--on-brown);
+  cursor: pointer;
+  transition:
+    opacity var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.poe-send:hover {
+  background: color-mix(in srgb, var(--brown) 86%, var(--text));
+}
+
+.poe-send .poe-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.poe-send[aria-disabled="true"],
+.poe-textbtn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- footnote and text buttons ---------- */
+
+.poe-foot {
+  flex: none;
+  margin: 10px 22px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.poe-kbd {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.poe-actions {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  padding: 2px 16px 12px;
+}
+
+.poe-textbtn {
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-decoration: underline;
+  text-decoration-color: var(--dash);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.poe-textbtn:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---------- touch screens: 44px targets ---------- */
+
+@media (pointer: coarse) {
+  .poe-chip,
+  .poe-textbtn,
+  .poe-pill {
+    min-height: 44px;
+  }
+
+  .poe-close {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ---------- phone: bottom sheet ---------- */
+
+@media (max-width: 639.98px) {
+  .poe-potato {
+    right: 10px;
+    bottom: -26px;
+    width: 104px;
+  }
+
+  .poe-potato__label {
+    right: 34px;
+    font-size: 13px;
+  }
+
+  .poe-nudge {
+    right: 108px;
+    bottom: 74px;
+    max-width: 210px;
+    padding: 8px 4px 8px 14px;
+    border-radius: 18px 18px 4px 18px;
+  }
+
+  .poe-nudge__text {
+    font-size: 14px;
+  }
+
+  .poe-panel {
+    /* --poe-kb: on-screen keyboard height, set by ui.ts from visualViewport */
+    left: 0;
+    right: 0;
+    bottom: var(--poe-kb, 0px);
+    width: auto;
+    max-width: none;
+    height: min(580px, calc(100vh - 84px - var(--poe-kb, 0px)));
+    height: min(580px, calc(100dvh - 84px - var(--poe-kb, 0px)));
+    max-height: calc(100vh - 84px - var(--poe-kb, 0px));
+    max-height: calc(100dvh - 84px - var(--poe-kb, 0px));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 30px 30px 0 0;
+    box-shadow: var(--poe-shadow-sheet);
+    font-size: 15px;
+    transform: translateY(100%);
+  }
+
+  .poe-panel.is-dragging {
+    transition: none;
+  }
+
+  .poe-panel__potato {
+    left: 16px;
+    top: -62px;
+    width: 98px;
+  }
+
+  .poe-panel__handle {
+    display: block;
+    flex: none;
+    align-self: center;
+    width: 44px;
+    height: 5px;
+    margin-top: 10px;
+    border-radius: 99px;
+    background: var(--line-strong);
+    touch-action: none;
+  }
+
+  .poe-panel__head {
+    padding: 18px 16px 8px 20px;
+    touch-action: none;
+  }
+
+  .poe-panel__title {
+    font-size: 20px;
+  }
+
+  .poe-panel__sub {
+    font-size: 13px;
+  }
+
+  .poe-close {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .poe-context {
+    max-width: calc(100% - 40px);
+    margin: 0 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  .poe-log {
+    padding: 14px 20px 12px;
+  }
+
+  .poe-msg {
+    padding: 10px 14px;
+  }
+
+  .poe-chip {
+    padding: 0 12px;
+  }
+
+  .poe-form {
+    padding: 0 16px;
+  }
+
+  .poe-foot {
+    margin: 10px 20px 0;
+  }
+
+  .poe-actions {
+    padding: 2px 14px 0;
+  }
+}
+
+/* Locks page scroll behind the phone sheet. */
+html.poe-locked,
+html.poe-locked body {
+  overflow: hidden;
+}
+
+/* ---------- reduced motion: no bouncing, rising or sliding ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .poe-potato,
+  .poe-potato__label,
+  .poe-nudge,
+  .poe-panel,
+  .poe-scrim,
+  .poe-pill,
+  .poe-tab {
+    transition: none !important;
+  }
+
+  .poe-potato:hover,
+  .poe-potato:focus-visible,
+  .poe[data-open] .poe-potato,
+  .poe-potato__label,
+  .poe-nudge,
+  .poe-pill,
+  .poe-panel {
+    transform: none !important;
+  }
+
+  .poe-panel__potato,
+  .poe[data-busy] .poe-panel__potato,
+  .poe-dots i {
+    animation: none !important;
+  }
+
+  .poe-tab:hover,
+  .poe-tab:focus-visible {
+    width: 44px;
+  }
+}
+
+/* ---------- forced colors ---------- */
+
+@media (forced-colors: active) {
+  .poe-panel,
+  .poe-nudge,
+  .poe-pill,
+  .poe-tab,
+  .poe-chip,
+  .poe-send,
+  .poe-close {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media print {
+  .poe {
+    display: none !important;
+  }
+}

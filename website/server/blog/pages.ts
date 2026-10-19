@@ -1,0 +1,418 @@
+/**
+ * The blog's pages as HTML fragments for the shell (shell.ts): what goes in <head> and
+ * what goes in <main>. Every value from a record is escaped here or in blocks.ts.
+ *
+ * Head tags on every page: title, description, canonical, Open Graph, the Atom feed, and
+ * the standard.site hints, <link rel="site.standard.publication"> (and on a post
+ * <link rel="site.standard.document">), which is how Bluesky and other atproto apps
+ * recognise a page as a standard.site record. Like dame.is, the backing record is also
+ * named with <link rel="alternate" type="application/at-record+json"> and atproto:uri.
+ */
+
+import { BLOG_COPY, BLOG_PATH, POE_HANDLE, SITE_ORIGIN } from './config.js';
+import {
+  bodyImageCids,
+  formatDate,
+  renderPages,
+  renderPlainText,
+  type BlockContext,
+  type Embeds,
+  type LeafletPage,
+} from './blocks.js';
+import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
+import { documentPath, type BlogDocument, type Publication } from './records.js';
+import { FootnoteList, renderRichText } from './richtext.js';
+
+export const WORDS_PER_MINUTE = 200;
+export const FEED_PATH = `${BLOG_PATH}/feed.xml`;
+export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image.jpg`;
+
+/** URLs of shell images (the build hashes them), by data-asset name. */
+export type Assets = ReadonlyMap<string, string>;
+
+export interface SiteInfo {
+  name: string;
+  tagline: string;
+  /** Absolute publication URL, e.g. https://atpota.to/blog. */
+  url: string;
+  publication: Publication | null;
+  /** Author handle for the byline and follow links. */
+  handle: string;
+}
+
+export interface Page {
+  head: string;
+  main: string;
+}
+
+export function siteInfo(publication: Publication | null, url: string, handle: string | null): SiteInfo {
+  return {
+    name: publication?.name ?? BLOG_COPY.name,
+    tagline: publication?.description ?? BLOG_COPY.tagline,
+    url,
+    publication,
+    handle: handle ?? POE_HANDLE,
+  };
+}
+
+export function profileUrl(handle: string): string {
+  return `https://bsky.app/profile/${encodeURIComponent(handle)}`;
+}
+
+function bylineName(handle: string): string {
+  return handle === POE_HANDLE ? 'poe' : `@${handle}`;
+}
+
+export function docUrl(site: SiteInfo, doc: BlogDocument): string {
+  return `${site.url}${documentPath(doc)}`;
+}
+
+/** Same-site link to a post (relative, so previews stay on the preview). */
+export function docHref(doc: BlogDocument): string {
+  return `${BLOG_PATH}${documentPath(doc)}`;
+}
+
+export function readingMinutes(text: string): number {
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / WORDS_PER_MINUTE));
+}
+
+function clip(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.;:]+$/, '')}…`;
+}
+
+interface HeadMeta {
+  title: string;
+  description: string;
+  canonical: string | null;
+  type: 'website' | 'article';
+  image: string;
+  site: SiteInfo;
+  record?: { uri: string; cid: string } | null;
+  document?: BlogDocument;
+  robots?: string;
+  jsonLd?: unknown;
+}
+
+function headHtml(m: HeadMeta): string {
+  const tags: string[] = [
+    `<title>${escapeHtml(m.title)}</title>`,
+    `<meta name="title" content="${escapeAttr(m.title)}">`,
+    `<meta name="description" content="${escapeAttr(m.description)}">`,
+  ];
+  if (m.robots) tags.push(`<meta name="robots" content="${escapeAttr(m.robots)}">`);
+  if (m.canonical) tags.push(`<link rel="canonical" href="${escapeAttr(m.canonical)}">`);
+  tags.push(
+    `<link rel="alternate" type="application/atom+xml" title="${escapeAttr(m.site.name)}" href="${escapeAttr(`${SITE_ORIGIN}${FEED_PATH}`)}">`,
+    `<meta property="og:type" content="${m.type}">`,
+    `<meta property="og:site_name" content="atpotato">`,
+    `<meta property="og:title" content="${escapeAttr(m.title)}">`,
+    `<meta property="og:description" content="${escapeAttr(m.description)}">`,
+    `<meta property="og:image" content="${escapeAttr(m.image)}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+  );
+  if (m.canonical) tags.push(`<meta property="og:url" content="${escapeAttr(m.canonical)}">`);
+  if (m.document) {
+    tags.push(`<meta property="article:published_time" content="${escapeAttr(m.document.publishedAt)}">`);
+    if (m.document.updatedAt) tags.push(`<meta property="article:modified_time" content="${escapeAttr(m.document.updatedAt)}">`);
+    for (const tag of m.document.tags) tags.push(`<meta property="article:tag" content="${escapeAttr(tag)}">`);
+    tags.push(`<link rel="site.standard.document" href="${escapeAttr(m.document.uri)}">`);
+  }
+  if (m.site.publication) tags.push(`<link rel="site.standard.publication" href="${escapeAttr(m.site.publication.uri)}">`);
+  if (m.record) {
+    tags.push(
+      `<link rel="alternate" type="application/at-record+json" href="${escapeAttr(m.record.uri)}">`,
+      `<meta name="atproto:uri" content="${escapeAttr(m.record.uri)}">`,
+      `<meta name="atproto:cid" content="${escapeAttr(m.record.cid)}">`,
+    );
+  }
+  if (m.jsonLd) tags.push(`<script type="application/ld+json">${jsonForScript(m.jsonLd)}</script>`);
+  return tags.join('\n    ');
+}
+
+function asset(assets: Assets, name: string): string {
+  return assets.get(name) ?? '';
+}
+
+function potato(assets: Assets, face: string, className: string, width: number, height: number, mascot = false): string {
+  const src = asset(assets, `potato-${face}`);
+  if (!src) return '';
+  return `<img class="${className}"${mascot ? ` data-mascot="${face}"` : ''} src="${escapeAttr(src)}" alt="" width="${width}" height="${height}">`;
+}
+
+const ARROW =
+  '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>';
+const FEED_ICON =
+  '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a14 14 0 0 1 14 14M5 11a8 8 0 0 1 8 8"/><circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>';
+
+function followActions(site: SiteInfo, size = ''): string {
+  return (
+    `<a class="btn btn--primary${size}" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} on bluesky ${ARROW}</a>` +
+    `<a class="btn btn--outline${size}" href="${FEED_PATH}">${FEED_ICON} atom feed</a>`
+  );
+}
+
+function tagList(tags: readonly string[], className: string): string {
+  if (!tags.length) return '';
+  return `<ul class="${className}" role="list" aria-label="tags">${tags.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`;
+}
+
+// ---------- index ----------
+
+export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets: Assets): Page {
+  const pub = site.publication;
+  const items = docs.map((doc, i) => {
+    const cover = doc.coverUrl ? `<img class="blog-item__cover" src="${escapeAttr(doc.coverUrl)}" alt="" loading="${i < 2 ? 'eager' : 'lazy'}" decoding="async">` : '';
+    return (
+      `<li><a class="tile tile--link blog-item${i === 0 ? ' blog-item--latest' : ''}" href="${escapeAttr(docHref(doc))}">` +
+      `<span class="blog-item__text">` +
+      `<span class="blog-item__meta">${i === 0 ? '<span class="blog-item__new">latest</span>' : ''}<time datetime="${escapeAttr(doc.publishedAt)}">${escapeHtml(formatDate(doc.publishedAt))}</time></span>` +
+      `<h2 class="blog-item__title">${escapeHtml(doc.title)}</h2>` +
+      (doc.description ? `<span class="blog-item__desc">${escapeHtml(clip(doc.description, 280))}</span>` : '') +
+      `</span>${cover}</a></li>`
+    );
+  });
+  const list = items.length
+    ? `<ol class="blog-list" role="list" aria-label="posts">${items.join('')}</ol>`
+    : `<section class="tile tile--dashed blog-empty" aria-labelledby="blog-empty-title">` +
+      (asset(assets, 'sprout') ? `<img class="blog-empty__sprout" src="${escapeAttr(asset(assets, 'sprout'))}" alt="" width="60" height="56">` : '') +
+      `<h2 class="blog-empty__title" id="blog-empty-title">${escapeHtml(BLOG_COPY.emptyTitle)}</h2>` +
+      `<p class="blog-empty__text">${escapeHtml(BLOG_COPY.emptyText)}</p></section>`;
+
+  const main =
+    `<div class="blog">` +
+    `<section class="tile blog-hero" aria-labelledby="blog-title" data-mascot-trigger>` +
+    `<div class="blog-hero__text">` +
+    `<p class="chip blog-hero__chip">newsletter</p>` +
+    `<h1 class="blog-hero__title" id="blog-title">${escapeHtml(site.name)}</h1>` +
+    `<p class="blog-hero__lede">${escapeHtml(site.tagline)}</p>` +
+    `<div class="blog-hero__actions">${followActions(site)}</div>` +
+    `</div>` +
+    potato(assets, 'happy', 'blog-hero__potato', 260, 212, true) +
+    `</section>` +
+    list +
+    `</div>`;
+
+  const description = site.tagline;
+  return {
+    head: headHtml({
+      title: site.name,
+      description,
+      canonical: site.url,
+      type: 'website',
+      image: DEFAULT_OG_IMAGE,
+      site,
+      record: pub ? { uri: pub.uri, cid: pub.cid } : null,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'Blog',
+        name: site.name,
+        description,
+        url: site.url,
+        ...(pub ? { identifier: pub.uri } : {}),
+        author: { '@type': 'Person', name: bylineName(site.handle), url: profileUrl(site.handle) },
+        publisher: { '@type': 'Organization', name: 'atpotato', url: `${SITE_ORIGIN}/` },
+      },
+    }),
+    main,
+  };
+}
+
+// ---------- post ----------
+
+export interface PostInput {
+  site: SiteInfo;
+  doc: BlogDocument;
+  pages: LeafletPage[];
+  /** Plain text for reading time and the fallback description. */
+  text: string;
+  embeds: Embeds;
+  /** For blob URLs. */
+  did: string;
+  pds: string;
+  newer: BlogDocument | null;
+  older: BlogDocument | null;
+  others: readonly BlogDocument[];
+  headingShift: number;
+  assets: Assets;
+  /** CID of the record's coverImage blob, to spot the same image in the body. */
+  coverCid?: string | null;
+}
+
+/** The post body alone (blocks + footnotes), shared with the feed. */
+export function postBody(input: Omit<PostInput, 'site' | 'newer' | 'older' | 'assets'> & { site: SiteInfo }): string {
+  const footnotes = new FootnoteList();
+  const ctx: BlockContext = {
+    did: input.did,
+    pds: input.pds,
+    embeds: input.embeds,
+    footnotes,
+    headingShift: input.headingShift,
+    pages: new Map(),
+    linkedPages: [],
+    headingIds: new Set(),
+    otherPosts: input.others.map((d) => ({ href: docHref(d), title: d.title, date: d.publishedAt })),
+    links: { profile: profileUrl(input.site.handle), feed: FEED_PATH },
+  };
+  let body = input.pages.length ? renderPages(input.pages, ctx) : '';
+  if (!body.trim()) body = renderPlainText(input.doc.textContent ?? '');
+  if (footnotes.items.length) {
+    body +=
+      `\n<section class="post-footnotes" aria-labelledby="footnotes-label">` +
+      `<h2 class="visually-hidden" id="footnotes-label">footnotes</h2><ol>` +
+      footnotes.items
+        .map((note, i) => {
+          const n = i + 1;
+          return `<li id="fn-${n}">${renderRichText(note.text, note.facets)} <a class="post-fn-back" href="#fnref-${n}" aria-label="back to footnote ${n} in the text">↩</a></li>`;
+        })
+        .join('') +
+      `</ol></section>`;
+  }
+  return body;
+}
+
+export function postPage(input: PostInput): Page {
+  const { site, doc } = input;
+  const minutes = readingMinutes(input.text || doc.textContent || '');
+  const description = doc.description ?? clip(input.text || doc.textContent || site.tagline, 200);
+  const body = postBody(input);
+  const record = aturiUrl(doc.uri);
+  // Leaflet uses coverImage as the thumbnail and usually repeats it in the body; show it
+  // on the page only when no image block already carries the same blob.
+  const cover =
+    doc.coverUrl && !(input.coverCid && bodyImageCids(input.pages).has(input.coverCid))
+      ? `<figure class="post__cover"><img src="${escapeAttr(doc.coverUrl)}" alt="" decoding="async" fetchpriority="high"></figure>`
+      : '';
+  const reply = doc.bskyPostUri ? aturiToBsky(doc.bskyPostUri) : null;
+  const nav =
+    input.newer || input.older
+      ? `<nav class="post-pager" aria-label="more posts">` +
+        (input.older
+          ? `<a class="tile tile--link post-pager__link post-pager__link--older" href="${escapeAttr(docHref(input.older))}"><span class="post-pager__label">older</span><span class="post-pager__title">${escapeHtml(input.older.title)}</span></a>`
+          : '') +
+        (input.newer
+          ? `<a class="tile tile--link post-pager__link post-pager__link--newer" href="${escapeAttr(docHref(input.newer))}"><span class="post-pager__label">newer</span><span class="post-pager__title">${escapeHtml(input.newer.title)}</span></a>`
+          : '') +
+        `</nav>`
+      : '';
+
+  const main =
+    `<div class="post-layout">` +
+    `<article class="post" data-poe-askable aria-labelledby="post-title">` +
+    `<header class="post__header">` +
+    `<nav class="post__crumbs" aria-label="breadcrumb"><ol class="post__crumbs-list" role="list"><li><a href="${BLOG_PATH}">${escapeHtml(site.name)}</a></li><li aria-current="page"><time datetime="${escapeAttr(doc.publishedAt)}">${escapeHtml(formatDate(doc.publishedAt))}</time></li></ol></nav>` +
+    `<h1 class="post__title" id="post-title">${escapeHtml(doc.title)}</h1>` +
+    (doc.description ? `<p class="post__subtitle">${escapeHtml(doc.description)}</p>` : '') +
+    `<p class="post__meta"><span>${minutes} min read</span><span aria-hidden="true">·</span><span>by <a href="${escapeAttr(profileUrl(site.handle))}">${escapeHtml(bylineName(site.handle))}</a></span>` +
+    (doc.updatedAt && doc.updatedAt.slice(0, 10) !== doc.publishedAt.slice(0, 10)
+      ? `<span aria-hidden="true">·</span><span>updated <time datetime="${escapeAttr(doc.updatedAt)}">${escapeHtml(formatDate(doc.updatedAt))}</time></span>`
+      : '') +
+    `</p>` +
+    tagList(doc.tags, 'post__tags') +
+    `</header>` +
+    cover +
+    `<div class="post__body">${body}</div>` +
+    `</article>` +
+    `<aside class="post-end" aria-label="after the post">` +
+    `<div class="tile post-end__card" data-mascot-trigger>` +
+    potato(input.assets, 'wink', 'post-end__potato', 150, 122, true) +
+    `<p class="post-end__title">${reply ? 'thoughts? talk about it on bluesky.' : 'want the next one?'}</p>` +
+    `<div class="post-end__actions">` +
+    (reply ? `<a class="btn btn--primary btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
+    `<a class="btn ${reply ? 'btn--outline' : 'btn--primary'} btn--sm" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))}</a>` +
+    `<a class="btn btn--outline btn--sm" href="${FEED_PATH}">${FEED_ICON} feed</a>` +
+    `</div></div>` +
+    nav +
+    (record
+      ? `<p class="post-end__record">this post is a <code>site.standard.document</code> record on ${escapeHtml(bylineName(site.handle))}'s pds. <a href="${escapeAttr(record)}">open the record</a></p>`
+      : '') +
+    `</aside>` +
+    `</div>`;
+
+  const canonical = docUrl(site, doc);
+  return {
+    head: headHtml({
+      title: `${doc.title} - ${site.name}`,
+      description,
+      canonical,
+      type: 'article',
+      image: doc.coverUrl ?? DEFAULT_OG_IMAGE,
+      site,
+      document: doc,
+      record: { uri: doc.uri, cid: doc.cid },
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: doc.title,
+        description,
+        url: canonical,
+        identifier: doc.uri,
+        datePublished: doc.publishedAt,
+        dateModified: doc.updatedAt ?? doc.publishedAt,
+        ...(doc.coverUrl ? { image: doc.coverUrl } : {}),
+        ...(doc.tags.length ? { keywords: doc.tags.join(', ') } : {}),
+        isPartOf: { '@type': 'Blog', name: site.name, url: site.url },
+        author: { '@type': 'Person', name: bylineName(site.handle), url: profileUrl(site.handle) },
+      },
+    }),
+    main,
+  };
+}
+
+function aturiToBsky(uri: string): string | null {
+  const m = /^at:\/\/(did:[a-z]+:[a-zA-Z0-9._:%-]+)\/app\.bsky\.feed\.post\/([A-Za-z0-9._:~-]+)$/.exec(uri);
+  return m ? `https://bsky.app/profile/${m[1]}/post/${m[2]}` : null;
+}
+
+// ---------- not found / unavailable ----------
+
+export function notFoundPage(site: SiteInfo, assets: Assets): Page {
+  return {
+    head: headHtml({
+      title: `not found - ${site.name}`,
+      description: site.tagline,
+      canonical: null,
+      type: 'website',
+      image: DEFAULT_OG_IMAGE,
+      site,
+      robots: 'noindex',
+    }),
+    main:
+      `<div class="blog"><section class="tile blog-missing" aria-labelledby="blog-missing-title" data-mascot-trigger>` +
+      potato(assets, 'dead', 'blog-missing__potato', 200, 163, true) +
+      `<div class="blog-missing__text">` +
+      `<p class="eyebrow">404</p>` +
+      `<h1 class="blog-missing__title" id="blog-missing-title">this post isn't here.</h1>` +
+      `<p class="blog-missing__lede">it may have moved, or it was never planted.</p>` +
+      `<a class="btn btn--primary" href="${BLOG_PATH}">see all posts</a>` +
+      `</div></section></div>`,
+  };
+}
+
+export function unavailablePage(assets: Assets): Page {
+  const site = siteInfo(null, `${SITE_ORIGIN}${BLOG_PATH}`, null);
+  return {
+    head: headHtml({
+      title: site.name,
+      description: site.tagline,
+      canonical: null,
+      type: 'website',
+      image: DEFAULT_OG_IMAGE,
+      site,
+      robots: 'noindex',
+    }),
+    main:
+      `<div class="blog"><section class="tile blog-missing" aria-labelledby="blog-missing-title" data-mascot-trigger>` +
+      potato(assets, 'sleepy', 'blog-missing__potato', 200, 163, true) +
+      `<div class="blog-missing__text">` +
+      `<h1 class="blog-missing__title" id="blog-missing-title">the blog didn't load.</h1>` +
+      `<p class="blog-missing__lede">poe's posts live on poe's own server, and it didn't answer just now. try again in a minute.</p>` +
+      `<a class="btn btn--primary" href="${BLOG_PATH}">try again</a>` +
+      `</div></section></div>`,
+  };
+}
+

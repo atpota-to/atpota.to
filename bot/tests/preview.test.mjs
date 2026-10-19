@@ -38,3 +38,12 @@ test("the real Bluesky and operator DM channels are never treated as a preview",
     assert.equal(previewsBluesky(undefined), false);
   });
 });
+
+test("the website chat panel never gets the Bluesky preview, under either kind spelling", () => {
+  for (const env of [{ EVE_DEV: "1" }, { EVE_EVALUATION: "1" }]) {
+    withEnv(env, () => {
+      assert.equal(previewsBluesky("website"), false);
+      assert.equal(previewsBluesky("channel:website"), false);
+    });
+  }
+});

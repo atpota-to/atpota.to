@@ -158,8 +158,8 @@ export default defineTool({
     "raw responses are capped at 64 KiB, so request fewer records if a page is too large. " +
     "Accepts a cursor and reverse ordering. Returns full record values, next cursor, and explicit " +
     "partial/end status. Available for signed Bluesky posts, authenticated operator DMs, " +
-    "and authenticated website sessions. Budget: at most 10 page claims and 1,000 requested " +
-    "records per Bluesky attempt or DM/website session, with no automatic approval to continue. " +
+    "and authenticated eve sessions, not website chats. Budget: at most 10 page claims and 1,000 requested " +
+    "records per Bluesky attempt or DM/eve session, with no automatic approval to continue. " +
     "Stop on 429; label results incomplete if a cursor remains or a request stops early. " +
     "Use scan_collection for counts or date-window scans. To rank posts mentioning a handle " +
     "across authors, use top_mentioned_posts when available, not one account's list_records.",

@@ -138,7 +138,7 @@ const pageSchema = z.object({
 export default defineTool({
   description: "Search one page of Bluesky posts with app.bsky.feed.searchPostsV2 filters. " +
     "Requires a query or substantive filter; defaults to 10 results, at most 25. " +
-    "Runs through the authenticated droplet search callback for signed posts, operator DMs, or website sessions. " +
+    "Runs through the authenticated droplet search callback for signed posts, operator DMs, or authenticated eve sessions, not website chats. " +
     "A cursor requests another page but does not guarantee the entire index can be paged; " +
     "hitsTotal is an estimate, not a completeness claim. Stop on 429 and honor retryAfter.",
   inputSchema,

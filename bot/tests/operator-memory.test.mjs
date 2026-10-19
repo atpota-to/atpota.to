@@ -93,3 +93,19 @@ test("public person notes remain unavailable to operator DMs", () => {
   assert.equal(slot.scope(dm()), null);
   assert.equal(slot.scope(publicTurn(false))[1], otherDid);
 });
+
+test("an anonymous website visitor gets no memory beyond public-safe self recall", async () => {
+  for (const kind of ["website", "channel:website"]) {
+    const visitor = { channel: { kind }, session: { auth: { current: {
+      authenticator: "atpotato-website", principalType: "anonymous", principalId: "website-visitor",
+      attributes: { conversationId: "c".repeat(43), path: "/" },
+    } } } };
+    for (const file of ["person", "life", "operator-dm-life", "operator-notes"]) {
+      assert.equal(loadSlot(file).scope(visitor), null, `${file} on ${kind}`);
+    }
+    const self = loadSlot("self");
+    assert.equal(self.scope, "poe-self");
+    assert.equal(await self.provider.tools(visitor), null);
+    assert.equal(await loadSlot("life").provider.tools(visitor), null);
+  }
+});

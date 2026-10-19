@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>atpotato guides</title>
+    <meta name="title" content="atpotato guides">
+    <meta name="description" content="plain-language guides to bluesky and the atproto ecosystem, with screenshots.">
+    <link rel="canonical" href="https://atpota.to/guides">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="atpotato">
+    <meta property="og:url" content="https://atpota.to/guides">
+    <meta property="og:title" content="atpotato guides">
+    <meta property="og:description" content="plain-language guides to bluesky and the atproto ecosystem, with screenshots.">
+    <meta property="og:image" content="https://atpota.to/og-image.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- standard.site: /guides is a site.standard.publication (build/guides.ts) -->
+    <!-- @standard-site -->
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/guide.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="guides" data-poe-nudge="not sure which guide you need? ask me.">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="guides-page" tabindex="-1">
+        <div class="guides">
+            <section class="tile guides-hero" aria-labelledby="guides-title" data-mascot-trigger>
+                <div class="guides-hero__text">
+                    <p class="chip guides-hero__chip"><!-- @svg leaf.svg class="guides-hero__chip-icon" -->guides</p>
+                    <h1 class="guides-hero__title" id="guides-title">atpotato guides</h1>
+                    <p class="guides-hero__lede">plain-language guides to bluesky and the atproto ecosystem, with screenshots.</p>
+                </div>
+                <img class="guides-hero__potato" data-mascot="happy" src="/src/assets/mascot/potato-happy.svg" alt="" width="220" height="179">
+            </section>
+
+            <ol class="guides-list" role="list" aria-label="guides">
+                <!-- @guides-list -->
+            </ol>
+
+            <section class="tile tile--dashed guides-more" aria-labelledby="guides-more-title">
+                <img class="guides-more__sprout" src="/src/assets/sprout.svg" alt="" width="60" height="56" loading="lazy">
+                <h2 class="guides-more__title" id="guides-more-title">more guides are in the ground.</h2>
+                <p class="guides-more__text">follow <a href="https://bsky.app/profile/atpota.to">@atpota.to</a> to catch the next one.</p>
+            </section>
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>

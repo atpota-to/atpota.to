@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Page shell for /blog, filled per request by api/blog.ts (server/blog/shell.ts).
+         The head and main marker pairs below, and what sits between them, are replaced. -->
+    <!-- @blog-head -->
+    <title>blog shell - atpotato</title>
+    <meta name="robots" content="noindex">
+    <!-- /@blog-head -->
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/blog.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="blog" data-poe-nudge="this is my blog! highlight anything in a post and ask me about it.">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <!-- Images the blog pages use; the function reads their built URLs and drops this list. -->
+    <div hidden data-blog-assets>
+        <img data-asset="potato-happy" src="/src/assets/mascot/potato-happy.svg" alt="">
+        <img data-asset="potato-wink" src="/src/assets/mascot/potato-wink.svg" alt="">
+        <img data-asset="potato-dead" src="/src/assets/mascot/potato-dead.svg" alt="">
+        <img data-asset="potato-sleepy" src="/src/assets/mascot/potato-sleepy.svg" alt="">
+        <img data-asset="sprout" src="/src/assets/sprout.svg" alt="">
+    </div>
+
+    <main id="main" class="blog-page" tabindex="-1">
+        <!-- @blog-main -->
+        <p class="blog-shell-note">this page is filled in by the server.</p>
+        <!-- /@blog-main -->
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>
