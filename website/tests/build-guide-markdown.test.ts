@@ -62,12 +62,15 @@ describe('renderGuide on the real guide', () => {
     }
   });
 
-  it('keeps links in the same tab', () => {
+  it('keeps links in the same tab, and in-page links land on a heading', () => {
     const links = [...guide.html.matchAll(/<a ([^>]*)>/g)].map((m) => m[1]!);
     expect(links.length).toBe(100);
+    const ids = new Set([...guide.html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]!));
     for (const attrs of links) {
       expect(attrs).not.toContain('target=');
-      expect(attrs).toMatch(/^href="https:\/\//);
+      expect(attrs).toMatch(/^href="(https:\/\/|#)/);
+      const anchor = /^href="#([^"]+)"/.exec(attrs)?.[1];
+      if (anchor) expect(ids).toContain(anchor);
     }
   });
 
