@@ -218,3 +218,50 @@ test('a site that only mentions the atmosphere is not tied to atproto', async ()
   assert.equal(judgeSite({ status: 200, title: 'Atmosphere: weather and air quality' }, none).verdict, 'unverified');
   assert.equal(judgeSite({ status: 200, title: 'Sign in', body: 'continue with Bluesky' }, none).verdict, 'likely');
 });
+
+test('collectLexicons reads Aturi right after the week ends and UFOs otherwise', async () => {
+  const { collectLexicons } = await import('../agent/lib/dispatch/collect.ts');
+  const window = { since: '2026-10-12T00:00:00.000Z', until: '2026-10-19T00:00:00.000Z' };
+  const tools = [];
+  const sse = (structuredContent) => new Response(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: 1, result: { structuredContent } })}\n\n`, { status: 200 });
+  const aturi = {
+    list_new_lexicons: { ok: true, since: '2026-10-12T00:10:00.000Z', activeInWindow: 2993, truncated: false, note: 'new means first seen',
+      lexicons: [{ nsid: 'app.sonasky.apollo.page', creates: 83, updates: 93, deletes: 35, didsEstimate: 32 },
+        { nsid: 'app.sonasky.apollo.style', creates: 50, updates: 32, deletes: 21, didsEstimate: 32 }] },
+    list_lexicon_movers: { ok: true, lexicons: [
+      { nsid: 'so.sprk.feed.post', creates: 42985, didsEstimate: 4953, previous: { didsEstimate: 39 } },
+      { nsid: 'app.bsky.actor.status', creates: 9, didsEstimate: 20, previous: { didsEstimate: 2 } }] },
+    list_trending_lexicons: { ok: true, lexicons: [{ nsid: 'app.bsky.feed.like', didsEstimate: 1e6 }, { nsid: 'site.standard.document', creates: 9, didsEstimate: 4442 }] },
+    get_lexicon_schema: { ok: false, code: 'not_found' },
+  };
+  const fakeFetch = async (url, init) => {
+    if (String(url).startsWith('https://aturi.to/api/mcp')) {
+      const { params } = JSON.parse(init.body);
+      tools.push(params.name);
+      return sse(aturi[params.name]);
+    }
+    return new Response('[]', { status: 200 });
+  };
+  const report = await collectLexicons(fakeFetch, window, () => {}, new Date('2026-10-19T00:15:00Z'));
+  assert.match(report.source, /^Aturi/);
+  assert.deepEqual(report.newByProject.map((g) => [g.root, g.count, g.maxAccounts]), [['app.sonasky', 2, 32]]);
+  assert.deepEqual(report.movers.up.map((m) => [m.nsid, m.accountsBefore, m.accountsAfter]), [['so.sprk.feed.post', 39, 4953]]);
+  assert.deepEqual(report.topOutsideBluesky.map((r) => r.nsid), ['site.standard.document']);
+  assert.equal(report.totals.activeThisWindow, 2993);
+  assert.ok(tools.includes('list_new_lexicons') && tools.filter((t) => t === 'list_lexicon_movers').length === 2);
+
+  // A week collected days later cannot be answered by Aturi's rolling window.
+  tools.length = 0;
+  const ufosFetch = async (url) => {
+    if (String(url).startsWith('https://aturi.to/api/mcp')) { tools.push('aturi'); return sse({ ok: false }); }
+    if (String(url).includes('/collections')) return new Response(JSON.stringify({ collections: [] }), { status: 200 });
+    return new Response('[]', { status: 200 });
+  };
+  const later = await collectLexicons(ufosFetch, window, () => {}, new Date('2026-10-22T00:00:00Z'));
+  assert.match(later.source, /^ufos/);
+  assert.equal(tools.length, 0);
+
+  // Aturi failing right after the week falls back to UFOs.
+  const fellBack = await collectLexicons(ufosFetch, window, () => {}, new Date('2026-10-19T00:15:00Z'));
+  assert.match(fellBack.source, /^ufos/);
+});

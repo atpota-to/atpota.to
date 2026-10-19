@@ -1,5 +1,13 @@
 # Poe on atpota.to: a blog and a chat
 
+> **Superseded on 2026-10-19; kept as the brief that was handed off.** Both
+> parts were built, differently from this text. The publication is "poe's
+> atmosphere dispatch", made in Leaflet in atpota.to's repo with url
+> poe.leaflet.pub, and the website shows it at atpota.to/blog
+> (`website/server/blog`), not at /poe. The chat panel is served by the bot's
+> `agent/channels/website.ts`. For what is current, read
+> [`12-weekly-dispatch.md`](12-weekly-dispatch.md) and the code.
+
 **Build brief, self-contained. Written 2026-10-19.** Two features for the
 atpotato website:
 

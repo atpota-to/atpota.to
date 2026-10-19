@@ -365,7 +365,8 @@ export function groupNewLexicons(lexicons: NewLexicon[]): LexiconGroup[] {
 export type LexiconReport = {
   window: Window;
   source: string;
-  totals: { activeThisWindow: number; seenBefore: number; newThisWindow: number; newWithThreePlusAccounts: number; newSingleAccount: number };
+  /** seenBefore and newSingleAccount come only from the UFOs path, which reads all of history. */
+  totals: { activeThisWindow: number; newThisWindow: number; newWithThreePlusAccounts: number; seenBefore?: number; newSingleAccount?: number };
   newByProject: LexiconGroup[];
   newLexicons: NewLexicon[];
   movers: { up: Mover[]; down: Mover[] };
@@ -456,14 +457,122 @@ export async function aturiTool(fetchFn: Fetch, name: string, args: Record<strin
 }
 
 /**
- * New NSIDs, movers and the largest lexicons outside Bluesky's own, from
- * microcosm's UFOs index. Production reads the same report from Aturi once it
- * has the endpoint (agent-spec/12-weekly-dispatch.md, "Lexicon data in Aturi").
- *
- * "New" means not seen by UFOs before the window started, so it is only as
- * complete as UFOs' history. Account counts are HyperLogLog estimates.
+ * The lexicon report: from Aturi when the window has just ended, since Aturi's
+ * tools only answer for the 7 days before the call; from UFOs otherwise, or
+ * when Aturi fails. A Monday collection right after the week closes gets Aturi.
  */
-export async function collectLexicons(fetchFn: Fetch, window: Window, log: Log = () => {}): Promise<LexiconReport> {
+export async function collectLexicons(fetchFn: Fetch, window: Window, log: Log = () => {}, now = new Date()): Promise<LexiconReport> {
+  if (Math.abs(now.getTime() - Date.parse(window.until)) <= 12 * 60 * 60 * 1000) {
+    const report = await collectLexiconsFromAturi(fetchFn, window, log).catch((err) => {
+      log(`lexicons: Aturi failed (${err instanceof Error ? err.message : String(err)}), using UFOs`);
+      return null;
+    });
+    if (report) return report;
+  }
+  return collectLexiconsFromUfos(fetchFn, window, log);
+}
+
+/** Schema details and sample records for the new lexicons more than a couple of accounts use. */
+async function enrichNewLexicons(fetchFn: Fetch, fresh: NewLexicon[], log: Log): Promise<void> {
+  const notable = fresh.filter((n) => n.accounts >= 3 && !n.flags.includes("invalid-looking")).slice(0, 40);
+  log(`lexicons: ${fresh.length} new, checking schemas and samples for ${notable.length}`);
+  await Promise.all(notable.map(async (lexicon) => {
+    const schema = await aturiTool(fetchFn, "get_lexicon_schema", { nsid: lexicon.nsid }).catch(() => null);
+    if (schema) {
+      const value = schema.value as { defs?: { main?: { description?: string } } } | undefined;
+      lexicon.schema = schema.ok
+        ? { published: true, authorityDid: schema.authorityDid as string, description: value?.defs?.main?.description }
+        : { published: false, note: String(schema.error ?? schema.code ?? "not found") };
+    }
+    const records = await getJson<UfosRecord[]>(fetchFn, `${UFOS}/records?collection=${encodeURIComponent(lexicon.nsid)}`).catch(() => []);
+    lexicon.samples = records.slice(0, 3).map((r) => ({
+      uri: `at://${r.did}/${r.collection}/${r.rkey}`,
+      value: JSON.stringify(r.record).slice(0, 1200),
+    }));
+  }));
+}
+
+/** Schemas published in the window, from UFOs' recent-records sample. */
+async function publishedSchemasIn(fetchFn: Fetch, window: Window): Promise<LexiconReport["publishedSchemas"]> {
+  const records = await getJson<UfosRecord[]>(fetchFn, `${UFOS}/records?collection=com.atproto.lexicon.schema`).catch(() => []);
+  return records
+    .filter((r) => inWindow(new Date(r.time_us / 1000).toISOString(), window))
+    .map((r) => ({ nsid: r.rkey, did: r.did, at: new Date(r.time_us / 1000).toISOString() }));
+}
+
+const outsideBluesky = (nsid: string) => !BLUESKY_PREFIXES.some((prefix) => nsid.startsWith(prefix));
+
+type AturiCounts = { nsid: string; creates?: number; updates?: number; deletes?: number; didsEstimate?: number };
+type AturiMover = AturiCounts & { previous?: { didsEstimate?: number } };
+
+async function aturiList<T>(fetchFn: Fetch, tool: string, args: Record<string, unknown>): Promise<{ rows: T[]; body: Record<string, unknown> }> {
+  const body = await aturiTool(fetchFn, tool, args);
+  if (!body?.ok || !Array.isArray(body.lexicons)) throw new Error(`${tool} returned no lexicons`);
+  return { rows: body.lexicons as T[], body };
+}
+
+/**
+ * The same report from the Aturi tools the operator added for the dispatch
+ * (list_new_lexicons and list_lexicon_movers, 2026-10-19), plus
+ * list_trending_lexicons. Aturi only lists new lexicons with two or more
+ * accounts, so the single-account count and the full history total are not
+ * in this version; most single-account NSIDs are one developer testing.
+ */
+export async function collectLexiconsFromAturi(fetchFn: Fetch, window: Window, log: Log = () => {}): Promise<LexiconReport> {
+  log("lexicons: reading Aturi (new lexicons, movers both ways, trending)");
+  const [fresh, rising, falling, trending] = await Promise.all([
+    aturiList<AturiCounts>(fetchFn, "list_new_lexicons", { window: "7d", minAccounts: 2, limit: 200 }),
+    aturiList<AturiMover>(fetchFn, "list_lexicon_movers", { window: "7d", direction: "rising", minAccounts: 10, limit: 50 }),
+    aturiList<AturiMover>(fetchFn, "list_lexicon_movers", { window: "7d", direction: "falling", minAccounts: 10, limit: 25 }),
+    aturiList<AturiCounts>(fetchFn, "list_trending_lexicons", { window: "7d", sort: "dids-estimate", limit: 50 }),
+  ]);
+  const counts = (c: AturiCounts): LexiconRow => ({
+    nsid: c.nsid, accounts: c.didsEstimate ?? 0, creates: c.creates ?? 0, updates: c.updates ?? 0, deletes: c.deletes ?? 0, explore: explore(c.nsid),
+  });
+  const newLexicons: NewLexicon[] = fresh.rows
+    .map((c) => ({ ...counts(c), flags: looksLikeNsid(c.nsid) ? [] : ["invalid-looking"] }))
+    .sort((a, b) => b.accounts - a.accounts || b.creates - a.creates);
+  await enrichNewLexicons(fetchFn, newLexicons, log);
+  const mover = (m: AturiMover): Mover => {
+    const accountsBefore = m.previous?.didsEstimate ?? 0;
+    const accountsAfter = m.didsEstimate ?? 0;
+    return { nsid: m.nsid, accountsBefore, accountsAfter, change: accountsAfter - accountsBefore, explore: explore(m.nsid) };
+  };
+  const notes = [fresh.body.note, rising.body.note].filter((n): n is string => typeof n === "string");
+  return {
+    window,
+    source: "Aturi (list_new_lexicons, list_lexicon_movers, list_trending_lexicons), with sample records from UFOs",
+    totals: {
+      activeThisWindow: Number(fresh.body.activeInWindow ?? 0),
+      newThisWindow: newLexicons.length,
+      newWithThreePlusAccounts: newLexicons.filter((n) => n.accounts >= 3).length,
+    },
+    newByProject: groupNewLexicons(newLexicons),
+    newLexicons,
+    movers: {
+      up: rising.rows.filter((m) => outsideBluesky(m.nsid)).map(mover).slice(0, 25),
+      down: falling.rows.filter((m) => outsideBluesky(m.nsid)).map(mover).slice(0, 15),
+    },
+    topOutsideBluesky: trending.rows.filter((c) => outsideBluesky(c.nsid)).slice(0, 40).map(counts),
+    publishedSchemas: await publishedSchemasIn(fetchFn, window),
+    talk: [],
+    notes: [
+      `Aturi's window is the 7 days before collection, starting ${String(fresh.body.since ?? "unknown")}, which can differ from the recapped week by a few hours.`,
+      "New lexicons are those with at least two accounts; single-account NSIDs, mostly developers testing, are not listed.",
+      ...(fresh.body.truncated ? ["Aturi truncated the new-lexicon list at 200."] : []),
+      ...notes,
+      "publishedSchemas comes from UFOs' recent-records sample, so it is a sample, not every schema published in the window.",
+    ],
+  };
+}
+
+/**
+ * New NSIDs, movers and the largest lexicons outside Bluesky's own, from
+ * microcosm's UFOs index, for any window. "New" means not seen by UFOs before
+ * the window started, so it is only as complete as UFOs' history. Account
+ * counts are HyperLogLog estimates.
+ */
+export async function collectLexiconsFromUfos(fetchFn: Fetch, window: Window, log: Log = () => {}): Promise<LexiconReport> {
   const previous = { since: new Date(Date.parse(window.since) - 7 * DAY).toISOString(), until: window.since };
   log("lexicons: reading UFOs (this window, the week before, and all earlier history)");
   const [current, before, history] = await Promise.all([
@@ -485,25 +594,8 @@ export async function collectLexicons(fetchFn: Fetch, window: Window, log: Log =
     }))
     .sort((a, b) => b.accounts - a.accounts || b.creates - a.creates);
 
-  // Look closer at the new ones that more than a couple of accounts use.
-  const notable = fresh.filter((n) => n.accounts >= 3 && !n.flags.includes("invalid-looking")).slice(0, 40);
-  log(`lexicons: ${fresh.length} new, checking schemas and samples for ${notable.length}`);
-  await Promise.all(notable.map(async (lexicon) => {
-    const schema = await aturiTool(fetchFn, "get_lexicon_schema", { nsid: lexicon.nsid }).catch(() => null);
-    if (schema) {
-      const value = schema.value as { defs?: { main?: { description?: string } } } | undefined;
-      lexicon.schema = schema.ok
-        ? { published: true, authorityDid: schema.authorityDid as string, description: value?.defs?.main?.description }
-        : { published: false, note: String(schema.error ?? schema.code ?? "not found") };
-    }
-    const records = await getJson<UfosRecord[]>(fetchFn, `${UFOS}/records?collection=${encodeURIComponent(lexicon.nsid)}`).catch(() => []);
-    lexicon.samples = records.slice(0, 3).map((r) => ({
-      uri: `at://${r.did}/${r.collection}/${r.rkey}`,
-      value: JSON.stringify(r.record).slice(0, 1200),
-    }));
-  }));
+  await enrichNewLexicons(fetchFn, fresh, log);
 
-  const outsideBluesky = (nsid: string) => !BLUESKY_PREFIXES.some((prefix) => nsid.startsWith(prefix));
   const movers: Mover[] = current
     .filter((c) => outsideBluesky(c.nsid))
     .map((c) => {
@@ -512,8 +604,6 @@ export async function collectLexicons(fetchFn: Fetch, window: Window, log: Log =
     })
     .filter((m) => Math.max(m.accountsBefore, m.accountsAfter) >= 50 && m.accountsBefore > 0);
   const byRatio = (m: Mover) => m.accountsAfter / m.accountsBefore;
-
-  const schemaRecords = await getJson<UfosRecord[]>(fetchFn, `${UFOS}/records?collection=com.atproto.lexicon.schema`).catch(() => []);
 
   return {
     window,
@@ -533,9 +623,7 @@ export async function collectLexicons(fetchFn: Fetch, window: Window, log: Log =
     },
     topOutsideBluesky: current.filter((c) => outsideBluesky(c.nsid))
       .sort((a, b) => b.dids_estimate - a.dids_estimate).slice(0, 40).map(row),
-    publishedSchemas: schemaRecords
-      .filter((r) => inWindow(new Date(r.time_us / 1000).toISOString(), window))
-      .map((r) => ({ nsid: r.rkey, did: r.did, at: new Date(r.time_us / 1000).toISOString() })),
+    publishedSchemas: await publishedSchemasIn(fetchFn, window),
     talk: [],
     notes: [
       "Account counts are HyperLogLog estimates; write them as approximate.",

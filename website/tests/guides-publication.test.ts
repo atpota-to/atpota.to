@@ -97,6 +97,14 @@ describe('markdown -> Leaflet blocks', () => {
     expect(facets.find((f) => f.features[0]!.$type === `${F}link`)!.features[0]!.uri).toBe('https://example.com/a');
   });
 
+  it('puts a link ahead of code over the same words, which Leaflet needs to show the link', () => {
+    const [p] = blocksOf('[`a.b.c`](https://example.com/a): up, while [`a.b.d`](https://example.com/d) fell');
+    const facets = p!.facets as { index: { byteStart: number }; features: { $type: string }[] }[];
+    for (const start of new Set(facets.map((f) => f.index.byteStart))) {
+      expect(facets.filter((f) => f.index.byteStart === start).map((f) => f.features[0]!.$type)).toEqual([`${F}link`, `${F}code`]);
+    }
+  });
+
   it('makes links absolute and points #anchors at the guide page; drops unsafe links', () => {
     const [p] = blocksOf('[home](/blog) [section](#section-2) [shot](screenshots/a.png) [bad](javascript:alert(1))');
     const uris = (p!.facets as { features: { uri: string }[] }[]).map((f) => f.features[0]!.uri);

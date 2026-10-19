@@ -1,26 +1,68 @@
 # Weekly Atmosphere dispatch
 
-> **Plan, 2026-10-18. Nothing here is built yet.** Unlike files 01 to 11, this
-> is the current plan for a feature, not a historical spec. Measurements below
-> were taken on 2026-10-18 and are marked as such.
+> **Plan, first written 2026-10-18, updated 2026-10-19 for the site as built.**
+> Unlike files 01 to 11, this is the current plan for a feature, not a
+> historical spec. Measurements are dated where they appear.
 
-Every Monday Poe recaps the previous week in the Atmosphere: which lexicons
-appeared or grew, what builders talked about, and what shipped. Poe DMs the
-draft to an operator on Bluesky. The operator replies with edits until it reads
-right, then sends `approve`. The droplet publishes it as a
-`site.standard.document` in Poe's repo, and atpota.to/poe/dispatch renders it.
+Every Monday Poe recaps the previous week in the Atmosphere: what builders
+talked about, what shipped, and which lexicons appeared or grew. Each issue is
+a `site.standard.document` in atpota.to's repo, in the Leaflet publication
+"poe's atmosphere dispatch", which lives at poe.leaflet.pub and is shown on
+atpota.to/blog.
+
+Today an operator generates an issue with the demo pipeline, reads it, and
+publishes it with one command; see "Publishing an issue today". Later the
+weekly loop runs on its own: Poe DMs the draft to an operator on Bluesky, the
+operator replies with edits, and `approve` publishes.
 
 ## Decisions made
 
 | Question | Decision |
 | --- | --- |
-| Whose repo publishes | Poe's: `poe.atpota.to`, `did:plc:6qw63oash3jfnpykvpbwnq5z` |
-| Approval | Over Bluesky DM. Nothing is published without an operator's `approve` |
+| Where issues live | atpota.to's repo (`did:plc:qntsxa2i4sb24noi45fx4np2`), in the publication `at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n`, made in Leaflet, url `https://poe.leaflet.pub`. atpota.to/blog shows a copy with canonical links to Leaflet. Poe is credited as contributor. Changed on 2026-10-19 from Poe's repo, when the publication was made |
+| Approval | Nothing is published without an operator. Today, running `npm run publish:dispatch` is the approval; later, `approve` over Bluesky DM |
 | Schedule | Monday. The draft DM should land around 12:00 EAT (09:00 UTC) |
 | Recap window | The previous week, Monday 00:00 UTC to Monday 00:00 UTC (see open questions) |
-| Lexicon data | Aturi, which gains new endpoints and tools (it is ours) |
+| Lexicon data | Aturi's `list_new_lexicons`, `list_lexicon_movers` and `list_trending_lexicons`, collected right after the week closes; UFOs for any other window |
 | Sources | The builders list, feeds and repos the operator sends |
-| Models | Poe orchestrates three specialist roles (analyst, writer, editor); each role's model comes from its own environment variable |
+| Models | Two analysts on Claude Sonnet 5.5, a writer and an editor on Claude Opus 5.5, each set by its own environment variable; see "Models and cost" |
+
+## Publishing an issue today
+
+The rest of this plan describes the automated weekly loop, which is not built
+yet. Until it is, an issue goes out by hand, and these steps work now:
+
+1. **Collect** the week on Monday, after 00:00 UTC (12:00 EAT is fine), so
+   Aturi's 7-day window lines up with the week:
+   `cd bot && npm run dispatch:collect -- --week`
+2. **Write** it: `npm run dispatch:write -- .dispatch/runs/week-<monday> --label v1`.
+   It takes about five minutes and reads model keys from the same env files as
+   `eve dev`. Read
+   `drafts/v1/final.md`, then `editor.json` for what the editor changed and
+   could not verify.
+3. **Revise** if needed: edit `agent/lib/dispatch/voice.md` and re-run the
+   writer and editor with `--label v2 --reuse v1`, or edit `final.md` by hand.
+   What is in the file is what gets published.
+4. **Check** the record:
+   `cd website && npm run publish:dispatch -- ../bot/.dispatch/runs/week-<monday>/drafts/v1/final.md --dry-run`
+5. **Publish**: the same command without `--dry-run`, with `ATP_APP_PASSWORD`
+   set to an app password for atpota.to. It prints the record key, and it
+   refuses to publish the same title twice. /blog shows the issue within its
+   5-minute cache.
+6. **Announce** it from @poe.atpota.to, then link the post into the record:
+   `npm run publish:dispatch -- <file> --rkey <key> --bsky-post <post url>`
+
+Issue 1 went out this way on 2026-10-19
+(`at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3myasnk4bzk22`).
+poe.leaflet.pub listed and rendered it within a minute, credited to Poe, and
+/blog showed it straight away. Before publishing, the 22 "(post)" links in the
+v4 draft were moved onto the words they support, by hand. One thing broke:
+Leaflet shows only the first of two facets over the same words, so a linked
+NSID whose code facet came first lost its link. The converter now puts the
+link first.
+
+Still unknown: whether Leaflet emails a document written straight to the repo
+to the publication's subscribers. That is a question for Leaflet.
 
 ## Rules carried over from the reply design
 
@@ -56,8 +98,8 @@ weekly lexicon report  ───────►  schedules ─► collectors ─
                                  GET  /dispatch/preview  ◄── operator reads draft           │
                                                                                      `approve`
                                                                                             ▼
-                                                                  site.standard.document in Poe's repo
-                                                                  Vercel deploy hook ─► atpota.to/poe
+                                                                  site.standard.document in atpota.to's repo
+                                                                  ─► poe.leaflet.pub and atpota.to/blog
                                                                   announcement post from Poe
 ```
 
@@ -69,7 +111,7 @@ holds the credential and talks to Bluesky, and the bot does the thinking.
 | When (UTC) | EAT | What runs |
 | --- | --- | --- |
 | Daily 00:10 | 03:10 | `dispatch/collect-daily`: read the builders list and feeds, append new posts to the week's files |
-| Mon 07:00 | 10:00 | `dispatch/finalize`: keyword searches, engagement refresh, author profiles and privacy filter, Aturi lexicon report, repo releases. Freeze the dataset |
+| Mon 00:15 | 03:15 | `dispatch/finalize`: Aturi lexicon report (its 7-day window now matches the week), keyword searches, engagement refresh, privacy filter, app sites, repo releases. Freeze the dataset |
 | Mon 07:30 | 10:30 | `dispatch/draft`: the writing pipeline starts on the frozen dataset |
 | Mon ~09:00 | ~12:00 | The draft DM lands. This is a target; the shadow weeks measure how long the pipeline takes |
 | Any time | | Edits go back and forth in the DM. `approve` publishes within minutes |
@@ -106,24 +148,28 @@ Bluesky record.
 Keyword queries should pair "atmosphere" with atproto terms or limit it to list
 members. On its own it matches weather and moods.
 
-### Lexicon data in Aturi
+### Lexicon data from Aturi
 
-What Aturi should expose, as one HTTP endpoint for the collector and as MCP
-tools so Poe can also answer "what's new this week?" in replies:
+Built on 2026-10-19. The collector calls three Aturi tools over MCP:
+`list_new_lexicons` (7 days, at least two accounts, up to 200),
+`list_lexicon_movers` in both directions (at least 10 accounts), and
+`list_trending_lexicons`. For the 40 busiest new lexicons it adds schema
+details from `get_lexicon_schema` and sample records from UFOs. Code groups
+new NSIDs by project and counts them.
 
-- **New lexicons**: NSIDs first seen in a window. For each, the estimated
-  account count, creates, whether a schema is published, the authority, links
-  to a few sample records, and flags such as `single-account` and
-  `invalid-looking`.
-- **Movers**: each NSID's accounts this window against the previous one, with
-  a minimum account floor.
-- **Published schemas**: `com.atproto.lexicon.schema` records created or
-  updated in the window. If Aturi's ingest does not see every one of these, the
-  droplet can add that collection to its Jetstream subscription instead. Per
-  Aturi's own numbers, the collection averaged about 57 creates a day from 10
-  to 20 accounts over the 30 days to 2026-10-17.
+Aturi's windows are the 7 days before the call, so the collector uses Aturi
+only when the recapped week ended within the last 12 hours. Any other window,
+or an Aturi failure, falls back to UFOs, which can answer any window from its
+full history. A live run on 2026-10-19 found 67 new lexicons with two or more
+accounts, 42 with three or more, and Spark's `so.sprk.feed.post` up from about
+39 to about 4,950 accounts.
 
-Measured against microcosm's UFOs API on 2026-10-18:
+Still open: published schemas come from UFOs' recent-records sample, which is
+not a complete list. An Aturi tool for schemas published in a window would
+close that.
+
+Measured against microcosm's UFOs API on 2026-10-18, before Aturi had the
+tools:
 
 - 2,850 NSIDs were active in the previous 7 days. 34,761 had been seen before
   that.
@@ -134,23 +180,21 @@ Measured against microcosm's UFOs API on 2026-10-18:
 - Account counts are HyperLogLog estimates. "First seen" is only as complete
   as the index's history.
 
-Aturi should keep everything and flag, not drop. The 3-account cut becomes the
-analyst's default view of the list, and the full list stays available to it.
-
 ### Storage: public on the PDS, private in Blob
 
-Decided 2026-10-18: as much as can be public lives in Poe's repo on
-`pds.atpota.to`. Anything on a PDS is public, so drafts and review notes stay
-private until they are approved.
+Decided 2026-10-18: as much as can be public lives on `pds.atpota.to`. The
+week list and snapshot go in Poe's repo; the issue goes in atpota.to's repo,
+with its publication. Anything on a PDS is public, so drafts and review notes
+stay private until they are approved.
 
-**In Poe's repo (public)**
+**On the PDS (public)**
 
 | Record | What it holds | Written by |
 | --- | --- | --- |
-| `net.anisota.feed.list`, one per week | "atmosphere week of oct 12": the posts Poe read | droplet, on the collector's request |
+| `net.anisota.feed.list` in Poe's repo, one per week | "atmosphere week of oct 12": the posts Poe read | droplet, on the collector's request |
 | `net.anisota.feed.listItem` | one collected post, by at-uri | droplet, daily |
 | `to.atpota.dispatch.snapshot`, rkey = issue date | the lexicon report, releases, sources and counts | droplet, Monday |
-| `site.standard.document` | the published issue | droplet, after `approve` |
+| `site.standard.document`, in atpota.to's repo | the published issue | the operator today (`publish:dispatch`); the droplet after `approve` later |
 
 The week list uses Anisota's list lexicon, so anyone can read what Poe read in
 Anisota, and the pipeline reads the same list back on Monday. List items are
@@ -413,47 +457,45 @@ An optional setting can also send the full text in the DM, split into
 
 ## Publishing
 
-**Once**, a `site.standard.publication` record in Poe's repo:
+The publication exists: "poe's atmosphere dispatch", made in Leaflet in
+atpota.to's repo
+(`at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n`,
+url `https://poe.leaflet.pub`).
 
-- `name` and `description`: to be chosen.
-- `url`: `https://atpota.to/poe`, shared with Poe's other writing (see 13).
-- `icon`: a potato avatar from `branding/avatars/`, as PNG, at least 256 px
-  square and under 1 MB.
-- `preferences.showInDiscover`: true.
+Each issue is a `site.standard.document` in the same repo, shaped like the
+documents Leaflet writes itself, so Leaflet and the blog both read it:
 
-**Per issue**, after `approve`, the droplet:
+- the record key is a TID from the publish time, and `path` is `/<key>`, so the
+  issue is at `poe.leaflet.pub/<key>` and `atpota.to/blog/<key>`;
+- `site` is the publication's AT-URI, plus `title`, `description`,
+  `publishedAt`, and `tags` `atmosphere` and `dispatch`;
+- `contributors` is `[{ did: <Poe's DID> }]`, which credits Poe;
+- `content` is Leaflet blocks (`pub.leaflet.content`), converted from the
+  issue's markdown by `website/build/leaflet-markdown.ts`, the converter the
+  guides use, and `textContent` is the plain text;
+- `bskyPostRef` points at the announcement post once it exists.
 
-1. Creates the `site.standard.document`: `site` is the publication's AT-URI,
-   `path` is `/dispatch/2026-10-12`, plus `title`, `publishedAt`, `description`, `tags`,
-   `textContent` (plain text, required for search and other readers), and
-   `content` holding the markdown.
-2. Calls the website's Vercel deploy hook and waits until the page returns
-   200.
-3. Posts an announcement from Poe's account with a link card. It has no
-   @-mentions, so featured people are not pinged.
-4. Updates the document with `bskyPostRef` pointing at the announcement, which
-   gives the issue a comment thread.
-5. DMs the operator both links.
+`website/scripts/publish-dispatch.ts` (`npm run publish:dispatch`) builds and
+writes exactly this record. It has a dry run, refuses to publish a title
+twice, updates with `--rkey`, and links the announcement with `--bsky-post`.
+When the droplet takes over publishing, it writes the same record
+(`mentions/DISPATCH.md`).
 
-Each step is idempotent per issue and version, so a retry never publishes
-twice. A droplet environment flag switches publishing off.
+No deploy is needed. /blog reads the repo on each request and caches for 5
+minutes (`website/server/blog/handler.ts`).
 
-**Content format.** Standard.site leaves `content` to each platform. All 42 of
-the most recent documents in UFOs' sample on 2026-10-18 had `textContent` and
-no `content` at all, so `textContent` is what other readers can count on. The
-markdown goes in `content` under our own type, `to.atpota.poe.markdown`, for
-our renderer. Publishing a schema for it is optional; doing so means a
-`_lexicon.poe.atpota.to` TXT record and a schema record.
+The announcement is a post from @poe.atpota.to with a link card to the issue.
+It has no @-mentions, so featured people are not pinged.
 
 ## Website
 
-The publication and its pages are specified in
-[`13-poe-blog-and-chat.md`](13-poe-blog-and-chat.md), Part 1. Decided
-2026-10-19: one publication for all of Poe's writing, at `atpota.to/poe`, with
-dispatch issues at `atpota.to/poe/dispatch/<date>`. The website builds its
-pages from Poe's repo, renders the markdown as untrusted, serves the
-`site.standard.document` link tag and RSS, and fails the build rather than
-publish an empty blog when the PDS cannot be read.
+Built on main (#2 and #4): the Vite site; the chat panel, served by the bot's
+`agent/channels/website.ts`; and /blog, which renders the dispatch publication
+from atpota.to's repo with canonical links to poe.leaflet.pub
+(`website/server/blog`). Leaflet serves the publication's verification;
+atpota.to's `/.well-known` file only answers for a publication whose url is
+atpota.to/blog. [`13-poe-blog-and-chat.md`](13-poe-blog-and-chat.md) was the
+brief; parts were built differently, as its status note records.
 
 ## Risks and controls
 
@@ -560,34 +602,21 @@ things:
 
 ## Build phases
 
-**0. Inputs (operator).** The builders list, feeds, repos, keyword list,
-publication name, description and icon.
+**Done.** The demo pipeline and its collectors (`bot/scripts/dispatch-demo.ts`,
+`bot/agent/lib/dispatch/`), lexicon data from Aturi, app-site checks, the site,
+the chat panel, /blog, and `publish:dispatch`. Issue 1, for the week of
+October 12, was published by hand on 2026-10-19.
 
-**1. Data.** Aturi endpoints and tools (operator). In the bot: collectors,
-Blob layout, privacy filter, the `collect-daily` and `finalize` schedules,
-unit tests. Done when a frozen dataset for a real week exists in Blob and spot
-checks against Bluesky and UFOs match.
+**Now: publish by hand** every Monday, as in "Publishing an issue today". Still
+wanted from the operator: the builders list, feeds, repos and keywords;
+`agent/lib/dispatch/sources.ts` has stand-ins.
 
-**2. Pipeline.** Subagents, sandboxes, `open_week`, `finalize_draft`,
-`submit_draft`, hooks, voice guide, the `draft` schedule, evals. Run locally
-with `POST /eve/v1/dev/schedules/dispatch%2Fdraft` and a local catcher like
-the one in `bot/README.md`. Done when a local run on the fixture produces a
-draft that passes the evals.
-
-**3. Review loop.** In the bot: the `dispatch` channel with the review and
-preview routes, and the `dispatch-style` memory slot. In the droplet: DM
-delivery, routing, `approve` and `skip`. Done when a draft goes through two
-rounds of edits over DM, end to end, against a test account.
-
-**4. Publishing and website.** The publication record, document publishing,
-deploy hook, announcement post, website build script, verification file and
-RSS. Done when a test issue validates as Standard.site and renders on a
-preview deployment.
-
-**5. Shadow weeks.** At least two Mondays with the full pipeline and `approve`
-switched off. Measure pipeline time, token use and cost per run, and the
-operator's edit count. Tune thresholds, voice and the schedule. Then switch
-`approve` on.
+**Next: the weekly loop.** In the bot: the `collect-daily`, `finalize` and
+`draft` schedules, private storage in Blob, the `dispatch` channel with the
+review and preview routes, and the hand-off to the droplet. In the droplet:
+`mentions/DISPATCH.md`. Done when a draft goes through two rounds of edits
+over DM against a test account, followed by two shadow Mondays with
+publishing switched off.
 
 **Later.** A section on what people wrote, from atproto-tagged
 `site.standard.document` records (about 193,000 creates in the week to
@@ -598,23 +627,18 @@ Opt-out requests by DM.
 ## Work by codebase
 
 **bot/** (this repo)
-- `agent/schedules/dispatch/{collect-daily,finalize,draft}.ts`
-- `agent/channels/dispatch.ts`: `POST /dispatch/review`, `GET /dispatch/preview/...`
-- `agent/instructions/dispatch.ts`: Poe as the dispatch's editor-in-chief
-- `agent/subagents/dispatch-{analyst,writer,editor}/`: `agent.ts`,
-  instructions, tools, hooks, sandbox, and an Aturi connection for analyst
-  and editor
-- `agent/tools/{open_week,submit_draft}.ts`, gated to the dispatch channel
-- `agent/memory/dispatch-style.ts`
-- `agent/lib/dispatch/`: sources, collectors, store, identifiers, lint,
-  renderer, voice guide
-- `agent/lib/model.ts`: `direct()` takes a model id; role variables added
-- `tests/dispatch-*.test.mjs`, `evals/dispatch/`
+- Built: `agent/lib/dispatch/` (sources, collectors over Aturi and UFOs,
+  privacy filter, app sites, lint, roles, voice guide),
+  `scripts/dispatch-demo.ts`, `tests/dispatch-*.test.mjs`.
+- To build: `agent/schedules/dispatch/{collect-daily,finalize,draft}.ts`;
+  `agent/channels/dispatch.ts` with the review and preview routes; the
+  analyst, writer and editor as subagents or tools; `submit_draft`;
+  `agent/memory/dispatch-style.ts`; `evals/dispatch/`; and the markdown to
+  Leaflet conversion, matching `website/build/leaflet-markdown.ts`, so the
+  droplet receives a record it can write as is.
 
 **website/** (this repo)
-- `scripts/build-dispatch.mjs`, wired into `build`
-- `.well-known/site.standard.publication/poe` (see 13)
-- A home page link
+- Built: /blog, the chat panel, `scripts/publish-dispatch.ts`.
 
 **droplet** (on DigitalOcean, not in this repo). The standalone brief is
 [`../mentions/DISPATCH.md`](../mentions/DISPATCH.md). In short:
@@ -622,37 +646,36 @@ Opt-out requests by DM.
 - `POST /dispatch/draft`, the identifier check, DM delivery
 - Operator DM routing while a review is open; `approve` and `skip`
 - Accept the dispatch collector as a caller of `/internal/bluesky-search`
-- Publication setup, document publishing, deploy hook, announcement,
-  `bskyPostRef` update
+- Publishing into atpota.to's repo, which needs a credential for that account,
+  then the announcement from Poe and the `bskyPostRef` update
 - The opt-out list and an endpoint for the collector to read it
 - A publishing kill switch
-- Only if Aturi cannot provide published schemas: add
-  `com.atproto.lexicon.schema` to the Jetstream subscription
 
 **Aturi** (operator)
-- New lexicons, movers and published schemas, as one HTTP endpoint plus MCP
-  tools
+- Built: `list_new_lexicons`, `list_lexicon_movers`.
+- Wanted: schemas published in a window.
 
 ## Open questions
 
-1. Publication name, description and icon.
-2. Week boundary: Monday 00:00 UTC as proposed, or Monday 00:00 EAT (Sunday
+1. Does Leaflet email subscribers about a document written straight to the
+   repo? It lists and renders one (issue 1).
+2. The droplet will write into atpota.to's repo. An app password for
+   atpota.to, or an OAuth session limited to `site.standard.document`, if
+   pds.atpota.to supports scoped permissions?
+3. Should the announcement link poe.leaflet.pub (the canonical page, with
+   Leaflet's subscribe button) or atpota.to/blog?
+4. Week boundary: Monday 00:00 UTC as proposed, or Monday 00:00 EAT (Sunday
    21:00 UTC).
-3. DM routing: everything during an open review, as proposed, or only replies
+5. DM routing: everything during an open review, as proposed, or only replies
    to the draft message, if the app supports replying to a DM.
-4. Should featured people be notified? Proposed no.
-5. How does someone opt out? Proposed: by DM to Poe or an operator command,
+6. Should featured people be notified? Proposed no.
+7. How does someone opt out? Proposed: by DM to Poe or an operator command,
    recorded by the droplet.
-6. Which moderation labels exclude a post.
-7. Does Aturi's ingest see every `com.atproto.lexicon.schema` record?
-8. Who builds the droplet side, and where does its code live?
-9. A per-run cost budget, set after the shadow weeks measure real usage.
-10. How Leaflet, pckt and Offprint display a document from another
-    publisher. They are likely to use `textContent` or link to the canonical
-    URL; this is unverified.
-11. Posts that fail the relevance check: drop them, or keep them privately in
+8. Which moderation labels exclude a post.
+9. A per-run cost budget, set after real usage.
+10. Posts that fail the relevance check: drop them, or keep them privately in
     Blob so the analysts still see everything collected?
-12. Does Anisota's AppView offer a read endpoint for a list's items? Without
+11. Does Anisota's AppView offer a read endpoint for a list's items? Without
     one, the pipeline pages Poe's `net.anisota.feed.listItem` collection
     newest first and stops at the week's start.
 

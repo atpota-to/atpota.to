@@ -154,6 +154,9 @@ Collection also checks each notable project's website, and the writer links
 only the ones it could verify. `npm run dispatch:sites -- .dispatch/runs/<dir>`
 adds those checks to a week collected before they existed.
 
+To publish an issue, run `npm run publish:dispatch` in `../website` on its
+`final.md`; "Publishing an issue today" in the plan has the steps.
+
 ## Learn more
 
 To learn more about eve, explore these resources:

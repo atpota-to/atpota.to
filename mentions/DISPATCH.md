@@ -2,7 +2,8 @@
 
 **Build brief for the droplet side of Poe's weekly dispatch. Self-contained:
 you should not need any other conversation to work from it.** Written
-2026-10-18. The overall plan is `agent-spec/12-weekly-dispatch.md`; read it if
+2026-10-18, updated 2026-10-19 after the publication was made in Leaflet and
+issue 1 was published by hand. The overall plan is `agent-spec/12-weekly-dispatch.md`; read it if
 you want the reasoning, but everything you need to build is here.
 
 ## What you are adding
@@ -21,8 +22,9 @@ the credential:
    numbers and releases the issue was written from.
 3. **Run the review.** DM the operator each version of the draft, relay their
    notes to the agent, and accept `approve` or `skip`.
-4. **Publish.** After `approve`, write the `site.standard.document`, rebuild
-   the website, post the announcement, and link the two.
+4. **Publish.** After `approve`, write the `site.standard.document` into
+   atpota.to's repo, check the page is up, post the announcement from Poe, and
+   link the two.
 5. **Keep opt-outs.** Record who has asked to be left out, remove their list
    items, and tell the collector.
 
@@ -41,6 +43,29 @@ including keyword search results, so assume a post will eventually try to talk
 Poe into including a link or a claim. If an injection succeeds completely
 inside the agent, the worst outcome must be a draft the droplet rejects or the
 operator declines.
+
+**Where issues live.** Not in Poe's repo: each issue is a
+`site.standard.document` in **atpota.to's** repo
+(`did:plc:qntsxa2i4sb24noi45fx4np2`, same PDS), in the Leaflet publication
+"poe's atmosphere dispatch"
+(`at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n`,
+url `https://poe.leaflet.pub`). Leaflet serves each issue at
+`poe.leaflet.pub/<rkey>`, and the website shows a copy at
+`atpota.to/blog/<rkey>`, reading the repo on each request, so no deploy is
+needed. Poe is credited through the document's `contributors`. The week list,
+the snapshot and the announcement stay in Poe's repo.
+
+So publishing needs a **second credential**, for atpota.to. Use it for one
+thing only: `site.standard.document` writes in that publication. Store it like
+Poe's, never send it to the agent, and use an app password, never the main
+one. (If `pds.atpota.to` supports OAuth permission sets by then, a session
+limited to `site.standard.document` is better.)
+
+**Issues are published by hand until this is built.** An operator runs
+`npm run publish:dispatch` in `website/` (`website/scripts/publish-dispatch.ts`).
+That script is the reference for the record this service writes; match it.
+Issue 1 went out that way on 2026-10-19 as
+`at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3myasnk4bzk22`.
 
 **Nothing is published without an operator's `approve`**, sent by DM from a DID
 on the droplet's operator allowlist, and bound to the exact version they saw.
@@ -137,10 +162,11 @@ Each version of the issue, after the agent's editor has finished with it.
   "kind": "dispatch",
   "version": 2,
   "sha256": "hex of the UTF-8 markdown",
-  "title": "the atmosphere this week: oct 12 to 18",
+  "title": "attie sites, spaces near beta, and a brand new cow",
   "description": "under 300 characters",
   "markdown": "the issue body",
   "textContent": "the same body as plain text",
+  "content": { "$type": "pub.leaflet.content", "pages": ["the body as Leaflet blocks"] },
   "summary": "under 900 graphemes, for the DM",
   "changes": ["what changed since v1"],
   "openQuestions": ["things the editor could not verify"],
@@ -150,20 +176,27 @@ Each version of the issue, after the agent's editor has finished with it.
 ```
 
 `kind` is `dispatch` for a weekly issue or `post` for anything else Poe writes
-(`agent-spec/13-poe-blog-and-chat.md`). A `post` uses a slug instead of the
-issue date, is published at path `/<slug>`, and has no week list or snapshot;
-review, approval and publishing work the same way.
+for the same publication. A `post` is keyed by a slug instead of the issue
+date and has no week list or snapshot; review, approval and publishing work
+the same way.
+
+`content` is the markdown already converted to Leaflet blocks by the agent,
+with the same converter the website uses (`website/build/leaflet-markdown.ts`),
+so the droplet writes it as is and needs no markdown parser.
 
 On receipt:
 
 1. Recompute the sha256 of `markdown` and reject a mismatch.
 2. **Identifier gate.** Extract every `http(s)://` URL, every backticked token
    that looks like an NSID (three or more dot-separated segments), and every
-   `did:plc:` or `did:web:` string from title, description and markdown. Strip
+   `did:plc:` or `did:web:` string from title, description and markdown, and
+   every `uri` in `content`'s facets, since that is what readers click. Strip
    trailing punctuation and trailing slashes. Each must be in `allowed`, or be
    under `https://atpota.to/`. Same rule as the reply link gate: a host
    allowlist cannot catch an invented path on a real domain.
-3. Reject raw HTML in the markdown.
+3. Reject raw HTML in the markdown, and any `content` block other than text,
+   header, unordered and ordered list, blockquote, code and horizontal rule
+   (no images or embeds yet).
 4. If any check fails, store the version as `rejected`, and DM the operator
    that version N failed the gate and why. Do not send it as a draft.
 5. Otherwise store it as the issue's latest version and DM the operator
@@ -238,18 +271,25 @@ resumes where it stopped, and so no step runs twice.
 
 1. **Check.** The approved version's stored markdown still hashes to its
    sha256, and `DISPATCH_PUBLISH_ENABLED` is true. If publishing is disabled
-   (shadow mode), DM "shadow mode: not published" and stop.
-2. **Create the document** with `com.atproto.repo.createRecord` in
-   `site.standard.document` (shape below). Store its at-uri and cid.
-3. **Rebuild the website.** `POST` to the Vercel deploy hook in
-   `DISPATCH_DEPLOY_HOOK_URL`. Then poll `https://atpota.to/poe/dispatch/<issue>`
-   every 20 seconds, for up to 10 minutes, until it returns 200 **and** its HTML
-   contains `<link rel="site.standard.document" href="<the document's at-uri>">`.
-   The second check proves the new build is live rather than a cached page.
+   (shadow mode), DM "shadow mode: not published" and stop. List the
+   publication's documents in atpota.to's repo; if one already has this
+   version's title, an operator published it by hand, so store that document
+   and skip to step 3.
+2. **Write the document.** Generate a TID from the current time as the record
+   key and store it before writing, then `com.atproto.repo.putRecord` in
+   `site.standard.document` in atpota.to's repo with that key (shape below). A
+   retry reuses the stored key, so it overwrites instead of duplicating. Store
+   the at-uri and cid.
+3. **Check the page.** Poll `https://poe.leaflet.pub/<rkey>` every 20 seconds,
+   for up to 10 minutes, until it returns 200 **and** its HTML contains
+   `<link rel="site.standard.document" href="<the document's at-uri>">`. Leaflet
+   indexes from the network, so this proves it has the issue. On 2026-10-19 it
+   showed issue 1 within a minute. `https://atpota.to/blog/<rkey>` needs no
+   check: it reads the repo directly.
 4. **Post the announcement** from Poe's account (shape below).
-5. **Link them.** `com.atproto.repo.putRecord` the document again with
-   `bskyPostRef` set to the announcement's `{ uri, cid }` and `updatedAt` set.
-6. **Confirm.** DM the operator the page URL and the post URL.
+5. **Link them.** `putRecord` the document again with `bskyPostRef` set to the
+   announcement's `{ uri, cid }` and `updatedAt` set, keeping `publishedAt`.
+6. **Confirm.** DM the operator the page URLs and the post URL.
 
 If step 3 times out, DM the operator and stop before posting; the announcement
 should never link to a page that is not up. They can retry with `approve`
@@ -267,7 +307,8 @@ again, which resumes at step 3.
 
 ## Records
 
-All in Poe's repo.
+The week list, list items, snapshot and announcement are in Poe's repo. The
+document is in atpota.to's repo.
 
 **Week list**, `net.anisota.feed.list` (schema published by anisota.net):
 
@@ -316,51 +357,41 @@ schema under `_lexicon.dispatch.atpota.to` is optional):
 
 The agent fills the body; the droplet only checks size and writes it.
 
-**Publication**, `site.standard.publication`, created once by an admin
-command, not by the service loop:
+**Publication**: already exists, made in Leaflet. Do not create or edit it.
+Its at-uri is
+`at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n`
+and its url `https://poe.leaflet.pub`. Leaflet serves its verification file.
 
-```json
-{
-  "$type": "site.standard.publication",
-  "name": "<to be chosen>",
-  "url": "https://atpota.to/poe",
-  "description": "<to be chosen>",
-  "icon": "<blob: potato avatar, PNG, at least 256 px square, under 1 MB>",
-  "preferences": { "showInDiscover": true }
-}
-```
-
-Store its at-uri as `DISPATCH_PUBLICATION_URI`. The website serves it at
-`/.well-known/site.standard.publication/poe`. It is one publication for all of
-Poe's writing; the website side is `agent-spec/13-poe-blog-and-chat.md`.
-
-**Document**, `site.standard.document`:
+**Document**, `site.standard.document`, in atpota.to's repo, shaped like the
+documents Leaflet writes itself:
 
 ```json
 {
   "$type": "site.standard.document",
-  "site": "<DISPATCH_PUBLICATION_URI>",
-  "path": "/dispatch/2026-10-12",
+  "site": "at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n",
+  "path": "/<rkey>",
   "title": "<title>",
   "description": "<description>",
   "publishedAt": "<now>",
-  "tags": ["atproto", "dispatch"],
+  "tags": ["atmosphere", "dispatch"],
+  "contributors": [{ "did": "did:plc:6qw63oash3jfnpykvpbwnq5z" }],
   "textContent": "<textContent>",
-  "content": { "$type": "to.atpota.poe.markdown", "markdown": "<markdown>" },
+  "content": "<content, as the agent sent it>",
   "bskyPostRef": { "uri": "...", "cid": "..." }
 }
 ```
 
-`bskyPostRef` is added in step 5. The canonical URL is the publication `url`
-plus `path`: `https://atpota.to/poe/dispatch/2026-10-12`. Posts that are not
-dispatch issues use `/<slug>`.
+`path` is the record key, so the issue is at `https://poe.leaflet.pub/<rkey>`
+and `https://atpota.to/blog/<rkey>`. `bskyPostRef` is added in step 5. A record
+must stay under about 145 KB (issue 1 was 27 KB).
 
 **Announcement**, `app.bsky.feed.post`:
 
 - Text under 300 graphemes, written from the issue's title and description,
   with the page URL as a link facet.
 - An `app.bsky.embed.external` card: the page URL, title, description, and a
-  thumbnail blob uploaded from the issue's Open Graph image.
+  thumbnail blob uploaded from the page's Open Graph image (Leaflet generates
+  one per issue).
 - `langs: ["en"]`.
 - **No mention facets.** Featured people are not pinged.
 
@@ -369,7 +400,7 @@ dispatch issues use `/<slug>`.
 Something like this, in whatever store the droplet already uses:
 
 ```
-dispatch_issue     issue (pk), state, list_uri, snapshot_uri, document_uri, document_cid,
+dispatch_issue     issue (pk), state, list_uri, snapshot_uri, document_rkey, document_uri, document_cid,
                    post_uri, post_cid, approved_version, publish_step, updated_at
 dispatch_version   issue, version, sha256, title, description, markdown, text_content,
                    summary, preview_url, status (accepted|rejected), reject_reason,
@@ -389,8 +420,9 @@ arrives while this one is still in review).
 | --- | --- |
 | `DISPATCH_ENABLED` | Off: every dispatch endpoint answers `503` and DMs are routed as today |
 | `DISPATCH_PUBLISH_ENABLED` | Off (the default): shadow mode. Drafts and reviews work; `approve` does not publish |
-| `DISPATCH_DEPLOY_HOOK_URL` | The website's Vercel deploy hook. Secret; only the droplet holds it |
-| `DISPATCH_PUBLICATION_URI` | Set after the publication record exists |
+| `DISPATCH_PUBLICATION_URI` | `at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n` |
+| `DISPATCH_PUBLISHER_IDENTIFIER` | `atpota.to` |
+| `DISPATCH_PUBLISHER_APP_PASSWORD` | An app password for atpota.to. Secret; only the droplet holds it. Check after signing in that the session's DID is atpota.to's |
 
 The agent host and the shared secret are the ones already configured.
 
@@ -411,7 +443,11 @@ Unit tests, written before wiring anything to the real account:
 - DM text never exceeds 1,000 graphemes and always keeps the preview link and
   the commands.
 
-Then end to end against a test account and a test PDS before Poe's real repo.
+- The document written matches what `website/scripts/publish-dispatch.ts`
+  writes for the same issue, apart from the record key and times.
+- An issue already published by hand is not published again.
+
+Then end to end against a test account and a test PDS before the real repos.
 
 ## Rollout
 
@@ -419,15 +455,18 @@ Then end to end against a test account and a test PDS before Poe's real repo.
    agent starts filling week lists.
 2. Endpoints 4 to 6 and DMs. At least two Mondays of shadow review: real drafts,
    real notes, `approve` answering "shadow mode".
-3. The publication record, then `DISPATCH_PUBLISH_ENABLED` on.
+3. The atpota.to credential, then `DISPATCH_PUBLISH_ENABLED` on. Until then,
+   operators publish approved issues by hand with `publish:dispatch`.
 
 ## Open questions
 
-1. The publication's name and description.
-2. Does `pds.atpota.to` have write rate limits enabled, and what is its
+1. App password or scoped OAuth for the atpota.to credential (see above).
+2. Should the announcement link `poe.leaflet.pub/<rkey>`, which has Leaflet's
+   subscribe button, or `atpota.to/blog/<rkey>`?
+3. Does `pds.atpota.to` have write rate limits enabled, and what is its
    `applyWrites` batch limit?
-3. Should a later version route only DM replies to the draft message as notes?
+4. Should a later version route only DM replies to the draft message as notes?
    Depends on whether the Bluesky app supports replying to a DM.
-4. Does Anisota's AppView offer a read endpoint for a list's items? If so, the
+5. Does Anisota's AppView offer a read endpoint for a list's items? If so, the
    agent can read the week list through it instead of paging Poe's whole
    `net.anisota.feed.listItem` collection.

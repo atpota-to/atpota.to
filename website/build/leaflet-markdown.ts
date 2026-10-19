@@ -206,7 +206,10 @@ class RichText {
         if (byteEnd > byteStart) facets.push({ index: { byteStart, byteEnd }, features: [feature] });
       }
     }
-    facets.sort((x, y) => x.index.byteStart - y.index.byteStart || x.index.byteEnd - y.index.byteEnd);
+    // Leaflet shows only the first of two facets over the same text (seen on
+    // poe.leaflet.pub, 2026-10-19), so a link goes ahead of the code or bold around it.
+    const linkFirst = (f: Facet) => (f.features[0]?.$type === `${F}#link` ? 0 : 1);
+    facets.sort((x, y) => x.index.byteStart - y.index.byteStart || x.index.byteEnd - y.index.byteEnd || linkFirst(x) - linkFirst(y));
     return { plaintext, facets };
   }
 }

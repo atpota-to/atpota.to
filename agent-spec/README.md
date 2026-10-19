@@ -42,9 +42,10 @@ coding agent) so the thing that gets built is the thing you wanted.
 | [`09-bluesky-channel.md`](09-bluesky-channel.md) | The Bluesky account: Jetstream detection, the gate layer, thread-to-session mapping, and the posting path |
 | [`10-memory.md`](10-memory.md) | What it remembers about whom, how the scope is keyed, and how forgetting works |
 | [`11-go-live.md`](11-go-live.md) | **The runbook.** Nothing to live, in order, with what to check at each step |
-| [`12-weekly-dispatch.md`](12-weekly-dispatch.md) | **Current plan, not historical.** The weekly Atmosphere dispatch: data collection, the analyst/writer/editor pipeline, DM review, Standard.site publishing, and the website pages |
-| [`13-poe-blog-and-chat.md`](13-poe-blog-and-chat.md) | **Current build brief.** Poe's Standard.site publication and blog at atpota.to/poe, and the chat panel on the website |
+| [`12-weekly-dispatch.md`](12-weekly-dispatch.md) | **Current plan, not historical.** The weekly Atmosphere dispatch: data collection, the analyst/writer/editor pipeline, publishing to the Leaflet publication (by hand today, with the runbook), and the DM review loop still to build |
+| [`13-poe-blog-and-chat.md`](13-poe-blog-and-chat.md) | Superseded. The brief for the blog and the chat panel, which were built differently: the dispatch is on poe.leaflet.pub and atpota.to/blog |
 | [`../mentions/SPEC.md`](../mentions/SPEC.md) | Standalone build brief for the droplet service. Self-contained, meant to be handed off on its own |
+| [`../mentions/DISPATCH.md`](../mentions/DISPATCH.md) | Standalone brief for the droplet's side of the dispatch: week lists, DM review, publishing |
 
 ## Assumptions worth checking before building
 
