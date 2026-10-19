@@ -41,7 +41,7 @@ describe('renderGuide on the real guide', () => {
 
   it('gives every h3-h5 a unique slug id', () => {
     const ids = [...guide.html.matchAll(/<h[3-5] id="([^"]+)">/g)].map((m) => m[1]!);
-    expect(ids.length).toBe(20 + 49 + 7);
+    expect(ids.length).toBe(22 + 50 + 7);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     expect(ids).toContain('1-custom-feeds-algorithms');

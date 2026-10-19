@@ -53,11 +53,12 @@ If you only take ten things from this guide, make it these. Each one links to th
 ![Screenshot showing how to change your handle on Bluesky](/guides/screenshots/change-handle.png)
 
 **4. Turn on two-factor authentication.**
-- Go to Settings → Privacy and Security → Two-factor authentication. Once it's on, you'll need a code from your email whenever you sign in.
+- Go to Settings → Privacy and security → Two-factor authentication. Once it's on, you'll need a code from your email whenever you sign in.
 - If someone else will post for you, like an agency, a contractor, or a scheduling tool, create an app password for them on that same settings page instead of handing over your main password. Give each person and each tool its own app password, so you can revoke one (say, when a contractor's work wraps up) without changing the rest. Many newer tools skip passwords altogether and send you to Bluesky to approve the connection, which is even better.
 
 **5. Make your first post.**
 - Introduce yourself, announce your latest news, or share something helpful within your niche. It's probably best to wait to do this until your handle updates to your custom domain though.
+- Once it's up, pin it: tap the "..." menu on the post and choose "Pin to your profile." You can only pin one post at a time, so it's a good home for your introduction or your most important link.
 
 **6. Share about it on other channels.**
 - Let your world know they can find you on Bluesky now.
@@ -373,7 +374,7 @@ Bluesky posts still top out at 300 characters, so long-form writing lives somewh
 
 #### 10. Check how your links will look
 
-When you add a link to a post, Bluesky builds a preview card from your page's Open Graph tags: its title, description, and preview image. If your website doesn't set those tags, your links show up as bare cards with no image, which are easy to scroll past. Before you launch, paste a few of your links into the post composer and see what comes up. You don't have to post them.
+When you add a link to a post, Bluesky builds a preview card from your page's Open Graph tags: its title, description, and preview image. If your website doesn't set those tags, your links show up as bare cards with no image, which are easy to scroll past. Before you launch, paste a few of your links into the post composer and see what comes up. You don't have to post them. Get this right early, because the card is saved when you post. Fixing your tags later won't change the cards on posts that are already up.
 
 ### Leveraging Bluesky's unique features for growth and engagement
 
@@ -452,14 +453,20 @@ In June 2026, Bluesky added group chats, which it described as its ["first featu
 For a brand, a group chat works best as a smaller, more personal space alongside your public account: a group for your most engaged customers, beta testers, volunteers, or local organizers. A few limits to keep in mind:
 
 - Group chats aren't end-to-end encrypted, so don't use them for anything sensitive.
-- People under 18 can't join them.
-- By default, people can only be added to a group by accounts they follow, so an invite link is usually the easier way in.
+- They're text only for now. You can share links and quote posts, but not images or videos.
+- People under 18 can't use them, and Bluesky treats accounts with no birthdate on file the same way.
+- By default, people only accept group invites from accounts they follow. An invite link gets around that: whoever created the group can make one that lets people join instantly or ask to join, and share it in a post.
+- Brand-new accounts can't create groups, so set yours up ahead of time.
 
 #### 6. Live Now badges (Easy)
 
-If you livestream, you can link your stream to your Bluesky profile while you're live. Your avatar gets a red ring and a LIVE badge, and people can tap it to go straight to your stream. It works with Twitch, YouTube, Substack, beehiiv, Streamplace, and Bluecast, and it has been open to everyone (as a beta) since January 2026. If your brand does live events, product demos, or behind-the-scenes streams, it lets people on Bluesky know you're on without you having to post about it over and over.
+If you livestream, you can link your stream to your Bluesky profile while you're live. On your profile, tap the "..." button, choose "Go live," paste your stream link, and pick how long the badge should show (up to four hours). Your avatar gets a red ring and a LIVE badge, and people can tap it to go straight to your stream. It works with Twitch, YouTube, Substack, beehiiv, Streamplace, and Bluecast, and it has been open to everyone (as a beta) since January 2026. If your brand does live events, product demos, or behind-the-scenes streams, it lets people on Bluesky know you're on without you having to post about it over and over.
 
-#### 7. Automated account labels (Easy)
+#### 7. Direct messages (Easy)
+
+By default, Bluesky only lets people you follow send you a direct message. That's a sensible setting for individuals, but a brand that wants customers to be able to reach it should change it: open the chat tab, go to Chat settings, and set "Allow direct messages from" to "Everyone." If you'd rather not handle support in DMs, leave it alone and say in your bio where people should go instead. Either way, remember that Bluesky DMs aren't end-to-end encrypted, so never ask anyone to send passwords, payment details, or other sensitive information there.
+
+#### 8. Automated account labels (Easy)
 
 If your brand runs an account that posts automatically, like service alerts, new blog posts, or product updates, mark it as automated in your account settings. Bluesky added this option in March 2026, and it puts a label on the profile and its posts so people know they're not talking to a person. BART, the San Francisco Bay Area's transit system, keeps the two separate: @bart.gov is its main account, and @alerts.bart.gov handles the automated alerts.
 
@@ -619,9 +626,9 @@ For larger brands and organizations with development resources and heightened mo
 
 #### Activity notifications
 
-When this guide first came out, getting an alert every time a specific account posted meant downloading a separate app. Now it's built in. Tap the bell icon next to the Follow button on someone's profile, and Bluesky will notify you when they post. You can manage these under Settings → Notifications → Activity notifications. It's a handy way to keep tabs on competitors, partners, or the journalists who cover your industry.
+When this guide first came out, getting an alert every time a specific account posted meant downloading a separate app. Now it's built in. On the profile of an account you follow, tap the bell icon, and Bluesky will notify you when they post (and, if you want, when they reply). You can manage these under Settings → Notifications → Activity from others. It's a handy way to keep tabs on competitors, partners, or the journalists who cover your industry.
 
-It works the other way, too: your followers can turn on notifications for your posts, unless you've limited who can do that under Settings → Privacy and Security.
+It works the other way, too: your followers can turn on notifications for your posts, unless you've limited who can do that under Settings → Privacy and security → "Allow others to be notified of your posts."
 
 #### Clearsky
 
@@ -651,7 +658,15 @@ When you go to make a post about a topic that might be sensitive, think carefull
 
 ### Age checks
 
-Laws in several places now require Bluesky to check people's ages, and that can affect which parts of your audience can use which features. In the UK, for example, people have to verify their age before they can use DMs or turn on adult content. In Australia, Bluesky blocks accounts for people under 16, and in Mississippi it's unavailable to anyone under 18. Group chats are off-limits to anyone under 18, everywhere. If your audience skews young, keep this in mind before you plan a community around DMs or group chats.
+Laws in several places now require Bluesky to check people's ages, and that can affect which parts of your audience can use which features. In the UK, for example, people have to verify their age before they can use DMs or turn on adult content. In Australia, Bluesky blocks accounts for people under 16. In Mississippi it's unavailable to anyone under 18, and adults there have to verify their age before they can use it. Group chats are off-limits to anyone under 18, everywhere. If your audience skews young, keep this in mind before you plan a community around DMs or group chats.
+
+### Impersonation
+
+If someone sets up an account pretending to be your brand, report it: open their profile, tap the "..." menu, choose "Report account," then "Misleading," then "Impersonation." Your best long-term protection is the one from earlier in this guide. A handle on your own domain is something an impersonator can't copy, and verification, if you qualify, adds a second signal.
+
+### Backing up your account
+
+Every so often, download a copy of your account's data. Go to Settings → Account → Export my data, and choose "Download profile data." You'll get a single file with your posts, follows, likes, and other public records. It doesn't include images or your private data, so keep your own copies of the media you post. The same screen can also export the chat messages you've sent.
 
 ### Community guidelines
 
