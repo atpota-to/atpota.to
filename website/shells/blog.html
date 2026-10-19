@@ -50,6 +50,40 @@
         <!-- /@blog-main -->
     </main>
 
+    <!-- Bluesky sign-in for subscribing, recommending and commenting (src/blog/ui.ts). Two
+         steps: the handle, then "is this you?" with the site the reader is about to visit. -->
+    <dialog class="blog-signin" id="blog-signin" aria-labelledby="blog-signin-title" data-blog-signin>
+        <div class="blog-signin__panel">
+            <div class="blog-signin__head">
+                <h2 class="blog-signin__title" id="blog-signin-title" data-blog-signin-title>sign in with bluesky</h2>
+                <button type="button" class="blog-signin__close" aria-label="close" data-blog-signin-close>
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                </button>
+            </div>
+            <form class="blog-signin__step" data-blog-signin-form novalidate>
+                <p class="blog-signin__lede" data-blog-signin-lede>sign in with your bluesky account.</p>
+                <label class="blog-signin__label" for="blog-signin-handle">your handle</label>
+                <input class="blog-signin__input" id="blog-signin-handle" name="handle" type="text" inputmode="url" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="alice.bsky.social" aria-describedby="blog-signin-fine" required>
+                <p class="blog-signin__error" data-blog-signin-error role="alert" hidden></p>
+                <button type="submit" class="btn btn--primary btn--block" data-blog-signin-submit>next</button>
+                <p class="blog-signin__fine" id="blog-signin-fine">any atproto account works. next you'll see where your account lives before you go there.</p>
+            </form>
+            <div class="blog-signin__step" data-blog-signin-confirm hidden>
+                <div class="blog-signin__who" data-blog-signin-who></div>
+                <button type="button" class="btn btn--primary btn--block blog-signin__go" data-blog-signin-go>
+                    <span>continue at <span data-blog-signin-host></span></span>
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+                </button>
+                <p class="blog-signin__where" data-blog-signin-where></p>
+                <p class="blog-signin__error" data-blog-signin-go-error role="alert" hidden></p>
+                <div class="blog-signin__foot">
+                    <button type="button" class="blog-signin__back" data-blog-signin-back>not you?</button>
+                    <span>atpota.to never sees your password.</span>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
     <!-- @partial footer -->
 </body>
 </html>

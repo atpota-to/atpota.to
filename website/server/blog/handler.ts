@@ -11,13 +11,16 @@
  *
  * Pages are cached by Vercel's CDN for a few minutes and served stale while they refresh,
  * so a new post shows up within about five minutes without a deploy. Records, identities
- * and the shell are also cached briefly in the function instance.
+ * and the shell are also cached briefly in the function instance. A post also carries its
+ * comments and recommend count (discussion.ts), on the same cache; the reader's own new
+ * comment shows at once because the browser adds it (src/blog/).
  */
 
 import type { Env } from '../config.js';
 import { AtprotoError, resolveDid, TtlCache, type Fetch, type Identity } from './atproto.js';
 import { embedTargets, EMPTY_EMBEDS, headingShiftFor, leafletPages, pagesText } from './blocks.js';
 import { ATPOTATO_DID, POE_DID, readBlogConfig, type BlogConfig } from './config.js';
+import { loadDiscussion } from './discussion.js';
 import { loadEmbeds } from './embeds.js';
 import { atomFeed, FEED_ENTRIES } from './feed.js';
 import {
@@ -213,7 +216,11 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
 
     const index = data.docs.indexOf(doc);
     const pages = leafletPages(doc.content);
-    const embeds = await loadEmbeds(doFetch, embedTargets(pages));
+    const [embeds, discussion] = await Promise.all([
+      loadEmbeds(doFetch, embedTargets(pages)),
+      config.commentsEnabled ? loadDiscussion(doFetch, { document: doc.uri, owner: data.identity, hidden: config.hiddenComments }) : null,
+    ]);
+    if (discussion?.status === 'unavailable') log({ event: 'discussion_error' });
     return page(request, e, 200, CACHE_OK, (shell) =>
       postPage({
         site,
@@ -229,6 +236,7 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
         headingShift: headingShiftFor(pages),
         assets: shell.assets,
         coverCid: doc.coverCid,
+        discussion,
       }),
     );
   }

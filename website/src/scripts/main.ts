@@ -2,8 +2,8 @@
  * Shared entry for every page (<script type="module" src="/src/scripts/main.ts">).
  *
  * 1. theme toggle wiring, header nav (phone menu sheet), mascot expression swapping
- * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts
- *    (dynamic import; each page module exports `init()`, which is called once)
+ * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
+ *    "blog" -> ./blog.ts (dynamic import; each page module exports `init()`, called once)
  * 3. mountPoe() from src/poe/index.ts (the corner widget, on every page)
  *
  * Page CSS is linked from each page's <head>, not imported here, so it never flashes.
@@ -19,6 +19,7 @@ type PageModule = { init?: () => void | Promise<void> };
 const PAGE_MODULES: Record<string, () => Promise<PageModule>> = {
   home: () => import('./home'),
   guide: () => import('./guide'),
+  blog: () => import('./blog'),
 };
 
 function safely(label: string, fn: () => void): void {
