@@ -187,8 +187,12 @@ html[data-theme="dark"] .home-sun::before {
   transition: transform var(--dur) var(--ease-out);
 }
 
-.home-sun:hover .home-sun__mascot {
-  transform: translateY(-6px) rotate(-1.5deg);
+/* Mouse and pen only: a tap leaves :hover stuck on touch screens, which kept the
+   potato lifted until the next tap somewhere else. Taps still swap the face (mascot.ts). */
+@media (hover: hover) and (pointer: fine) {
+  .home-sun:hover .home-sun__mascot {
+    transform: translateY(-6px) rotate(-1.5deg);
+  }
 }
 
 .home-sun__bubble {
@@ -495,8 +499,10 @@ html[data-theme="dark"] .home-sun::before {
   transition: transform var(--dur) var(--ease-out);
 }
 
-.home-guide:hover .home-guide__potato {
-  transform: translateY(-6px);
+@media (hover: hover) and (pointer: fine) {
+  .home-guide:hover .home-guide__potato {
+    transform: translateY(-6px);
+  }
 }
 
 /* ---------- find us ---------- */

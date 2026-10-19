@@ -231,9 +231,12 @@ a.tile.tile--soil:hover {
     box-shadow var(--dur) var(--ease-out);
 }
 
-.tile--link:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-soft);
+/* Mouse and pen only, so a tap on a touch screen doesn't leave the tile lifted. */
+@media (hover: hover) and (pointer: fine) {
+  .tile--link:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-soft);
+  }
 }
 
 @media (max-width: 640px) {

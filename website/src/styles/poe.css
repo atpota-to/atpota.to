@@ -92,15 +92,26 @@ html[data-theme="dark"] {
     transform var(--dur) var(--ease-out);
 }
 
-.poe-potato:hover,
 .poe-potato:focus-visible {
   transform: translateY(-14px);
 }
 
-.poe-potato:hover .poe-potato__label,
 .poe-potato:focus-visible .poe-potato__label {
   opacity: 1;
   transform: none;
+}
+
+/* Hover only where it is real: on touch screens :hover sticks after a tap and kept
+   the potato raised (label showing) after the panel closed. */
+@media (hover: hover) and (pointer: fine) {
+  .poe-potato:hover {
+    transform: translateY(-14px);
+  }
+
+  .poe-potato:hover .poe-potato__label {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .poe-potato:focus-visible {
