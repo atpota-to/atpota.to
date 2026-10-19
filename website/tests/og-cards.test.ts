@@ -47,9 +47,9 @@ describe('og cards: readCards', () => {
     expect(cards.home).toMatchObject({
       kind: 'home',
       title: home.querySelector('#home-title')!.textContent,
+      lede: home.querySelector('.home-hero__lede')!.textContent,
       bubble: home.body.dataset.poeNudge,
     });
-    expect(cards.home!.lede).toMatch(/^responsible for /);
 
     expect(cards.guides).toMatchObject({ kind: 'guides', chip: 'guides', title: 'atpotato guides' });
     for (const guide of GUIDES.documents) {
