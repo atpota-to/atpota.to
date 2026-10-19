@@ -75,24 +75,8 @@ html[data-theme="dark"] {
   background: var(--paper);
 }
 
-.home-hero__chip {
-  align-self: flex-start;
-}
-
-.home-hero__chip-icon {
-  width: 18px;
-  height: auto;
-  flex: none;
-}
-
-/* leaf.svg ships with a fixed green; follow the chip colour so it works in dark mode too. */
-.home-hero__chip-icon path {
-  fill: currentColor;
-  stroke: currentColor;
-}
-
 .home-hero__title {
-  margin: 24px 0 20px;
+  margin: 0 0 20px;
   font-size: clamp(46px, 5.2vw, 74px);
   line-height: 0.98;
   letter-spacing: -0.03em;
@@ -939,17 +923,8 @@ html.js .home-latest[data-state="loading"] .home-post__fallback,
     border-radius: 30px;
   }
 
-  .home-hero__chip {
-    padding: 6px 14px 6px 10px;
-    font-size: 14px;
-  }
-
-  .home-hero__chip-icon {
-    width: 16px;
-  }
-
   .home-hero__title {
-    margin: 16px 0 12px;
+    margin: 0 0 12px;
     font-size: 44px;
     line-height: 1;
   }

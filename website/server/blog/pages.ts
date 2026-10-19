@@ -26,7 +26,13 @@ import { FootnoteList, renderRichText } from './richtext.js';
 
 export const WORDS_PER_MINUTE = 200;
 export const FEED_PATH = `${BLOG_PATH}/feed.xml`;
-export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-image.jpg`;
+/** The blog's card (scripts/og-cards.html), for every page without a cover image of its own. */
+export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og/blog.png`;
+const DEFAULT_OG_IMAGE_TAGS = [
+  `<meta property="og:image:width" content="1200">`,
+  `<meta property="og:image:height" content="630">`,
+  `<meta property="og:image:alt" content="poe's atmosphere dispatch, a weekly newsletter by @poe.atpota.to, with a happy potato standing on a dirt mound under green rays.">`,
+];
 
 /** URLs of shell images (the build hashes them), by data-asset name. */
 export type Assets = ReadonlyMap<string, string>;
@@ -117,6 +123,7 @@ function headHtml(m: HeadMeta): string {
     `<meta property="og:title" content="${escapeAttr(m.title)}">`,
     `<meta property="og:description" content="${escapeAttr(m.description)}">`,
     `<meta property="og:image" content="${escapeAttr(m.image)}">`,
+    ...(m.image === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_TAGS : []),
     `<meta name="twitter:card" content="summary_large_image">`,
   );
   if (m.canonical) tags.push(`<meta property="og:url" content="${escapeAttr(m.canonical)}">`);
