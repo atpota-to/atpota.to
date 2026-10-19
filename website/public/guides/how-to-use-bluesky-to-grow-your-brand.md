@@ -50,6 +50,7 @@ Let's do this.
 
 **7. Add your Bluesky link to your website.**
 - If you have icons or links to your social media profiles on your website, add Bluesky to that list.
+- Some people read Bluesky through other apps, like Blacksky or deer.social. If you want your link to work for them too, you can use a universal link from [Aturi](https://aturi.to/links) (a free tool I made) instead, like `aturi.to/profile/yourbrand.com`. Visitors see a preview of your profile and choose which app opens it.
 
 Now, while you wait for your custom domain to finish connecting or your IT department to make the necessary configurations, let's learn more about what makes Bluesky tick.
 
@@ -81,7 +82,9 @@ You'll also hear people call the whole network of apps built on the AT Protocol 
 
 When you create an account on Bluesky, you're actually creating an AT Protocol account, even if you don't realize it. When you make a post on Bluesky, reply to another user, or like an image, all of that data gets stored in what's called your account's Personal Data Server (PDS). 
 
-The PDS is basically just a file folder containing lots of different files that get stored on a server in the cloud. You can decide which company (or even yourself) "hosts" your data, similar to how a website is hosted. 
+The PDS is basically just a file folder containing lots of different files that get stored on a server in the cloud. You can decide which company (or even yourself) "hosts" your data, similar to how a website is hosted.
+
+If you're curious what's in your own folder, you can look. Paste your handle into [Aturi's explorer](https://aturi.to/explore) and you'll see every record your account holds: your posts, likes, follows, and lists, plus anything you've made in other Atmosphere apps. 
 
 By default, new Bluesky accounts have their PDS data hosted on one of many different Bluesky servers, each of which is named after a different type of mushroom.
 
@@ -347,7 +350,7 @@ If you write threads, you don't have to number the posts yourself anymore. Since
 
 #### 9. Link to your long-form writing
 
-Bluesky posts still top out at 300 characters, so long-form writing lives somewhere else. What's new is how well it shows up here. Blogging platforms built on the AT Protocol, like [Leaflet](https://leaflet.pub), [pckt](https://pckt.blog), and [Offprint](https://offprint.app), publish articles using a shared format called [Standard.site](https://standard.site), and since May 2026, links to those articles appear on Bluesky as richer preview cards. Because the articles are stored in your own account's data, they also come with you if you ever change hosts. If your brand has a blog or newsletter, this is worth a look. (This guide is published the same way.)
+Bluesky posts still top out at 300 characters, so long-form writing lives somewhere else. What's new is how well it shows up here. Blogging platforms built on the AT Protocol, like [Leaflet](https://leaflet.pub), [pckt](https://pckt.blog), and [Offprint](https://offprint.app), publish articles using a shared format called [Standard.site](https://standard.site), and since May 2026, links to those articles appear on Bluesky as richer preview cards. Because the articles are stored in your own account's data, they also come with you if you ever change hosts. If your brand has a blog or newsletter, this is worth a look. (This guide is published the same way, and you can [see its record on Aturi](https://aturi.to/profile/did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3lrdzen52y224).)
 
 ### Leveraging Bluesky's unique features for growth and engagement
 
@@ -367,13 +370,13 @@ Here is a list of some different Labelers to give you more inspiration and ideas
 
 * [Bikesky Labeler](https://bsky.app/profile/labeler.bikesky.social)  
 * [2025 Super Bowl Labeler](https://bsky.app/profile/did:plc:h2btirb6mgshvzf2jqrsggbc)  
-* [Pronouns Labeler](https://bsky.app/profile/pronounsinb.io)  
+* [Northsky Pronouns Labeler](https://bsky.app/profile/pronouns.northsky.social)  
 * [The Cave of Trophonius](https://bsky.app/profile/oracle.posters.rip)  
 * [Screenshots Labeler](https://bsky.app/profile/xblock.aendra.dev)
 
 Creating your own Labeler is not user-friendly at the moment though, but it is possible if you have some coding/development skills. To get you started [check out this Github Repository](https://github.com/aliceisjustplaying/labeler-starter-kit-bsky) that a community member created to serve as a starter kit for creating a Labeler.
 
-If you do build one, plan on keeping it running. Labels only exist for as long as the labeler behind them stays online, so when one shuts down, every label your community picked goes with it. That's what happened to the pronouns labeler I originally recommended in this guide, and to the Swifties labeler mentioned earlier. The person who built a replacement for the pronouns one put it simply in their bio: "The pronouns labeler I was using disappeared so I built this one."
+If you do build one, plan on keeping it running. Labels only exist for as long as the labeler behind them stays online, so when one shuts down, every label your community picked goes with it. That's what happened to the pronouns labeler I originally recommended in this guide, and to the Swifties labeler mentioned earlier. These days I'd point people to [Northsky's pronouns labeler](https://bsky.app/profile/pronouns.northsky.social), which is run by Northsky, the Canadian account host mentioned earlier, rather than by a single person. You can pick your pronouns by liking one of its posts or on [its website](https://pronouns.northsky.app/).
 
 #### 2. Feeds (Easy/Moderate)
 
@@ -503,6 +506,7 @@ One notable exception, as of October 2026, is Later, which doesn't list Bluesky 
 * [deck.blue](https://deck.blue/)   
 * [graze.social](https://graze.social/)   
 * [ClearSky](https://clearsky.app/)
+* [Aturi](https://aturi.to/)
 
 ### Utilities
 
@@ -591,6 +595,10 @@ It works the other way, too: your followers can turn on notifications for your p
 #### Clearsky
 
 [This tool](https://clearsky.app/) was mentioned earlier in the guide, but it can be helpful for brands as a monitoring application because you're able to see all the lists your account has been put on as well as all the accounts that are blocking you. If you notice a huge spike out of the blue in the number of blockers you have, that might be an indicator that your account is being spread around in a negative context.
+
+#### Aturi
+
+Bluesky's notifications only tell you about activity inside Bluesky. To see everything that points back at one of your posts or your profile, open it in [Aturi's explorer](https://aturi.to/explore). Its backlinks view counts every like, repost, reply, and quote, and it also catches references from other Atmosphere apps that the Bluesky app never shows you. If you install the [browser extension](https://aturi.to/extension), you can pull up the same view for whatever post or profile you're looking at.
 
 #### Service status
 
