@@ -1,0 +1,29 @@
+# Checks every link and Bluesky account in the guides (website/scripts/check-guide-links.ts).
+# Runs weekly, on pull requests that touch a guide, and on demand from the Actions tab.
+# A failed weekly run emails whoever last edited this schedule.
+name: Guide links
+
+on:
+  schedule:
+    - cron: '17 14 * * 1'
+  pull_request:
+    paths:
+      - 'website/public/guides/**'
+      - 'website/scripts/check-guide-links.ts'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm run check:links

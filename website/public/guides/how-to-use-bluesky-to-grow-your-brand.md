@@ -2,7 +2,7 @@
 
 *Updated October 2026. I first published this guide in June 2025, and plenty has changed since then. This version adds what's new (group chats, livestream badges, longer videos, and more) and fixes the parts that had gone out of date.*
 
-Bluesky passed 45 million registered accounts in June 2026. Daily activity is lower than it was at its late-2024 peak: on a typical day in the fall of 2026, around 560,000 accounts post something, down from about a million back then. Journalists, politicians, activists, celebrities, and everyday individuals still use it to engage with the content and communities that matter most to them. If you're wondering whether your brand should be there too, **this guide will help you decide—and show you exactly how to succeed if you do.**
+Bluesky passed [45 million registered accounts](https://bsky.app/profile/bsky.app/post/3mp54n7zccc2j) in June 2026. Daily activity is lower than it was at its late-2024 peak: according to [Jaz's public Bluesky stats](https://bsky.jazco.dev/stats), around 560,000 accounts post something on a typical day in the fall of 2026, down from about a million back then. Journalists, politicians, activists, celebrities, and everyday individuals still use it to engage with the content and communities that matter most to them. If you're wondering whether your brand should be there too, **this guide will help you decide—and show you exactly how to succeed if you do.**
 
 Getting started on Bluesky is actually very easy, and it doesn't require a big time investment. You don't need to completely change your content strategy or brand voice to make it work. 
 
@@ -17,6 +17,21 @@ My background is in social media and community growth, but nowadays I create res
 We'll start with the basics if you're itching to jump right in, and then proceed to covering the complexities if you're ready to take things to the next level.
 
 Let's do this.
+
+### The short version
+
+If you only take ten things from this guide, make it these. Each one links to the part that explains it.
+
+1. Use your own domain as your username, and turn on two-factor authentication. ([Quick Start](#section-2))
+2. Put links right in your posts. Bluesky doesn't bury them. ([Links](#1-use-links-directly-without-any-weird-hacks))
+3. Write alt text for every image and video. ([Alt text](#2-if-you-post-images-always-include-alt-text))
+4. Find the custom feeds your audience reads, and learn what gets a post into them. ([Topical feeds](#4-consider-the-variables-or-conditions-of-relevant-topical-feeds))
+5. Build two feeds of your own: one to track mentions of your brand, and a public one for your niche. ([Feeds](#2-feeds-easy-moderate))
+6. Make a starter pack of your team or the best accounts in your field. ([Starter packs](#3-starter-packs-easy))
+7. Keep an eye on what people say about you with a mentions feed, search, and activity notifications. ([Active monitoring](#active-monitoring))
+8. Learn how to limit replies, detach quotes, and hide replies before you need to. ([Mitigation strategies](#mitigation-strategies))
+9. Measure followers, engagement, and clicks on links tagged with UTM parameters. Bluesky doesn't show view counts. ([Measuring success](#section-5))
+10. Keep a presence on other networks too, and don't make Bluesky the only place you announce anything urgent. ([Next steps](#section-7))
 
 ## Quick Start Guide
 
@@ -39,7 +54,7 @@ Let's do this.
 
 **4. Turn on two-factor authentication.**
 - Go to Settings → Privacy and Security → Two-factor authentication. Once it's on, you'll need a code from your email whenever you sign in.
-- If someone else will post for you, like an agency, a contractor, or a scheduling tool, create an app password for them on that same settings page instead of handing over your main password. Many newer tools skip passwords altogether and send you to Bluesky to approve the connection, which is even better.
+- If someone else will post for you, like an agency, a contractor, or a scheduling tool, create an app password for them on that same settings page instead of handing over your main password. Give each person and each tool its own app password, so you can revoke one (say, when a contractor's work wraps up) without changing the rest. Many newer tools skip passwords altogether and send you to Bluesky to approve the connection, which is even better.
 
 **5. Make your first post.**
 - Introduce yourself, announce your latest news, or share something helpful within your niche. It's probably best to wait to do this until your handle updates to your custom domain though.
@@ -156,7 +171,7 @@ You can also set up subdomains as usernames, so you could set up team member acc
 
 In addition to being able to self-verify your account via your domain name, there is also a unique verification system run by Bluesky that functions similarly to the original "blue check" from Twitter before it became X. While it may look the same on the surface though, there's actually a lot more going on.
 
-Bluesky can issue blue check verifications like you would expect, but it also can designate a third-party organization like the New York Times to be considered a "Trusted Verifier", meaning that there are now multiple independent sources for verification. When the program launched in April 2025, there were only a handful of "Trusted Verifiers". By the end of that year there were 21, including WIRED, CNN, the European Commission, and the City of Toronto, and together with Bluesky they had verified about 4,300 accounts.
+Bluesky can issue blue check verifications like you would expect, but it also can designate a third-party organization like the New York Times to be considered a "Trusted Verifier", meaning that there are now multiple independent sources for verification. When the program launched in April 2025, there were only a handful of "Trusted Verifiers". By the end of that year, according to [Bluesky's 2025 transparency report](https://bsky.social/about/blog/01-29-2026-transparency-report-2025), there were 21, including WIRED, CNN, the European Commission, and the City of Toronto, and together with Bluesky they had verified about 4,300 accounts.
 
 ![A screenshot showing Paul Frazee's verified account on Bluesky](/guides/screenshots/paul-verification.png)
 
@@ -190,11 +205,11 @@ On most social platforms, sharing a YouTube or Spotify link won't play the media
 
 #### 9. No outbound link suppression
 
-Since we're on the subject of sharing links, now's a great time to mention that another defining and powerful feature of Bluesky is that its "Discover" feed algorithm doesn't suppress and down rank content that contains links to outside websites. This is huge for companies, brands, and creators because you no longer need to perform silly algorithmic gymnastics just to get followers onto your website. Bluesky has said so directly: "there's no limit to the number of links you can share, and they will receive the same visibility as your other posts."
+Since we're on the subject of sharing links, now's a great time to mention that another defining and powerful feature of Bluesky is that its "Discover" feed algorithm doesn't suppress and down rank content that contains links to outside websites. This is huge for companies, brands, and creators because you no longer need to perform silly algorithmic gymnastics just to get followers onto your website. Bluesky has [said so directly](https://bsky.app/profile/bsky.app/post/3lv76v3dauk2w): "there's no limit to the number of links you can share, and they will receive the same visibility as your other posts."
 
 #### 10. Starter packs
 
-One of the difficult parts of joining a new social network is finding accounts that share your common interests and values. Bluesky tackled this issue by introducing an industry first: Starter Packs. Within six months, Meta's Threads app was testing its own version. 
+One of the difficult parts of joining a new social network is finding accounts that share your common interests and values. Bluesky tackled this issue with a feature called Starter Packs, and within six months, [Meta's Threads app was testing its own version](https://www.engadget.com/social-media/threads-take-on-bluesky-starter-packs-is-live-193106158.html). 
 
 At their core, Starter Packs are hand-curated lists of accounts that anyone can make. Each starter pack even has an invite-link attached to it. By sharing a Starter Pack with someone, they can create a new Bluesky account and follow a bunch of relevant accounts instantly. 
 
@@ -236,7 +251,7 @@ Eventually, there were growth periods that were dominated by other countries suc
 
 The biggest growth event that the network has experienced so far though was in the days surrounding the 2024 United States presidential election, at which point millions of people created new Bluesky accounts in an effort to migrate off of big tech social networks like Facebook, Instagram, and X.
 
-Growth has slowed since that rush. Sign-ups kept coming (Bluesky went from about 26 million accounts at the start of 2025 to about 41 million at the end of it), but as I mentioned at the start of this guide, fewer people post on a typical day now than they did back then.
+Growth has slowed since that rush. Sign-ups kept coming (Bluesky went from about 26 million accounts at the start of 2025 to about 41 million at the end of it, according to its [transparency report](https://bsky.social/about/blog/01-29-2026-transparency-report-2025)), but as I mentioned at the start of this guide, fewer people post on a typical day now than they did back then.
 
 In the months after the election, many people mistakenly started to assume that Bluesky had effectively become a politically left-leaning platform just for democrats. In reality, the culture of Bluesky is so multi-faceted at this point that it really doesn't make sense to think about it with such a hegemonic lens.
 
@@ -276,7 +291,7 @@ In this situation, the primary way to keep people using your app (and even get t
 
 This isn't to say that advertising will never exist within Bluesky, but at the very least it won't manifest in the exact same way as it has in the past.
 
-As of October 2026, the Bluesky app still doesn't show ads. Bluesky's leadership has said the company plans to start making money with payments instead, so people can support, buy from, and fundraise for each other right on the network. There is one kind of advertising here already, and it shows the different shape ads can take on an open network: [Graze](https://graze.social), a popular tool for building custom feeds, lets brands sponsor posts inside community feeds, and the person who runs each feed picks which sponsors to accept and keeps most of the money. More on that later.
+As of October 2026, the Bluesky app still doesn't show ads. Bluesky's leadership [has said](https://techcrunch.com/2026/10/15/bluesky-wants-to-make-it-easier-to-buy-sell-and-fundraise-on-the-network/) the company plans to start making money with payments instead, so people can support, buy from, and fundraise for each other right on the network. There is one kind of advertising here already, and it shows the different shape ads can take on an open network: [Graze](https://graze.social), a popular tool for building custom feeds, lets brands sponsor posts inside community feeds, and the person who runs each feed picks which sponsors to accept and keeps most of the money. More on that later.
 
 #### 3. There's more control.
 
@@ -286,7 +301,7 @@ This reality also contributes to Bluesky's multicultural environment... for any 
 
 #### 4. It's not "big tech".
 
-Given the fact that almost all of the major social media platforms in the United States have decided to align themselves with specific government administrations and policy proposals, even to extreme degrees, many people are uncomfortable spending their time with products made by those companies. Bluesky does not have the same affiliations or baggage, thus making it an attractive alternative. It is still a venture-backed company, though: in 2026, Bluesky disclosed that it had raised $100 million the year before. The open protocol is the safety net here. If Bluesky ever changed course, people could take their accounts and followers somewhere else.
+Given the fact that almost all of the major social media platforms in the United States have decided to align themselves with specific government administrations and policy proposals, even to extreme degrees, many people are uncomfortable spending their time with products made by those companies. Bluesky does not have the same affiliations or baggage, thus making it an attractive alternative. It is still a venture-backed company, though: in 2026, Bluesky [disclosed](https://bsky.social/about/blog/03-19-2026-series-b) that it had raised $100 million the year before. The open protocol is the safety net here. If Bluesky ever changed course, people could take their accounts and followers somewhere else.
 
 Now that you have a solid understanding of Bluesky, its underlying technology, and its multifaceted community, you're ready to start thinking about how you can practically fit into the equation.
 
@@ -316,6 +331,10 @@ More so than in other places, a significant part of Bluesky's culture cares a lo
 
 For instance, if you post a screenshot of a document or promotional graphic, you should include all of that content as alt text too. If you didn't do this, then your post would not end up in relevant search results where it otherwise could and should. There are even Bluesky users who refuse to share content from other accounts if alt text isn't present. The same goes for videos, which can have alt text too.
 
+❌ Don't: 'event poster'
+
+✅ Do: 'Poster for our Spring Market: Saturday, May 9, 10am to 4pm at Lowell Park. Free entry, 40 local vendors, and live music.'
+
 #### 3. Be conservative and mindful with your hashtag usage
 
 While hashtags are supported on Bluesky and used in many different contexts, including them in all of your posts can be seen as a desperate attempt for attention and a form of engagement hacking in many spheres. Depending on your industry and context though, the usage of hashtags might be more normal and prevalent. It's wise to take a look at what other accounts in your community/niche are doing to see what is and isn't common practice.
@@ -332,7 +351,7 @@ Be warned though, if your activity violates the norms or rules of a custom feed,
 
 #### 5. There is no edit button, so spell-check your content carefully
 
-Most social platforms these days allow for editing a post if you make a typo or need to add something after the fact. Bluesky still doesn't support this feature. In May 2026, Bluesky's head of product said the team was discussing a limited version (one edit, within five minutes, text only, with the earlier version visible to everyone), so even if it ships, it won't save you from much. While it is technically possible to edit posts under the hood on the protocol level, doing so is a bit technical, requires third-party tools, and usually is not advisable (it also will reset the post's engagement stats).
+Most social platforms these days allow for editing a post if you make a typo or need to add something after the fact. Bluesky still doesn't support this feature. In May 2026, Bluesky's head of product [said](https://bsky.app/profile/alexbenzer.com/post/3mlvrfzti7k25) the team was discussing a limited version (one edit, within five minutes, text only, with the earlier version visible to everyone), so even if it ships, it won't save you from much. While it is technically possible to edit posts under the hood on the protocol level, doing so is a bit technical, requires third-party tools, and usually is not advisable (it also will reset the post's engagement stats).
 
 One thing that does help: since February 2026, Bluesky has drafts, so you can write a post, step away, and come back to proofread it before it goes out.
 
@@ -351,6 +370,10 @@ If you write threads, you don't have to number the posts yourself anymore. Since
 #### 9. Link to your long-form writing
 
 Bluesky posts still top out at 300 characters, so long-form writing lives somewhere else. What's new is how well it shows up here. Blogging platforms built on the AT Protocol, like [Leaflet](https://leaflet.pub), [pckt](https://pckt.blog), and [Offprint](https://offprint.app), publish articles using a shared format called [Standard.site](https://standard.site), and since May 2026, links to those articles appear on Bluesky as richer preview cards. Because the articles are stored in your own account's data, they also come with you if you ever change hosts. If your brand has a blog or newsletter, this is worth a look. (This guide is published the same way, and you can [see its record on Aturi](https://aturi.to/profile/did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3lrdzen52y224).)
+
+#### 10. Check how your links will look
+
+When you add a link to a post, Bluesky builds a preview card from your page's Open Graph tags: its title, description, and preview image. If your website doesn't set those tags, your links show up as bare cards with no image, which are easy to scroll past. Before you launch, paste a few of your links into the post composer and see what comes up. You don't have to post them.
 
 ### Leveraging Bluesky's unique features for growth and engagement
 
@@ -390,11 +413,17 @@ By doing this, you're providing a valuable free service to people and getting yo
 
 For a recent example, The A.V. Club (@avclub.com) ran an "Emmys Watch" feed during the September 2026 Emmys and asked its followers to pin it, and Bluesky's official account shared it.
 
+Whatever you build, give it a description that says what's in it and how people can get their posts included:
+
+❌ Don't: 'Our feed'
+
+✅ Do: 'Sourdough and wild yeast baking posts from across Bluesky. Add #Breadsky to your post to be included.'
+
 ![Screenshot of the Graze.social feed editor interface showing various filtering options](screenshots/graze-editor.jpg)
 
-A few things have changed with Graze since this guide first came out. In August 2026, it was bought by Flipboard, which plans to bring Graze's feed tools to other apps on the AT Protocol, including Flipboard's own. Building a feed is still free. Graze is also where Bluesky's version of advertising lives: brands can sponsor posts that appear inside feeds, the person who runs each feed decides which sponsors to accept, and they keep 70% of the money. If there's a popular feed in your niche, sponsoring it is one of the only paid options on the network, and the money goes to someone who's already serving your audience.
+A few things have changed with Graze since this guide first came out. In August 2026, it was [bought by Flipboard](https://techcrunch.com/2026/08/26/flipboard-acquires-graze-the-feed-builder-working-to-monetize-the-open-social-web/), which plans to bring Graze's feed tools to other apps on the AT Protocol, including Flipboard's own. Building a feed is still free. Graze is also where Bluesky's version of advertising lives: brands can sponsor posts that appear inside feeds, the person who runs each feed decides which sponsors to accept, and they keep 70% of the money. If there's a popular feed in your niche, sponsoring it is one of the only paid options on the network, and the money goes to someone who's already serving your audience.
 
-Graze isn't the only way to build a feed, either. [Bluesky Feed Creator](https://blueskyfeedcreator.com) is another no-code tool, and Bluesky has its own app called [Attie](https://attie.ai) that builds a feed from a plain-language description of what you want to see. Attie uses AI to do this, so keep in mind what we'll cover later about how some parts of Bluesky feel about AI.
+Graze isn't the only way to build a feed, either. [SkyFeed](https://skyfeed.app) and [Bluesky Feed Creator](https://blueskyfeedcreator.com) are other no-code tools (Boston's and many of Bikesky's feeds are built with SkyFeed), and Bluesky has its own app called [Attie](https://attie.ai) that builds a feed from a plain-language description of what you want to see. Attie uses AI to do this, so keep in mind what we'll cover later about how some parts of Bluesky feel about AI.
 
 #### 3. Starter packs (Easy)
 
@@ -418,7 +447,7 @@ For instance, Taylor Swift fans can get their very own free username that uses t
 
 #### 5. Group chats (Easy)
 
-In June 2026, Bluesky added group chats, which it described as its "first feature built for communities." A group chat can hold up to 100 people, and you can share an invite link instead of adding everyone by hand.
+In June 2026, Bluesky added group chats, which it described as its ["first feature built for communities."](https://bsky.app/profile/bsky.app/post/3mnzmprxpe22y) A group chat can hold up to 100 people, and you can share an invite link instead of adding everyone by hand.
 
 For a brand, a group chat works best as a smaller, more personal space alongside your public account: a group for your most engaged customers, beta testers, volunteers, or local organizers. A few limits to keep in mind:
 
@@ -440,9 +469,9 @@ If your brand runs an account that posts automatically, like service alerts, new
 
 [https://bsky.app/profile/boston.gov](https://bsky.app/profile/boston.gov)
 
-The most populous city in the commonwealth of Massachusetts is also one of the most active municipalities on Bluesky currently. Boasting over two dozen interconnected government-owned accounts, Boston's embrace of Bluesky is a great blueprint for how a large entity could join the social network. 
+The most populous city in the commonwealth of Massachusetts is also one of the most active municipalities on Bluesky currently. Boasting more than three dozen interconnected government-owned accounts, Boston's embrace of Bluesky is a great blueprint for how a large entity could join the social network. 
 
-Each of their major city departments has its own Bluesky account with consistent branding and official usernames that are self-verified using the subdomain system. Anyone can instantly recognize a Boston account as being official because they all end in the [boston.gov](https://boston.gov) domain name. Furthermore, they have a Starter Pack that contains all of the city accounts, plus the mayor, in one place so that Boston residents can quickly follow all of these local sources with one tap.
+Each of their major city departments has its own Bluesky account with consistent branding and official usernames that are self-verified using the subdomain system. Anyone can instantly recognize a Boston account as being official because they all end in the [boston.gov](https://boston.gov) domain name. The city even gives its neighborhood liaisons their own accounts, like @roxbury.boston.gov, so residents can find the person who covers their part of town. Furthermore, they have a Starter Pack that contains all of the city accounts, plus the mayor, in one place so that Boston residents can quickly follow all of these local sources with one tap.
 
 Boston even has a unified custom feed that you can follow to see just city updates across all departments in one timeline, clutter free.
 
@@ -454,7 +483,7 @@ A bicycle rider named Derek van Vliet took it upon himself to organize a communi
 
 The Bikesky labeler lets a community member add a tag to their profile to display what kind of bike enthusiast they are. These labels range from "Tandem Bike Partner", "Recumbent Rider", to even "Folding Bike Fan". This tool makes it easy for community members to recognize and connect with one another, especially those that share common interests or traits.
 
-Bikesky even has over a dozen custom feeds so that bike enjoyers can find niche content created within the biking community. Many of these feeds gather/curate posts automatically by matching the #Bikesky hashtag.
+Bikesky now runs about 30 custom feeds so that bike enjoyers can find niche content created within the biking community, including city feeds like #BikeTO and #SFBike. Many of these feeds gather/curate posts automatically by matching the #Bikesky hashtag.
 
 #### Bandcamp
 
@@ -470,6 +499,8 @@ Once you've started posting on Bluesky, there might come a time where you need t
 - Engagements received (likes, reposts, replies, mentions)  
 - Engagement rate  
 - Website traffic from Bluesky
+
+For website traffic, don't count on your analytics tool to recognize every visit from Bluesky. Visits from mobile apps often arrive without any referrer information, so they get lumped in with "direct" traffic. Adding UTM tags to the links you post (for example, `?utm_source=bluesky&utm_medium=social`) makes those visits show up properly in tools like Google Analytics or Plausible.
 
 Unlike other major social media platforms, Bluesky still doesn't offer in-app analytics or social media management features that you might be accustomed to (as of October 2026). Thanks to its free and public API though, dozens of third-party social media management tools have popped up that can help fill the gap.
 
@@ -624,7 +655,7 @@ Laws in several places now require Bluesky to check people's ages, and that can 
 
 ### Community guidelines
 
-Lastly, be aware of Bluesky's rules and make sure you don't violate them. Bluesky rewrote its Community Guidelines in 2025, and the new version took effect on October 15, 2025. Two rules matter most for brands: if you post sponsored or paid content, you have to clearly label it as such, and parody or fan accounts have to identify themselves in both their display name and bio.
+Lastly, be aware of Bluesky's rules and make sure you don't violate them. Bluesky [rewrote its Community Guidelines](https://bsky.social/about/blog/09-19-2025-building-healthier-social-media) in 2025, and the new version took effect on October 15, 2025. Two rules matter most for brands: if you post sponsored or paid content, you have to clearly label it as such, and parody or fan accounts have to identify themselves in both their display name and bio.
 
 [https://bsky.social/about/support/community-guidelines](https://bsky.social/about/support/community-guidelines)
 
@@ -636,7 +667,7 @@ Establishing yourself as a brand or creator early in the journey positions you f
 
 With that being said, you should likely still maintain some sort of a presence on other networks in the meantime. Bluesky is still relatively small in comparison to legacy platforms like LinkedIn, Facebook, and Instagram, so it probably can't meet all your communication needs just yet. It can be a viable alternative to Twitter/X though if you prefer to avoid that place completely.
 
-News publishers seem to be taking a similar approach. In the Reuters Institute's 2026 survey, publishers said they plan to put a little less effort into Bluesky this year (a net score of -11), though nowhere near the pullback they're planning for X (-52).
+News publishers seem to be taking a similar approach. In the [Reuters Institute's 2026 survey](https://reutersinstitute.politics.ox.ac.uk/sites/default/files/2026-01/Newman%20-%20Trends%20and%20Predictions%202026%20FINAL.pdf), publishers said they plan to put a little less effort into Bluesky this year (a net score of -11), though nowhere near the pullback they're planning for X (-52).
 
 The information contained in this guide will hopefully get you started, and I will do my best to provide updates as new features come out and dynamics evolve. If you have any questions, feel free to reply to my post about this guide on Bluesky, or ask Poe (@poe.atpota.to), the potato who lives on atpota.to.
 
