@@ -74,7 +74,7 @@ const DEFAULT_MODELS = {
 
 /**
  * Anthropic list prices per million tokens (input, cache read, output), as of
- * October 2026, for an estimate in the log. The gateway's charges can differ.
+ * October 2026, for an estimate in the log. Anthropic's console has the real charges.
  */
 const PRICES: Record<string, [number, number, number]> = {
   "anthropic/claude-opus-5.5": [4, 0.2, 20],
@@ -86,6 +86,22 @@ function dollars(model: string, usage: LanguageModelUsage): number | undefined {
   if (!price) return undefined;
   const cached = usage.inputTokenDetails?.cacheReadTokens ?? 0;
   return (((usage.inputTokens ?? 0) - cached) * price[0] + cached * price[1] + (usage.outputTokens ?? 0) * price[2]) / 1e6;
+}
+
+/**
+ * The dispatch runs on Anthropic's API with ANTHROPIC_API_KEY, not through the AI
+ * Gateway (decided 2026-10-19). Without the key, languageModel() would quietly use the
+ * gateway, so a missing key or a non-Claude model stops the run before it spends anything.
+ */
+function anthropicOnly(): string | undefined {
+  if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+    return "set ANTHROPIC_API_KEY, in the environment or in .env.local: the dispatch calls Anthropic directly, not the AI Gateway";
+  }
+  for (const name of ["ANALYST", "WRITER", "EDITOR"] as const) {
+    const id = process.env[`DISPATCH_${name}_MODEL`]?.trim() || DEFAULT_MODELS[name];
+    if (!id.startsWith("anthropic/")) return `DISPATCH_${name}_MODEL is ${id}, but the dispatch only runs Claude models (anthropic/...) on Anthropic's API`;
+  }
+  return undefined;
 }
 
 function role(name: "ANALYST" | "WRITER" | "EDITOR"): Role {
@@ -369,6 +385,11 @@ const command = process.argv[2];
 const days = Number(arg("days") ?? 7);
 const label = arg("label") ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
 const week = process.argv.includes("--week");
+const refusal = command === "write" || command === "demo" ? anthropicOnly() : undefined;
+if (refusal) {
+  console.error(refusal);
+  process.exit(1);
+}
 if (command === "sites" && process.argv[3]) await sites(process.argv[3]);
 else if (command === "collect") await collect(days, week);
 else if (command === "write" && process.argv[3]) await write(process.argv[3], label);

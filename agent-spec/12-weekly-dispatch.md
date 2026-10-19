@@ -25,7 +25,7 @@ operator replies with edits, and `approve` publishes.
 | Recap window | The previous week, Monday 00:00 UTC to Monday 00:00 UTC (see open questions) |
 | Lexicon data | Aturi's `list_new_lexicons`, `list_lexicon_movers` and `list_trending_lexicons`, collected right after the week closes; UFOs for any other window |
 | Sources | The builders list, feeds and repos the operator sends |
-| Models | Two analysts on Claude Sonnet 5.5, a writer and an editor on Claude Opus 5.5, each set by its own environment variable; see "Models and cost" |
+| Models | Two analysts on Claude Sonnet 5.5, a writer and an editor on Claude Opus 5.5, each set by its own environment variable; see "Models and cost". They run on Anthropic's API with the team's `ANTHROPIC_API_KEY`, not the AI Gateway (decided 2026-10-19); the demo script refuses to run without the key. Those calls fall under Anthropic's standard API data retention rather than the gateway's zero retention, which matters little here because the inputs are public posts |
 
 ## Publishing an issue today
 
@@ -347,9 +347,10 @@ What a run costs at list prices, measured:
 
 These are estimates from token counts. The AI Gateway key used for the demos
 reported $20.08 spent when these runs added up to $11.20 at list prices;
-whether that is earlier spend on the key or a pricing difference (for example
-on prompts over 200,000 tokens) is unconfirmed. The gateway's spend page has
-the real per-request figures and should be checked before setting a budget.
+whether that was earlier spend on the key or a pricing difference (for example
+on prompts over 200,000 tokens) is unconfirmed. From 2026-10-19 the dispatch
+runs on Anthropic's API instead, so the first runs there should be compared
+with Anthropic's console before setting a budget.
 
 Not yet measured: **Sonnet as the writer.** It would save about $0.30 a run and
 about $0.30 a revision, and voice is the risk. The test is one command on a
@@ -362,10 +363,11 @@ Other levers, roughly in order of what they save:
 - **Prompt caching** between the writer and the editor, and across revision
   rounds: they send the same brief of about 55,000 tokens. On Opus a cached
   read costs $0.20 per million instead of $4. Needs the brief placed as a
-  shared prefix and the gateway passing Anthropic's cache control through.
-- **Batch pricing.** The gateway lists `-batch` variants of these models. A
-  weekly job with hours of slack before the Monday DM may be able to use them;
-  how they behave through the AI SDK is unchecked.
+  shared prefix with Anthropic's cache control on it.
+- **Batch pricing.** Anthropic's Message Batches API has been half price for
+  work that can wait up to a day, and a weekly job has hours of slack before
+  the Monday DM. The AI SDK does not use it, so it would need its own client;
+  check the current discount first.
 - **A relevance filter** with a small model before the public week list, which
   the storage plan wants anyway, also trims the posts the analyst reads.
 - **Lower reasoning effort** for the analysts. Their output is a small share
@@ -635,7 +637,9 @@ Opt-out requests by DM.
   analyst, writer and editor as subagents or tools; `submit_draft`;
   `agent/memory/dispatch-style.ts`; `evals/dispatch/`; and the markdown to
   Leaflet conversion, matching `website/build/leaflet-markdown.ts`, so the
-  droplet receives a record it can write as is.
+  droplet receives a record it can write as is. The roles need
+  `ANTHROPIC_API_KEY` on the Vercel project and, like the demo, should refuse
+  to fall back to the gateway.
 
 **website/** (this repo)
 - Built: /blog, the chat panel, `scripts/publish-dispatch.ts`.
