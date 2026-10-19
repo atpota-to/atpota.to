@@ -20,7 +20,17 @@ export type LintReport = {
   emDashes: number;
   rawHtml: boolean;
   unroundedEstimates: string[];
+  vagueLinks: number;
 };
+
+/**
+ * Links whose text says nothing, like "[post](...)". The fourth demo run wrote
+ * "([post](...))" after nearly every claim although the guide's examples
+ * linked the words themselves.
+ */
+export function vagueLinks(markdown: string): number {
+  return [...markdown.matchAll(/\[(post|posts|link|here|this|source)\]\(/gi)].length;
+}
 
 /**
  * "about 4,685" claims a precision the HyperLogLog estimate does not have.
@@ -97,10 +107,11 @@ export function lintDraft(markdown: string, haystack: string, extra: Iterable<st
     emDashes: [...markdown].filter((ch) => ch === "—").length,
     rawHtml: /<\/?[a-zA-Z][^>]*>/.test(markdown),
     unroundedEstimates: unroundedEstimates(markdown),
+    vagueLinks: vagueLinks(markdown),
   };
   return {
     ok: report.ungrounded.length === 0 && report.bareMentions.length === 0 && report.bannedPhrases.length === 0 &&
-      report.emDashes === 0 && !report.rawHtml && report.unroundedEstimates.length === 0,
+      report.emDashes === 0 && !report.rawHtml && report.unroundedEstimates.length === 0 && report.vagueLinks === 0,
     ...report,
   };
 }

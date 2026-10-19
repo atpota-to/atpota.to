@@ -126,8 +126,10 @@ export type DispatchPost = {
   reposts: number;
   replies: number;
   quotes: number;
-  /** Where it was found: list:<uri>, feed:<uri>, search:<query>. */
+  /** Where it was found: list:<uri>, feed:<uri>, search:<query>, lexicon:<root>. */
   via: string[];
+  /** The author carries the `!no-unauthenticated` self-label. Kept, but marked. */
+  noUnauthenticated?: true;
 };
 
 function rkeyOf(uri: string): string {
@@ -174,6 +176,7 @@ export function trimPost(view: PostView, via: string): DispatchPost {
     replies: view.replyCount ?? 0,
     quotes: view.quoteCount ?? 0,
     via: [via],
+    ...(view.author.labels?.some((label) => label.val === "!no-unauthenticated") ? { noUnauthenticated: true as const } : {}),
   };
 }
 
@@ -193,27 +196,25 @@ export const EXCLUDED_POST_LABELS = new Set(["porn", "sexual", "nudity", "graphi
 
 export type PrivacyResult = {
   kept: PostView[];
-  removed: { optOut: number; noUnauthenticated: number; labeled: number };
+  removed: { optOut: number; labeled: number };
 };
 
 /**
  * The only filter that removes records, applied before anything is stored so
- * no model ever sees what it removes.
+ * no model ever sees what it removes: opt-outs, and posts with adult or
+ * graphic labels.
  *
- * `!no-unauthenticated` is a self-label asking not to be shown to logged-out
- * viewers. The dispatch is a logged-out web page, so those authors are left
- * out entirely.
+ * Authors with the `!no-unauthenticated` self-label stay in, by the operator's
+ * decision on 2026-10-19 (the first demo week dropped 197 of their posts).
+ * trimPost marks those posts, so treating them differently later is a change
+ * to the writer, not to collection.
  */
 export function privacyFilter(views: PostView[], optOuts: Iterable<string>): PrivacyResult {
   const blocked = new Set([...optOuts].map((id) => id.toLowerCase()));
-  const removed = { optOut: 0, noUnauthenticated: 0, labeled: 0 };
+  const removed = { optOut: 0, labeled: 0 };
   const kept = views.filter((view) => {
     if (blocked.has(view.author.did.toLowerCase()) || blocked.has(view.author.handle.toLowerCase())) {
       removed.optOut++;
-      return false;
-    }
-    if (view.author.labels?.some((label) => label.val === "!no-unauthenticated")) {
-      removed.noUnauthenticated++;
       return false;
     }
     if (view.labels?.some((label) => EXCLUDED_POST_LABELS.has(label.val))) {
@@ -370,8 +371,12 @@ export type LexiconReport = {
   movers: { up: Mover[]; down: Mover[] };
   topOutsideBluesky: LexiconRow[];
   publishedSchemas: Array<{ nsid: string; did: string; at: string }>;
+  /** Posts about the apps behind the notable lexicons; filled by collectLexiconTalk. */
+  talk: LexiconTalk[];
   notes: string[];
 };
+
+export type LexiconTalk = { root: string; domain: string; why: string; posts: string[]; notes: string[] };
 
 const BLUESKY_PREFIXES = ["app.bsky.", "chat.bsky.", "com.atproto.", "tools.ozone."];
 const explore = (nsid: string) => `https://aturi.to/explore/lexicons/${nsid}`;
@@ -511,12 +516,82 @@ export async function collectLexicons(fetchFn: Fetch, window: Window, log: Log =
     publishedSchemas: schemaRecords
       .filter((r) => inWindow(new Date(r.time_us / 1000).toISOString(), window))
       .map((r) => ({ nsid: r.rkey, did: r.did, at: new Date(r.time_us / 1000).toISOString() })),
+    talk: [],
     notes: [
       "Account counts are HyperLogLog estimates; write them as approximate.",
       "Movers compare this window with the 7 days before it, for lexicons outside Bluesky's own namespaces with at least 50 accounts in one of the two.",
       "publishedSchemas comes from UFOs' recent-records sample, so it is a sample, not every schema published in the window.",
     ],
   };
+}
+
+/** The domain an NSID's first two segments name: so.sprk is sprk.so. */
+export function domainFor(nsid: string): string {
+  return nsid.split(".").slice(0, 2).reverse().join(".");
+}
+
+/**
+ * The projects worth asking about: the biggest movers each way, then new
+ * projects that more than a couple of accounts use. One entry per domain.
+ */
+export function talkTargets(report: LexiconReport, max = 15): Array<{ root: string; why: string }> {
+  const rootOf = (nsid: string) => nsid.split(".").slice(0, 2).join(".");
+  const out = new Map<string, string>();
+  const add = (root: string, why: string) => {
+    if (out.size < max && !out.has(root) && !BLUESKY_PREFIXES.some((prefix) => `${root}.`.startsWith(prefix))) out.set(root, why);
+  };
+  for (const m of report.movers.up.slice(0, 8)) add(rootOf(m.nsid), `${m.nsid} up from about ${m.accountsBefore} to about ${m.accountsAfter} accounts`);
+  for (const m of report.movers.down.slice(0, 3)) add(rootOf(m.nsid), `${m.nsid} down from about ${m.accountsBefore} to about ${m.accountsAfter} accounts`);
+  for (const g of report.newByProject.filter((g) => g.maxAccounts >= 3)) add(g.root, `${g.count} new NSIDs, up to about ${g.maxAccounts} accounts`);
+  return [...out].map(([root, why]) => ({ root, why }));
+}
+
+/**
+ * What people said about the apps behind the week's notable lexicons, so a
+ * jump in the numbers can sit next to the app's own announcement. Two reads
+ * per project: the posts of the account at the app's domain (most apps post
+ * from one, like sonasky.app), and a search for the domain, which finds links
+ * and mentions.
+ *
+ * Search by author or domain needs authentication; unauthenticated search
+ * rejected `from:`, `author` without a query word, and `domain` on 2026-10-19,
+ * so the author's posts come from getAuthorFeed instead.
+ */
+export async function collectLexiconTalk(
+  fetchFn: Fetch,
+  search: SearchPosts,
+  report: LexiconReport,
+  window: Window,
+  log: Log = () => {},
+): Promise<{ talk: LexiconTalk[]; found: Array<{ view: PostView; via: string }> }> {
+  const talk: LexiconTalk[] = [];
+  const found: Array<{ view: PostView; via: string }> = [];
+  for (const { root, why } of talkTargets(report)) {
+    const domain = domainFor(root);
+    const via = `lexicon:${root}`;
+    const notes: string[] = [];
+    const views: PostView[] = [];
+    try {
+      const body = await getJson<{ feed?: Array<{ post: PostView; reason?: unknown }> }>(fetchFn,
+        xrpc(APPVIEW, "app.bsky.feed.getAuthorFeed", { actor: domain, limit: 100, filter: "posts_no_replies" }));
+      views.push(...(body.feed ?? []).filter((item) => !item.reason && inWindow(item.post.record.createdAt, window)).map((item) => item.post));
+    } catch {
+      notes.push(`no account at ${domain}`);
+    }
+    try {
+      views.push(...await collectSearch(search, domain, window, 1));
+    } catch (err) {
+      notes.push(`search for ${domain} failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    // The most-engaged 20, so one busy domain cannot crowd out the rest.
+    const unique = [...new Map(views.map((view) => [view.uri, view])).values()]
+      .sort((a, b) => (b.likeCount ?? 0) + (b.repostCount ?? 0) - (a.likeCount ?? 0) - (a.repostCount ?? 0))
+      .slice(0, 20);
+    found.push(...unique.map((view) => ({ view, via })));
+    talk.push({ root, domain, why, posts: unique.map((view) => view.uri), notes });
+    log(`${via}: ${unique.length} posts${notes.length ? ` (${notes.join("; ")})` : ""}`);
+  }
+  return { talk, found };
 }
 
 // ---------------------------------------------------------------------------
@@ -598,12 +673,21 @@ export async function collectWeek(
   ]);
   for (const result of releases) if (!result.ok) notes.push(`releases for ${result.repo} unavailable: ${result.error}`);
 
+  // After the lexicon report, because it decides which apps to ask about.
+  if (lexicons) {
+    const { talk, found: talkPosts } = await collectLexiconTalk(fetchFn, search, lexicons, window, log);
+    lexicons.talk = talk;
+    found.push(...talkPosts);
+    counts.lexiconTalk = talkPosts.length;
+  }
+
   const unique = [...new Map(found.map((f) => [f.view.uri, f.view])).values()];
   const privacy = privacyFilter(unique, sources.optOuts);
   const keptUris = new Set(privacy.kept.map((view) => view.uri));
   const posts = dedupePosts(found.filter((f) => keptUris.has(f.view.uri)).map((f) => trimPost(f.view, f.via)))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   counts.uniquePosts = posts.length;
+  counts.noUnauthenticatedKept = posts.filter((p) => p.noUnauthenticated).length;
 
   return {
     manifest: {

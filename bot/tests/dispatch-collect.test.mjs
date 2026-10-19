@@ -63,16 +63,19 @@ test('dedupePosts merges the sources that found a post', () => {
   assert.deepEqual(merged[0].via, ['feed:x', 'search:y']);
 });
 
-test('privacyFilter drops opt-outs, !no-unauthenticated authors and labeled posts', () => {
+test('privacyFilter drops opt-outs and labeled posts, and keeps !no-unauthenticated authors marked', () => {
   const other = { did: 'did:plc:other', handle: 'other.example', labels: [] };
+  const hidden = view('hidden', { author: { ...other, labels: [{ val: '!no-unauthenticated' }] } });
   const result = privacyFilter([
     view('kept'),
     view('optout', { author: { ...other, handle: 'Quiet.Example' } }),
-    view('hidden', { author: { ...other, labels: [{ val: '!no-unauthenticated' }] } }),
+    hidden,
     view('labeled', { labels: [{ val: 'porn' }] }),
   ], ['quiet.example']);
-  assert.deepEqual(result.kept.map((v) => v.uri.split('/').pop()), ['kept']);
-  assert.deepEqual(result.removed, { optOut: 1, noUnauthenticated: 1, labeled: 1 });
+  assert.deepEqual(result.kept.map((v) => v.uri.split('/').pop()), ['kept', 'hidden']);
+  assert.deepEqual(result.removed, { optOut: 1, labeled: 1 });
+  assert.equal(trimPost(hidden, 'feed:x').noUnauthenticated, true);
+  assert.equal('noUnauthenticated' in trimPost(view('kept'), 'feed:x'), false);
 });
 
 test('looksLikeNsid flags fuzzing-style collection names', () => {
@@ -135,4 +138,34 @@ test('groupNewLexicons counts new NSIDs per domain in code', async () => {
   assert.deepEqual(groups.map((g) => [g.root, g.count, g.flagged, g.maxAccounts]),
     [['bot.did', 1, 0, 240], ['app.sonasky', 3, 0, 20], ['a--0.0', 1, 1, 9]]);
   assert.equal(groups[1].creates, 88);
+});
+
+test('talkTargets picks movers and busy new projects, one per domain, never Bluesky\'s own', async () => {
+  const { talkTargets, domainFor } = await import('../agent/lib/dispatch/collect.ts');
+  assert.equal(domainFor('so.sprk.feed.post'), 'sprk.so');
+  assert.equal(domainFor('app.sonasky'), 'sonasky.app');
+  const mover = (nsid, before, after) => ({ nsid, accountsBefore: before, accountsAfter: after, change: after - before, explore: '' });
+  const report = {
+    movers: { up: [mover('so.sprk.feed.post', 39, 4685), mover('so.sprk.actor.profile', 144, 1793), mover('app.bsky.feed.post', 1, 2)],
+      down: [mover('tech.tokimeki.poll.vote', 147, 27)] },
+    newByProject: [{ root: 'app.sonasky', count: 10, flagged: 0, maxAccounts: 20, creates: 221, nsids: [] },
+      { root: 'dev.quiet', count: 2, flagged: 0, maxAccounts: 1, creates: 2, nsids: [] }],
+  };
+  assert.deepEqual(talkTargets(report).map((t) => t.root), ['so.sprk', 'tech.tokimeki', 'app.sonasky']);
+});
+
+test('collectLexiconTalk reads the app account and searches its domain', async () => {
+  const { collectLexiconTalk } = await import('../agent/lib/dispatch/collect.ts');
+  const window = { since: '2026-10-12T00:00:00.000Z', until: '2026-10-19T00:00:00.000Z' };
+  const report = { movers: { up: [], down: [] }, newByProject: [{ root: 'app.sonasky', count: 10, flagged: 0, maxAccounts: 20, creates: 0, nsids: [] }] };
+  const fakeFetch = async (url) => {
+    assert.match(url, /getAuthorFeed\?actor=sonasky\.app/);
+    return new Response(JSON.stringify({ feed: [{ post: view('announce', { likeCount: 36 }) }, { post: view('repost'), reason: {} }] }), { status: 200 });
+  };
+  const queries = [];
+  const search = async (query, sort) => { queries.push([query, sort]); return { posts: [view('mention')] }; };
+  const { talk, found } = await collectLexiconTalk(fakeFetch, search, report, window);
+  assert.deepEqual(queries, [['sonasky.app', 'top'], ['sonasky.app', 'latest']]);
+  assert.deepEqual(found.map((f) => [f.view.uri.split('/').pop(), f.via]), [['announce', 'lexicon:app.sonasky'], ['mention', 'lexicon:app.sonasky']]);
+  assert.equal(talk[0].domain, 'sonasky.app');
 });

@@ -51,3 +51,9 @@ test('banned phrases are checked in prose, not in NSIDs, URLs or other words', (
   assert.deepEqual(lintDraft(nsid, haystack).bannedPhrases, []);
   assert.deepEqual(lintDraft('we delve into it. a robustness check is fine', haystack).bannedPhrases, ['delve']);
 });
+
+test('links must label the words that carry the claim', async () => {
+  const { vagueLinks } = await import('../agent/lib/dispatch/lint.ts');
+  assert.equal(vagueLinks('paul said so ([post](https://x.example/1)), see [here](https://x.example/2)'), 2);
+  assert.equal(vagueLinks('paul [said attie is in beta](https://x.example/1), from his [post history](https://x.example/2)'), 0);
+});

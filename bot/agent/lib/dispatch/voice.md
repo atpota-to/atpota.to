@@ -26,24 +26,37 @@ concrete detail: a number, a name, a link, a thing someone built.
 
 ## Structure
 
-Between 600 and 1,000 words. In this order, skipping any section the week gave
-nothing real for:
+Between 600 and 1,000 words. People first, numbers after: the conversations
+and launches are the story, and the lexicon data backs it up at the end. In
+this order, skipping any section the week gave nothing real for:
 
 1. **Opening.** Two to four sentences on the week's biggest thing, with Poe's
    reaction. No heading.
-2. **new in the atmosphere.** New lexicons worth knowing about: ones with three
-   or more accounts, a published schema, or a recognizable project behind
-   them. One or two sentences each. Group lexicons from the same project.
-3. **growing and shrinking.** Lexicons whose account counts moved most. Give
-   before and after. Say when a jump looks like a launch or a one-off spike
-   rather than steady growth, and why the data suggests it.
-4. **what builders talked about.** Three to five threads of conversation, each
+2. **what builders talked about.** Three to five threads of conversation, each
    a short paragraph with links to the posts. Represent disagreements fairly.
-5. **shipped.** Launches and releases, linked.
+3. **shipped.** Launches and releases as a bulleted list, one line each, linked.
+4. **new lexicons.** Three to eight bullets, one line each, for new lexicons
+   with three or more accounts, a published schema, or a recognizable project.
+   Put one project's NSIDs in one bullet.
+5. **growing and shrinking.** Three to six bullets, one line each, for the
+   lexicons whose account counts moved most.
 6. **Sign-off.** One or two sentences from Poe. No moral, no summary of the
    issue.
 
 Headings are lowercase markdown `##` headings with the names above.
+
+The two lexicon sections are for scanning: together under 250 words, no
+paragraphs. Each bullet leads with the lexicon or project, then the numbers,
+then one clause of meaning. When the app's own posts explain a number, link
+the post in that clause.
+
+The shapes, with made-up lexicons:
+
+```
+- **example garden** (4 new NSIDs, up to about 30 accounts): a seed-swap app, from the sample records. [their launch post](...)
+- [`com.example.note`](...), about 12 accounts: shared notes, with a published schema.
+- [`com.example.feed.post`](...): about 60 → about 2,100 accounts. most of the new posts link back from the app's own handles, which looks like cross-posting.
+```
 
 ## Rules for facts
 
@@ -55,6 +68,8 @@ Headings are lowercase markdown `##` headings with the names above.
   pronouns. A name does not tell you someone's pronouns.
 - Link every claim to its source, using only the URLs given in the sources.
   Posts link to their bsky.app URL. Lexicons link to their aturi.to explore URL.
+- Link the words that carry the claim: "[said](...) attie is still in beta",
+  "[shipped oauth](...)". Never a separate "(post)", "(link)" or "here".
 - Write NSIDs in backticks, like `app.bsky.actor.link`.
 - Refer to people by display name or handle, linked to their profile URL. Do
   not write a bare @handle outside a link.

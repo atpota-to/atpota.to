@@ -3,10 +3,13 @@
  * write an issue from it with the analyst, writer and editor roles, so the
  * format and voice can be tuned before the production pipeline exists.
  *
- *   node scripts/dispatch-demo.ts collect [--days 7]
+ *   node scripts/dispatch-demo.ts collect [--week | --days 7]
  *   node scripts/dispatch-demo.ts write .dispatch/runs/<date> [--label name]
- *        [--reuse <earlier label> [--rerun lexicons,conversation,shipping]]
- *   node scripts/dispatch-demo.ts demo [--days 7]
+ *        [--reuse <earlier label> [--rerun lexicons,posts]] [--analysts-only]
+ *   node scripts/dispatch-demo.ts demo [--week | --days 7]
+ *
+ * --week collects the last full Monday-to-Monday UTC week, the window
+ * production recaps; without it, the 7 days ending now.
  *
  * `write` can be re-run on the same collected week as often as you like, so a
  * change to agent/lib/dispatch/voice.md or roles.ts can be compared against
@@ -15,10 +18,11 @@
  * Nothing is posted or published. Output stays in .dispatch/, which is
  * gitignored because it holds other people's posts.
  *
- * Models: DISPATCH_{ANALYST,WRITER,EDITOR}_MODEL, then AGENT_MODEL, then
- * anthropic/claude-opus-5.5. Reasoning: DISPATCH_{...}_REASONING, then
- * AGENT_REASONING, then high. Both are read from .env.local and
- * .env.development.local the way eve reads them, so `npx eve link` is enough.
+ * Models: DISPATCH_{ANALYST,WRITER,EDITOR}_MODEL, defaulting to Claude Sonnet
+ * 5.5 for the analysts and Claude Opus 5.5 for the writer and editor (see
+ * DEFAULT_MODELS). Reasoning: DISPATCH_{...}_REASONING, default high. Both are
+ * read from .env.local and .env.development.local the way eve reads them, so
+ * `npx eve link` is enough.
  *
  * Unlike production, the analysts get their slice in the prompt rather than as
  * sandbox files. A demo week fits in the context window; a large builders list
@@ -29,7 +33,7 @@ import { join } from "node:path";
 import { parseEnv } from "node:util";
 import { Output, streamText, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { z } from "zod";
-import { collectWeek, groupNewLexicons, lastDays, looksLikeNsid, type DispatchDataset, type DispatchPost, type LexiconReport, type ReleaseResult } from "../agent/lib/dispatch/collect.ts";
+import { collectWeek, groupNewLexicons, lastDays, looksLikeNsid, previousWeek, type DispatchDataset, type DispatchPost, type LexiconReport, type ReleaseResult } from "../agent/lib/dispatch/collect.ts";
 import { lintDraft, type LintReport } from "../agent/lib/dispatch/lint.ts";
 import { ANALYST, ANALYST_SLICES, Draft, EDITOR, Edited, Findings, WRITER } from "../agent/lib/dispatch/roles.ts";
 import { SOURCES } from "../agent/lib/dispatch/sources.ts";
@@ -50,10 +54,39 @@ const { languageModel } = await import("../agent/lib/model.ts");
 type Reasoning = "low" | "medium" | "high" | "xhigh";
 type Role = { name: string; id: string; model: LanguageModel; reasoning: Reasoning | undefined };
 
+/**
+ * The analysts read most of the tokens, about 410,000 of a run's 620,000, and
+ * their job is finding and sorting; the writer and editor read far less and
+ * carry the voice and the fact-checking. So the analysts default to Sonnet and
+ * the other two to Opus. The 2026-10-19 comparison behind this is in
+ * agent-spec/12-weekly-dispatch.md.
+ */
+const DEFAULT_MODELS = {
+  ANALYST: "anthropic/claude-sonnet-5.5",
+  WRITER: "anthropic/claude-opus-5.5",
+  EDITOR: "anthropic/claude-opus-5.5",
+};
+
+/**
+ * Anthropic list prices per million tokens (input, cache read, output), as of
+ * October 2026, for an estimate in the log. The gateway's charges can differ.
+ */
+const PRICES: Record<string, [number, number, number]> = {
+  "anthropic/claude-opus-5.5": [4, 0.2, 20],
+  "anthropic/claude-sonnet-5.5": [2, 0.2, 10],
+};
+
+function dollars(model: string, usage: LanguageModelUsage): number | undefined {
+  const price = PRICES[model];
+  if (!price) return undefined;
+  const cached = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  return (((usage.inputTokens ?? 0) - cached) * price[0] + cached * price[1] + (usage.outputTokens ?? 0) * price[2]) / 1e6;
+}
+
 function role(name: "ANALYST" | "WRITER" | "EDITOR"): Role {
   const env = (key: string) => process.env[key]?.trim() || undefined;
-  const id = env(`DISPATCH_${name}_MODEL`) ?? env("AGENT_MODEL") ?? "anthropic/claude-opus-5.5";
-  const reasoning = env(`DISPATCH_${name}_REASONING`) ?? env("AGENT_REASONING") ?? "high";
+  const id = env(`DISPATCH_${name}_MODEL`) ?? DEFAULT_MODELS[name];
+  const reasoning = env(`DISPATCH_${name}_REASONING`) ?? "high";
   return { name: name.toLowerCase(), id, model: languageModel(id), reasoning: reasoning === "off" ? undefined : reasoning as Reasoning };
 }
 
@@ -68,9 +101,10 @@ function arg(name: string): string | undefined {
 // ---------------------------------------------------------------------------
 // collect
 
-async function collect(days: number): Promise<string> {
-  const window = lastDays(new Date(), days);
-  const dir = join(ROOT, ".dispatch/runs", window.until.slice(0, 10));
+async function collect(days: number, week: boolean): Promise<string> {
+  const window = week ? previousWeek(new Date()) : lastDays(new Date(), days);
+  // A full week is named like an issue, by the Monday it starts.
+  const dir = join(ROOT, ".dispatch/runs", week ? `week-${window.since.slice(0, 10)}` : window.until.slice(0, 10));
   mkdirSync(dir, { recursive: true });
   log(`collecting ${window.since} to ${window.until}`);
   const data = await collectWeek(fetch, SOURCES, window, { log });
@@ -127,7 +161,7 @@ function postsText(posts: DispatchPost[], ids: Map<string, string>): string {
   }).join("\n");
 }
 
-function lexiconsText(report: LexiconReport): string {
+function lexiconsText(report: LexiconReport, posts: DispatchPost[], ids: Map<string, string>): string {
   const out = [`window: ${report.window.since} to ${report.window.until}`, `totals: ${JSON.stringify(report.totals)}`, ...report.notes.map((n) => `note: ${n}`), ""];
   out.push("NEW LEXICONS BY PROJECT, counted by code. domain | new NSIDs | of which flagged invalid-looking | most accounts on one | total creates | nsids");
   for (const g of report.newByProject) out.push(`${g.root} | ${g.count} | ${g.flagged} | ${g.maxAccounts} | ${g.creates} | ${g.nsids.join(", ")}`);
@@ -145,6 +179,13 @@ function lexiconsText(report: LexiconReport): string {
   for (const r of report.topOutsideBluesky) out.push(`${r.nsid} | ${r.accounts} | ${r.creates} | ${r.updates} | ${r.deletes}`);
   out.push("", "PUBLISHED SCHEMAS, SAMPLE. nsid | publisher did | time");
   for (const s of report.publishedSchemas) out.push(`${s.nsid} | ${s.did} | ${s.at}`);
+  const byUri = new Map(posts.map((p) => [p.uri, p]));
+  out.push("", "LEXICON TALK: posts by the account at each project's domain, and posts naming the domain");
+  for (const t of report.talk ?? []) {
+    out.push("", `${t.root} (${t.domain}): ${t.why}${t.notes.length ? `. ${t.notes.join("; ")}` : ""}`);
+    const found = t.posts.map((uri) => byUri.get(uri)).filter((p): p is DispatchPost => !!p);
+    out.push(found.length ? postsText(found, ids) : "  (no posts found)");
+  }
   return out.join("\n");
 }
 
@@ -184,7 +225,8 @@ async function call<T>(who: Role, label: string, system: string, prompt: string,
   const usage = await result.totalUsage;
   const seconds = Math.round((Date.now() - t0) / 1000);
   usages.push({ role: who.name, label, model: who.id, seconds, usage });
-  log(`${label}: done in ${seconds}s, ${usage.inputTokens?.toLocaleString()} in / ${usage.outputTokens?.toLocaleString()} out`);
+  const cost = dollars(who.id, usage);
+  log(`${label}: done in ${seconds}s, ${usage.inputTokens?.toLocaleString()} in / ${usage.outputTokens?.toLocaleString()} out${cost === undefined ? "" : `, about $${cost.toFixed(2)}`}`);
   return output;
 }
 
@@ -211,13 +253,14 @@ async function write(dir: string, label: string): Promise<void> {
   const posts = postsText(data.posts, ids);
 
   log(`writing from ${dir}: ${data.posts.length} posts, ${data.lexicons?.newLexicons.length ?? 0} new lexicons`);
+  // One analyst for posts and releases, one for lexicons. Conversation and
+  // shipping were separate analysts reading the same 238,000 tokens twice.
   const slices: Array<[keyof typeof ANALYST_SLICES, string]> = [
-    ["lexicons", data.lexicons ? lexiconsText(data.lexicons) : "Lexicon data was unavailable this run."],
-    ["conversation", posts],
-    ["shipping", `${posts}\n\nRELEASES\n${releasesText(data.releases)}`],
+    ["lexicons", data.lexicons ? lexiconsText(data.lexicons, data.posts, ids) : "Lexicon data was unavailable this run."],
+    ["posts", `${posts}\n\nRELEASES\n${releasesText(data.releases)}`],
   ];
   // --reuse <label> takes the analysts' findings from an earlier run, so a
-  // writer or voice change is compared on identical findings at a third of
+  // writer or voice change is compared on identical findings for a fraction of
   // the cost. --rerun names slices to analyse again anyway.
   const reuse = arg("reuse");
   const rerun = new Set((arg("rerun") ?? "").split(",").filter(Boolean));
@@ -230,6 +273,7 @@ async function write(dir: string, label: string): Promise<void> {
     return [slice, await call(analyst, `analyst:${slice}`, `${ANALYST}\n\n${ANALYST_SLICES[slice]}`, `${header}\n\n${body}`, Findings)] as const;
   })));
   writeFileSync(join(out, "findings.json"), JSON.stringify(findings, null, 2));
+  if (process.argv.includes("--analysts-only")) return finish(out);
 
   // Everything a finding cites, resolved by code, so the writer quotes and
   // links from the record itself rather than from an analyst's paraphrase.
@@ -277,13 +321,19 @@ async function write(dir: string, label: string): Promise<void> {
   const finalLint = lint(edited);
   writeFileSync(join(out, "final.md"), issueMarkdown(edited));
   writeFileSync(join(out, "editor.json"), JSON.stringify({ changes: edited.changes, openQuestions: edited.openQuestions, lint: finalLint }, null, 2));
-  writeFileSync(join(out, "usage.json"), JSON.stringify(usages, null, 2));
-
-  const total = usages.reduce((sum, u) => ({ in: sum.in + (u.usage.inputTokens ?? 0), out: sum.out + (u.usage.outputTokens ?? 0) }), { in: 0, out: 0 });
   log(`final lint: ${finalLint.ok ? "clean" : JSON.stringify({ ...finalLint, ok: undefined })}`);
   log(`final: ${finalLint.words} words, ${edited.changes.length} editor changes, ${edited.openQuestions.length} open questions`);
-  log(`tokens: ${total.in.toLocaleString()} in, ${total.out.toLocaleString()} out`);
+  finish(out);
   log(`wrote ${join(out, "final.md")}`);
+}
+
+function finish(out: string): void {
+  const priced = usages.map((u) => ({ ...u, dollars: dollars(u.model, u.usage) }));
+  writeFileSync(join(out, "usage.json"), JSON.stringify(priced, null, 2));
+  const total = priced.reduce((sum, u) => ({
+    in: sum.in + (u.usage.inputTokens ?? 0), out: sum.out + (u.usage.outputTokens ?? 0), dollars: sum.dollars + (u.dollars ?? 0),
+  }), { in: 0, out: 0, dollars: 0 });
+  log(`tokens: ${total.in.toLocaleString()} in, ${total.out.toLocaleString()} out, about $${total.dollars.toFixed(2)} at list prices`);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,10 +341,11 @@ async function write(dir: string, label: string): Promise<void> {
 const command = process.argv[2];
 const days = Number(arg("days") ?? 7);
 const label = arg("label") ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-if (command === "collect") await collect(days);
+const week = process.argv.includes("--week");
+if (command === "collect") await collect(days, week);
 else if (command === "write" && process.argv[3]) await write(process.argv[3], label);
-else if (command === "demo") await write(await collect(days), label);
+else if (command === "demo") await write(await collect(days, week), label);
 else {
-  console.error("usage: node scripts/dispatch-demo.ts collect [--days 7] | write <run dir> [--label name] [--reuse <label> [--rerun <slices>]] | demo [--days 7]");
+  console.error("usage: node scripts/dispatch-demo.ts collect [--week | --days 7] | write <run dir> [--label name] [--reuse <label> [--rerun <slices>]] [--analysts-only] | demo [--week | --days 7]");
   process.exit(1);
 }

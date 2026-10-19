@@ -48,7 +48,7 @@ Aturi (Atmosphere data)          bot on Vercel (eve)                         dro
 weekly lexicon report  ───────►  schedules ─► collectors ─► Vercel Blob
                                                               │
                                  dispatch channel: Poe ◄──────┘
-                                   ├─ analyst ×3 (parallel, sandboxed)
+                                   ├─ analyst ×2 (parallel, sandboxed)
                                    ├─ writer
                                    └─ editor ─► final vN ─► POST /dispatch/draft ─►  gates, DM to operator
                                                                                             │
@@ -94,6 +94,7 @@ frozen and, if it is not, DMs the operator that collection failed.
 | Keyword posts | A fixed list of queries | The droplet's authenticated `/internal/bluesky-search`, `since`/`until` set to the window. Unauthenticated search serves first pages only: on 2026-10-18 every cursor request was refused | Monday |
 | Releases | Repos the operator lists | GitHub `releases.atom` per repo (no auth needed) | Monday |
 | Lexicons | Aturi's weekly report | One HTTP call | Monday |
+| Talk about notable lexicons | For each mover and busy new project (up to 15), the account at its domain (`so.sprk` is `sprk.so`) and posts naming the domain | `getAuthorFeed` on the domain, plus a search for it. Search by author or domain needs auth, so production can do more through the droplet | Monday, after the lexicon report |
 | Engagement | Every collected post | `getPosts` in batches of 25, so counts reflect the week's end | Monday |
 | Authors | Every author in the dataset | `getProfiles`, for labels and current handles | Monday |
 
@@ -193,9 +194,12 @@ Applied when records are written, so no model sees what it removes:
 
 - **Opt-outs**: a list the droplet keeps and the collector fetches. Authors on
   it are left out.
-- **`!no-unauthenticated`**: authors with this self-label have asked not to be
-  shown to logged-out viewers, and atpota.to is logged out. Their posts are left
-  out.
+- **`!no-unauthenticated` is kept** (decided 2026-10-19). These authors have
+  asked apps not to show their posts to logged-out viewers, and atpota.to is
+  logged out, but the operator chose to include them. Each such post is marked
+  `noUnauthenticated` in the data, so linking without quoting them, for
+  example, would be a change to the writer rather than to collection. On the
+  demo week that was 209 of 1,471 posts.
 - **Moderation labels**: posts carrying adult or graphic-media labels are left
   out. The exact label list is an open question.
 
@@ -227,7 +231,7 @@ sandbox's bootstrap step.
 | Role | eve shape | Model variable | Reads | Produces |
 | --- | --- | --- | --- | --- |
 | Poe | Root agent on a new `dispatch` channel | `AGENT_MODEL` | Findings, drafts, operator notes | Runs the steps, talks to the operator |
-| Analyst | Declared subagent `dispatch-analyst`, run three times in parallel: lexicons, conversation, shipping | `DISPATCH_ANALYST_MODEL` | Its slice of the dataset, in full, plus Aturi for follow-ups | Findings JSON: each claim with the record ids behind it and the command that produced each number |
+| Analyst | Declared subagent `dispatch-analyst`, run twice in parallel: posts (conversations and launches) and lexicons | `DISPATCH_ANALYST_MODEL` | Its slice of the dataset, in full, plus Aturi for follow-ups | Findings JSON: each claim with the record ids behind it and the command that produced each number |
 | Writer | `dispatch-writer` | `DISPATCH_WRITER_MODEL` | Findings, the voice guide, the last three issues, dispatch style notes, the dataset | `drafts/vN.md` |
 | Editor | `dispatch-editor` | `DISPATCH_EDITOR_MODEL` | The draft, findings, the dataset, the lint report | `drafts/vN.final.md`, a change log, and open questions for the operator |
 
@@ -240,12 +244,63 @@ The editor works in a fixed order. It checks every claim against the files
 first, then copyedits for voice and length. Anything it cannot verify goes in
 its open questions, and those appear in the operator's DM.
 
-Recommendation: start all three roles on the Claude model Poe runs now. I
-expect most of the gain to come from separate contexts. The editor reads the
-draft cold, without the writer's reasoning in its context, which is the point
-of having an editor. Try a different model for the editor during the shadow
-weeks and compare. If the editor flattens Poe's voice, split it into a
-fact-checker and a copyeditor.
+The editor reads the draft cold, without the writer's reasoning in its
+context, which is the point of having one. If it flattens Poe's voice, split
+it into a fact-checker and a copyeditor.
+
+### Models and cost
+
+Defaults since 2026-10-19: **Claude Sonnet 5.5 for the analysts, Claude Opus
+5.5 for the writer and editor.** The analysts read most of the tokens and
+their job is finding and sorting; the writer and editor read far less and
+carry the voice and the fact-checking.
+
+The evidence, from the demo week of 2026-10-12 (1,471 posts):
+
+- Both analysts were run on Sonnet and on Opus over identical input. The posts
+  analysts found the same dozen main stories; each also found three to five
+  smaller ones the other missed. The lexicon findings were nearly the same
+  list. Every evidence id resolved for both, and the Sonnet claims I checked
+  against the posts were accurate, including counts it copied from the
+  code-computed tables.
+- Sonnet analysts cost about $1.01 against $1.94 for Opus, at Anthropic's list
+  prices ($2 and $10 per million input and output tokens for Sonnet 5.5, $4 and
+  $20 for Opus 5.5, as of October 2026).
+
+What a run costs at list prices, measured:
+
+| Configuration | Run | Estimate |
+| --- | --- | --- |
+| Three Opus analysts, Opus writer and editor | v1, 1,311 posts | $3.78 |
+| Two Opus analysts, Opus writer and editor | analysts measured, writer and editor from v4 | about $3.10 |
+| Two Sonnet analysts, Opus writer and editor | v4, 1,471 posts | $2.19 |
+| A revision in the DM loop (writer and editor, Opus) | from v4 | about $1.20 |
+
+These are estimates from token counts. The AI Gateway key used for the demos
+reported $20.08 spent when these runs added up to $11.20 at list prices;
+whether that is earlier spend on the key or a pricing difference (for example
+on prompts over 200,000 tokens) is unconfirmed. The gateway's spend page has
+the real per-request figures and should be checked before setting a budget.
+
+Not yet measured: **Sonnet as the writer.** It would save about $0.30 a run and
+about $0.30 a revision, and voice is the risk. The test is one command on a
+collected week:
+`DISPATCH_WRITER_MODEL=anthropic/claude-sonnet-5.5 npm run dispatch:write -- <run> --label sonnet-writer --reuse v4`.
+Keep the editor on Opus; it caught the most consequential errors in every run.
+
+Other levers, roughly in order of what they save:
+
+- **Prompt caching** between the writer and the editor, and across revision
+  rounds: they send the same brief of about 55,000 tokens. On Opus a cached
+  read costs $0.20 per million instead of $4. Needs the brief placed as a
+  shared prefix and the gateway passing Anthropic's cache control through.
+- **Batch pricing.** The gateway lists `-batch` variants of these models. A
+  weekly job with hours of slack before the Monday DM may be able to use them;
+  how they behave through the AI SDK is unchecked.
+- **A relevance filter** with a small model before the public week list, which
+  the storage plan wants anyway, also trims the posts the analyst reads.
+- **Lower reasoning effort** for the analysts. Their output is a small share
+  of the cost, so this saves little.
 
 ### What code enforces
 
@@ -284,14 +339,18 @@ version of it, in a shared file, `agent/lib/dispatch/voice.md`, imported by the
 writer's and editor's instructions. It sets length, structure, how Poe's
 opinions show up in longer prose, and the writing tells to avoid.
 
-A first structure to try, around 600 to 1,000 words:
+The structure, around 600 to 1,000 words, people first and numbers after
+(revised 2026-10-19):
 
-1. Two or three sentences on the week's biggest thing.
-2. New in the Atmosphere: new lexicons above the account threshold, and newly
-   published schemas.
-3. Growing and shrinking: the movers.
-4. What builders talked about: three to five threads, linked.
-5. Shipped: releases.
+1. Two to four sentences on the week's biggest thing.
+2. What builders talked about: three to five threads, linked.
+3. Shipped: one line per launch or release.
+4. New lexicons: three to eight one-line bullets.
+5. Growing and shrinking: three to six one-line bullets.
+
+The two lexicon sections stay under 250 words together and are built for
+scanning: lexicon or project first, then the numbers, then one clause of
+meaning, linking the app's own post when it explains a number.
 
 ## Review over Bluesky DM
 
@@ -393,7 +452,7 @@ for our renderer. Publishing a schema for it is optional; doing so means a
 | Instructions planted in posts | Data is read as data; identifier check; editor check; operator approval | Bot, droplet, operator |
 | An invented link, handle or NSID | Identifier check in code, twice | Bot lint, droplet |
 | A wrong number | Numbers computed from files; the editor recomputes them; operator review | Subagents, operator |
-| Featuring someone who opted out or is `!no-unauthenticated` | Removed at collection, before any model | Collector |
+| Featuring someone who opted out | Removed at collection, before any model | Collector |
 | Private memory reaching a public issue | No person or DM memory scope on the dispatch channel | Memory scope functions |
 | Publishing without approval | `approve` parsed in code, bound to sha256; Poe has no credential | Droplet |
 | Pinging people unasked | No @-mentions in the announcement | Droplet |
@@ -474,6 +533,20 @@ What the first three runs showed, and what changed because of it:
 - **A bad check does damage.** Lint flagged "delve" inside the NSID
   `town.delve.feed.post`, and the editor cut a real lexicon to clear it. Phrase
   checks now read prose only.
+
+The fourth run (v4, 2026-10-19, on the full Monday-to-Monday week) added three
+things:
+
+- **Cross-referencing works where apps have an account.** For 11 of 15 notable
+  projects the collector found posts by the app or naming its domain, and the
+  issue used them: vibescrobble's builder saying they are "the only one using
+  it right now", the Anisota bump next to a login redesign, userinput.app
+  upvotes next to an app pointing users at its feedback board there. Where
+  nothing explained a number (Spark), it said so.
+- **The new order reads better** and the lexicon sections came in at 239
+  words. Conversations, then shipped, then the data.
+- **It linked "(post)" after nearly every claim**, 22 times, where earlier runs
+  linked the words. Lint now flags vague link text.
 
 ## Build phases
 

@@ -138,12 +138,17 @@ findings:
 npm run dispatch:write -- .dispatch/runs/<date> --label v2 --reuse v1
 ```
 
-Models come from `DISPATCH_ANALYST_MODEL`, `DISPATCH_WRITER_MODEL` and
-`DISPATCH_EDITOR_MODEL`, falling back to `AGENT_MODEL` and then
-`anthropic/claude-opus-5.5`, read from the same env files as `eve dev`. A full
-run on Claude Opus 5.5 read about 740,000 input tokens in October 2026; a
-`--reuse` run is about a third of that. `.dispatch/` is gitignored because it
-holds other people's posts.
+Models come from `DISPATCH_ANALYST_MODEL` (default `anthropic/claude-sonnet-5.5`),
+`DISPATCH_WRITER_MODEL` and `DISPATCH_EDITOR_MODEL` (both default
+`anthropic/claude-opus-5.5`), read from the same env files as `eve dev`. Each
+run logs its tokens and an estimate at Anthropic's list prices; a full run was
+about $2.20 and a `--reuse` run about $1.20 in October 2026. The
+gateway's spend page has the real charges, which may differ; see the models
+and cost section of the plan. `.dispatch/` is gitignored because it holds other people's
+posts.
+
+`npm run dispatch:collect -- --week` collects the last full Monday-to-Monday
+week (UTC), the window production recaps.
 
 ## Learn more
 
