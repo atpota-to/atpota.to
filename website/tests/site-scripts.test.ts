@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MASCOT_URLS, SWAP_FACES, bindMascot, pickFace } from '../src/scripts/mascot.js';
 import { initNav } from '../src/scripts/nav.js';
 import { applyTheme, getTheme, initTheme, toggleTheme } from '../src/scripts/theme.js';
+
+// A variable (not a literal) keeps Vite from treating new URL(..., import.meta.url) as an asset.
+const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 
 function pointer(type: string, pointerType: string): Event {
   const event = new Event(type, { bubbles: type === 'pointerdown' });
@@ -72,6 +77,35 @@ describe('theme', () => {
     expect(toggleTheme()).toBe('light');
     expect(localStorage.getItem('theme')).toBe('light');
     expect(events).toEqual(['dark', 'light']);
+  });
+
+  it.each(['index.html', '404.html', 'guides/bluesky-for-brands.html'])(
+    '%s head script defaults to light, even when the OS prefers dark',
+    (page) => {
+      const html = read(`../${page}`);
+      const script = /<script>(\(function\(\)\{var d=document\.documentElement[\s\S]*?)<\/script>/.exec(html)![1]!;
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({ matches: query.includes('dark'), media: query })) as unknown as typeof window.matchMedia;
+      try {
+        const run = () => {
+          document.documentElement.removeAttribute('data-theme');
+          new Function(script)();
+          return document.documentElement.getAttribute('data-theme');
+        };
+        expect(run()).toBe('light');
+        localStorage.setItem('theme', 'dark');
+        expect(run()).toBe('dark');
+        localStorage.setItem('theme', 'nonsense');
+        expect(run()).toBe('light');
+      } finally {
+        window.matchMedia = original;
+      }
+      expect(html).not.toContain('prefers-color-scheme');
+    },
+  );
+
+  it('initTheme does not follow the OS setting', () => {
+    expect(read('../src/scripts/theme.ts')).not.toContain('prefers-color-scheme');
   });
 
   it('survives storage that throws', () => {

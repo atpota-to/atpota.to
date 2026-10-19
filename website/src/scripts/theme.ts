@@ -1,18 +1,18 @@
 /**
  * Theme: light/dark via html[data-theme]. The inline <head> script in every page
  * shell sets the initial value before first paint (same storage key and values as
- * the old site: localStorage "theme" = "light" | "dark"). This module wires the
- * footer toggle(s) ([data-theme-toggle], aria-pressed = dark is on), keeps the
- * theme-color metas in sync, follows the OS setting until the visitor picks one,
- * and fires `window` event "theme:change" with detail { theme }.
+ * the old site: localStorage "theme" = "light" | "dark"). Light is the default; the
+ * OS setting is not consulted, so dark only shows once a visitor picks it. This
+ * module wires the footer toggle(s) ([data-theme-toggle], aria-pressed = dark is
+ * on), keeps the theme-color meta in sync, and fires `window` event "theme:change"
+ * with detail { theme }.
  */
 
 export type Theme = 'light' | 'dark';
 
 export const THEME_STORAGE_KEY = 'theme';
 export const THEME_COLORS: Record<Theme, string> = { light: '#F4EEDF', dark: '#1C160E' };
-
-const DARK_QUERY = '(prefers-color-scheme: dark)';
+export const DEFAULT_THEME: Theme = 'light';
 
 export function readStoredTheme(): Theme | null {
   try {
@@ -29,10 +29,6 @@ function storeTheme(theme: Theme): void {
   } catch {
     // storage blocked: the choice lasts for this page only
   }
-}
-
-export function systemTheme(): Theme {
-  return typeof window.matchMedia === 'function' && window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light';
 }
 
 export function getTheme(): Theme {
@@ -70,7 +66,7 @@ export function initTheme(): void {
 
   // The head script normally did this already; repeat in case it was stripped.
   if (!document.documentElement.hasAttribute('data-theme')) {
-    document.documentElement.setAttribute('data-theme', readStoredTheme() ?? systemTheme());
+    document.documentElement.setAttribute('data-theme', readStoredTheme() ?? DEFAULT_THEME);
   }
   syncUi(getTheme());
 
@@ -78,10 +74,4 @@ export function initTheme(): void {
     const target = event.target instanceof Element ? event.target.closest('[data-theme-toggle]') : null;
     if (target) toggleTheme();
   });
-
-  if (typeof window.matchMedia === 'function') {
-    window.matchMedia(DARK_QUERY).addEventListener('change', (event) => {
-      if (readStoredTheme() === null) applyTheme(event.matches ? 'dark' : 'light');
-    });
-  }
 }

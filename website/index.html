@@ -2,16 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else the OS setting -->
-    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.setAttribute('data-theme',t);d.className+=' js'})()</script>
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>atpotato</title>
     <meta name="title" content="atpotato">
     <meta name="description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
     <link rel="canonical" href="https://atpota.to/">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#F4EEDF" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#1C160E" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#F4EEDF">
     <link rel="icon" href="/favicon.png" type="image/png">
 
     <!-- Open Graph -->
