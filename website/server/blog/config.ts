@@ -10,6 +10,8 @@
  *   BLOG_DID               the repo for that unpinned lookup. Default: Poe (poe.atpota.to).
  *   BLOG_PUBLICATION_URL   atpota.to's address for the blog. Default https://atpota.to/blog.
  *   BLOG_COMMENTS_DISABLED=1  kill switch: posts render without the comments section.
+ *   BLOG_EMAIL_DISABLED=1  kill switch: no "subscribe by email" form (subscribe.ts). The form
+ *                          only works for a publication with Leaflet's Newsletter Mode on.
  *   BLOG_HIDDEN_COMMENTS   comments to leave off the page: at:// URIs of pub.leaflet.comment
  *                          records, or DIDs to hide everything an account wrote. Separated
  *                          by commas, spaces or new lines. (Blocking an account as the
@@ -60,6 +62,7 @@ export interface BlogConfig {
   /** Publication base URL without a trailing slash. */
   publicationUrl: string;
   commentsEnabled: boolean;
+  emailEnabled: boolean;
   /** Comment at:// URIs and author DIDs from BLOG_HIDDEN_COMMENTS. */
   hiddenComments: ReadonlySet<string>;
 }
@@ -111,6 +114,7 @@ export function readBlogConfig(env: Env): BlogConfig {
     publicationUri: pinnedMatch ? pinned : null,
     publicationUrl: normalizePublicationUrl(env.BLOG_PUBLICATION_URL) ?? DEFAULT_PUBLICATION_URL,
     commentsEnabled: !flag(env.BLOG_COMMENTS_DISABLED),
+    emailEnabled: !flag(env.BLOG_EMAIL_DISABLED),
     hiddenComments: parseHiddenComments(env.BLOG_HIDDEN_COMMENTS),
   };
 }

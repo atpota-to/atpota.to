@@ -29,7 +29,8 @@ import {
   rememberAdded,
   safeReturnTo,
 } from '../src/blog/state.js';
-import { COPY, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY, PREPARED_TTL_MS } from '../src/blog/ui.js';
+import { COPY, EMAIL_RETURN, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY, PREPARED_TTL_MS } from '../src/blog/ui.js';
+import { EMAIL_RETURN_PARAM, EMAIL_RETURN_VALUE, emailFormHtml, SUBSCRIBE_COPY } from '../server/blog/subscribe.js';
 import { createStore, type KeyValueStore } from '../src/poe/storage.js';
 
 // The blog's reader actions in the browser (src/blog/). The OAuth library is never
@@ -218,13 +219,14 @@ const SHELL_DIALOG = (() => {
   return shell.slice(shell.indexOf('<dialog'), shell.indexOf('</dialog>') + '</dialog>'.length);
 })();
 
-function postPage(): string {
+function postPage(opts: { email?: boolean } = {}): string {
   const comment = (did: string, rkey: string, depth: number, replies = '') =>
     `<li class="comment" data-comment="at://${did}/pub.leaflet.comment/${rkey}" data-comment-author="${did}" data-comment-depth="${depth}">` +
     `<div class="comment__head"><span class="comment__who"><a class="comment__name" href="#">x</a></span></div>` +
     `<div class="comment__body">${rkey}</div><div class="comment__actions" data-comment-actions></div>${replies}</li>`;
   return (
     `<div class="post-layout" data-blog-publication="${PUB}" data-blog-document="${DOC}">` +
+    (opts.email ? emailFormHtml({ publication: PUB, redirect: 'https://atpota.to/blog/3doc' }, 'subscribe') : '') +
     `<div class="post-end__actions">` +
     `<button type="button" data-blog-subscribe aria-pressed="false" hidden><span data-blog-subscribe-label>subscribe</span></button>` +
     `<button type="button" data-blog-recommend data-recommend-count="2" aria-pressed="false" hidden><span data-blog-recommend-label>recommend</span><span data-blog-recommend-count>2</span></button>` +
@@ -238,7 +240,8 @@ function postPage(): string {
 }
 
 interface FakeWin {
-  location: { pathname: string; replace: ReturnType<typeof vi.fn> };
+  location: { pathname: string; search: string; hash: string; replace: ReturnType<typeof vi.fn> };
+  history: { state: unknown; replaceState: ReturnType<typeof vi.fn> };
   confirm: () => boolean;
 }
 
@@ -262,6 +265,8 @@ function setup(
   opts: {
     start?: StartResult | null;
     path?: string;
+    search?: string;
+    hash?: string;
     store?: KeyValueStore;
     owned?: Harness['owned'];
     failWrites?: number;
@@ -328,7 +333,11 @@ function setup(
     }
     return new Response('unexpected', { status: 599 });
   }) as typeof fetch;
-  const win: FakeWin = { location: { pathname: opts.path ?? '/blog/3doc', replace: vi.fn() }, confirm: () => true };
+  const win: FakeWin = {
+    location: { pathname: opts.path ?? '/blog/3doc', search: opts.search ?? '', hash: opts.hash ?? '', replace: vi.fn() },
+    history: { state: null, replaceState: vi.fn() },
+    confirm: () => true,
+  };
   const store = opts.store ?? memory();
   const local = memory();
   const mounted = mountBlog({ doc: document, win: win as unknown as Window, auth, fetchImpl, now: () => clock, sessionStore: store, localStore: local, confirm: () => win.confirm() });
@@ -651,5 +660,94 @@ describe('mountBlog', () => {
     await mountBlog({ doc: document, win: { location: { pathname: '/blog/3doc' } } as unknown as Window, auth: null, sessionStore: memory(), localStore: memory() });
     expect($('button[data-blog-subscribe]').hidden).toBe(true);
     expect($('[data-comment-compose] a').getAttribute('href')).toBe('https://atpota.to/blog/3doc#comments');
+  });
+});
+
+describe('email subscribe forms', () => {
+  beforeEach(() => {
+    document.body.innerHTML = postPage({ email: true });
+  });
+
+  const form = () => $<HTMLFormElement>('form[data-blog-email]');
+  const also = () => $<HTMLLabelElement>('.blog-email__also');
+  const box = () => also().querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  const submit = () => {
+    const event = new Event('submit', { cancelable: true });
+    form().dispatchEvent(event);
+    return event;
+  };
+  const SUBSCRIBED = { subscription: [`at://${ME}/site.standard.graph.subscription/3old`], recommend: [] };
+
+  it('uses the labels and return marker the server renders', () => {
+    expect(COPY.subscribe).toBe(SUBSCRIBE_COPY.bluesky);
+    expect(EMAIL_RETURN).toEqual({ param: EMAIL_RETURN_PARAM, value: EMAIL_RETURN_VALUE });
+  });
+
+  it('signed out: no box, and the form goes straight to Leaflet', async () => {
+    const h = setup({ start: null });
+    await h.mounted;
+    expect(also().hidden).toBe(true);
+    expect(submit().defaultPrevented).toBe(false);
+    expect(h.calls).toEqual([]);
+  });
+
+  it('signed in and not subscribed on bluesky: one submit saves that subscription, then goes to Leaflet', async () => {
+    const h = setup();
+    await h.mounted;
+    expect(also().hidden).toBe(false);
+    expect(also().textContent).toBe(COPY.email.also('me.test'));
+    expect(box().checked).toBe(true);
+    const sent = vi.spyOn(form(), 'submit').mockImplementation(() => undefined);
+    expect(submit().defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(sent).toHaveBeenCalledTimes(1));
+    expect(h.calls).toEqual([
+      {
+        path: '/xrpc/com.atproto.repo.createRecord',
+        body: { repo: ME, collection: 'site.standard.graph.subscription', record: { $type: 'site.standard.graph.subscription', publication: PUB, createdAt: '2026-10-19T12:00:00.000Z' } },
+      },
+    ]);
+    expect($('button[data-blog-subscribe]').getAttribute('aria-pressed')).toBe('true');
+    expect(also().hidden).toBe(true);
+  });
+
+  it('unticked, or already subscribed on bluesky: the form goes straight to Leaflet', async () => {
+    const h = setup();
+    await h.mounted;
+    box().checked = false;
+    expect(submit().defaultPrevented).toBe(false);
+    expect(h.calls).toEqual([]);
+
+    document.body.innerHTML = postPage({ email: true });
+    const subscribed = setup({ owned: SUBSCRIBED });
+    await subscribed.mounted;
+    expect(also().hidden).toBe(true);
+    expect(submit().defaultPrevented).toBe(false);
+    expect(subscribed.calls).toEqual([]);
+  });
+
+  it('a failed save keeps the reader here, with a way forward', async () => {
+    setup({ failWrites: 500 });
+    await flush();
+    await vi.waitFor(() => expect(also().hidden).toBe(false));
+    const sent = vi.spyOn(form(), 'submit').mockImplementation(() => undefined);
+    expect(submit().defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect($('.blog-email__error').hidden).toBe(false));
+    expect($('.blog-email__error').textContent).toBe(COPY.email.failed);
+    expect(sent).not.toHaveBeenCalled();
+    expect(form().querySelector('button[type="submit"]')!.hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('points a new bluesky subscriber at the email form', async () => {
+    const h = setup();
+    await h.mounted;
+    $('button[data-blog-subscribe]').click();
+    await vi.waitFor(() => expect($('[data-blog-account] .blog-account__notice').textContent).toBe(COPY.notices.subscribedAddEmail));
+  });
+
+  it('back from Leaflet: says so, and takes the marker off the address', async () => {
+    const h = setup({ start: null, search: '?subscribed=email', hash: '#subscribe' });
+    await h.mounted;
+    expect($('[data-blog-account]').textContent).toBe(COPY.notices.emailSubscribed);
+    expect(h.win.history.replaceState).toHaveBeenCalledWith(null, '', '/blog/3doc#subscribe');
   });
 });

@@ -5,7 +5,8 @@
  * (nested, with checkboxes), code, math (as TeX source), horizontalRule, website, button,
  * bskyPost, standardSitePost, standardSitePublication, iframe (known video/audio hosts
  * only), page and embeddedCanvas (sub-pages, rendered after the main page), drawing,
- * postsList and signup (pointed at this blog's own list and follow links).
+ * postsList (this blog's own list) and signup (the email form and Bluesky subscribe button
+ * from subscribe.ts on a post page; follow and feed links where forms don't belong).
  *
  * Left out on purpose: html blocks and iframe srcdoc (arbitrary markup on atpota.to, in
  * posts a language model writes), and the blocks that only work inside Leaflet's app
@@ -15,6 +16,7 @@
 import { blobCid, blobUrl } from './atproto.js';
 import { aturiUrl, displayHost, escapeAttr, escapeHtml, httpUrl, safeColor, textWithBreaks } from './html.js';
 import { FootnoteList, renderRichText } from './richtext.js';
+import { blueskySubscribeHtml, emailFormHtml, type EmailSignup } from './subscribe.js';
 
 const T = 'pub.leaflet.blocks.';
 
@@ -67,6 +69,8 @@ export interface BlockContext {
   /** Other posts, for postsList blocks. */
   otherPosts: PostListItem[];
   links: { profile: string; feed: string };
+  /** The email form for signup blocks; null in the feed, or with BLOG_EMAIL_DISABLED. */
+  signup?: EmailSignup | null;
 }
 
 export interface LeafletPage {
@@ -220,7 +224,7 @@ function slug(text: string): string {
 }
 
 /** Ids the page already uses (header, footer, Poe, the post template), and their families. */
-const RESERVED_IDS = new Set(['main', 'about', 'site-menu', 'blog-title', 'post-title', 'footnotes-label']);
+const RESERVED_IDS = new Set(['main', 'about', 'site-menu', 'blog-title', 'post-title', 'footnotes-label', 'subscribe']);
 const RESERVED_PREFIX = /^(?:poe|fn|fnref|page|footer)-/;
 
 function uniqueId(slugText: string, used: Set<string>): string {
@@ -428,6 +432,17 @@ function postsListHtml(block: Record<string, unknown>, ctx: BlockContext): strin
 }
 
 function signupHtml(ctx: BlockContext): string {
+  if (ctx.signup) {
+    return (
+      `<aside class="post-signup">` +
+      `<p class="post-signup__title">get the next issue</p>` +
+      `<p class="post-signup__text">by email, or with your bluesky account.</p>` +
+      emailFormHtml(ctx.signup, uniqueId('signup', ctx.headingIds)) +
+      `<p class="post-signup__actions">${blueskySubscribeHtml('btn btn--primary btn--sm')} ` +
+      `<a class="btn btn--outline btn--sm" href="${escapeAttr(ctx.links.feed)}">atom feed</a></p>` +
+      `</aside>`
+    );
+  }
   return (
     `<aside class="post-signup">` +
     `<p class="post-signup__title">get the next issue</p>` +

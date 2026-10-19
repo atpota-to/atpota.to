@@ -391,6 +391,24 @@ describe('/api/blog with reader actions', () => {
     expect([...d.querySelectorAll('.post-talk li.comment')].map((li) => li.getAttribute('data-comment-author'))).toEqual([ALICE, BOB]);
   });
 
+  it('offers email (to Leaflet) and bluesky subscribing on the index and after a post, unless BLOG_EMAIL_DISABLED', async () => {
+    const index = await page(h(), 'view=index');
+    const hero = index.querySelector<HTMLFormElement>('.blog-hero form[data-blog-email]')!;
+    expect(hero.id).toBe('subscribe');
+    expect(hero.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog?subscribed=email#subscribe');
+    expect(JSON.parse(decodeURIComponent(hero.querySelector<HTMLInputElement>('input[name="action"]')!.value))).toEqual({ action: 'subscribe', publication: PUB, source: { placement: 'embed' } });
+    expect(index.querySelector('.blog-hero__actions [data-blog-subscribe-label]')!.textContent).toBe('subscribe with bluesky');
+
+    const post = await page(h(), 'view=post&path=3doc');
+    expect(post.querySelector<HTMLInputElement>('.post-end form[data-blog-email] input[name="redirect"]')!.value).toBe('https://atpota.to/blog/3doc?subscribed=email#subscribe');
+    expect(post.querySelectorAll('#subscribe')).toHaveLength(1);
+    expect(post.querySelector('.post-end__title')!.textContent).toBe('want the next one?');
+
+    const off = h({ BLOG_EMAIL_DISABLED: '1' });
+    expect((await page(off, 'view=index')).querySelector('form[data-blog-email]')).toBeNull();
+    expect((await page(off, 'view=post&path=3doc')).querySelector('form[data-blog-email]')).toBeNull();
+  });
+
   it('puts a subscribe button and an account line on the index', async () => {
     const d = await page(h(), 'view=index');
     expect(d.querySelector('.blog')!.getAttribute('data-blog-publication')).toBe(PUB);

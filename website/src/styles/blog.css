@@ -1105,6 +1105,102 @@ html[data-theme="dark"] .post__body h2::after {
   opacity: 0.7;
 }
 
+/* Leaflet's email subscribe form (server/blog/subscribe.ts), in the hero, after a post and
+   in signup blocks. Scoped twice where post body prose rules would win. */
+.blog-email {
+  --email-h: 50px;
+  max-width: 34rem;
+  margin: 0 0 14px;
+  scroll-margin-top: 24px;
+}
+
+.post-end .blog-email,
+.post-signup .blog-email {
+  --email-h: 44px;
+}
+
+.blog-email__row {
+  display: flex;
+  gap: 8px;
+}
+
+.blog-email__field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.blog-email__input {
+  width: 100%;
+  min-height: var(--email-h);
+  padding: 0 18px;
+  border: 2px solid var(--brown);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.blog-email__input:focus-visible {
+  border-color: var(--focus);
+}
+
+.blog-email .btn {
+  --btn-h: var(--email-h);
+  flex: none;
+  padding: 0 22px;
+  font-size: 16px;
+}
+
+.blog-email .blog-email__also {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.blog-email .blog-email__also[hidden] {
+  display: none;
+}
+
+.blog-email__box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--brown);
+}
+
+.blog-email .blog-email__error {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.blog-email .blog-email__fine {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .blog-email__row {
+    flex-direction: column;
+  }
+
+  .blog-email .btn {
+    width: 100%;
+  }
+}
+
 .blog-account {
   margin: 14px 0 0;
   color: var(--text-soft);
@@ -1624,6 +1720,7 @@ html:has(.blog-signin[open]) {
 @media print {
   .post-end,
   .post-embed,
+  .blog-email,
   .blog-account,
   .blog-signin {
     display: none !important;

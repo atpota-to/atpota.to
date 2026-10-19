@@ -165,7 +165,7 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
     }
     // A publication hosted elsewhere (the dispatch lives at poe.leaflet.pub) keeps its own
     // url as the canonical address, and only a publication at this address is claimed here.
-    const site = siteInfo(data.publication, data.publication?.url ?? config.publicationUrl, data.identity.handle);
+    const site = siteInfo(data.publication, data.publication?.url ?? config.publicationUrl, data.identity.handle, config.emailEnabled);
 
     if (view === 'well-known') {
       if (!data.publication || data.publication.url !== config.publicationUrl) {
