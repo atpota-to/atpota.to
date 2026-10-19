@@ -1,3 +1,5 @@
+import { isChannelKind } from "./channel-kind";
+
 /**
  * Local Bluesky preview.
  *
@@ -11,12 +13,12 @@
  * is set on a deployment, so `eve dev <url>` against production still gets the
  * plain chat. POE_PREVIEW=off turns the preview off locally.
  *
- * The website chat panel has rules of its own (instructions/website.ts), and
- * its kind may arrive either spelled bare or as "channel:website".
+ * The website chat panel has rules of its own (instructions/website.ts).
  */
 export function previewsBluesky(channelKind: string | undefined): boolean {
-  if (!channelKind || channelKind === "bluesky" || channelKind === "operator-dm") return false;
-  if (channelKind === "website" || channelKind === "channel:website") return false;
+  if (!channelKind) return false;
+  if (isChannelKind(channelKind, "bluesky") || isChannelKind(channelKind, "operator-dm") ||
+      isChannelKind(channelKind, "website")) return false;
   if (process.env.POE_PREVIEW?.trim().toLowerCase() === "off") return false;
   return process.env.EVE_DEV === "1" || process.env.EVE_EVALUATION === "1";
 }
