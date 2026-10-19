@@ -8,7 +8,9 @@
  *   section with aria-current="true" on every .toc-link (desktop tile and phone sheet)
  *   and updates the "n/7" count on the contents button.
  * - Contents sheet (< 1200px): the fixed bottom-left "contents" button opens a modal
- *   <dialog>. It closes on Esc, the backdrop, the close button, a link (focus moves to
+ *   <dialog>. Opened from the keyboard, focus lands on the current section's link; from
+ *   a tap or click it lands on the panel, so no focus ring is drawn on a link nobody
+ *   tabbed to. It closes on Esc, the backdrop, the close button, a link (focus moves to
  *   the chosen section), "/" (so Poe can open), or when the window grows to the desktop
  *   layout. Otherwise focus returns to the button.
  */
@@ -129,8 +131,11 @@ export function initTocTracking(
   return { update, current: () => current };
 }
 
+/** Where focus goes when the sheet opens: the current link (keyboard) or the panel (pointer). */
+export type SheetFocus = 'current' | 'panel';
+
 export interface ContentsSheet {
-  open: () => void;
+  open: (focus?: SheetFocus) => void;
   close: (restoreFocus?: boolean) => void;
   isOpen: () => boolean;
 }
@@ -139,6 +144,8 @@ export interface ContentsSheet {
 export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogElement): ContentsSheet {
   const html = document.documentElement;
   const native = typeof dialog.showModal === 'function';
+  const panel = dialog.querySelector<HTMLElement>('[data-toc-panel]') ?? dialog;
+  if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
   let restoreFocus = true;
   let pressedOnBackdrop = false;
 
@@ -165,7 +172,7 @@ export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogE
     restoreFocus = true;
   };
 
-  function open(): void {
+  function open(focus: SheetFocus = 'current'): void {
     if (isOpen()) return;
     restoreFocus = true;
     if (native) {
@@ -178,7 +185,14 @@ export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogE
     html.classList.add('is-toc-open');
     const target =
       dialog.querySelector<HTMLElement>('a.toc-link[aria-current]') ?? dialog.querySelector<HTMLElement>('a.toc-link');
-    target?.focus();
+    if (focus === 'panel') {
+      // Focus still moves into the modal, but browsers (iOS Safari in particular) draw
+      // a focus ring on a link focused by script after a tap, so park it on the panel.
+      panel.focus({ preventScroll: true });
+      target?.scrollIntoView?.({ block: 'nearest' });
+    } else {
+      target?.focus();
+    }
   }
 
   function close(restore = true): void {
@@ -196,7 +210,8 @@ export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogE
 
   dialog.addEventListener('close', finish);
 
-  button.addEventListener('click', () => (isOpen() ? close() : open()));
+  // detail is 0 for clicks made with Enter/Space (and scripted clicks), >= 1 for pointers.
+  button.addEventListener('click', (event) => (isOpen() ? close() : open(event.detail === 0 ? 'current' : 'panel')));
   dialog.querySelector<HTMLElement>('[data-toc-close]')?.addEventListener('click', () => close());
 
   // Backdrop: with a padding-less dialog wrapping one panel, only the ::backdrop
@@ -241,7 +256,7 @@ export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogE
     const last = items[items.length - 1];
     if (!first || !last) return;
     const active = document.activeElement;
-    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+    if (event.shiftKey && (active === first || active === panel || !dialog.contains(active))) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {

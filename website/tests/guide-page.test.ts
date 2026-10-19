@@ -222,6 +222,30 @@ describe('contents sheet (fallback without showModal)', () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it('a tap or click opens with focus on the panel, so no link wears a focus ring', () => {
+    const { button, dialog } = sheetFixture();
+    const panel = dialog.querySelector<HTMLElement>('.panel')!;
+    panel.setAttribute('data-toc-panel', '');
+    initContentsSheet(button, dialog);
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(panel.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(panel);
+    // Shift+Tab from the panel wraps to the last item instead of leaving the modal.
+    const back = key('Tab', { shiftKey: true });
+    panel.dispatchEvent(back);
+    expect(back.defaultPrevented).toBe(true);
+    expect(document.activeElement?.getAttribute('href')).toBe('#section-3');
+  });
+
+  it('leaves the sheet list room for the focus ring (3px ring + 3px offset)', () => {
+    const css = read('../src/styles/guide.css');
+    const rule = /\.toc-sheet__nav\s*\{([^}]*)\}/.exec(css)![1]!;
+    const padding = /\bpadding:\s*(\d+)px\s*;/.exec(rule);
+    expect(padding, 'one padding value for all four sides').not.toBeNull();
+    expect(Number(padding![1])).toBeGreaterThanOrEqual(6);
+  });
+
   it('closes from the close button and from a backdrop click, not from a click inside', () => {
     const { button, dialog } = sheetFixture();
     initContentsSheet(button, dialog);

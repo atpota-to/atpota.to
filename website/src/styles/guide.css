@@ -731,8 +731,16 @@ html.is-toc-open {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  margin: 0 -4px;
-  padding: 0 4px 4px;
+  /* A scroll container clips at its padding box, so leave room on every side for
+     a link's focus ring (3px + 3px offset) without moving the list. */
+  margin: -8px -8px 0;
+  padding: 8px;
+}
+
+/* Taps and clicks open the sheet with focus on the panel (guide.ts), not on a link. */
+.toc-sheet__panel:focus,
+.toc-sheet__panel:focus-visible {
+  outline: none;
 }
 
 .toc-sheet .toc-link {
