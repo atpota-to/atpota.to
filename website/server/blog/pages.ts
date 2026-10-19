@@ -36,8 +36,10 @@ export interface SiteInfo {
   /** Absolute publication URL, e.g. https://atpota.to/blog. */
   url: string;
   publication: Publication | null;
-  /** Author handle for the byline and follow links. */
+  /** Author handle for the byline and follow links: always Poe, whose blog this is. */
   handle: string;
+  /** Handle of the repo the records live in, which can be another account's. */
+  owner: string;
 }
 
 export interface Page {
@@ -45,13 +47,14 @@ export interface Page {
   main: string;
 }
 
-export function siteInfo(publication: Publication | null, url: string, handle: string | null): SiteInfo {
+export function siteInfo(publication: Publication | null, url: string, owner: string | null): SiteInfo {
   return {
     name: publication?.name ?? BLOG_COPY.name,
     tagline: publication?.description ?? BLOG_COPY.tagline,
     url,
     publication,
-    handle: handle ?? POE_HANDLE,
+    handle: POE_HANDLE,
+    owner: owner ?? POE_HANDLE,
   };
 }
 
@@ -328,7 +331,7 @@ export function postPage(input: PostInput): Page {
     `</div></div>` +
     nav +
     (record
-      ? `<p class="post-end__record">this post is a <code>site.standard.document</code> record on ${escapeHtml(bylineName(site.handle))}'s pds. <a href="${escapeAttr(record)}">open the record</a></p>`
+      ? `<p class="post-end__record">this post is a <code>site.standard.document</code> record on ${escapeHtml(bylineName(site.owner))}'s pds. <a href="${escapeAttr(record)}">open the record</a></p>`
       : '') +
     `</aside>` +
     `</div>`;

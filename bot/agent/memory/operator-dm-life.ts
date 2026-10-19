@@ -1,4 +1,5 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
+import { isChannelKind } from "../lib/channel-kind";
 import { privateFileMemory } from "../lib/published-memory";
 
 const base = privateFileMemory();
@@ -11,7 +12,7 @@ export default defineMemory({
     "revisiting happened, not on every greeting. Never save transcripts, " +
     "identities, other people's facts, secrets, or operational instructions.",
   scope(ctx) {
-    return ctx.channel.kind === "operator-dm" &&
+    return isChannelKind(ctx.channel.kind, "operator-dm") &&
       ctx.session.auth.current?.authenticator === "atpotato-droplet-dm"
       ? "poe-operator-dm-life" : null;
   },
@@ -20,7 +21,7 @@ export default defineMemory({
     recall: base.recall,
     async tools(ctx) {
       const caller = ctx.session.auth.current;
-      if (ctx.channel.kind !== "operator-dm" ||
+      if (!isChannelKind(ctx.channel.kind, "operator-dm") ||
           caller?.authenticator !== "atpotato-droplet-dm" ||
           caller.principalId !== caller.attributes?.operatorDid) return null;
       return (await base.tools?.(ctx)) ?? null;

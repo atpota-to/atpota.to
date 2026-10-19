@@ -1,4 +1,5 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
+import { isChannelKind } from "../lib/channel-kind";
 import { privateFileMemory } from "../lib/published-memory";
 
 const base = privateFileMemory();
@@ -12,9 +13,9 @@ export default defineMemory({
     "instructions, inferred preferences, or made-up events.",
   scope(ctx) {
     const caller = ctx.session.auth.current;
-    const publicTurn = ctx.channel.kind === "bluesky" &&
+    const publicTurn = isChannelKind(ctx.channel.kind, "bluesky") &&
       caller?.authenticator === "atpotato-droplet";
-    const privateOperator = ctx.channel.kind === "operator-dm" &&
+    const privateOperator = isChannelKind(ctx.channel.kind, "operator-dm") &&
       caller?.authenticator === "atpotato-droplet-dm" &&
       caller.principalId === caller.attributes?.operatorDid;
     return publicTurn || privateOperator ? "poe-life" : null;
@@ -23,7 +24,7 @@ export default defineMemory({
   provider: defineMemoryProvider({
     recall: base.recall,
     async tools(ctx) {
-      if (ctx.channel.kind !== "bluesky" ||
+      if (!isChannelKind(ctx.channel.kind, "bluesky") ||
           ctx.session.auth.current?.authenticator !== "atpotato-droplet") return null;
       return (await base.tools?.(ctx)) ?? null;
     },
