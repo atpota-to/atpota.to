@@ -23,7 +23,7 @@ describe('partials plugin', () => {
 
   it('marks the current nav link from body[data-page]', () => {
     const header = applyPartials('<body data-page="guide"><!-- @partial header --></body>', opts);
-    expect(header).toMatch(/<a aria-current="page" class="site-nav__link" href="\/guides\/bluesky-for-brands" data-nav="guides">/);
+    expect(header).toMatch(/<a aria-current="page" class="site-nav__link" href="\/guides" data-nav="guides">/);
     expect(header.match(/aria-current/g)).toHaveLength(1);
     const notFound = applyPartials('<body data-page="notfound"><!-- @partial header --></body>', opts);
     expect(notFound).not.toContain('aria-current');

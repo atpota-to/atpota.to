@@ -274,17 +274,27 @@ export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogE
   return { open, close, isOpen };
 }
 
-/** Hides the fixed contents button while the footer is on screen. */
+/**
+ * Hides the fixed contents button once the article is over: while the tiles after the
+ * guide (.guide-end) or the footer are on screen, it would only cover them.
+ */
 function initButtonVisibility(button: HTMLElement): void {
-  const footer = document.querySelector('.site-footer');
-  if (!footer || typeof IntersectionObserver !== 'function') return;
+  const targets = [document.querySelector('.guide-end'), document.querySelector('.site-footer')].filter(
+    (el): el is Element => el !== null,
+  );
+  if (targets.length === 0 || typeof IntersectionObserver !== 'function') return;
+  const showing = new Set<Element>();
   const observer = new IntersectionObserver(
     (entries) => {
-      for (const entry of entries) button.classList.toggle('is-away', entry.isIntersecting);
+      for (const entry of entries) {
+        if (entry.isIntersecting) showing.add(entry.target);
+        else showing.delete(entry.target);
+      }
+      button.classList.toggle('is-away', showing.size > 0);
     },
     { rootMargin: '0px 0px -72px 0px', threshold: 0 },
   );
-  observer.observe(footer);
+  for (const target of targets) observer.observe(target);
 }
 
 export function init(): void {

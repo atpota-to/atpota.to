@@ -10,6 +10,7 @@ import type { Plugin, ViteDevServer } from 'vite';
  *   <!-- @guide-content -->  with the rendered markdown article
  *   <!-- @guide-toc -->      with <ol class="toc-list"> of the h2 links (every occurrence)
  *   <!-- @reading-time -->   with "N min read" (200 wpm over the article text; every occurrence)
+ *   <!-- @chapter-count -->  with "N chapters" (the h2 sections; every occurrence)
  *
  * Renderer rules:
  *   - h2 ids are section-1 .. section-N in document order (kept for old deep links)
@@ -62,6 +63,7 @@ export interface RenderOptions {
 const CONTENT_MARKER = /<!--\s*@guide-content\s*-->/g;
 const TOC_MARKER = /<!--\s*@guide-toc\s*-->/g;
 const READING_MARKER = /<!--\s*@reading-time\s*-->/g;
+const CHAPTER_MARKER = /<!--\s*@chapter-count\s*-->/g;
 
 export function escapeHtml(value: string): string {
   return value
@@ -277,7 +279,8 @@ export function applyGuide(shell: string, guide: RenderedGuide): string {
   return shell
     .replace(CONTENT_MARKER, () => guide.html)
     .replace(TOC_MARKER, () => guide.tocHtml)
-    .replace(READING_MARKER, () => guide.readingTime);
+    .replace(READING_MARKER, () => guide.readingTime)
+    .replace(CHAPTER_MARKER, () => `${guide.toc.length} chapters`);
 }
 
 export function guideMarkdown(opts: GuideMarkdownOptions): Plugin {

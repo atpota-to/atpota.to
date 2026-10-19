@@ -1,35 +1,48 @@
 /*
- * Guide page (guides/bluesky-for-brands.html), spec section 3.2, styled after
- * H-Poe-Desktop / H-PoeM-Closed. Linked only from the guide page, so the page
- * background below applies here alone. Behaviour: src/scripts/guide.ts.
+ * Guides: the guide page (guides/bluesky-for-brands.html) and the guides publication
+ * page (guides/index.html). Behaviour: src/scripts/guide.ts.
  *
- * Layout: one reading column (max 700px). From 1200px a sticky contents tile sits
- * on the right; below that a fixed "contents" pill (bottom-left, Poe owns
- * bottom-right) opens the contents sheet (<dialog>).
+ * The guide uses the site's tiles: a hero tile across the top, the article on a paper
+ * tile, and from 1200px a sticky contents tile beside it. Below 1200px a fixed
+ * "contents" pill (bottom-left, Poe owns bottom-right) opens the contents sheet
+ * (<dialog>). On phones the article drops its tile so the text keeps the full width.
  */
 
 :root {
-  --guide-bg: #FCF8EE;
-  --guide-article: 700px;
-  --guide-toc: 272px;
+  /* text measure, tile padding, contents column and the gap between tiles */
+  --guide-measure: 680px;
+  --guide-pad: 56px;
+  --guide-toc: 280px;
+  --guide-gap: var(--grid-gap);
   --guide-gutter: max(var(--gutter), 20px);
   --guide-text: 18px;
+  --guide-column: calc(var(--guide-measure) + 2 * var(--guide-pad));
+
+  /* the little page drawn in the hero and on /guides (as on the home page's guide tile) */
+  --paper-sheet: #FFFFFF;
+  --paper-sheet-bar: var(--line);
+  --paper-sheet-title: var(--flesh);
+  --paper-sheet-shot: #D7F2FE;
 }
 
 html[data-theme="dark"] {
-  --guide-bg: var(--bg);
+  --paper-sheet: #4A3D2B;
+  --paper-sheet-bar: #625237;
+  --paper-sheet-title: #B89E64;
+  --paper-sheet-shot: #2A4752;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --guide-pad: 40px;
+  }
 }
 
 @media (max-width: 640px) {
   :root {
     --guide-text: 17px;
+    --guide-pad: 0px;
   }
-}
-
-/* The reading page uses the lighter paper of the guide mock. */
-html,
-body {
-  background: var(--guide-bg);
 }
 
 /* ---------- reading progress ---------- */
@@ -56,33 +69,74 @@ html:not(.js) .reading-progress {
 
 /* ---------- layout ---------- */
 
-.guide-layout {
+.guide-wrap {
   width: 100%;
-  max-width: calc(var(--guide-article) + 2 * var(--guide-gutter));
+  max-width: calc(var(--guide-column) + 2 * var(--guide-gutter));
   margin-inline: auto;
-  padding: 24px var(--guide-gutter) 0;
+  padding: 4px var(--guide-gutter) 0;
+}
+
+.guide-layout {
+  margin-top: var(--guide-gap);
 }
 
 .guide {
   min-width: 0;
+  padding: var(--guide-pad);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
 }
 
 @media (min-width: 1200px) {
+  .guide-wrap {
+    max-width: calc(var(--guide-column) + var(--guide-gap) + var(--guide-toc) + 2 * var(--guide-gutter));
+  }
+
   .guide-layout {
-    max-width: none;
     display: grid;
-    grid-template-columns: minmax(0, var(--guide-article)) var(--guide-toc);
-    column-gap: clamp(56px, 7vw, 120px);
-    justify-content: center;
+    grid-template-columns: minmax(0, var(--guide-column)) var(--guide-toc);
+    gap: var(--guide-gap);
     align-items: start;
-    padding-top: 32px;
   }
 }
 
-/* ---------- header ---------- */
+@media (max-width: 640px) {
+  .guide-wrap {
+    padding-inline: 14px;
+  }
+
+  .guide {
+    padding: 0 6px;
+    border-radius: 0;
+    background: none;
+  }
+}
+
+/* ---------- hero ---------- */
+
+.guide-hero {
+  --tile-pad: 44px 48px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 24px;
+  min-height: 360px;
+  border-radius: var(--radius-lg);
+  background: var(--flesh-tint);
+  isolation: isolate;
+}
+
+.guide-hero__text {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 
 .guide__crumbs {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   font-size: 15px;
   line-height: 1.4;
   color: var(--muted);
@@ -102,48 +156,58 @@ html:not(.js) .reading-progress {
   padding-inline: 0.4em;
 }
 
+.guide__crumbs a {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.guide__crumbs a:hover {
+  text-decoration: underline;
+}
+
 .guide__title {
-  max-width: 15em;
-  margin: 0 0 16px;
-  font-size: clamp(32px, 2.4vw + 10px, 46px);
-  line-height: 1.05;
-  letter-spacing: -0.025em;
+  max-width: 13em;
+  margin: 0 0 14px;
+  font-size: clamp(36px, 2.6vw + 16px, 58px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
 }
 
 .guide__subtitle {
-  max-width: 30em;
-  margin: 0 0 22px;
-  font-size: 21px;
-  line-height: 1.35;
+  max-width: 28em;
+  margin: 0 0 20px;
+  font-size: 20px;
+  line-height: 1.4;
   color: var(--text-soft);
 }
 
 .guide__meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.4;
-  color: var(--muted);
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
 }
 
-.guide__reading-time {
+.guide__meta li {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-.guide__reading-time svg {
-  width: 17px;
-  height: 17px;
+.guide__meta svg {
+  width: 16px;
+  height: 16px;
   flex: none;
-}
-
-.guide__author {
-  white-space: nowrap;
 }
 
 .guide__author a {
@@ -155,16 +219,201 @@ html:not(.js) .reading-progress {
   text-decoration: underline;
 }
 
+.guide-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.guide-hero__actions .btn {
+  --btn-h: 50px;
+  padding: 0 22px;
+  font-size: 16px;
+}
+
 .guide__thanks {
-  max-width: 40em;
-  margin: 8px 0 0;
-  font-size: 15px;
+  max-width: 34em;
+  margin: auto 0 0;
+  padding-top: 26px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--muted);
 }
 
 .guide__thanks a {
   font-weight: 700;
+}
+
+.guide-hero__art {
+  position: relative;
+  pointer-events: none;
+}
+
+.guide-hero__stack {
+  top: 4px;
+  right: 10px;
+}
+
+.guide-hero__potato {
+  position: absolute;
+  right: -30px;
+  bottom: -84px;
+  z-index: 3;
+  width: 210px;
+  height: auto;
+  transform-origin: 50% 100%;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .guide-hero:hover .guide-hero__potato {
+    transform: translateY(-6px) rotate(-2deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .guide-hero {
+    --tile-pad: 36px;
+    grid-template-columns: minmax(0, 1fr) 170px;
+  }
+
+  .guide-hero__stack {
+    transform: scale(0.78);
+    transform-origin: 100% 0;
+  }
+
+  .guide-hero__potato {
+    width: 170px;
+    bottom: -70px;
+  }
+}
+
+@media (max-width: 640px) {
+  .guide-hero {
+    --tile-pad: 24px 22px 26px;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    border-radius: 30px;
+  }
+
+  .guide-hero__text {
+    padding-right: 0;
+  }
+
+  .guide__crumbs {
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  .guide__title {
+    max-width: 11em;
+    font-size: 34px;
+  }
+
+  .guide__subtitle {
+    margin-bottom: 16px;
+    padding-right: 72px;
+    font-size: 17px;
+  }
+
+  .guide__meta {
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+
+  .guide__meta li {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  .guide-hero__actions,
+  .guide-hero__actions .btn {
+    width: 100%;
+  }
+
+  .guide-hero__art {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .guide-hero__stack {
+    display: none;
+  }
+
+  .guide-hero__potato {
+    top: 168px;
+    right: -26px;
+    bottom: auto;
+    width: 104px;
+  }
+}
+
+/* ---------- paper stack (hero and /guides cards) ---------- */
+
+.paper-stack {
+  position: absolute;
+  z-index: 1;
+  width: 200px;
+  height: 250px;
+  pointer-events: none;
+}
+
+.paper-stack__sheet {
+  position: absolute;
+  width: 170px;
+  border-radius: 18px;
+  background: var(--paper-sheet);
+}
+
+.paper-stack__sheet--back {
+  top: 10px;
+  right: 30px;
+  height: 200px;
+  transform: rotate(-6deg);
+}
+
+.paper-stack__sheet--front {
+  top: 0;
+  right: 0;
+  height: 210px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transform: rotate(4deg);
+  box-shadow: 0 1px 0 rgba(61, 47, 27, 0.04);
+}
+
+.paper-stack__bar {
+  display: block;
+  height: 8px;
+  width: 100%;
+  border-radius: 99px;
+  background: var(--paper-sheet-bar);
+}
+
+.paper-stack__bar--title {
+  height: 12px;
+  width: 70%;
+  background: var(--paper-sheet-title);
+}
+
+.paper-stack__bar--86 {
+  width: 86%;
+}
+
+.paper-stack__bar--92 {
+  width: 92%;
+}
+
+.paper-stack__shot {
+  display: block;
+  height: 54px;
+  width: 100%;
+  border-radius: 12px;
+  background: var(--paper-sheet-shot);
 }
 
 /* ---------- article typography ---------- */
@@ -223,7 +472,7 @@ html[data-theme="dark"] .guide__body h2::after {
 }
 
 .guide__body > h2:first-child {
-  margin-top: 64px;
+  margin-top: 34px; /* room for the sprout inside the paper tile */
 }
 
 .guide__body h3 {
@@ -375,18 +624,8 @@ html[data-theme="dark"] .guide__body h2::after {
 }
 
 @media (max-width: 640px) {
-  .guide-layout {
-    padding-top: 22px;
-  }
-
-  .guide__crumbs {
-    margin-bottom: 10px;
-    font-size: 14px;
-  }
-
-  .guide__subtitle {
-    margin-bottom: 18px;
-    font-size: 18px;
+  .guide__body > h2:first-child {
+    margin-top: 56px;
   }
 
   .guide__body {
@@ -509,8 +748,7 @@ html:not(.js) .guide-aside {
 
 .guide-toc {
   padding: 22px 16px 18px;
-  border: 2px solid var(--line);
-  border-radius: 28px;
+  border-radius: var(--radius-tile);
   background: var(--card);
 }
 
@@ -529,17 +767,34 @@ html:not(.js) .guide-aside {
   white-space: nowrap;
 }
 
+/* Poe's tile under the contents: the sun tile of the home page's "say hi". */
 .guide-toc__poe {
-  margin: 16px 8px 0;
-  padding-top: 16px;
-  border-top: 2px dashed var(--line-strong);
+  --focus: var(--on-sun);
+  position: relative;
+  overflow: hidden;
+  margin-top: var(--guide-gap);
+  padding: 22px 24px 22px;
+  border-radius: var(--radius-tile);
+  background: var(--sun);
+  color: var(--on-sun);
+}
+
+.guide-toc__potato {
+  position: absolute;
+  right: -14px;
+  bottom: -14px;
+  width: 78px;
+  height: auto;
+  pointer-events: none;
 }
 
 .guide-toc__hint {
-  margin: 0 0 12px;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--muted);
+  max-width: 13em;
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--on-sun);
 }
 
 @media (min-width: 1200px) {
@@ -548,13 +803,11 @@ html:not(.js) .guide-aside {
     display: block;
     position: sticky;
     top: 28px;
-    margin-top: 0;
-  }
-
-  .guide-toc {
     max-height: calc(100vh - 56px);
+    margin-top: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
 }
 
@@ -793,6 +1046,374 @@ html.is-toc-open {
   }
 }
 
+/* ---------- after the guide ---------- */
+
+.guide-end {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--guide-gap);
+  margin-top: var(--guide-gap);
+}
+
+.guide-end__tile {
+  --tile-pad: 26px 28px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 240px;
+}
+
+.guide-end__share {
+  background: var(--sage);
+}
+
+.guide-end__title {
+  max-width: 14em;
+  margin: 8px 0 18px;
+  color: var(--ink);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.guide-end__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.guide-end__poe .btn {
+  margin-top: auto;
+}
+
+.guide-end__potato {
+  position: absolute;
+  right: -22px;
+  bottom: -26px;
+  width: 120px;
+  height: auto;
+  pointer-events: none;
+}
+
+.guide-end__record .eyebrow {
+  color: var(--on-soil-soft);
+}
+
+.guide-end__text {
+  margin: -8px 0 16px;
+  max-width: 22em;
+  color: var(--on-soil-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.guide-end__links {
+  margin-top: auto;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--on-soil-soft);
+}
+
+.guide-end__links a,
+.guide-end__links a:hover {
+  color: var(--on-soil);
+}
+
+@media (min-width: 641px) and (max-width: 1199.98px) {
+  .guide-end {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-end__record {
+    grid-column: 1 / -1;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .guide-end {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 40px;
+  }
+
+  .guide-end__tile {
+    --tile-pad: 22px;
+    min-height: 0;
+    border-radius: 26px;
+  }
+
+  .guide-end__title {
+    font-size: 21px;
+  }
+
+  .guide-end__poe {
+    padding-right: 110px;
+  }
+
+  .guide-end__potato {
+    width: 104px;
+  }
+}
+
+/* ---------- /guides (the publication) ---------- */
+
+.guides {
+  width: 100%;
+  max-width: calc(760px + 2 * var(--guide-gutter));
+  margin: 0 auto;
+  padding: 4px var(--guide-gutter) 0;
+}
+
+.guides-hero {
+  --tile-pad: 40px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+
+.guides-hero__chip {
+  margin-bottom: 18px;
+}
+
+.guides-hero__chip-icon {
+  width: 18px;
+  height: auto;
+  flex: none;
+}
+
+/* leaf.svg ships with a fixed green; follow the chip colour so it works in dark mode too. */
+.guides-hero__chip-icon path {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.guides-hero__title {
+  margin: 0 0 14px;
+  font-size: clamp(40px, 4vw + 14px, 62px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.guides-hero__lede {
+  max-width: 24em;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.guides-hero__potato {
+  width: 190px;
+  height: auto;
+  margin: 0 -8px -46px 0;
+  pointer-events: none;
+}
+
+.guides-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--guide-gap);
+  margin: var(--guide-gap) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* .guides-list raises specificity over a.tile's display: block (components.css). */
+.guides-list .guides-card {
+  --tile-pad: 34px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 330px;
+  padding-right: 260px;
+  background: var(--flesh-tint);
+  isolation: isolate;
+}
+
+.guides-card > :not(.paper-stack, .guides-card__potato) {
+  position: relative;
+  z-index: 2;
+}
+
+.guides-card__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.guides-card__chip svg {
+  width: 16px;
+  height: 16px;
+}
+
+.guides-card__title {
+  max-width: 12em;
+  margin: 18px 0 10px;
+  font-size: clamp(28px, 1.6vw + 18px, 36px);
+  line-height: 1.06;
+}
+
+.guides-card__desc {
+  max-width: 22em;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.guides-card__meta {
+  margin-top: 10px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.guides-card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 20px;
+  color: var(--leaf-strong);
+  font-weight: 700;
+}
+
+.guides-card__cta svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.guides-card__stack {
+  top: 30px;
+  right: 40px;
+}
+
+.guides-card__potato {
+  position: absolute;
+  right: -16px;
+  bottom: -36px;
+  z-index: 3;
+  width: 170px;
+  height: auto;
+  pointer-events: none;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .guides-card:hover .guides-card__cta svg {
+    transform: translateX(3px);
+  }
+
+  .guides-card:hover .guides-card__potato {
+    transform: translateY(-6px);
+  }
+}
+
+.guides-more {
+  --tile-pad: 36px 32px;
+  margin-top: var(--guide-gap);
+  text-align: center;
+}
+
+.guides-more__sprout {
+  width: 56px;
+  height: auto;
+  margin: 0 auto 12px;
+}
+
+.guides-more__title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.guides-more__text {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.guides-more__text a {
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .guides {
+    padding: 0 14px;
+  }
+
+  .guides-hero {
+    --tile-pad: 26px 22px 0;
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 30px;
+  }
+
+  .guides-hero__title {
+    font-size: 42px;
+  }
+
+  .guides-hero__lede {
+    font-size: 17px;
+  }
+
+  .guides-hero__potato {
+    justify-self: center;
+    width: 140px;
+    margin: 10px 0 -30px;
+  }
+
+  .guides-list .guides-card {
+    --tile-pad: 22px 22px 24px;
+    min-height: 0;
+    padding-right: 22px;
+    border-radius: 26px;
+  }
+
+  .guides-card__stack,
+  .guides-card__chip svg {
+    display: none;
+  }
+
+  .guides-card__title {
+    max-width: 10.5em;
+    font-size: 25px;
+  }
+
+  .guides-card__desc {
+    max-width: 14em;
+    font-size: 15px;
+  }
+
+  .guides-card__potato {
+    right: -22px;
+    bottom: -26px;
+    width: 130px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-hero:hover .guide-hero__potato,
+  .guides-card:hover .guides-card__potato {
+    transform: none;
+  }
+}
+
 /* ---------- forced colours ---------- */
 
 @media (forced-colors: active) {
@@ -807,7 +1428,9 @@ html.is-toc-open {
   }
 
   .guide-toc-btn,
-  .toc-sheet {
+  .toc-sheet,
+  .guide,
+  .guide-toc {
     border: 2px solid CanvasText;
   }
 }
@@ -818,8 +1441,17 @@ html.is-toc-open {
   .reading-progress,
   .guide-aside,
   .guide-toc-btn,
-  .toc-sheet {
+  .toc-sheet,
+  .guide-hero__art,
+  .guide-hero__actions,
+  .guide-end {
     display: none !important;
+  }
+
+  .guide-hero,
+  .guide {
+    padding: 0;
+    background: none;
   }
 
   .guide__body img {

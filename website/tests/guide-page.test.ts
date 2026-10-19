@@ -24,20 +24,25 @@ describe('guide page shell + build output', () => {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
   it('fills every marker and keeps no agent instructions', () => {
-    expect(html).not.toMatch(/@guide-|@reading-time|GUIDE AGENT/);
+    expect(html).not.toMatch(/@guide-|@reading-time|@chapter-count|GUIDE AGENT/);
+    expect(doc.querySelector('.guide__chapters')!.textContent!.trim()).toBe('7 chapters');
     expect(doc.querySelectorAll('.guide-toc .toc-link')).toHaveLength(7);
     expect(doc.querySelectorAll('dialog .toc-link')).toHaveLength(7);
     expect(doc.querySelector('.guide__reading-time')!.textContent!.trim()).toBe(guide.readingTime);
   });
 
-  it('marks the article askable and keeps the header copy and links', () => {
+  it('marks the article askable and keeps the header copy and links in the hero tile', () => {
     const article = doc.querySelector('main#main article.guide[data-poe-askable]')!;
     expect(article).not.toBeNull();
-    expect(article.querySelector('h1')!.textContent).toBe('How to use Bluesky to grow your brand');
-    expect(article.querySelector('.guide__subtitle')!.textContent).toBe('A comprehensive guide for companies, communities, and creators');
-    expect(article.querySelector('.guide__crumbs')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('guides bluesky for brands');
-    expect(article.querySelector('.guide__author a')!.getAttribute('href')).toBe('https://bsky.app/profile/dame.is');
-    const thanks = article.querySelector('.guide__thanks')!;
+    const hero = doc.querySelector('main#main header.guide-hero')!;
+    expect(hero.querySelector('h1')!.textContent).toBe('How to use Bluesky to grow your brand');
+    expect(article.getAttribute('aria-labelledby')).toBe(hero.querySelector('h1')!.id);
+    expect(hero.querySelector('.guide__subtitle')!.textContent).toBe('A comprehensive guide for companies, communities, and creators');
+    expect(hero.querySelector('.guide__crumbs')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('guides bluesky for brands');
+    expect(hero.querySelector('.guide__crumbs a')!.getAttribute('href')).toBe('/guides');
+    expect(hero.querySelector('.guide__author a')!.getAttribute('href')).toBe('https://bsky.app/profile/dame.is');
+    expect(hero.querySelector('.guide-hero__actions a')!.getAttribute('href')).toBe('#section-1');
+    const thanks = hero.querySelector('.guide__thanks')!;
     expect(thanks.textContent).toBe('Thanks to Protocol Labs for their support in helping make this guide possible.');
     expect(thanks.querySelector('a')!.getAttribute('href')).toBe('https://bsky.app/profile/protocollabs.bsky.social');
     // the toc tile and the sheet live outside the askable article
@@ -410,14 +415,28 @@ describe('guide colour pairs meet WCAG AA in both themes', () => {
   };
   // [text, surface, minimum]
   const PAIRS: Array<[string, string, number]> = [
-    ['text', 'guide-bg', 4.5], // article
-    ['ink', 'guide-bg', 4.5], // headings
-    ['text-soft', 'guide-bg', 4.5], // subtitle, h5
-    ['muted', 'guide-bg', 4.5], // crumbs, meta, thanks
-    ['link', 'guide-bg', 4.5],
-    ['link-hover', 'guide-bg', 4.5],
-    ['focus', 'guide-bg', 3],
-    ['leaf', 'guide-bg', 3], // progress bar
+    ...['paper', 'bg'].flatMap((surface): Array<[string, string, number]> => [
+      // the article: on its paper tile, or straight on the page on phones
+      ['text', surface, 4.5],
+      ['ink', surface, 4.5], // headings
+      ['text-soft', surface, 4.5], // h5
+      ['link', surface, 4.5],
+      ['link-hover', surface, 4.5],
+      ['focus', surface, 3],
+    ]),
+    ['leaf', 'bg', 3], // progress bar
+    ['ink', 'flesh-tint', 4.5], // hero title
+    ['text-soft', 'flesh-tint', 4.5], // hero subtitle
+    ['muted', 'flesh-tint', 4.5], // crumbs, thanks
+    ['leaf', 'flesh-tint', 4.5], // crumb + thanks links
+    ['text-soft', 'card', 4.5], // hero facts, /guides chip
+    ['leaf', 'card', 4.5], // author link in its fact
+    ['on-sun', 'sun', 4.5], // poe tile beside the contents
+    ['ink', 'sage', 4.5], // share tile
+    ['muted', 'sage', 4.5],
+    ['on-soil', 'soil', 4.5], // record tile
+    ['on-soil-soft', 'soil', 4.5],
+    ['leaf-strong', 'flesh-tint', 4.5], // /guides card call to action
     ['ink', 'flesh-tint', 4.5], // inline code
     ['text', 'card', 4.5], // toc tile, sheet, contents button
     ['muted', 'card', 4.5], // toc time + hint

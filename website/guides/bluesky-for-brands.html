@@ -24,6 +24,9 @@
     <meta property="og:image:height" content="1081">
     <meta name="twitter:card" content="summary_large_image">
 
+    <!-- standard.site: this guide is a site.standard.document (build/guides.ts) -->
+    <!-- @standard-site -->
+
     <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
     <link rel="preconnect" href="https://use.typekit.net" crossorigin>
     <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
@@ -47,56 +50,106 @@
     <main id="main" class="guide-page" tabindex="-1">
         <div class="reading-progress" aria-hidden="true"><div class="reading-progress__bar" data-reading-progress></div></div>
 
-        <div class="guide-layout">
-            <article class="guide" data-poe-askable aria-labelledby="guide-title">
-                <header class="guide__header">
+        <div class="guide-wrap">
+            <header class="tile guide-hero" data-mascot-trigger>
+                <div class="guide-hero__text">
                     <nav class="guide__crumbs" aria-label="breadcrumb">
                         <ol class="guide__crumbs-list" role="list">
-                            <li>guides</li>
+                            <li><a href="/guides">guides</a></li>
                             <li aria-current="page">bluesky for brands</li>
                         </ol>
                     </nav>
                     <h1 class="guide__title" id="guide-title">How to use Bluesky to grow your brand</h1>
                     <p class="guide__subtitle">A comprehensive guide for companies, communities, and creators</p>
-                    <p class="guide__meta">
-                        <span class="guide__reading-time">
+                    <ul class="guide__meta" role="list">
+                        <li class="guide__reading-time">
                             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
                             <!-- @reading-time -->
-                        </span>
-                        <span class="guide__meta-sep" aria-hidden="true">·</span>
-                        <span class="guide__author">written by <a href="https://bsky.app/profile/dame.is" target="_blank" rel="noopener">@dame.is</a></span>
-                    </p>
-                    <p class="guide__thanks"><em>Thanks to <a href="https://bsky.app/profile/protocollabs.bsky.social" target="_blank" rel="noopener">Protocol Labs</a> for their support in helping make this guide possible.</em></p>
-                </header>
-
-                <!-- Phone and tablet (< 1200px): opens the contents sheet below. Fixed bottom-left; Poe owns bottom-right. -->
-                <button type="button" class="guide-toc-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="guide-toc-sheet" data-toc-open hidden>
-                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17.5" r="1.2" fill="currentColor" stroke="none"/></svg>
-                    <span class="guide-toc-btn__label">contents</span>
-                    <span class="guide-toc-btn__count" aria-hidden="true" data-toc-count></span>
-                </button>
-
-                <div class="guide__body">
-                    <!-- @guide-content -->
-                </div>
-            </article>
-
-            <aside class="guide-aside">
-                <nav class="guide-toc" aria-labelledby="guide-toc-title">
-                    <div class="guide-toc__head">
-                        <p class="eyebrow guide-toc__title" id="guide-toc-title">contents</p>
-                        <p class="guide-toc__time"><!-- @reading-time --></p>
+                        </li>
+                        <li class="guide__chapters">
+                            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17.5" r="1.2" fill="currentColor" stroke="none"/></svg>
+                            <!-- @chapter-count -->
+                        </li>
+                        <li class="guide__author">written by <a href="https://bsky.app/profile/dame.is" target="_blank" rel="noopener">@dame.is</a></li>
+                    </ul>
+                    <div class="guide-hero__actions">
+                        <a class="btn btn--primary" href="#section-1">start reading
+                            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+                        </a>
                     </div>
-                    <!-- @guide-toc -->
+                    <p class="guide__thanks"><em>Thanks to <a href="https://bsky.app/profile/protocollabs.bsky.social" target="_blank" rel="noopener">Protocol Labs</a> for their support in helping make this guide possible.</em></p>
+                </div>
+                <div class="guide-hero__art" aria-hidden="true">
+                    <span class="paper-stack guide-hero__stack">
+                        <span class="paper-stack__sheet paper-stack__sheet--back"></span>
+                        <span class="paper-stack__sheet paper-stack__sheet--front">
+                            <span class="paper-stack__bar paper-stack__bar--title"></span>
+                            <span class="paper-stack__bar"></span>
+                            <span class="paper-stack__bar paper-stack__bar--86"></span>
+                            <span class="paper-stack__shot"></span>
+                            <span class="paper-stack__bar paper-stack__bar--92"></span>
+                        </span>
+                    </span>
+                    <img class="guide-hero__potato" data-mascot="wow" src="/src/assets/mascot/potato-wow.svg" alt="" width="210" height="171">
+                </div>
+            </header>
+
+            <div class="guide-layout">
+                <article class="guide" data-poe-askable aria-labelledby="guide-title">
+                    <!-- Phone and tablet (< 1200px): opens the contents sheet below. Fixed bottom-left; Poe owns bottom-right. -->
+                    <button type="button" class="guide-toc-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="guide-toc-sheet" data-toc-open hidden>
+                        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17.5" r="1.2" fill="currentColor" stroke="none"/></svg>
+                        <span class="guide-toc-btn__label">contents</span>
+                        <span class="guide-toc-btn__count" aria-hidden="true" data-toc-count></span>
+                    </button>
+
+                    <div class="guide__body">
+                        <!-- @guide-content -->
+                    </div>
+                </article>
+
+                <aside class="guide-aside">
+                    <nav class="guide-toc" aria-labelledby="guide-toc-title">
+                        <div class="guide-toc__head">
+                            <p class="eyebrow guide-toc__title" id="guide-toc-title">contents</p>
+                            <p class="guide-toc__time"><!-- @reading-time --></p>
+                        </div>
+                        <!-- @guide-toc -->
+                    </nav>
                     <div class="guide-toc__poe">
+                        <img class="guide-toc__potato" src="/src/assets/mascot/potato-happy.svg" alt="" width="64" height="52" loading="lazy">
                         <p class="guide-toc__hint">stuck on a word? highlight it in the guide and poe will explain.</p>
                         <button type="button" class="btn btn--leaf btn--sm guide-toc__ask" data-poe-open>
                             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18l-1 3 4-2h9a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v7a3 3 0 0 0 2 3z"/></svg>
                             ask poe
                         </button>
                     </div>
-                </nav>
-            </aside>
+                </aside>
+            </div>
+
+            <section class="guide-end" aria-labelledby="guide-end-title">
+                <h2 class="visually-hidden" id="guide-end-title">after the guide</h2>
+                <div class="tile guide-end__tile guide-end__share">
+                    <p class="eyebrow">found it useful?</p>
+                    <p class="guide-end__title">pass it to someone setting up on bluesky.</p>
+                    <div class="guide-end__actions">
+                        <a class="btn btn--primary btn--sm" href="https://bsky.app/intent/compose?text=How%20to%20use%20Bluesky%20to%20grow%20your%20brand%20https%3A%2F%2Fatpota.to%2Fguides%2Fbluesky-for-brands">share on bluesky</a>
+                        <a class="btn btn--outline btn--sm" href="https://bsky.app/profile/atpota.to">follow @atpota.to</a>
+                    </div>
+                </div>
+                <div class="tile guide-end__tile guide-end__poe" data-mascot-trigger>
+                    <img class="guide-end__potato" data-mascot="happy" src="/src/assets/mascot/potato-happy.svg" alt="" width="120" height="98" loading="lazy">
+                    <p class="eyebrow">still stuck?</p>
+                    <p class="guide-end__title">ask poe about anything in the guide.</p>
+                    <button type="button" class="btn btn--leaf btn--sm" data-poe-open>ask poe</button>
+                </div>
+                <div class="tile tile--soil guide-end__tile guide-end__record">
+                    <p class="eyebrow">open data</p>
+                    <p class="guide-end__title">this guide is a standard.site document.</p>
+                    <p class="guide-end__text">it lives on atpota.to's pds as a record any atproto app can read.</p>
+                    <p class="guide-end__links"><a href="https://aturi.to/profile/did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3lrdzen52y224">open the record</a><span aria-hidden="true"> · </span><a href="/guides">more guides</a></p>
+                </div>
+            </section>
         </div>
 
         <dialog class="toc-sheet" id="guide-toc-sheet" aria-labelledby="toc-sheet-title" data-toc-sheet>

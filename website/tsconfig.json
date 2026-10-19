@@ -18,5 +18,5 @@
     "noImplicitReturns": true,
     "useDefineForClassFields": true
   },
-  "include": ["src", "api", "server", "build", "tests", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "api", "server", "build", "scripts", "tests", "vite.config.ts", "vitest.config.ts"]
 }

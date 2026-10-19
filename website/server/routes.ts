@@ -8,6 +8,7 @@ export const FALLBACK_TITLE = 'atpota.to';
 
 const TITLES: Readonly<Record<string, string>> = {
   '/': 'atpota.to home',
+  '/guides': 'atpotato guides',
   '/guides/bluesky-for-brands': 'How to use Bluesky to grow your brand',
   '/blog': "poe's blog",
 };
