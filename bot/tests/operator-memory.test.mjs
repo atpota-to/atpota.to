@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 
+execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig", "agent/lib/channel-kind.ts",
+  "--outDir", ".eve/channel-kind-test", "--module", "esnext", "--moduleResolution", "bundler",
+  "--target", "es2022", "--skipLibCheck", "--types", "node"],
+  { cwd: new URL("..", import.meta.url) });
+const channelKind = await import("../.eve/channel-kind-test/channel-kind.js");
 
 // Exercise each authored memory definition with a small stand-in for eve's
 // memory lifecycle. No Vercel credentials, PDS, or DM transport are involved.
@@ -30,6 +36,7 @@ function loadSlot(file) {
         privateFileMemory: provider,
         publishedFileMemory: provider,
       };
+      if (name === "../lib/channel-kind") return channelKind;
       throw new Error(`unexpected memory dependency ${name}`);
     },
   });
@@ -38,15 +45,16 @@ function loadSlot(file) {
 
 const operatorDid = "did:plc:operator123";
 const otherDid = "did:plc:other123";
-const dm = (did = operatorDid) => ({
-  channel: { kind: "operator-dm" },
+// Kinds as eve reports them at runtime: "channel:" plus the channel's file stem.
+const dm = (did = operatorDid, kind = "channel:operator-dm") => ({
+  channel: { kind },
   session: { auth: { current: {
     authenticator: "atpotato-droplet-dm", principalType: "user",
     principalId: did, attributes: { operatorDid: did },
   } } },
 });
-const publicTurn = (operator) => ({
-  channel: { kind: "bluesky" },
+const publicTurn = (operator, kind = "channel:bluesky") => ({
+  channel: { kind },
   session: { auth: { current: {
     authenticator: "atpotato-droplet", principalType: "user",
     principalId: otherDid, attributes: { did: otherDid, operator: String(operator) },
@@ -92,4 +100,39 @@ test("public person notes remain unavailable to operator DMs", () => {
   const slot = loadSlot("person");
   assert.equal(slot.scope(dm()), null);
   assert.equal(slot.scope(publicTurn(false))[1], otherDid);
+});
+
+test("an anonymous website visitor gets no memory beyond public-safe self recall", async () => {
+  for (const kind of ["website", "channel:website"]) {
+    const visitor = { channel: { kind }, session: { auth: { current: {
+      authenticator: "atpotato-website", principalType: "anonymous", principalId: "website-visitor",
+      attributes: { conversationId: "c".repeat(43), path: "/" },
+    } } } };
+    for (const file of ["person", "life", "operator-dm-life", "operator-notes"]) {
+      assert.equal(loadSlot(file).scope(visitor), null, `${file} on ${kind}`);
+    }
+    const self = loadSlot("self");
+    assert.equal(self.scope, "poe-self");
+    assert.equal(await self.provider.tools(visitor), null);
+    assert.equal(await loadSlot("life").provider.tools(visitor), null);
+  }
+});
+
+test("each slot opens for its own channel under either kind spelling, and never for another", async () => {
+  for (const [dmKind, publicKind] of [["channel:operator-dm", "channel:bluesky"], ["operator-dm", "bluesky"]]) {
+    assert.equal(loadSlot("operator-notes").scope(dm(operatorDid, dmKind)), operatorDid);
+    assert.equal(loadSlot("operator-dm-life").scope(dm(operatorDid, dmKind)), "poe-operator-dm-life");
+    assert.equal(loadSlot("life").scope(publicTurn(false, publicKind)), "poe-life");
+    assert.equal(loadSlot("person").scope(publicTurn(false, publicKind))[1], otherDid);
+    assert.equal((await loadSlot("self").provider.tools(publicTurn(true, publicKind))).save_memory, true);
+  }
+  // eve reports any spelling it does not know as "unknown"; that, or another
+  // channel's kind, opens nothing.
+  for (const kind of ["unknown", "channel:eve", "http"]) {
+    assert.equal(loadSlot("operator-notes").scope(dm(operatorDid, kind)), null, kind);
+    assert.equal(loadSlot("operator-dm-life").scope(dm(operatorDid, kind)), null, kind);
+    assert.equal(loadSlot("life").scope(publicTurn(false, kind)), null, kind);
+    assert.equal(loadSlot("person").scope(publicTurn(false, kind)), null, kind);
+    assert.equal(await loadSlot("self").provider.tools(publicTurn(true, kind)), null, kind);
+  }
 });

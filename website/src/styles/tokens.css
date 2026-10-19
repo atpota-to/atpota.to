@@ -1,0 +1,169 @@
+/*
+ * Design tokens (spec section 2). Light values live on :root, dark values on
+ * html[data-theme="dark"] (set before first paint by the inline head script).
+ * Every text/background pair listed in tests/build-contrast.test.ts is checked
+ * for WCAG AA in both themes; add a pair there when you introduce a new one.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #F4EEDF;
+  --paper: #FFFDF7;
+  --card: #FFFFFF;
+
+  /* text */
+  --ink: #3D2F1B;
+  --text: #3D2F1B;
+  --text-soft: #5E4D33;
+  --muted: #6B5A3E;
+
+  /* potato */
+  --brown: #725B36;
+  --on-brown: #FCF8EE;
+  --skin: #A58650;
+  --flesh: #E3CE90;
+  --flesh-tint: #F3E7C4;
+
+  /* lines */
+  --line: #EFE4C8;
+  --line-strong: #E6D9B6;
+  --dash: #C9B47E;
+
+  /* greens */
+  --leaf: #006837;
+  --leaf-strong: #00532C;
+  --leaf-tint: #E2F0D6;
+  --vine: #39B54A;
+
+  /* tile tints and accents */
+  --sage: #DDEFD2;
+  --sky: #C9EEFC;
+  --sun: #FFD978;
+  --sun-deep: #FFCD5E;
+  --on-sun: #3D2F1B;
+  --on-sun-soft: #5E4D33;
+  --butter: #FFEDB8;
+  --soil: #3D2F1B;
+  --on-soil: #F7EFDA;
+  --on-soil-soft: #E3CE90;
+  --soil-line: #5A4A30;
+
+  /* footer */
+  --footer: #725B36;
+  --on-footer: #F7EFDA;
+  --on-footer-soft: #F1E5C6;
+  --footer-heading: #EEDDAE;
+  --footer-quiet: #E9DCB8;
+  --footer-line: #8C7349;
+
+  /* interaction */
+  --link: var(--leaf);
+  --link-hover: #004D29;
+  --focus: var(--leaf);
+  --focus-on-dark: var(--sun);
+  --scrim: rgba(61, 47, 27, 0.45);
+  --selection: #FFE29A;
+
+  /* shape and depth */
+  --radius-tile: 32px;
+  --radius-lg: 36px;
+  --radius-md: 20px;
+  --radius-sm: 12px;
+  --radius-pill: 999px;
+  --shadow-pop: 0 20px 56px rgba(61, 47, 27, 0.24);
+  --shadow-soft: 0 6px 18px rgba(61, 47, 27, 0.12);
+
+  /* type */
+  --font-sans: "eigerdals", ui-rounded, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --text-base: 17px;
+  --leading: 1.5;
+
+  /* layout */
+  --page-max: 1280px;
+  --gutter: 40px;
+  --header-pad-y: 24px;
+  --grid-gap: 16px;
+
+  /* stacking */
+  --z-header: 50;
+  --z-menu: 60;
+  --z-progress: 70;
+  --z-poe: 1000;
+  --z-skip: 2000;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --text-base: 16px;
+    --gutter: 16px;
+    --header-pad-y: 16px;
+    --grid-gap: 12px;
+    --radius-tile: 26px;
+    --radius-lg: 30px;
+  }
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #1C160E;
+  --paper: #271F15;
+  --card: #2E2519;
+
+  --ink: #F3EAD6;
+  --text: #F3EAD6;
+  --text-soft: #E0D2B0;
+  --muted: #CDBE98;
+
+  --brown: #E3CE90;
+  --on-brown: #2A2116;
+  --skin: #8C7146;
+  --flesh: #B89E64;
+  --flesh-tint: #332A1B;
+
+  --line: #3A2F20;
+  --line-strong: #4A3D2A;
+  --dash: #7A6743;
+
+  --leaf: #7FD18B;
+  --leaf-strong: #A8E2B0;
+  --leaf-tint: #1D3322;
+  --vine: #39B54A;
+
+  --sage: #1F3322;
+  --sky: #16323C;
+  --sun: #E0A93A;
+  --sun-deep: #C99231;
+  --on-sun: #241A0E;
+  --on-sun-soft: #4A3818;
+  --butter: #3B3016;
+  --soil: #0E0A05;
+  --on-soil: #F3EAD6;
+  --on-soil-soft: #E3CE90;
+  --soil-line: #3A2F20;
+
+  --footer: #120E08;
+  --on-footer: #F3EAD6;
+  --on-footer-soft: #E0D2B0;
+  --footer-heading: #E3CE90;
+  --footer-quiet: #CDBE98;
+  --footer-line: #3A2F20;
+
+  --link: var(--leaf);
+  --link-hover: #A8E2B0;
+  --focus: var(--sun);
+  --focus-on-dark: var(--sun);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --selection: #6B5420;
+
+  --shadow-pop: 0 20px 56px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.35);
+}

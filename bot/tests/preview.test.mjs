@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
 
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig", "agent/lib/preview.ts",
   "--outDir", ".eve/preview-test", "--module", "esnext", "--moduleResolution", "bundler",
   "--target", "es2022", "--skipLibCheck", "--types", "node"],
   { cwd: new URL("..", import.meta.url) });
-const { previewsBluesky } = await import("../.eve/preview-test/preview.js");
+// eve's bundler resolves the extensionless import; plain Node needs the .js.
+const compiled = new URL("../.eve/preview-test/preview.js", import.meta.url);
+writeFileSync(compiled, readFileSync(compiled, "utf8").replace('from "./channel-kind"', 'from "./channel-kind.js"'));
+const { previewsBluesky } = await import(compiled);
 
 function withEnv(env, fn) {
   const keys = ["EVE_DEV", "EVE_EVALUATION", "POE_PREVIEW"];
@@ -33,8 +37,20 @@ test("POE_PREVIEW=off turns it off locally", () => {
 
 test("the real Bluesky and operator DM channels are never treated as a preview", () => {
   withEnv({ EVE_DEV: "1" }, () => {
+    // eve's runtime spelling first, then the bare file stem.
+    assert.equal(previewsBluesky("channel:bluesky"), false);
+    assert.equal(previewsBluesky("channel:operator-dm"), false);
     assert.equal(previewsBluesky("bluesky"), false);
     assert.equal(previewsBluesky("operator-dm"), false);
     assert.equal(previewsBluesky(undefined), false);
   });
+});
+
+test("the website chat panel never gets the Bluesky preview, under either kind spelling", () => {
+  for (const env of [{ EVE_DEV: "1" }, { EVE_EVALUATION: "1" }]) {
+    withEnv(env, () => {
+      assert.equal(previewsBluesky("website"), false);
+      assert.equal(previewsBluesky("channel:website"), false);
+    });
+  }
 });

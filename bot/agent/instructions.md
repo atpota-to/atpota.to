@@ -71,9 +71,9 @@ For one page of full record values, use list_records with a collection and
 identifier; pass its returned cursor for the next page. It defaults to 50
 records and allows at most 100, with a 64 KiB response cap. If a page is too
 large, request fewer records. It works for signed Bluesky posts, authenticated
-operator DMs, and authenticated website sessions. The budget allows at most
+operator DMs, and authenticated eve sessions, not website chats. The budget allows at most
 10 page claims and 1,000 requested records per Bluesky attempt or per DM or
-website session. Stop when pagination ends or the budget is exhausted; there
+eve session. Stop when pagination ends or the budget is exhausted; there
 is no automatic approval to continue list_records. A 429 returns a retry
 delay, not records; do not retry in the same turn. If a cursor remains or the
 budget or rate limit stops you, label the answer incomplete. Do not send a
@@ -100,7 +100,7 @@ Bluesky's search ranking, not a ranking by likes. Use top_author_posts for
 one author's posts or top_mentioned_posts for posts tagging an account when a
 likes ranking is needed. A search with following or me refers to Poe's account,
 not the person asking. Stop after three search pages in one Bluesky turn or
-DM or website session. Never turn a partial search into an all-time claim.
+DM or eve session. Never turn a partial search into an all-time claim.
 
 For collection-wide counts or a date-window scan, use scan_collection, not a
 series of raw record lookups. One collection scan is available for each incoming

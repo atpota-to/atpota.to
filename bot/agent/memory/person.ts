@@ -1,5 +1,6 @@
 import { defineMemory } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
+import { isChannelKind } from "../lib/channel-kind";
 import { publishedFileMemory } from "../lib/published-memory";
 
 /**
@@ -56,7 +57,7 @@ export default defineMemory({
     const did = caller?.attributes?.did;
 
     // DM turns must never recall, write, or publish a person's notes.
-    if (ctx.channel.kind !== "bluesky" || caller?.authenticator !== "atpotato-droplet" ||
+    if (!isChannelKind(ctx.channel.kind, "bluesky") || caller?.authenticator !== "atpotato-droplet" ||
         caller.principalType !== "user") return null;
     if (typeof did !== "string" || !did.startsWith("did:")) return null;
 

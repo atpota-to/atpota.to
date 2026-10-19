@@ -2,75 +2,173 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>How to use Bluesky to grow your brand - atpotato</title>
-    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="guide-styles.css">
-    
-    <!-- Favicon -->
-    <link rel="icon" href="/favicon.png" type="image/png">
-    
-    <!-- Primary Meta Tags -->
     <meta name="title" content="How to use Bluesky to grow your brand - atpotato">
     <meta name="description" content="A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.">
-    
+    <link rel="canonical" href="https://atpota.to/guides/bluesky-for-brands">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
     <!-- Open Graph -->
     <meta property="og:type" content="article">
+    <meta property="og:site_name" content="atpotato">
     <meta property="og:url" content="https://atpota.to/guides/bluesky-for-brands">
     <meta property="og:title" content="How to use Bluesky to grow your brand - atpotato">
     <meta property="og:description" content="A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.">
-    <meta property="og:image" content="/bsky-guide-og.png">
+    <meta property="og:image" content="https://atpota.to/bsky-guide-og.png">
+    <meta property="og:image:width" content="1920">
+    <meta property="og:image:height" content="1081">
+    <meta name="twitter:card" content="summary_large_image">
 
+    <!-- standard.site: this guide is a site.standard.document (build/guides.ts) -->
+    <!-- @standard-site -->
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/guide.css">
+
+    <!-- Vercel Web Analytics -->
     <script>
         window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
     </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="../theme.js"></script>
-    <script defer src="../logo-hover.js"></script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
 </head>
-<body>
-    <div class="guide-container">
-        <main class="guide-content">
-            <header class="guide-header">
-                <h1>How to use Bluesky to grow your brand</h1>
-                <h2>A comprehensive guide for companies, communities, and creators</h2>
-                <div class="guide-meta">
-                    <span class="reading-time">📚 calculating...</span>
-                    <span class="meta-separator">·</span>
-                    <span class="guide-author">written by <a href="https://bsky.app/profile/dame.is" target="_blank">@dame.is</a></span>
+<body data-page="guide" data-poe-nudge="stuck on a word? highlight it and ask me.">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="guide-page" tabindex="-1">
+        <div class="reading-progress" aria-hidden="true"><div class="reading-progress__bar" data-reading-progress></div></div>
+
+        <div class="guide-wrap">
+            <header class="tile guide-hero" data-mascot-trigger>
+                <div class="guide-hero__text">
+                    <nav class="guide__crumbs" aria-label="breadcrumb">
+                        <ol class="guide__crumbs-list" role="list">
+                            <li><a href="/guides">guides</a></li>
+                            <li aria-current="page">bluesky for brands</li>
+                        </ol>
+                    </nav>
+                    <h1 class="guide__title" id="guide-title">How to use Bluesky to grow your brand</h1>
+                    <p class="guide__subtitle">A comprehensive guide for companies, communities, and creators</p>
+                    <ul class="guide__meta" role="list">
+                        <li class="guide__reading-time">
+                            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+                            <!-- @reading-time -->
+                        </li>
+                        <li class="guide__chapters">
+                            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17.5" r="1.2" fill="currentColor" stroke="none"/></svg>
+                            <!-- @chapter-count -->
+                        </li>
+                        <li class="guide__author">written by <a href="https://bsky.app/profile/dame.is" target="_blank" rel="noopener">@dame.is</a></li>
+                    </ul>
+                    <div class="guide-hero__actions">
+                        <a class="btn btn--primary" href="#section-1">start reading
+                            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+                        </a>
+                    </div>
+                    <p class="guide__thanks"><em>Thanks to <a href="https://bsky.app/profile/protocollabs.bsky.social" target="_blank" rel="noopener">Protocol Labs</a> for their support in helping make this guide possible.</em></p>
                 </div>
-                <p class="support-thanks"><em>Thanks to <a href="https://bsky.app/profile/protocollabs.bsky.social" target="_blank">Protocol Labs</a> for their support in helping make this guide possible.</em></p>
+                <div class="guide-hero__art" aria-hidden="true">
+                    <span class="paper-stack guide-hero__stack">
+                        <span class="paper-stack__sheet paper-stack__sheet--back"></span>
+                        <span class="paper-stack__sheet paper-stack__sheet--front">
+                            <span class="paper-stack__bar paper-stack__bar--title"></span>
+                            <span class="paper-stack__bar"></span>
+                            <span class="paper-stack__bar paper-stack__bar--86"></span>
+                            <span class="paper-stack__shot"></span>
+                            <span class="paper-stack__bar paper-stack__bar--92"></span>
+                        </span>
+                    </span>
+                    <img class="guide-hero__potato" data-mascot="wow" src="/src/assets/mascot/potato-wow.svg" alt="" width="210" height="171">
+                </div>
             </header>
 
-            <div id="markdown-content">
-                <!-- Markdown content will be inserted here -->
+            <div class="guide-layout">
+                <article class="guide" data-poe-askable aria-labelledby="guide-title">
+                    <!-- Phone and tablet (< 1200px): opens the contents sheet below. Fixed bottom-left; Poe owns bottom-right. -->
+                    <button type="button" class="guide-toc-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="guide-toc-sheet" data-toc-open hidden>
+                        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17.5" r="1.2" fill="currentColor" stroke="none"/></svg>
+                        <span class="guide-toc-btn__label">contents</span>
+                        <span class="guide-toc-btn__count" aria-hidden="true" data-toc-count></span>
+                    </button>
+
+                    <div class="guide__body">
+                        <!-- @guide-content -->
+                    </div>
+                </article>
+
+                <aside class="guide-aside">
+                    <nav class="guide-toc" aria-labelledby="guide-toc-title">
+                        <div class="guide-toc__head">
+                            <p class="eyebrow guide-toc__title" id="guide-toc-title">contents</p>
+                            <p class="guide-toc__time"><!-- @reading-time --></p>
+                        </div>
+                        <!-- @guide-toc -->
+                    </nav>
+                    <div class="guide-toc__poe">
+                        <img class="guide-toc__potato" src="/src/assets/mascot/potato-happy.svg" alt="" width="64" height="52" loading="lazy">
+                        <p class="guide-toc__hint">stuck on a word? highlight it in the guide and poe will explain.</p>
+                        <button type="button" class="btn btn--leaf btn--sm guide-toc__ask" data-poe-open>
+                            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18l-1 3 4-2h9a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v7a3 3 0 0 0 2 3z"/></svg>
+                            ask poe
+                        </button>
+                    </div>
+                </aside>
             </div>
-        </main>
-        <!-- Table of contents will be inserted here by JavaScript -->
-    </div>
 
-    <div class="button-backdrop"></div>
-    <a href="/" class="home-button">
-        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
-    </a>
+            <section class="guide-end" aria-labelledby="guide-end-title">
+                <h2 class="visually-hidden" id="guide-end-title">after the guide</h2>
+                <div class="tile guide-end__tile guide-end__share">
+                    <p class="eyebrow">found it useful?</p>
+                    <p class="guide-end__title">pass it to someone setting up on bluesky.</p>
+                    <div class="guide-end__actions">
+                        <a class="btn btn--primary btn--sm" href="https://bsky.app/intent/compose?text=How%20to%20use%20Bluesky%20to%20grow%20your%20brand%20https%3A%2F%2Fatpota.to%2Fguides%2Fbluesky-for-brands">share on bluesky</a>
+                        <a class="btn btn--outline btn--sm" href="https://bsky.app/profile/atpota.to">follow @atpota.to</a>
+                    </div>
+                </div>
+                <div class="tile guide-end__tile guide-end__poe" data-mascot-trigger>
+                    <img class="guide-end__potato" data-mascot="happy" src="/src/assets/mascot/potato-happy.svg" alt="" width="120" height="98" loading="lazy">
+                    <p class="eyebrow">still stuck?</p>
+                    <p class="guide-end__title">ask poe about anything in the guide.</p>
+                    <button type="button" class="btn btn--leaf btn--sm" data-poe-open>ask poe</button>
+                </div>
+                <div class="tile tile--soil guide-end__tile guide-end__record">
+                    <p class="eyebrow">open data</p>
+                    <p class="guide-end__title">this guide is a standard.site document.</p>
+                    <p class="guide-end__text">it lives on atpota.to's pds as a record any atproto app can read.</p>
+                    <p class="guide-end__links"><a href="https://aturi.to/profile/did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3lrdzen52y224">open the record</a><span aria-hidden="true"> · </span><a href="/guides">more guides</a></p>
+                </div>
+            </section>
+        </div>
 
-    <!-- Markdown processing -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="guide-components.js"></script>
-    <script>
-        // Configure marked options
-        marked.setOptions({
-            headerIds: true,
-            gfm: true
-        });
+        <dialog class="toc-sheet" id="guide-toc-sheet" aria-labelledby="toc-sheet-title" data-toc-sheet>
+            <div class="toc-sheet__panel" data-toc-panel>
+                <span class="toc-sheet__handle" aria-hidden="true"></span>
+                <div class="toc-sheet__head">
+                    <h2 class="toc-sheet__title" id="toc-sheet-title">contents</h2>
+                    <button type="button" class="toc-sheet__close" aria-label="close contents" data-toc-close>
+                        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                    </button>
+                </div>
+                <p class="toc-sheet__time"><!-- @reading-time --></p>
+                <nav class="toc-sheet__nav" aria-labelledby="toc-sheet-title">
+                    <!-- @guide-toc -->
+                </nav>
+            </div>
+        </dialog>
+    </main>
 
-        // Fetch and render markdown
-        fetch('how-to-use-bluesky-to-grow-your-brand.md')
-            .then(response => response.text())
-            .then(markdown => {
-                document.getElementById('markdown-content').innerHTML = marked.parse(markdown);
-            });
-    </script>
+    <!-- @partial footer -->
 </body>
-</html> 
+</html>

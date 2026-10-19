@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nothing growing here - atpotato</title>
+    <meta name="description" content="this page does not exist on atpota.to.">
+    <meta name="robots" content="noindex">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/notfound.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="notfound" data-poe-nudge="this page never sprouted, but i can still dig up anything on atproto.">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="notfound" tabindex="-1">
+        <div class="notfound__inner">
+            <div class="notfound__scene" data-mascot-trigger>
+                <span class="notfound__ray" aria-hidden="true"></span>
+                <span class="notfound__mound" aria-hidden="true"></span>
+                <img class="notfound__sprout" src="/src/assets/sprout.svg" alt="" width="64" height="59">
+                <img class="notfound__potato" data-mascot="dead" data-mascot-faces="scawy wow wink" src="/src/assets/mascot/potato-dead.svg" alt="a knocked-out potato with crossed-out eyes, tipped over in the dirt" width="515" height="419">
+            </div>
+            <p class="eyebrow notfound__code">error 404</p>
+            <h1 class="notfound__title">nothing growing here.</h1>
+            <p class="notfound__text">we dug up the whole patch, but this page never sprouted. it may have moved, or the link has a typo.</p>
+            <div class="notfound__actions">
+                <a class="btn btn--primary" href="/">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/></svg>
+                    back home
+                </a>
+                <a class="btn btn--outline" href="/guides/bluesky-for-brands">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>
+                    read the guide
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>
