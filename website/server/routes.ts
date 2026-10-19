@@ -10,11 +10,11 @@ const TITLES: Readonly<Record<string, string>> = {
   '/': 'atpota.to home',
   '/guides': 'atpotato guides',
   '/guides/bluesky-for-brands': 'How to use Bluesky to grow your brand',
-  '/blog': "poe's blog",
+  '/blog': "poe's atmosphere dispatch",
 };
 
 /** Any single post (the post's own title would come from a record, so it is not used). */
-const BLOG_POST_TITLE = "a post on poe's blog";
+const BLOG_POST_TITLE = "a post in poe's atmosphere dispatch";
 
 /** "/index.html", "/guides/bluesky-for-brands.html" and trailing slashes map like their clean URLs. */
 export function canonicalPath(path: string): string {

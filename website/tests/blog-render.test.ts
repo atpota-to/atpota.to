@@ -16,7 +16,7 @@ import {
   type BlockContext,
   type LeafletPage,
 } from '../server/blog/blocks.js';
-import { DEFAULT_PUBLICATION_URL, POE_DID, readBlogConfig } from '../server/blog/config.js';
+import { ATPOTATO_DID, DEFAULT_PUBLICATION_URI, DEFAULT_PUBLICATION_URL, POE_DID, readBlogConfig } from '../server/blog/config.js';
 import { atomFeed } from '../server/blog/feed.js';
 import { aturiUrl, jsonForScript, safeColor, safeHref } from '../server/blog/html.js';
 import { readingMinutes, siteInfo } from '../server/blog/pages.js';
@@ -335,8 +335,20 @@ describe('records', () => {
 });
 
 describe('config', () => {
-  it('defaults to Poe and https://atpota.to/blog', () => {
-    expect(readBlogConfig({})).toEqual({ did: POE_DID, publicationUri: null, publicationUrl: DEFAULT_PUBLICATION_URL });
+  it("defaults to the dispatch in atpota.to's repo, shown at https://atpota.to/blog", () => {
+    expect(DEFAULT_PUBLICATION_URI).toBe('at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n');
+    expect(readBlogConfig({})).toEqual({ did: ATPOTATO_DID, publicationUri: DEFAULT_PUBLICATION_URI, publicationUrl: DEFAULT_PUBLICATION_URL });
+  });
+
+  it('credits poe as the author and names the repo owner separately', () => {
+    const site = siteInfo(null, DEFAULT_PUBLICATION_URL, 'atpota.to');
+    expect(site.handle).toBe('poe.atpota.to');
+    expect(site.owner).toBe('atpota.to');
+  });
+
+  it("an empty pin turns pinning off: the publication is found by url in BLOG_DID's repo, else Poe's", () => {
+    expect(readBlogConfig({ BLOG_PUBLICATION_URI: '' })).toEqual({ did: POE_DID, publicationUri: null, publicationUrl: DEFAULT_PUBLICATION_URL });
+    expect(readBlogConfig({ BLOG_PUBLICATION_URI: ' ', BLOG_DID: 'did:plc:abcdefghijklmnopqrstuvwx' }).did).toBe('did:plc:abcdefghijklmnopqrstuvwx');
   });
 
   it('accepts a pinned publication (its repo becomes the DID) and ignores junk', () => {

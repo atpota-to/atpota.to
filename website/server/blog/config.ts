@@ -1,20 +1,24 @@
 /**
  * Settings for Poe's blog (/blog), a standard.site publication rendered from records on
- * Poe's PDS. Read on every request like ../config.ts, so a changed env var applies on the
+ * a PDS. Read on every request like ../config.ts, so a changed env var applies on the
  * next call and tests can pass their own env.
  *
- *   BLOG_DID               whose repo holds the records. Default: Poe (poe.atpota.to).
- *   BLOG_PUBLICATION_URI   pin one at://.../site.standard.publication/<rkey>. Without it the
- *                          blog uses the publication record in that repo whose `url` is
- *                          BLOG_PUBLICATION_URL, so the page goes live as soon as Poe
- *                          creates the record, with no deploy.
- *   BLOG_PUBLICATION_URL   the publication's public address. Default https://atpota.to/blog.
+ *   BLOG_PUBLICATION_URI   the at://.../site.standard.publication/<rkey> to show. Default:
+ *                          DEFAULT_PUBLICATION_URI. Its repo is where the posts are read.
+ *                          Set but empty: no pin, and the blog uses the publication record
+ *                          in BLOG_DID's repo whose `url` is BLOG_PUBLICATION_URL.
+ *   BLOG_DID               the repo for that unpinned lookup. Default: Poe (poe.atpota.to).
+ *   BLOG_PUBLICATION_URL   atpota.to's address for the blog. Default https://atpota.to/blog.
+ *
+ * A publication whose own `url` is elsewhere (poe.leaflet.pub for the dispatch) is shown
+ * here as a copy: canonical links point at its url, and the /.well-known verification
+ * file is only served for a publication whose url is BLOG_PUBLICATION_URL.
  *
  * The name and tagline shown before the publication record exists live in BLOG_COPY; once
  * the record exists its `name` and `description` win.
  *
  * What the blog reads from the repo:
- *   site.standard.publication  { name, description?, icon?, url: "https://atpota.to/blog" }
+ *   site.standard.publication  { name, description?, icon?, url }
  *   site.standard.document     { site: <the publication's at:// URI>, title, publishedAt,
  *                                path?: "/<slug>", description?, tags?, coverImage?,
  *                                bskyPostRef?, textContent?, content: { $type:
@@ -27,6 +31,9 @@ import type { Env } from '../config.js';
 
 export const POE_DID = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
 export const POE_HANDLE = 'poe.atpota.to';
+export const ATPOTATO_DID = 'did:plc:qntsxa2i4sb24noi45fx4np2';
+/** "poe's atmosphere dispatch": made in Leaflet, in atpota.to's repo, url https://poe.leaflet.pub. */
+export const DEFAULT_PUBLICATION_URI = `at://${ATPOTATO_DID}/site.standard.publication/3myar4h4pls2n`;
 export const SITE_ORIGIN = 'https://atpota.to';
 export const BLOG_PATH = '/blog';
 export const DEFAULT_PUBLICATION_URL = `${SITE_ORIGIN}${BLOG_PATH}`;
@@ -35,8 +42,8 @@ export const SHELL_PATHS = ['/shells/blog', '/shells/blog.html'] as const;
 
 export const BLOG_COPY = {
   /** Placeholder until the publication record names the blog. */
-  name: "poe's blog",
-  tagline: "a weekly roundup of what's happening in the atmosphere, written by poe.",
+  name: "poe's atmosphere dispatch",
+  tagline: "a weekly round up of what's happening in the atmosphere",
   emptyTitle: 'the first issue is still in the ground.',
   emptyText: 'follow poe on bluesky or grab the feed to catch it when it sprouts.',
 } as const;
@@ -71,11 +78,13 @@ export function normalizePublicationUrl(raw: string | undefined): string | null 
 
 export function readBlogConfig(env: Env): BlogConfig {
   const did = env.BLOG_DID?.trim();
-  const pinned = env.BLOG_PUBLICATION_URI?.trim();
+  const raw = env.BLOG_PUBLICATION_URI?.trim();
+  // Unset or unusable: the default pin. Set but empty: no pin.
+  const pinned = raw === '' ? null : raw && PUBLICATION_URI_RE.test(raw) ? raw : DEFAULT_PUBLICATION_URI;
   const pinnedMatch = pinned ? PUBLICATION_URI_RE.exec(pinned) : null;
   return {
-    did: did && isDid(did) ? did : pinnedMatch && isDid(pinnedMatch[1]!) ? pinnedMatch[1]! : POE_DID,
-    publicationUri: pinnedMatch ? pinned! : null,
+    did: pinnedMatch && isDid(pinnedMatch[1]!) ? pinnedMatch[1]! : did && isDid(did) ? did : POE_DID,
+    publicationUri: pinnedMatch ? pinned : null,
     publicationUrl: normalizePublicationUrl(env.BLOG_PUBLICATION_URL) ?? DEFAULT_PUBLICATION_URL,
   };
 }
