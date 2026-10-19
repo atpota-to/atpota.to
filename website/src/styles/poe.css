@@ -758,10 +758,13 @@ html[data-theme="dark"] .poe-msg--poe:not(.poe-msg--note) {
 /* ---------- phone: bottom sheet ---------- */
 
 @media (max-width: 639.98px) {
+  /* The whole potato stays on screen. iOS Safari paints the page below the point
+     where fixed elements stop (under its floating toolbar), so a potato hanging
+     off the bottom edge looked cut off in mid-air. */
   .poe-potato {
-    right: 10px;
-    bottom: -26px;
-    width: 104px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: 88px;
   }
 
   .poe-potato__label {
