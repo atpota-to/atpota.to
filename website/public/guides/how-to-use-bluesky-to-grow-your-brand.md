@@ -498,6 +498,38 @@ Bikesky now runs about 30 custom feeds so that bike enjoyers can find niche cont
 
 The popular online music platform for independent recording artists known as Bandcamp launched a first-of-its-kind integration with Bluesky in March 2025 that allows its Pro users to set their Bluesky username to be their Bandcamp subdomain such as `artist.bandcamp.com`. It's unclear how many of its users have adopted the feature yet, but either way it serves as a powerful example of how another platform can choose to connect to Bluesky and let its community self-identify in a way that makes sense to them. The relationship has gone both ways since then: in February 2026, Bluesky added Bandcamp embeds, so songs and albums now play right inside Bluesky posts.
 
+#### Leaflet
+
+[https://bsky.app/profile/leaflet.pub](https://bsky.app/profile/leaflet.pub)
+
+Leaflet is a blogging and newsletter platform built on the AT Protocol by a team of three, the same people who previously made Hyperlink Academy. Writers sign in with their Bluesky account, and their posts are stored in their own account's data rather than locked inside Leaflet.
+
+Almost every feature Leaflet has shipped ties a post back to Bluesky. Since [June 2025](https://bsky.app/profile/leaflet.pub/post/3lrbmiait5s2q), writers can share a new post to Bluesky the moment they publish it, and readers can subscribe with their Bluesky account or by email. Since [November 2025](https://bsky.app/profile/leaflet.pub/post/3m5hjfsmcek2d), each post shows the Bluesky quotes and mentions it has picked up, so the conversation about a post sits right next to it. Leaflet also runs its own custom feeds, including one that collects new posts from the publications you subscribe to. By [September 2025](https://bsky.app/profile/leaflet.pub/post/3lzyuvtdw422k), more than 400 publications had published at least one post.
+
+Its biggest move was teaming up with its competitors. Leaflet worked with two other blogging platforms, pckt and Offprint, on Standard.site, the shared format for long-form writing mentioned earlier, and [moved over to it](https://bsky.app/profile/leaflet.pub/post/3md4qsqncqs24) in January 2026. Because all three platforms now publish the same way, Bluesky had a reason to support all of them at once, and it did so twice in two months: rich preview cards for their articles in May 2026, then a ["Summer of Standard.site"](https://bsky.social/about/blog/06-22-2026-summer-of-standard-site) promotion in June that covered 25% off a year of each platform's paid plan.
+
+#### Streamplace
+
+[https://bsky.app/profile/stream.place](https://bsky.app/profile/stream.place)
+
+Streamplace is an open-source livestreaming platform built on the AT Protocol by a small company founded by Eli Mallon (@iame.li). In its first full year, from January 2025 to January 2026, it had [1,654 users and hosted 2,036 livestreams](https://bsky.app/profile/stream.place/post/3mcdvs442m22n). Those are modest numbers, but Streamplace has turned a few decisions into a lot of visibility.
+
+The first decision was to never ask anyone to build a new audience. You sign in with your Bluesky account, the Streamplace app notifies you when people you follow on Bluesky go live, and it can post to Bluesky for you when your stream starts. In January 2026, Bluesky's Live Now badges started supporting Streamplace links, and your LIVE badge on Bluesky now turns on by itself when you stream there. Bluesky's head of product [called it](https://bsky.app/profile/alexbenzer.com/post/3mckobr5nss2w) a "very cool demonstration of how Atmosphere apps can interconnect and benefit each other," and the next day Streamplace [posted](https://bsky.app/profile/stream.place/post/3mclgjv5xzs2w): "Bit of instability with lots of new users coming in!"
+
+The second was to become the place where its community's events happen. Streamplace streamed both AtmosphereConf gatherings, Bluesky's own developer shows stream there, and in September 2026 it [carried W Social's broadcast](https://bsky.app/profile/stream.place/post/3mvizqwh26c2g) of the European Commission president's State of the European Union address. Every one of those events put the product in front of the people it most wants to reach.
+
+#### Blacksky
+
+[https://bsky.app/profile/blackskyweb.xyz](https://bsky.app/profile/blackskyweb.xyz)
+
+You've already met Blacksky a few times in this guide. Its story is worth telling from the beginning, because it shows how far you can get by starting small with tools anyone can use.
+
+It began in 2023 as a single custom feed for Black users, built by Rudy Fraser (@rude1.blacksky.team). People joined by using the #AddToBlackSky hashtag once, and #BlackSky added a single post. On the feed's first birthday, Fraser [counted](https://bsky.app/profile/rude1.blacksky.team/post/3kta6db4ke22e) 10 million views and 100,000 people who had used it, and during the November 2024 rush its traffic [jumped](https://bsky.app/profile/rude1.blacksky.team/post/3lapd6742d22p) from 40,000 views a day to 200,000 in a single week. A moderation labeler came next, with labels the community defined for harms like misogynoir and anti-Black harassment.
+
+From there, Blacksky kept adding pieces: account hosting with its own handles (like name.blacksky.app), a one-click tool for moving accounts over, [its own servers running the network](https://bsky.app/profile/pfrazee.com/post/3mcs6673hfs2y) in January 2026, its own app with [iOS and Android betas](https://bsky.app/profile/blackskyweb.xyz/post/3mrsbr6kg6c2b) in July 2026, and [Acorn](https://bsky.app/profile/blackskyweb.xyz/post/3mhrdixe6wc2g), a toolkit other communities like Latinsky and Medsky use to run their own spaces. Fraser has [said](https://bsky.app/profile/rude1.blacksky.team/post/3lyqvspoy422y) Blacksky is a for-profit company whose main business model, for now, is voluntary, sliding-scale subscriptions from the people who use it.
+
+You don't need to build your own app to learn from this. A feed and a labeler, two things any brand or community can set up, were enough for Blacksky to find and serve an audience in the hundreds of thousands, and everything else grew from that base.
+
 ## Analyzing and Measuring success
 
 Once you've started posting on Bluesky, there might come a time where you need to see if what you're doing is having any effect. How you go about investigating this will largely depend on your specific goals and needs, but in general here are some of the key areas you can pay attention to:

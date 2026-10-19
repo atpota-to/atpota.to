@@ -225,7 +225,7 @@ describe('site plugin', () => {
     expect(index).not.toMatch(/@standard-site|@guides-list/);
     const card = html(index).querySelector('a.guides-card')!;
     expect(card.getAttribute('href')).toBe('/guides/bluesky-for-brands');
-    expect(card.querySelector('.guides-card__meta')!.textContent).toBe('57 min read · 7 chapters · by @dame.is');
+    expect(card.querySelector('.guides-card__meta')!.textContent).toBe('60 min read · 7 chapters · by @dame.is');
     expect(guidesList(root)).toContain('read the guide');
     expect(() => transform('<html></html>', { filename: `${root}${guide.html}` })).toThrow(/marker/);
 
