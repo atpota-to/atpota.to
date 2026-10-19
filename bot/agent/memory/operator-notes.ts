@@ -1,4 +1,5 @@
 import { defineMemory } from "eve/memory";
+import { isChannelKind } from "../lib/channel-kind";
 import { privateFileMemory } from "../lib/published-memory";
 
 // Notes about a verified operator belong to their private DM scope. This slot
@@ -11,7 +12,7 @@ export default defineMemory({
     "details, or private facts about other people. Correct or remove outdated notes.",
   scope(ctx) {
     const caller = ctx.session.auth.current;
-    if (ctx.channel.kind !== "operator-dm" ||
+    if (!isChannelKind(ctx.channel.kind, "operator-dm") ||
         caller?.authenticator !== "atpotato-droplet-dm" ||
         caller.principalType !== "user" ||
         caller.principalId !== caller.attributes?.operatorDid ||

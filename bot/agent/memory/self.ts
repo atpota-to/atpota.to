@@ -1,4 +1,5 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
+import { isChannelKind } from "../lib/channel-kind";
 import { privateFileMemory } from "../lib/published-memory";
 
 const base = privateFileMemory();
@@ -16,9 +17,9 @@ export default defineMemory({
     recall: base.recall,
     async tools(ctx) {
       const caller = ctx.session.auth.current;
-      const publicOperator = ctx.channel.kind === "bluesky" &&
+      const publicOperator = isChannelKind(ctx.channel.kind, "bluesky") &&
         caller?.authenticator === "atpotato-droplet" && caller.attributes?.operator === "true";
-      const privateOperator = ctx.channel.kind === "operator-dm" &&
+      const privateOperator = isChannelKind(ctx.channel.kind, "operator-dm") &&
         caller?.authenticator === "atpotato-droplet-dm" &&
         caller.principalType === "user" &&
         caller.principalId === caller.attributes?.operatorDid;

@@ -1,5 +1,6 @@
 import { defineDynamic, defineInstructions } from "eve/instructions";
 import skill from "../skills/bluesky-reply.md?raw";
+import { isChannelKind } from "../lib/channel-kind";
 import { PREVIEW_NOTE, previewsBluesky } from "../lib/preview";
 
 /**
@@ -21,7 +22,7 @@ export default defineDynamic({
     // under way. A system-role result stays outside history, so resolving it
     // each turn adds nothing to the thread; the text is identical turn to turn.
     "turn.started": async (_event, ctx) => {
-      if (ctx.channel.kind === "bluesky") return defineInstructions({ content: rules });
+      if (isChannelKind(ctx.channel.kind, "bluesky")) return defineInstructions({ content: rules });
       if (previewsBluesky(ctx.channel.kind)) {
         return defineInstructions({ content: `${PREVIEW_NOTE}\n\n${rules}` });
       }
