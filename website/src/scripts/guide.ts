@@ -226,9 +226,12 @@ export function initContentsSheet(button: HTMLButtonElement, dialog: HTMLDialogE
 
   dialog.addEventListener('keydown', (event) => {
     // "/" opens Poe (src/poe): close the modal first so Poe is not left behind its inert
-    // backdrop. The key event keeps bubbling to Poe's listener; focus is back on the button.
+    // backdrop. The key event keeps bubbling to Poe's listener. Focus goes to the button
+    // now (Poe records it as the opener and returns there on Esc) and is not restored when
+    // the queued "close" event lands, which would pull it out of Poe's input.
     if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      close(true);
+      close(false);
+      button.focus({ preventScroll: true });
       return;
     }
     // Keep Tab inside the sheet (wrap at both ends), like the header's phone menu.

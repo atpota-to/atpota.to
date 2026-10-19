@@ -86,27 +86,67 @@ export function pillPosition(
   return { left: Math.round(left), top: Math.round(top), placement: below ? 'below' : 'above' };
 }
 
+const SECTION_HEADINGS = 'h2, h3, h4, h5';
+const SECTION_SKIP = 'script, style, .poe, [data-poe-ignore]';
+
+function headingRank(el: Element): number {
+  return /^H([1-6])$/.exec(el.tagName) ? Number(el.tagName.charAt(1)) : 0;
+}
+
 /**
- * The text of the guide section currently being read, for "summarize this
- * section": the last h2 in `root` whose top is above `line` (viewport px), plus
- * its following siblings up to the next h2. Null when the root has no h2.
+ * The part of the guide being read, for "summarize this section". Only 2000
+ * characters fit in a request (client, proxy and bot all cap the selection), and
+ * some h2 sections run to 20k, so this anchors on the nearest heading of any level
+ * (h2..h5) whose top is at or above `line` (viewport px), falling back to the first.
+ * The text starts with the path of headings above it ("Understanding Bluesky ›
+ * How Bluesky is different from Twitter › 3. Labelers + content filters") so Poe
+ * knows where the excerpt sits, then that heading's section: its following siblings
+ * up to the next heading of the same or a higher level. Cut at a word, with "…",
+ * when it does not fit. `title` (the bubble's caption) is the nearest heading.
+ * Null when the root has no headings.
  */
 export function currentSection(root: Element, line: number, maxChars = 2000): { title: string; text: string } | null {
-  const headings = Array.from(root.querySelectorAll('h2'));
+  const headings = Array.from(root.querySelectorAll<HTMLElement>(SECTION_HEADINGS));
   if (headings.length === 0) return null;
-  let current = headings[0] as HTMLElement;
-  for (const h of headings) {
-    const top = (h as HTMLElement).getBoundingClientRect().top;
-    if (top <= line) current = h as HTMLElement;
+  let index = 0;
+  for (let i = 0; i < headings.length; i++) {
+    if ((headings[i] as HTMLElement).getBoundingClientRect().top <= line) index = i;
     else break;
   }
-  const parts: string[] = [];
+  const current = headings[index] as HTMLElement;
+  const rank = headingRank(current);
   const title = collapseWhitespace(current.textContent ?? '');
-  parts.push(title);
-  for (let el = current.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
-    if (el.matches('script, style, .poe, [data-poe-ignore]')) continue;
-    parts.push(el.textContent ?? '');
-    if (parts.join(' ').length > maxChars) break;
+
+  // The headings this one sits under, nearest last.
+  const path = [title];
+  let above = rank;
+  for (let i = index - 1; i >= 0 && above > 2; i--) {
+    const h = headings[i] as HTMLElement;
+    const r = headingRank(h);
+    if (r < above) {
+      path.unshift(collapseWhitespace(h.textContent ?? ''));
+      above = r;
+    }
   }
-  return { title, text: collapseWhitespace(parts.join(' ')).slice(0, maxChars) };
+
+  const parts = [path.join(' › ')];
+  let length = parts[0]!.length;
+  for (let el = current.nextElementSibling; el; el = el.nextElementSibling) {
+    const r = headingRank(el);
+    if (r > 0 && r <= rank) break;
+    if (el.matches(SECTION_SKIP)) continue;
+    const text = collapseWhitespace(el.textContent ?? '');
+    if (!text) continue;
+    parts.push(text);
+    length += text.length + 1;
+    if (length > maxChars) break;
+  }
+  let text = parts.join(' ');
+  if (text.length > maxChars) {
+    let cut = text.slice(0, Math.max(0, maxChars - 1));
+    const space = cut.lastIndexOf(' ');
+    if (space > maxChars * 0.8) cut = cut.slice(0, space);
+    text = `${cut.trimEnd()}…`;
+  }
+  return { title, text };
 }

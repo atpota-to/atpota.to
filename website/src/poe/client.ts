@@ -21,7 +21,8 @@ import { SseParser } from './sse';
 export const ENDPOINT = '/api/poe';
 export const MAX_MESSAGE = 1000;
 export const MAX_SELECTION = 2000;
-const MAX_TEXT = 20_000;
+/** The longest answer text the widget accepts, renders and restores. */
+export const MAX_ANSWER_TEXT = 20_000;
 const MAX_LABEL = 80;
 const MAX_LINKS = 200;
 const MAX_LINK_LENGTH = 2048;
@@ -263,15 +264,15 @@ export async function askPoe(request: AskRequest, handlers: StreamHandlers, opti
           }
           return null;
         case 'delta':
-          if (typeof payload.text === 'string' && isBlockIndex(payload.block)) handlers.onDelta?.(payload.block, payload.text.slice(0, MAX_TEXT));
+          if (typeof payload.text === 'string' && isBlockIndex(payload.block)) handlers.onDelta?.(payload.block, payload.text.slice(0, MAX_ANSWER_TEXT));
           return null;
         case 'block':
           if ((typeof payload.text === 'string' || payload.text === null) && isBlockIndex(payload.block)) {
-            handlers.onBlock?.(payload.block, payload.text === null ? null : payload.text.slice(0, MAX_TEXT));
+            handlers.onBlock?.(payload.block, payload.text === null ? null : payload.text.slice(0, MAX_ANSWER_TEXT));
           }
           return null;
         case 'done': {
-          const text = typeof payload.text === 'string' ? payload.text.slice(0, MAX_TEXT) : '';
+          const text = typeof payload.text === 'string' ? payload.text.slice(0, MAX_ANSWER_TEXT) : '';
           finished = true;
           handlers.onDone?.(text, cleanLinks(payload.links));
           return 'done';
@@ -321,18 +322,33 @@ export async function askPoe(request: AskRequest, handlers: StreamHandlers, opti
   }
 }
 
-/** Starts a new conversation (the proxy clears the httpOnly cookie). Never throws. */
-export async function resetConversation(options: { fetchImpl?: typeof fetch; endpoint?: string } = {}): Promise<boolean> {
+/**
+ * Starts a new conversation (the proxy clears the httpOnly cookie). Never throws.
+ * Gives up (false) after `timeoutMs`, so a stalled DELETE never holds up the next question.
+ */
+export async function resetConversation(options: { fetchImpl?: typeof fetch; endpoint?: string; timeoutMs?: number } = {}): Promise<boolean> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(false);
+    }, options.timeoutMs ?? 5000);
+  });
   try {
-    const response = await fetchImpl(options.endpoint ?? ENDPOINT, {
+    const request = fetchImpl(options.endpoint ?? ENDPOINT, {
       method: 'DELETE',
       credentials: 'same-origin',
       cache: 'no-store',
       keepalive: true,
-    });
-    return response.ok;
-  } catch {
-    return false;
+      signal: controller.signal,
+    }).then(
+      (response) => response.ok,
+      () => false,
+    );
+    return await Promise.race([request, timedOut]);
+  } finally {
+    clearTimeout(timer);
   }
 }

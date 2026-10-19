@@ -11,11 +11,40 @@ import { z } from "zod";
  */
 
 /**
- * The authenticator every website turn carries. No tool, memory slot or
- * channel callback accepts it, so each existing gate fails closed for a
- * visitor. Never reuse a droplet name, "oidc" or "local-dev" here.
+ * The authenticator every website turn carries. No authored tool, memory slot
+ * or channel callback accepts it, so those gates fail closed for a visitor.
+ * eve's own default tools check for nothing, so the dangerous ones are
+ * wrapped in agent/tools/ and refuse it by name; see refuseWebsiteCaller.
+ * Never reuse a droplet name, "oidc" or "local-dev" here.
  */
 export const WEBSITE_AUTHENTICATOR = "atpotato-website";
+
+type Caller = { authenticator?: string } | null | undefined;
+
+/**
+ * True when a website visitor started or is driving this session. Tools get no
+ * ctx.channel, so this goes by the authenticator alone, and it checks the
+ * initiator too: a copy started by eve's `agent` tool inherits the root's
+ * auth, so the gate holds inside it as well.
+ */
+export function isWebsiteCaller(ctx: { session: { auth: { initiator?: Caller; current?: Caller } } }): boolean {
+  const { initiator, current } = ctx.session.auth;
+  return [initiator, current].some((caller) => caller?.authenticator === WEBSITE_AUTHENTICATOR);
+}
+
+/**
+ * The code-level gate on eve's default bash, read_file, write_file and
+ * web_fetch, which carry no approval policy of their own. A visitor is
+ * anonymous and can start a fresh session by dropping a cookie, so shell, file
+ * and fetch access is refused here rather than left to the website
+ * instructions. Every other caller gets eve's tool unchanged.
+ */
+export function refuseWebsiteCaller(
+  ctx: { session: { auth: { initiator?: Caller; current?: Caller } } },
+  tool: string,
+): void {
+  if (isWebsiteCaller(ctx)) throw new Error(`${tool} is not available in website chats`);
+}
 
 export const WEBSITE_SECRET_HEADER = "x-atpotato-website-secret";
 
@@ -92,6 +121,48 @@ export function buildWebsitePrompt(chat: Pick<WebsiteChat, "message" | "page" | 
  */
 function fence(text: string): string {
   return text.replace(/<(\s*\/?\s*)(page|selection|message)\b([^>]*)>/gi, "‹$1$2$3›");
+}
+
+/**
+ * URLs as they appear inside a JSON-serialized tool result. Unlike the
+ * Bluesky/droplet pattern in lib/bluesky.ts this one keeps ")", so a URL such
+ * as https://en.wikipedia.org/wiki/Mercury_(planet) reaches the widget whole
+ * instead of as a prefix that 404s; trimLink drops a ")" that only closes the
+ * prose or markdown around a URL.
+ */
+const LINK_PATTERN = /https?:\/\/[^\s"'\\<>\]}]+/g;
+const TRAILING_PUNCT = /[.,;:!?]+$/;
+
+const count = (text: string, char: string) => text.split(char).length - 1;
+
+/**
+ * Strip trailing prose punctuation, and a trailing ")" that has no "(" of its
+ * own in the URL, until neither applies. They alternate so that
+ * "https://x.to/a)." and "[t](https://x.to/wiki/A_(b))" both come out right.
+ */
+function trimLink(url: string): string {
+  for (;;) {
+    let next = url.replace(TRAILING_PUNCT, "");
+    if (next.endsWith(")") && count(next, ")") > count(next, "(")) next = next.slice(0, -1);
+    if (next === url) return url;
+    url = next;
+  }
+}
+
+/**
+ * Every URL one `action.result` event returned, for the website channel's
+ * `links`. The widget links a URL only when it is in that list, exactly, so
+ * the list has to hold the URL the tool returned rather than a truncation of
+ * it. channels/bluesky.ts keeps linksFromToolResult, which the droplet's own
+ * link check is built around.
+ */
+export function websiteLinksFromToolResult(event: unknown): string[] {
+  const found = new Set<string>();
+  for (const match of JSON.stringify(event ?? null).matchAll(LINK_PATTERN)) {
+    const url = trimLink(match[0]);
+    if (url.length > 8) found.add(url);
+  }
+  return [...found];
 }
 
 /**

@@ -23,7 +23,7 @@ export const ERROR_CODES: readonly ErrorCode[] = [
 ];
 
 export const MESSAGES = {
-  not_configured: "poe isn't set up on the website yet. you can ask @poe.atpota.to on bluesky in the meantime.",
+  not_configured: "poe isn't answering on the website right now. you can ask @poe.atpota.to on bluesky in the meantime.",
   disabled: 'poe is taking a nap right now. you can ask @poe.atpota.to on bluesky in the meantime.',
   rate_limited: "that's a lot of questions in a short time. give poe a few minutes to catch up.",
   bad_request: "poe couldn't read that message. try sending it again.",

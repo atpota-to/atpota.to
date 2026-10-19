@@ -186,8 +186,48 @@ describe('current section for "summarize this section"', () => {
     const root = document.querySelector('article')!;
     expect(currentSection(root, 300)).toEqual({ title: '2. Feeds', text: '2. Feeds feeds text one' });
     expect(currentSection(root, -2000)?.title).toBe('1. Intro');
-    expect(currentSection(root, 300, 12)?.text).toHaveLength(12);
+    const short = currentSection(root, 300, 12)!.text;
+    expect(short.length).toBeLessThanOrEqual(12);
+    expect(short.endsWith('…')).toBe(true);
     document.body.innerHTML = '<article><p>no headings</p></article>';
     expect(currentSection(document.querySelector('article')!, 0)).toBeNull();
+  });
+
+  it('anchors on the nearest h3/h4 inside a long h2 section, with the heading path for context', () => {
+    // Shaped like the guide: one flat list of siblings, an h2 far longer than the 2000-char cap.
+    const filler = (word: string, n: number) => `<p>${`${word} `.repeat(n).trim()}</p>`;
+    document.body.innerHTML = `
+      <article data-poe-askable>
+        <h2 id="s3">Understanding Bluesky</h2>${filler('backstory', 400)}
+        <h3 id="diff">How Bluesky is different from Twitter</h3>${filler('intro', 40)}
+        <h4 id="feeds">1. Custom feeds</h4>${filler('feeds', 400)}
+        <h4 id="labelers">3. Labelers + content filters</h4><p>Connected to third-party moderation services are a special tool called labelers.</p>${filler('labels', 100)}
+        <h4 id="domains">4. Domain names as usernames</h4>${filler('domains', 400)}
+        <h3 id="culture">Audience and Culture</h3>${filler('culture', 50)}
+        <h2 id="s4">Achieving Growth</h2>${filler('growth', 50)}
+      </article>`;
+    const tops: Record<string, number> = { s3: -6000, diff: -3000, feeds: -2500, labelers: 120, domains: 900, culture: 1600, s4: 2400 };
+    for (const h of Array.from(document.querySelectorAll<HTMLElement>('h2, h3, h4'))) {
+      h.getBoundingClientRect = () => ({ top: tops[h.id]!, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    }
+    const root = document.querySelector('article')!;
+    const section = currentSection(root, 300)!;
+    expect(section.title).toBe('3. Labelers + content filters');
+    expect(section.text.startsWith('Understanding Bluesky › How Bluesky is different from Twitter › 3. Labelers + content filters Connected to third-party')).toBe(true);
+    expect(section.text).toContain('labels labels');
+    // stops at the next heading of the same level, so nothing from the neighbours
+    expect(section.text).not.toMatch(/backstory|feeds feeds|domains|culture/);
+    expect(section.text.length).toBeLessThanOrEqual(2000);
+
+    // an h3 takes in its h4s, up to the cap, cut at a word with "…"
+    const h3 = currentSection(root, -2800)!;
+    expect(h3.title).toBe('How Bluesky is different from Twitter');
+    expect(h3.text.startsWith('Understanding Bluesky › How Bluesky is different from Twitter intro')).toBe(true);
+    expect(h3.text.length).toBeLessThanOrEqual(2000);
+    expect(h3.text.endsWith('feeds…')).toBe(true);
+    expect(h3.text).not.toContain('labels');
+
+    // above every heading: the first one
+    expect(currentSection(root, -9000)!.title).toBe('Understanding Bluesky');
   });
 });

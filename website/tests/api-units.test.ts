@@ -178,11 +178,17 @@ describe('origin', () => {
     ['https://www.atpota.to', true],
     ['https://atpotato.com', true],
     ['https://www.atpotato.com', true],
-    ['https://atpota-to.vercel.app', true],
-    ['https://atpota-to-git-redesign-vite-poe-atpotato.vercel.app', true],
-    ['https://atpota-to-abc123-atpotato.vercel.app', true],
-    ['http://localhost:5173', true],
-    ['http://127.0.0.1:4173', true],
+    // Vercel hostnames are not on the list (anyone can name a project "atpota-to-..."):
+    // a preview is only allowed to call its own host, see the same-host test below.
+    ['https://atpota-to.vercel.app', false],
+    ['https://atpota-to-git-redesign-vite-poe-atpotato.vercel.app', false],
+    ['https://atpota-to-abc123-atpotato.vercel.app', false],
+    ['https://atpota-to-evil.vercel.app', false],
+    ['https://atpota-to-git-main-attacker.vercel.app', false],
+    ['https://atpota-to-git-x-atpotato.vercel.app', false],
+    // Loopback pages are only allowed against a loopback server.
+    ['http://localhost:5173', false],
+    ['http://127.0.0.1:4173', false],
     ['https://evil.example', false],
     ['https://evil.vercel.app', false],
     ['https://atpota-to.vercel.app.evil.example', false],
@@ -200,6 +206,28 @@ describe('origin', () => {
   it('allows the request URL origin itself', () => {
     expect(isAllowedOrigin('https://some-alias.example', 'https://some-alias.example/api/poe')).toBe(true);
     expect(isAllowedOrigin('https://some-alias.example', 'https://other.example/api/poe')).toBe(false);
+  });
+
+  it('allows an https Origin on the request host even when the runtime reports http://', () => {
+    // @vercel/node builds request.url as http:// behind TLS; previews must still reach their own /api/poe.
+    const preview = 'https://atpota-to-git-x-atpotato.vercel.app';
+    expect(isAllowedOrigin(preview, 'http://atpota-to-git-x-atpotato.vercel.app/api/poe')).toBe(true);
+    expect(isAllowedOrigin(preview, 'https://atpota-to-git-x-atpotato.vercel.app/api/poe')).toBe(true);
+    expect(isAllowedOrigin(preview, 'https://atpota.to/api/poe')).toBe(false);
+    expect(isAllowedOrigin('https://atpota-to-evil.vercel.app', 'http://atpota-to-git-x-atpotato.vercel.app/api/poe')).toBe(false);
+    // Same host only over https, and the port has to match too.
+    expect(isAllowedOrigin('http://atpota-to-git-x-atpotato.vercel.app', 'https://atpota-to-git-x-atpotato.vercel.app/api/poe')).toBe(false);
+    expect(isAllowedOrigin('https://preview.example:8443', 'http://preview.example/api/poe')).toBe(false);
+  });
+
+  it('allows loopback origins only when the server is loopback too', () => {
+    expect(isAllowedOrigin('http://localhost:5173', 'http://localhost:5173/api/poe')).toBe(true);
+    expect(isAllowedOrigin('http://localhost:3000', 'http://localhost:5173/api/poe')).toBe(true);
+    expect(isAllowedOrigin('http://127.0.0.1:4173', 'http://localhost:4173/api/poe')).toBe(true);
+    expect(isAllowedOrigin('http://[::1]:4173', 'http://127.0.0.1:4173/api/poe')).toBe(true);
+    expect(isAllowedOrigin('http://localhost:5173', 'https://atpota.to/api/poe')).toBe(false);
+    expect(isAllowedOrigin('http://localhost:5173', 'http://atpota-to-git-x-atpotato.vercel.app/api/poe')).toBe(false);
+    expect(isAllowedOrigin('http://localhost:5173', 'not a url')).toBe(false);
   });
 });
 

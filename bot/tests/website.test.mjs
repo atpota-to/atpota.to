@@ -3,16 +3,18 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
 
-// Compile the website channel, its instructions and the two tools whose
-// descriptions it touches, then swap eve's runtime imports for stubs. The
-// route runs against a scripted fake Session: no eve runtime, model, proxy or
-// droplet is involved.
+// Compile the website channel, its instructions, the two tools whose
+// descriptions it touches and the wrappers around eve's default tools, then
+// swap eve's runtime imports for stubs. The route runs against a scripted fake
+// Session: no eve runtime, model, proxy or droplet is involved.
 const stub = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 const compile = (files, outDir) => execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig",
   ...files, "--outDir", outDir, "--rootDir", "agent", "--module", "esnext", "--moduleResolution", "bundler",
   "--target", "es2022", "--skipLibCheck", "--types", "node"], { cwd: new URL("..", import.meta.url) });
+const GATED = [["bash", "bash"], ["read_file", "readFile"], ["write_file", "writeFile"], ["web_fetch", "webFetch"]];
 compile(["agent/channels/website.ts", "agent/instructions/website.ts",
-  "agent/tools/list_records.ts", "agent/tools/search_bluesky_posts.ts"], ".eve/website-test");
+  "agent/tools/list_records.ts", "agent/tools/search_bluesky_posts.ts",
+  ...GATED.map(([file]) => `agent/tools/${file}.ts`)], ".eve/website-test");
 const out = new URL("../.eve/website-test/", import.meta.url);
 function load(path, replacements) {
   let source = readFileSync(new URL(`${path}.js`, out), "utf8");
@@ -35,6 +37,16 @@ const instructions = (await load("instructions/website", [
 const toolStub = ['from "eve/tools"', `from "${stub("export const defineTool = (tool) => tool;")}"`];
 const listRecords = (await load("tools/list_records", [toolStub])).default;
 const searchPosts = (await load("tools/search_bluesky_posts", [toolStub])).default;
+// Each wrapper over a stand-in for eve's tool that records the calls it gets.
+const innerCalls = [];
+globalThis.__websiteTestInnerCalls = innerCalls;
+const gated = Object.fromEntries(await Promise.all(GATED.map(async ([file, name]) => [file,
+  (await load(`tools/${file}`, [toolStub, ["../lib/website", "../lib/website.mjs"],
+    [`from "eve/tools/${file}"`, `from "${stub(`export const ${name} = { description: "eve's ${file}",
+      inputSchema: { type: "object" }, execute(input, ctx) {
+        globalThis.__websiteTestInnerCalls.push({ tool: "${file}", input, ctx });
+        return { ran: "${file}" };
+      } };`)}"`]])).default])));
 
 const SECRET = "website-test-secret";
 process.env.WEBSITE_SHARED_SECRET = SECRET;
@@ -248,6 +260,43 @@ test("a website turn needs both the website kind and the website authenticator",
   }
 });
 
+test("a website caller is anyone whose initiator or current auth is the website's", () => {
+  const droplet = { authenticator: "atpotato-droplet", principalType: "user", principalId: "did:plc:x" };
+  const caller = (initiator, current) => lib.isWebsiteCaller({ session: { auth: { initiator, current } } });
+  assert.equal(caller(websiteAuth, websiteAuth), true);
+  assert.equal(caller(websiteAuth, droplet), true, "a copy that inherited a visitor's session");
+  assert.equal(caller(droplet, websiteAuth), true);
+  assert.equal(caller(null, websiteAuth), true);
+  assert.equal(caller(websiteAuth, undefined), true);
+  for (const other of [droplet, { authenticator: "local-dev", principalId: "dev" },
+    { authenticator: "oidc", principalType: "user", principalId: "u" }, null, undefined]) {
+    assert.equal(caller(other, other), false, JSON.stringify(other));
+  }
+  assert.equal(caller({ ...websiteAuth, authenticator: "atpotato-website-x" }, null), false);
+});
+
+test("website links keep a URL's own parens and drop the ones around it", () => {
+  const links = (text) => lib.websiteLinksFromToolResult({ result: { kind: "tool-result", output: { text } } });
+  const mercury = "https://en.wikipedia.org/wiki/Mercury_(planet)";
+  for (const [text, expected] of [
+    [`see ${mercury} ok`, [mercury]],
+    [`see ${mercury}.`, [mercury]],
+    [`[Mercury](${mercury})`, [mercury]],
+    [`(${mercury})`, [mercury]],
+    ["(see https://bsky.app/profile/x)", ["https://bsky.app/profile/x"]],
+    ["[DID](https://atproto.com/specs/did)", ["https://atproto.com/specs/did"]],
+    ["https://x.to/a).", ["https://x.to/a"]],
+    ["https://x.to/a.)", ["https://x.to/a"]],
+    ["https://x.to/a(b)c) and https://x.to/d,", ["https://x.to/a(b)c", "https://x.to/d"]],
+    ["https://aturi.to/explore/dame.is. and https://aturi.to/explore/dame.is", ["https://aturi.to/explore/dame.is"]],
+    ['"https://x.to/q?a=1" <https://x.to/r> {https://x.to/s} [https://x.to/t]',
+      ["https://x.to/q?a=1", "https://x.to/r", "https://x.to/s", "https://x.to/t"]],
+    ["line one https://x.to/u\nline two", ["https://x.to/u"]],
+    ["http:// and https:// alone", []],
+  ]) assert.deepEqual(links(text), expected, text);
+  assert.deepEqual(lib.websiteLinksFromToolResult(undefined), []);
+});
+
 // --------------------------------------------------------------- the route
 
 test("the route refuses a missing or wrong secret, a kill switch and bad bodies", async () => {
@@ -353,6 +402,25 @@ test("without a deliveryId the next turn to start after the tail is ours", async
     sendResult: { status: "accepted", sessionId: "session-1" } });
   const events = parseSse(await (await post(valid, { args: routeArgs({ owner }).args })).text());
   assert.deepEqual(events.at(-1), { event: "done", data: { text: ANSWER, links: LINKS } });
+});
+
+test("a tool-returned URL with parens reaches the widget whole", async () => {
+  const mercury = "https://en.wikipedia.org/wiki/Mercury_(planet)";
+  const answer = `mercury is the closest one ${mercury} (◕‿◕)`;
+  const created = fakeSession({ events: [
+    ev("turn.started", { sequence: 1, turnId: "t" }),
+    ev("actions.requested", { actions: [{ kind: "tool-call", callId: "c", toolName: "atmosphere__get_posts",
+      input: {} }], sequence: 2, stepIndex: 0, turnId: "t" }),
+    ev("action.result", { result: { kind: "tool-result", callId: "c", toolName: "atmosphere__get_posts",
+      output: { posts: [{ text: `read this (${mercury}).`, embed: { uri: mercury } },
+        { text: "[docs](https://atproto.com/specs/did)" }] } },
+    sequence: 3, stepIndex: 0, status: "completed", turnId: "t" }),
+    ev("message.completed", { finishReason: "stop", message: answer, sequence: 4, stepIndex: 1, turnId: "t" }),
+    ev("turn.completed", { sequence: 5, turnId: "t" }),
+  ] });
+  const events = parseSse(await (await post(valid, { args: routeArgs({ created }).args })).text());
+  assert.deepEqual(events.at(-1), { event: "done",
+    data: { text: answer, links: [mercury, "https://atproto.com/specs/did"] } });
 });
 
 test("a session that stopped accepting messages is replaced by a new one", async () => {
@@ -505,6 +573,17 @@ test("website rules load only on website turns, and promise only what the widget
   assert.equal(rules.includes("—"), false, "no em dashes");
   assert.match(rules, /Every message gets a reply/);
   assert.match(rules, /never with ask_question/);
+  assert.match(rules, /fetch web pages, search the web, or start helper agents/);
+  // No notes from website chats, but no false promise that nothing is kept:
+  // the session itself is durable, and Poe can see the earlier turns.
+  assert.match(rules, /You keep no notes or memories from website chats/);
+  assert.match(rules, /Within this chat you can see what they said earlier/);
+  assert.match(rules, /keeps its own record of the conversation/);
+  assert.equal(/keep nothing|Nothing from this chat is saved/i.test(rules), false);
+  // The widget hides a face from screen readers only when it is the last
+  // token, so the rules never place one in front of a link.
+  assert.match(rules, /The face is always the very last thing in the reply, after any link/);
+  assert.equal(/\)\S*\s+(before|ahead of) a link/.test(rules), false);
   const skill = readFileSync(new URL("../agent/skills/bluesky-reply.md", import.meta.url), "utf8");
   for (const face of rules.match(/\S*\(◕[^)]*\)\S*/g)) {
     assert.ok(skill.includes(face.replace(/[,.]$/, "")), `face ${face} is one of Poe's own`);
@@ -529,5 +608,32 @@ test("website callers cannot reach list_records or Bluesky search", async () => 
     globalThis.fetch = original;
     delete process.env.DROPLET_CALLBACK_URL;
     delete process.env.DROPLET_SHARED_SECRET;
+  }
+});
+
+test("website callers cannot run eve's bash, read_file, write_file or web_fetch", async () => {
+  const droplet = { authenticator: "atpotato-droplet", principalType: "user", principalId: "did:plc:x",
+    attributes: { did: "did:plc:x" } };
+  const ctxFor = (initiator, current) => ({ callId: "c", toolName: "t",
+    session: { id: "session-1", auth: { initiator, current } } });
+  const inputs = { bash: { command: "echo hi" }, read_file: { filePath: "/workspace/a" },
+    write_file: { filePath: "/workspace/a", content: "x" }, web_fetch: { url: "https://example.com/" } };
+  for (const [file] of GATED) {
+    const tool = gated[file];
+    assert.equal(tool.description, `eve's ${file}`, "the wrapper keeps eve's own definition");
+    assert.deepEqual(tool.inputSchema, { type: "object" });
+    innerCalls.length = 0;
+    // A visitor's own turn, and a copy started by eve's agent tool, which
+    // inherits the visitor's auth as its initiator.
+    for (const ctx of [ctxFor(websiteAuth, websiteAuth), ctxFor(websiteAuth, droplet), ctxFor(null, websiteAuth)]) {
+      assert.throws(() => tool.execute(inputs[file], ctx), { message: `${file} is not available in website chats` });
+    }
+    assert.equal(innerCalls.length, 0, `${file} never reaches eve's tool for a visitor`);
+    // Everyone else, Bluesky included, gets eve's tool unchanged.
+    for (const caller of [droplet, { authenticator: "local-dev", principalId: "dev" }, null]) {
+      const ctx = ctxFor(caller, caller);
+      assert.deepEqual(await tool.execute(inputs[file], ctx), { ran: file });
+      assert.deepEqual(innerCalls.at(-1), { tool: file, input: inputs[file], ctx });
+    }
   }
 });

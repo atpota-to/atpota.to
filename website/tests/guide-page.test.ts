@@ -76,6 +76,23 @@ describe('404 shell', () => {
     expect(doc.querySelector('meta[name="robots"]')!.getAttribute('content')).toBe('noindex');
     expect(read('../404.html')).not.toContain('GUIDE AGENT');
   });
+
+  it("the nudge promises nothing Poe can't do: it knows no site pages and is not told the page is missing", () => {
+    const nudge = doc.body.dataset.poeNudge ?? '';
+    expect(nudge).toBeTruthy();
+    expect(nudge).not.toMatch(/find your way|help you find|below/);
+  });
+});
+
+describe('home page copy', () => {
+  const doc = new DOMParser().parseFromString(read('../index.html'), 'text/html');
+  it('only promises highlight-to-ask where it works (the guide article)', () => {
+    expect(doc.querySelector('[data-poe-askable]')).toBeNull();
+    const hover = doc.querySelector('.home-poe__text.only-hover')!;
+    expect(hover.textContent).toContain("highlight a word you don't know in the guide.");
+    expect(hover.querySelector('a')!.getAttribute('href')).toBe('/guides/bluesky-for-brands');
+    expect(doc.querySelector('.home-poe__text.only-touch')!.textContent).not.toMatch(/highlight|press/);
+  });
 });
 
 describe('paragraph classes', () => {
@@ -292,6 +309,39 @@ describe('contents sheet (native showModal path)', () => {
     expect(button.getAttribute('aria-expanded')).toBe('false');
     await Promise.resolve();
     expect(document.activeElement).toBe(button);
+  });
+
+  it('"/" hands focus to the button, and the queued close event does not pull it back out of Poe', async () => {
+    const { button, dialog } = sheetFixture();
+    initContentsSheet(button, dialog);
+    const poeInput = document.createElement('input');
+    document.body.appendChild(poeInput);
+    let focusAtPoe: Element | null = null;
+    // Stands in for Poe's document listener: it sees the button as the opener, then focuses its input.
+    const poe = (event: KeyboardEvent) => {
+      if (event.key !== '/') return;
+      focusAtPoe = document.activeElement;
+      poeInput.focus();
+    };
+    document.addEventListener('keydown', poe);
+    try {
+      button.click();
+      dialog.querySelector<HTMLAnchorElement>('a.toc-link')!.dispatchEvent(key('/'));
+      expect(dialog.hasAttribute('open')).toBe(false);
+      expect(focusAtPoe).toBe(button);
+      expect(document.activeElement).toBe(poeInput);
+      await Promise.resolve(); // the native "close" event lands
+      await Promise.resolve();
+      expect(document.activeElement).toBe(poeInput);
+      // the next close restores focus as usual
+      button.click();
+      dialog.querySelector<HTMLButtonElement>('[data-toc-close]')!.click();
+      await Promise.resolve();
+      expect(document.activeElement).toBe(button);
+    } finally {
+      document.removeEventListener('keydown', poe);
+      poeInput.remove();
+    }
   });
 
   it('handles a close the browser started (Esc -> cancel -> close)', async () => {

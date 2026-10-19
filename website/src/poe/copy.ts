@@ -15,7 +15,9 @@ export const COPY = {
   placeholderFollowUp: 'ask a follow-up',
   inputLabel: 'ask poe',
   send: 'send',
-  footnoteBefore: 'poe can get things wrong, so it shows where it looked. press ',
+  footnoteLead: 'poe can get things wrong, so it shows where it looked.',
+  // The "/" hint only shows where there is a keyboard (.only-hover).
+  footnoteBefore: ' press ',
   footnoteAfter: ' on any page to open it.',
   newChat: 'new chat',
   tuck: 'tuck poe away',
@@ -59,23 +61,38 @@ export interface NoteCopy {
   offerNewChat?: boolean;
 }
 
-function minutes(seconds: number): string {
+/** The burst rule (8 per 10 minutes) and the firewall never ask for longer; a longer wait means a daily cap. */
+export const SHORT_BREAK_MAX_S = 600;
+
+/** "about a minute", "about 7 minutes", "about an hour", "about 20 hours". */
+export function waitPhrase(seconds: number): string {
   const m = Math.max(1, Math.ceil(seconds / 60));
-  return m === 1 ? 'about a minute' : `about ${m} minutes`;
+  if (m < 60) return m === 1 ? 'about a minute' : `about ${m} minutes`;
+  const h = Math.round(seconds / 3600);
+  return h <= 1 ? 'about an hour' : `about ${h} hours`;
 }
 
 export function noteCopy(code: NoteCode, retryAfter?: number): NoteCopy {
   switch (code) {
     case 'not_configured':
+      // Also what the kill switch (POE_CHAT_DISABLED) answers, so it must be true after launch too.
       return {
-        text: "poe isn't set up on the website yet. you can ask @poe.atpota.to on bluesky in the meantime.",
+        text: "poe isn't answering on the website right now. you can ask @poe.atpota.to on bluesky in the meantime.",
         linkText: '@poe.atpota.to',
         linkHref: POE_BLUESKY_URL,
       };
     case 'rate_limited':
+      if (retryAfter && retryAfter > SHORT_BREAK_MAX_S) {
+        // A daily cap: not "in a row", and not a short break. No "tomorrow": the window is a rolling 24 hours.
+        return {
+          text: `that's all the questions i can take from you for now. try again in ${waitPhrase(retryAfter)}, or ask @poe.atpota.to on bluesky.`,
+          linkText: '@poe.atpota.to',
+          linkHref: POE_BLUESKY_URL,
+        };
+      }
       return {
         text: retryAfter
-          ? `that's a lot of questions in a row, so i need a short break. try again in ${minutes(retryAfter)}.`
+          ? `that's a lot of questions in a row, so i need a short break. try again in ${waitPhrase(retryAfter)}.`
           : "that's a lot of questions in a row, so i need a short break. try again in a few minutes.",
       };
     case 'bad_request':
@@ -96,6 +113,9 @@ export function noteCopy(code: NoteCode, retryAfter?: number): NoteCopy {
       return { text: 'my answer got cut off. try asking again?' };
     case 'empty':
       return { text: 'i came up empty on that one. try asking another way?' };
+    case 'fresh_start':
+      // The proxy started a new conversation (the cookie ran out, or "new chat" in another tab).
+      return { text: "i lost track of our earlier chat, so we're starting fresh. i won't remember what's above." };
     case 'upstream':
     default:
       return { text: 'something went wrong on my side. try again in a moment?' };

@@ -11,6 +11,8 @@
  *   localStorage   "poe:tucked"      "1" while Poe is tucked into the edge tab
  */
 
+import { MAX_ANSWER_TEXT } from './client';
+
 export interface KeyValueStore {
   get(key: string): string | null;
   set(key: string, value: string): boolean;
@@ -22,7 +24,10 @@ export const NUDGED_KEY = 'poe:nudged';
 export const TUCKED_KEY = 'poe:tucked';
 export const MAX_TRANSCRIPT = 20;
 
-const MAX_ENTRY_TEXT = 12_000;
+/** Your messages are at most 1000 characters on the wire; this only guards storage. */
+const MAX_YOU_TEXT = 12_000;
+/** Poe's answers: as long as anything the widget renders live, so a restored answer is never shorter. */
+export const MAX_POE_TEXT = MAX_ANSWER_TEXT;
 const MAX_QUOTE = 300;
 const MAX_LINKS_PER_ENTRY = 3;
 
@@ -142,7 +147,8 @@ export type NoteCode =
   | 'network'
   | 'interrupted'
   | 'cut_off'
-  | 'empty';
+  | 'empty'
+  | 'fresh_start';
 
 export const NOTE_CODES: readonly NoteCode[] = [
   'not_configured',
@@ -157,6 +163,7 @@ export const NOTE_CODES: readonly NoteCode[] = [
   'interrupted',
   'cut_off',
   'empty',
+  'fresh_start',
 ];
 
 export type TranscriptEntry =
@@ -173,7 +180,7 @@ export function parseEntry(value: unknown): TranscriptEntry | null {
   if (!isObject(value)) return null;
   if (value.role === 'you') {
     if (typeof value.text !== 'string' || value.text.length === 0) return null;
-    const entry: TranscriptEntry = { role: 'you', text: value.text.slice(0, MAX_ENTRY_TEXT) };
+    const entry: TranscriptEntry = { role: 'you', text: value.text.slice(0, MAX_YOU_TEXT) };
     if (typeof value.quote === 'string' && value.quote.length > 0) entry.quote = value.quote.slice(0, MAX_QUOTE);
     return entry;
   }
@@ -182,7 +189,7 @@ export function parseEntry(value: unknown): TranscriptEntry | null {
     const links = Array.isArray(value.links)
       ? value.links.filter((l): l is string => typeof l === 'string' && l.startsWith('https://') && l.length <= 2048).slice(0, MAX_LINKS_PER_ENTRY)
       : [];
-    return { role: 'poe', text: value.text.slice(0, MAX_ENTRY_TEXT), links };
+    return { role: 'poe', text: value.text.slice(0, MAX_POE_TEXT), links };
   }
   if (value.role === 'note') {
     if (typeof value.code !== 'string' || !(NOTE_CODES as readonly string[]).includes(value.code)) return null;

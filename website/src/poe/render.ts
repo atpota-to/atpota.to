@@ -13,7 +13,7 @@
  *                                       ASCII host; at most 3 per answer
  *   any other URL                    -> grey text (<span class="poe-url">)
  *   at:// and did: strings           -> <code class="poe-id">, never links
- *   trailing kaomoji with a ◕        -> <span aria-hidden="true">
+ *   trailing kaomoji with a ◕        -> <span aria-hidden="true"> (from its opening bracket only)
  *   anything else (**, #, [x](y), <html>) stays literal text
  */
 
@@ -229,10 +229,15 @@ function appendInline(parent: Node, text: string, ctx: Ctx): void {
   appendLinked(parent, text.slice(i), ctx);
 }
 
+const FACE_OPEN = '(（';
+const MAX_FACE = 16;
+
 /**
  * Finds a trailing kaomoji: the last whitespace-separated token, if it contains
- * "◕". Letters/digits glued in front of the face (as in "thanks(◕‿◕)") stay
- * visible. Returns [before, face] or null.
+ * "◕". The face starts at its own opening bracket (plus any "✧" in front), so
+ * whatever is glued to it stays visible: "thanks(◕‿◕)", a Japanese sentence with
+ * no spaces ("見てね。(◕‿◕)"), "café(◕‿◕)". A bare face without a bracket keeps
+ * any letter, number or punctuation in front of it. Returns [before, face] or null.
  */
 export function splitTrailingFace(text: string): [string, string] | null {
   const trimmed = text.replace(/\s+$/, '');
@@ -240,15 +245,30 @@ export function splitTrailingFace(text: string): [string, string] | null {
   const token = trimmed.slice(start);
   const eye = token.indexOf('◕');
   if (eye === -1) return null;
-  let faceStart = 0;
-  for (let i = eye - 1; i >= 0; i--) {
-    if (/[A-Za-z0-9]/.test(token.charAt(i))) {
-      faceStart = i + 1;
+  if (token.includes('`') || token.includes('://')) return null; // part of a code span or a URL
+  let faceStart = -1;
+  // The opening bracket sits right before the eye, give or take a cheek ("(｡◕‿◕｡)").
+  for (let i = eye - 1; i >= 0 && i >= eye - 3; i--) {
+    const c = token.charAt(i);
+    if (FACE_OPEN.includes(c)) {
+      faceStart = i;
       break;
+    }
+    if (/[\p{L}\p{N}]/u.test(c)) break;
+  }
+  if (faceStart !== -1) {
+    while (faceStart > 0 && token.charAt(faceStart - 1) === '✧') faceStart--;
+  } else {
+    faceStart = 0;
+    for (let i = eye - 1; i >= 0; i--) {
+      if (/[\p{L}\p{N}\p{P}]/u.test(token.charAt(i))) {
+        faceStart = i + 1;
+        break;
+      }
     }
   }
   const face = token.slice(faceStart);
-  if (token.includes('`') || token.includes('://')) return null; // part of a code span or a URL
+  if (face.length > MAX_FACE) return null; // never hide prose as a "face"
   return [trimmed.slice(0, start + faceStart), face];
 }
 

@@ -2,22 +2,32 @@
  * Home page behaviour (spec 3.1). main.ts imports this module when
  * <body data-page="home"> and calls init() once.
  *
- * "latest on bluesky" tile: fetches atpota.to's author feed from the public
- * AppView and shows the newest original post (reposts, replies and other
- * authors are skipped). Fetched text only ever reaches the DOM through
- * textContent; links are built from a validated record key. States live on
- * the tile as data-state="loading" | "ready" | "error" (CSS shows the skeleton,
- * the post or the fallback line).
+ * "latest on bluesky" tile: shows atpota.to's newest original post (replies,
+ * reposts and other authors are skipped). It reads the account's own repo:
+ * the DID document from plc.directory names the PDS, and one
+ * com.atproto.repo.listRecords page of app.bsky.feed.post records (newest
+ * first) holds the post, a few KB in all. Reposts live in another collection,
+ * so they never get in the way. Only if that path fails does it fall back to
+ * the public AppView's author feed, which needs a page of 100 (about 90 KB
+ * gzipped) because atpota.to mostly reposts.
+ *
+ * Fetched text only ever reaches the DOM through textContent; links are built
+ * from a validated record key. States live on the tile as
+ * data-state="loading" | "ready" | "error" (CSS shows the skeleton, the post or
+ * the fallback line).
  */
 
 import { MASCOT_URLS } from './mascot';
 
 export const FEED_ENDPOINT = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed';
+export const PLC_DIRECTORY = 'https://plc.directory';
 export const ACTOR_HANDLE = 'atpota.to';
 export const ACTOR_DID = 'did:plc:qntsxa2i4sb24noi45fx4np2';
 export const PROFILE_URL = `https://bsky.app/profile/${ACTOR_HANDLE}`;
 
-/** atpota.to mostly reposts, so one page of 10 rarely holds an original post. */
+/** listRecords page size on the PDS: only posts, so 10 is plenty. */
+export const RECORDS_LIMIT = 10;
+/** Fallback author feed: atpota.to mostly reposts, so one page of 10 rarely holds an original post. */
 export const PAGE_LIMIT = 100;
 export const MAX_PAGES = 2;
 export const FETCH_TIMEOUT_MS = 8000;
@@ -98,7 +108,9 @@ export function relativeTime(date: Date, now: Date = new Date()): string {
   if (delta > -45) return 'just now';
   const format = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
   for (const [unit, size] of RELATIVE_STEPS) {
-    if (Math.abs(delta) < size) return format.format(Math.round(delta), unit);
+    // Round first, so 59.6 seconds rolls over to "1 minute ago", not "60 seconds ago".
+    const rounded = Math.round(delta);
+    if (Math.abs(rounded) < size) return format.format(rounded, unit);
     delta /= size;
   }
   return '';
@@ -162,6 +174,27 @@ export function pickLatestPost(response: unknown, now: Date = new Date()): Lates
   return null;
 }
 
+/** The newest original post by atpota.to in a com.atproto.repo.listRecords response, or null. */
+export function pickLatestRecord(response: unknown, now: Date = new Date()): LatestPost | null {
+  if (!isObject(response) || !Array.isArray(response.records)) return null;
+  for (const item of response.records) {
+    if (!isObject(item) || !isObject(item.value)) continue;
+    const record = item.value;
+    if (record.$type !== 'app.bsky.feed.post' || record.reply !== undefined) continue;
+    const match = POST_URI_RE.exec(str(item.uri) ?? '');
+    if (!match) continue;
+    const [, uriDid = '', rkey = ''] = match;
+    if (uriDid !== ACTOR_DID || !RKEY_RE.test(rkey)) continue;
+    const createdAt = pickDate(record, {}, now);
+    if (!createdAt) continue;
+    const text = truncateText(str(record.text) ?? '');
+    const embed = embedNote(record.embed);
+    if (!text && !embed) continue;
+    return { text, createdAt, rkey, embed };
+  }
+  return null;
+}
+
 export function feedUrl(cursor?: string): string {
   const url = new URL(FEED_ENDPOINT);
   url.searchParams.set('actor', ACTOR_HANDLE);
@@ -171,30 +204,97 @@ export function feedUrl(cursor?: string): string {
   return url.toString();
 }
 
-/** Walk up to MAX_PAGES of the author feed. Resolves null when no original post is found. */
-export async function fetchLatestPost(fetchImpl: typeof fetch = fetch, timeoutMs = FETCH_TIMEOUT_MS): Promise<LatestPost | null> {
+export function listRecordsUrl(pds: string, cursor?: string): string {
+  const url = new URL('/xrpc/com.atproto.repo.listRecords', pds);
+  url.searchParams.set('repo', ACTOR_DID);
+  url.searchParams.set('collection', 'app.bsky.feed.post');
+  url.searchParams.set('limit', String(RECORDS_LIMIT));
+  if (cursor) url.searchParams.set('cursor', cursor);
+  return url.toString();
+}
+
+/** The PDS origin from a DID document, or null when it is missing or not a plain https URL. */
+export function pdsFromDidDoc(doc: unknown): string | null {
+  if (!isObject(doc) || doc.id !== ACTOR_DID || !Array.isArray(doc.service)) return null;
+  for (const service of doc.service) {
+    if (!isObject(service) || service.type !== 'AtprotoPersonalDataServer') continue;
+    const id = str(service.id) ?? '';
+    if (id !== '#atproto_pds' && id !== `${ACTOR_DID}#atproto_pds`) continue;
+    let url: URL;
+    try {
+      url = new URL(str(service.serviceEndpoint) ?? '');
+    } catch {
+      return null;
+    }
+    if (url.protocol !== 'https:' || url.username || url.password || !url.hostname.includes('.')) return null;
+    return url.origin;
+  }
+  return null;
+}
+
+async function getJson(fetchImpl: typeof fetch, url: string, signal: AbortSignal, label: string): Promise<unknown> {
+  const res = await fetchImpl(url, {
+    signal,
+    headers: { accept: 'application/json' },
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+  });
+  if (!res.ok) throw new Error(`${label} ${res.status}`);
+  return res.json();
+}
+
+async function withTimeout<T>(timeoutMs: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    let cursor: string | undefined;
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const res = await fetchImpl(feedUrl(cursor), {
-        signal: controller.signal,
-        headers: { accept: 'application/json' },
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer',
-      });
-      if (!res.ok) throw new Error(`feed ${res.status}`);
-      const data: unknown = await res.json();
-      const post = pickLatestPost(data);
-      if (post) return post;
-      cursor = isObject(data) ? str(data.cursor) : undefined;
-      if (!cursor) break;
-    }
-    return null;
+    return await run(controller.signal);
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Walk up to MAX_PAGES of `pageUrl`, picking with `pick`. Resolves null when no original post is found. */
+async function walkPages(
+  fetchImpl: typeof fetch,
+  signal: AbortSignal,
+  label: string,
+  pageUrl: (cursor?: string) => string,
+  pick: (data: unknown) => LatestPost | null,
+): Promise<LatestPost | null> {
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const data = await getJson(fetchImpl, pageUrl(cursor), signal, label);
+    const post = pick(data);
+    if (post) return post;
+    cursor = isObject(data) ? str(data.cursor) : undefined;
+    if (!cursor) break;
+  }
+  return null;
+}
+
+/** Resolve the PDS from plc.directory, then read the newest posts straight from the repo. */
+export function fetchLatestFromPds(fetchImpl: typeof fetch = fetch, timeoutMs = FETCH_TIMEOUT_MS): Promise<LatestPost | null> {
+  return withTimeout(timeoutMs, async (signal) => {
+    const pds = pdsFromDidDoc(await getJson(fetchImpl, `${PLC_DIRECTORY}/${ACTOR_DID}`, signal, 'plc'));
+    if (!pds) throw new Error('no pds');
+    return walkPages(fetchImpl, signal, 'pds', (cursor) => listRecordsUrl(pds, cursor), (data) => pickLatestRecord(data));
+  });
+}
+
+/** The heavier fallback: the public AppView's author feed. */
+export function fetchLatestFromFeed(fetchImpl: typeof fetch = fetch, timeoutMs = FETCH_TIMEOUT_MS): Promise<LatestPost | null> {
+  return withTimeout(timeoutMs, (signal) => walkPages(fetchImpl, signal, 'feed', feedUrl, (data) => pickLatestPost(data)));
+}
+
+/** The PDS path first; the author feed only when that fails or finds nothing. */
+export async function fetchLatestPost(fetchImpl: typeof fetch = fetch, timeoutMs = FETCH_TIMEOUT_MS): Promise<LatestPost | null> {
+  try {
+    const post = await fetchLatestFromPds(fetchImpl, timeoutMs);
+    if (post) return post;
+  } catch {
+    // fall through to the AppView
+  }
+  return fetchLatestFromFeed(fetchImpl, timeoutMs);
 }
 
 function isLatestPost(value: unknown): value is LatestPost {

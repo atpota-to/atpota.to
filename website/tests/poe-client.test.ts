@@ -364,4 +364,14 @@ describe('resetConversation', () => {
     expect((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].method).toBe('DELETE');
     expect(await resetConversation({ fetchImpl: async () => { throw new Error('down'); } })).toBe(false);
   });
+
+  it('gives up on a stalled DELETE after the timeout and aborts it', async () => {
+    let signal: AbortSignal | undefined;
+    const stalled = vi.fn((_url: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>(() => undefined);
+    }) as unknown as typeof fetch;
+    expect(await resetConversation({ fetchImpl: stalled, timeoutMs: 20 })).toBe(false);
+    expect(signal?.aborted).toBe(true);
+  });
 });

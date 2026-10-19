@@ -2,9 +2,9 @@
  * The /api/poe proxy (SPEC 4.1-4.4). api/poe.ts only wires these handlers to the HTTP
  * methods; everything else lives here so tests can inject fetch, clock, limiter and timers.
  *
- * POST order: origin (403) -> kill switch / config (503) -> body cap (413) -> JSON and
- * shape (400) -> rate limits (429) -> 200 event stream. Everything after the stream
- * starts, including upstream failures, arrives as SSE `error` events.
+ * POST order: origin (403) -> content type (415) -> kill switch / config (503) -> body cap
+ * (413) -> JSON and shape (400) -> rate limits (429) -> 200 event stream. Everything after
+ * the stream starts, including upstream failures, arrives as SSE `error` events.
  */
 
 import { readConfig, type Env } from './config.js';
@@ -152,6 +152,10 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
     if (!isAllowedOrigin(request.headers.get('origin'), request.url)) {
       return reject(403, 'bad_request', MESSAGES.origin, 'origin');
     }
+    // JSON only. A text/plain or form POST is a CORS "simple" request that skips the preflight
+    // (which OPTIONS refuses), so this keeps every cross-site browser POST out.
+    const type = (request.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+    if (type !== 'application/json') return reject(415, 'bad_request', MESSAGES.bad_request, 'content_type');
 
     const config = readConfig(env());
     if (config.disabled) return reject(503, 'not_configured', MESSAGES.disabled, 'disabled');

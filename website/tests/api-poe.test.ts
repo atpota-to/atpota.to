@@ -188,7 +188,7 @@ describe('pre-stream failures', () => {
     expect(res.headers.get('set-cookie')).toBeNull();
     const err = await errorBody(res);
     expect(err.code).toBe('not_configured');
-    expect(err.message).toBe("poe isn't set up on the website yet. you can ask @poe.atpota.to on bluesky in the meantime.");
+    expect(err.message).toBe("poe isn't answering on the website right now. you can ask @poe.atpota.to on bluesky in the meantime.");
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -295,21 +295,27 @@ describe('pre-stream failures', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  it('rejects a foreign Origin with 403 and allows the site, previews, localhost and same-origin', async () => {
-    happyFetch();
+  it('rejects a foreign Origin with 403 and allows the site, same-host previews, local dev and same-origin', async () => {
+    const { fn } = happyFetch();
     const h = handlers();
-    for (const origin of ['https://evil.example', 'null', 'https://atpota.to.evil.example', 'https://evil.vercel.app', 'http://atpota.to', 'https://atpota.to:8443']) {
+    for (const origin of [
+      'https://evil.example',
+      'null',
+      'https://atpota.to.evil.example',
+      'https://evil.vercel.app',
+      'https://atpota-to-evil.vercel.app',
+      'https://atpota-to-git-main-attacker.vercel.app',
+      'https://atpota-to-git-redesign-vite-poe-atpotato.vercel.app',
+      'http://localhost:5173',
+      'http://atpota.to',
+      'https://atpota.to:8443',
+    ]) {
       const res = await h.POST(post({ message: 'hi' }, { headers: { origin } }));
       expect(res.status, origin).toBe(403);
       expect((await errorBody(res)).code).toBe('bad_request');
     }
-    for (const origin of [
-      'https://atpota.to',
-      'https://www.atpota.to',
-      'https://atpotato.com',
-      'https://atpota-to-git-redesign-vite-poe-atpotato.vercel.app',
-      'http://localhost:5173',
-    ]) {
+    expect(fn).not.toHaveBeenCalled();
+    for (const origin of ['https://atpota.to', 'https://www.atpota.to', 'https://atpotato.com']) {
       const res = await h.POST(post({ message: 'hi' }, { headers: { origin } }));
       expect(res.status, origin).toBe(200);
       await collect(res);
@@ -319,6 +325,63 @@ describe('pre-stream failures', () => {
     );
     expect(same.status).toBe(200);
     await collect(same);
+    // A preview behind @vercel/node sees its own URL as http:// while the browser's Origin is https://.
+    const preview = await h.POST(
+      post(
+        { message: 'hi' },
+        {
+          url: 'http://atpota-to-git-x-atpotato.vercel.app/api/poe',
+          headers: { origin: 'https://atpota-to-git-x-atpotato.vercel.app' },
+        },
+      ),
+    );
+    expect(preview.status).toBe(200);
+    await collect(preview);
+    const local = await h.POST(
+      post({ message: 'hi' }, { url: 'http://localhost:4173/api/poe', headers: { origin: 'http://localhost:5173' } }),
+    );
+    expect(local.status).toBe(200);
+    await collect(local);
+  });
+
+  it('answers 415 for any body that is not application/json, before reading it or calling the bot', async () => {
+    const { fn } = happyFetch();
+    const h = handlers();
+    const body = JSON.stringify({ message: 'burn tokens', path: '/' });
+    // CORS "simple" content types (no preflight), plus a missing one.
+    for (const type of ['text/plain;charset=UTF-8', 'text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', 'application/jsonx', 'text/json']) {
+      const res = await h.POST(post(null, { raw: body, headers: { 'content-type': type, origin: 'https://atpota.to' } }));
+      expect(res.status, type).toBe(415);
+      expect((await errorBody(res)).code).toBe('bad_request');
+    }
+    const untyped = new Request(URL_HTTPS, { method: 'POST', body: new TextEncoder().encode(body) });
+    expect(untyped.headers.get('content-type')).toBeNull();
+    expect((await h.POST(untyped)).status).toBe(415);
+    // A string body without a header defaults to text/plain, the shape a no-cors fetch sends.
+    const implicit = new Request(URL_HTTPS, { method: 'POST', body });
+    expect((await h.POST(implicit)).status).toBe(415);
+    expect(fn).not.toHaveBeenCalled();
+    expect(h.logs.filter((l) => l.code === 'content_type')).toHaveLength(8);
+
+    // The attack shape from review: lookalike Vercel origin + text/plain is refused at the origin check.
+    const attack = await h.POST(
+      post(null, { raw: body, headers: { 'content-type': 'text/plain;charset=UTF-8', origin: 'https://atpota-to-evil.vercel.app' } }),
+    );
+    expect(attack.status).toBe(403);
+    expect(fn).not.toHaveBeenCalled();
+
+    for (const type of ['application/json', 'application/json; charset=utf-8', 'Application/JSON ; charset=UTF-8']) {
+      const res = await h.POST(post(null, { raw: body, headers: { 'content-type': type } }));
+      expect(res.status, type).toBe(200);
+      await collect(res);
+    }
+  });
+
+  it('checks the content type before config, so even a disabled proxy answers 415', async () => {
+    const res = await handlers({ ...ENV, POE_CHAT_DISABLED: '1' }).POST(
+      post(null, { raw: '{"message":"hi"}', headers: { 'content-type': 'text/plain' } }),
+    );
+    expect(res.status).toBe(415);
   });
 
   it('answers 405 (code bad_request, Allow: POST, DELETE) for every other method', async () => {
@@ -498,9 +561,10 @@ describe('rate limits', () => {
     await collect(await h.POST(post({ message: 'a' }, { headers: { 'x-forwarded-for': '192.0.2.1, 10.0.0.1' } })));
     const second = await h.POST(post({ message: 'b' }, { headers: { 'x-forwarded-for': '192.0.2.1, 10.0.0.2' } }));
     expect(second.status).toBe(429);
-    const noXff = new Request(URL_HTTPS, { method: 'POST', body: JSON.stringify({ message: 'c' }), headers: { 'x-real-ip': '192.0.2.50' } });
+    const json = { 'content-type': 'application/json', 'x-real-ip': '192.0.2.50' };
+    const noXff = new Request(URL_HTTPS, { method: 'POST', body: JSON.stringify({ message: 'c' }), headers: json });
     expect((await h.POST(noXff)).status).toBe(200);
-    const again = new Request(URL_HTTPS, { method: 'POST', body: JSON.stringify({ message: 'd' }), headers: { 'x-real-ip': '192.0.2.50' } });
+    const again = new Request(URL_HTTPS, { method: 'POST', body: JSON.stringify({ message: 'd' }), headers: json });
     expect((await h.POST(again)).status).toBe(429);
   });
 
@@ -974,6 +1038,7 @@ describe('mock mode (POE_MOCK=1)', () => {
     const h = handlers({ POE_MOCK: '1' }, { sleep: instant });
     expect((await h.POST(post({ message: '' }))).status).toBe(400);
     expect((await h.POST(post({ message: 'hi' }, { headers: { origin: 'https://evil.example' } }))).status).toBe(403);
+    expect((await h.POST(post(null, { raw: '{"message":"hi"}', headers: { 'content-type': 'text/plain' } }))).status).toBe(415);
   });
 
   it('is ignored in production: no secret -> 503, with a secret -> the real bot', async () => {

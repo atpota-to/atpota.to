@@ -6,11 +6,16 @@ import {
   ACTOR_DID,
   MAX_PAGES,
   PAGE_LIMIT,
+  RECORDS_LIMIT,
+  fetchLatestFromFeed,
   fetchLatestPost,
   feedUrl,
   initLatest,
+  listRecordsUrl,
   loadLatest,
+  pdsFromDidDoc,
   pickLatestPost,
+  pickLatestRecord,
   postUrl,
   readCache,
   relativeTime,
@@ -179,6 +184,17 @@ describe('relativeTime', () => {
     expect(ago(800 * 86400_000)).toBe('2 years ago');
     expect(relativeTime(new Date('nope'), NOW)).toBe('');
   });
+
+  it('rolls over to the next unit at the boundaries instead of "60 seconds" or "7 days"', () => {
+    expect(ago(59_600)).toBe('1 minute ago');
+    expect(ago(3599_000)).toBe('1 hour ago');
+    expect(ago(86_000_000)).toBe('yesterday');
+    expect(ago(6.6 * 86400_000)).toBe('last week');
+    expect(ago(360 * 86400_000)).toBe('last year');
+    // clearly inside a unit, nothing changes
+    expect(ago(58_000)).toBe('58 seconds ago');
+    expect(ago(6.4 * 86400_000)).toBe('6 days ago');
+  });
 });
 
 describe('postUrl', () => {
@@ -190,7 +206,173 @@ describe('postUrl', () => {
   });
 });
 
+/* The shapes below are trimmed from live responses (plc.directory and pds.atpota.to, 2026-10-19). */
+
+const DID_DOC = {
+  '@context': ['https://www.w3.org/ns/did/v1'],
+  id: ACTOR_DID,
+  alsoKnownAs: ['at://atpota.to'],
+  service: [{ id: '#atproto_pds', type: 'AtprotoPersonalDataServer', serviceEndpoint: 'https://pds.atpota.to' }],
+};
+
+function rec(rkey: string, value: Record<string, unknown>, did = ACTOR_DID): Record<string, unknown> {
+  return {
+    uri: `at://${did}/app.bsky.feed.post/${rkey}`,
+    cid: 'bafyreib',
+    value: { $type: 'app.bsky.feed.post', text: '', createdAt: '2026-09-01T15:15:33.114Z', langs: ['en'], ...value },
+  };
+}
+
+const replyRef = {
+  root: { cid: 'bafyreic', uri: `at://${OTHER_DID}/app.bsky.feed.post/3root` },
+  parent: { cid: 'bafyreic', uri: `at://${OTHER_DID}/app.bsky.feed.post/3root` },
+};
+
+const LIST_RECORDS = {
+  records: [
+    rec('3mushqmlan22r', { text: 'did someone say potatoes?', createdAt: '2026-09-05T21:54:16.765Z', reply: replyRef }),
+    rec('3muhplxef6k2d', { embed: { $type: 'app.bsky.embed.external', external: { uri: 'https://x.example', title: 't', description: '' } }, reply: replyRef }),
+    rec('3morf2ftw6k2m', {
+      text: 'potato in the machine',
+      createdAt: '2026-06-21T03:02:14.522Z',
+      embed: { $type: 'app.bsky.embed.record', record: { cid: 'bafyreid', uri: `at://${OTHER_DID}/app.bsky.feed.post/3quoted` } },
+    }),
+    rec('3mn3mpvrul22z', { text: 'wtf', createdAt: '2026-05-30T17:55:46.197Z' }),
+  ],
+  cursor: '3mf5lczzu2g2y',
+};
+
+type Route = (url: URL) => Response | Promise<Response>;
+
+/** A fetch that routes by host: plc.directory, the PDS and the AppView. */
+function router(routes: { plc?: Route; pds?: Route; feed?: Route }) {
+  const calls: URL[] = [];
+  const fail = () => jsonResponse({ error: 'not here' }, 404);
+  const fn = vi.fn(async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    calls.push(url);
+    if (url.host === 'plc.directory') return (routes.plc ?? fail)(url);
+    if (url.host === 'pds.atpota.to') return (routes.pds ?? fail)(url);
+    if (url.host === 'public.api.bsky.app') return (routes.feed ?? fail)(url);
+    return fail();
+  }) as unknown as typeof fetch;
+  return { fn, calls };
+}
+
+describe('pickLatestRecord (listRecords on the PDS)', () => {
+  it('skips replies and returns the newest original post, noting a quote post', () => {
+    expect(pickLatestRecord(LIST_RECORDS, NOW)).toEqual({
+      text: 'potato in the machine',
+      createdAt: '2026-06-21T03:02:14.522Z',
+      rkey: '3morf2ftw6k2m',
+      embed: 'with a quoted post',
+    });
+  });
+
+  it('describes record-shaped embeds (images, quote with media)', () => {
+    const imgs = pickLatestRecord({ records: [rec('a', { embed: { $type: 'app.bsky.embed.images', images: [{}, {}] } })] }, NOW);
+    expect(imgs).toMatchObject({ text: '', embed: 'with 2 images' });
+    const mixed = pickLatestRecord(
+      { records: [rec('b', { text: 'hi', embed: { $type: 'app.bsky.embed.recordWithMedia', media: { $type: 'app.bsky.embed.images', images: [{}] }, record: {} } })] },
+      NOW,
+    );
+    expect(mixed?.embed).toBe('with an image and a quoted post');
+  });
+
+  it('skips other repos, bad keys, other record types, empty posts and impossible dates', () => {
+    const records = [
+      null,
+      { uri: 'x', value: null },
+      rec('theirs', { text: 'not ours' }, OTHER_DID),
+      { ...rec('x', { text: 'bad key' }), uri: `at://${ACTOR_DID}/app.bsky.feed.post/bad%2Fkey` },
+      rec('like', { $type: 'app.bsky.feed.like', text: 'nope' }),
+      rec('empty', { text: '   ' }),
+      rec('future', { text: 'from the future', createdAt: '2099-01-01T00:00:00Z' }),
+      rec('ok', { text: 'the real one' }),
+    ];
+    expect(pickLatestRecord({ records }, NOW)?.rkey).toBe('ok');
+    expect(pickLatestRecord({ records: 'x' }, NOW)).toBeNull();
+    expect(pickLatestRecord(null, NOW)).toBeNull();
+  });
+});
+
+describe('pdsFromDidDoc', () => {
+  it('reads the #atproto_pds service as a bare https origin', () => {
+    expect(pdsFromDidDoc(DID_DOC)).toBe('https://pds.atpota.to');
+    const full = { ...DID_DOC, service: [{ ...DID_DOC.service[0], id: `${ACTOR_DID}#atproto_pds`, serviceEndpoint: 'https://pds.atpota.to/' }] };
+    expect(pdsFromDidDoc(full)).toBe('https://pds.atpota.to');
+  });
+
+  it('rejects other DIDs, missing services and unsafe endpoints', () => {
+    expect(pdsFromDidDoc({ ...DID_DOC, id: OTHER_DID })).toBeNull();
+    expect(pdsFromDidDoc({ ...DID_DOC, service: [] })).toBeNull();
+    expect(pdsFromDidDoc(null)).toBeNull();
+    for (const serviceEndpoint of ['http://pds.atpota.to', 'https://user:pw@pds.atpota.to', 'javascript:alert(1)', 'https://localhost', '']) {
+      expect(pdsFromDidDoc({ ...DID_DOC, service: [{ ...DID_DOC.service[0], serviceEndpoint }] }), serviceEndpoint).toBeNull();
+    }
+  });
+});
+
 describe('fetchLatestPost', () => {
+  it('resolves the PDS and reads one small listRecords page, never touching the AppView', async () => {
+    const { fn, calls } = router({ plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse(LIST_RECORDS) });
+    const post = await fetchLatestPost(fn);
+    expect(post?.rkey).toBe('3morf2ftw6k2m');
+    expect(post?.embed).toBe('with a quoted post');
+    expect(calls.map((u) => u.host)).toEqual(['plc.directory', 'pds.atpota.to']);
+    expect(calls[0]!.pathname).toBe(`/${ACTOR_DID}`);
+    expect(calls[1]!.pathname).toBe('/xrpc/com.atproto.repo.listRecords');
+    expect(calls[1]!.searchParams.get('repo')).toBe(ACTOR_DID);
+    expect(calls[1]!.searchParams.get('collection')).toBe('app.bsky.feed.post');
+    expect(calls[1]!.searchParams.get('limit')).toBe(String(RECORDS_LIMIT));
+    expect(RECORDS_LIMIT).toBeLessThanOrEqual(10);
+    const init = (fn as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[1]![1];
+    expect(init).toMatchObject({ credentials: 'omit', referrerPolicy: 'no-referrer' });
+  });
+
+  it('follows the PDS cursor once before giving up on the PDS', async () => {
+    const onlyReplies = { records: [rec('r', { text: 'a reply', reply: replyRef })], cursor: 'c1' };
+    const { fn, calls } = router({
+      plc: () => jsonResponse(DID_DOC),
+      pds: (url) => jsonResponse(url.searchParams.get('cursor') === 'c1' ? { records: [rec('older', { text: 'older original' })] } : onlyReplies),
+    });
+    expect((await fetchLatestPost(fn))?.rkey).toBe('older');
+    expect(calls.filter((u) => u.host === 'pds.atpota.to')).toHaveLength(2);
+  });
+
+  it('falls back to the author feed when plc.directory or the PDS fails, or the repo has no original post', async () => {
+    const feed = () => jsonResponse({ feed: [item({ rkey: 'from-feed' })] });
+    const cases = [
+      router({ plc: () => jsonResponse({ error: 'x' }, 500), feed }),
+      router({ plc: () => jsonResponse({ ...DID_DOC, service: [] }), feed }),
+      router({ plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse({ error: 'x' }, 502), feed }),
+      router({
+        plc: () => jsonResponse(DID_DOC),
+        pds: () => {
+          throw new TypeError('Failed to fetch');
+        },
+        feed,
+      }),
+      router({ plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse({ records: [] }), feed }),
+    ];
+    for (const { fn, calls } of cases) {
+      expect((await fetchLatestPost(fn))?.rkey).toBe('from-feed');
+      expect(calls[calls.length - 1]!.host).toBe('public.api.bsky.app');
+    }
+  });
+
+  it('rejects when both paths fail, and times out a hanging request', async () => {
+    const { fn } = router({ feed: () => jsonResponse({ error: 'x' }, 502) });
+    await expect(fetchLatestPost(fn)).rejects.toThrow('feed 502');
+    const hang = ((_url: string, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      })) as unknown as typeof fetch;
+    await expect(fetchLatestPost(hang, 20)).rejects.toThrow();
+  });
+});
+
+describe('fetchLatestFromFeed (fallback)', () => {
   it('asks for posts_no_replies with a page of 100 and follows the cursor once', async () => {
     const calls: string[] = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
@@ -198,7 +380,7 @@ describe('fetchLatestPost', () => {
       if (calls.length === 1) return jsonResponse({ feed: [item({ reason: repost })], cursor: 'c1' });
       return jsonResponse({ feed: [item({ rkey: 'found' })], cursor: 'c2' });
     }) as unknown as typeof fetch;
-    const post = await fetchLatestPost(fetchImpl);
+    const post = await fetchLatestFromFeed(fetchImpl);
     expect(post?.rkey).toBe('found');
     expect(calls).toHaveLength(2);
     const first = new URL(calls[0]!);
@@ -211,25 +393,26 @@ describe('fetchLatestPost', () => {
 
   it(`stops after ${MAX_PAGES} pages and when there is no cursor`, async () => {
     const many = vi.fn(async () => jsonResponse({ feed: [item({ reason: repost })], cursor: 'more' })) as unknown as typeof fetch;
-    expect(await fetchLatestPost(many)).toBeNull();
+    expect(await fetchLatestFromFeed(many)).toBeNull();
     expect(many).toHaveBeenCalledTimes(MAX_PAGES);
     const one = vi.fn(async () => jsonResponse({ feed: [] })) as unknown as typeof fetch;
-    expect(await fetchLatestPost(one)).toBeNull();
+    expect(await fetchLatestFromFeed(one)).toBeNull();
     expect(one).toHaveBeenCalledTimes(1);
   });
 
   it('rejects on http errors and on timeout', async () => {
     const bad = vi.fn(async () => jsonResponse({ error: 'x' }, 502)) as unknown as typeof fetch;
-    await expect(fetchLatestPost(bad)).rejects.toThrow('feed 502');
+    await expect(fetchLatestFromFeed(bad)).rejects.toThrow('feed 502');
     const hang = ((_url: string, init?: RequestInit) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
       })) as unknown as typeof fetch;
-    await expect(fetchLatestPost(hang, 20)).rejects.toThrow();
+    await expect(fetchLatestFromFeed(hang, 20)).rejects.toThrow();
   });
 
-  it('feedUrl encodes the cursor', () => {
+  it('feedUrl and listRecordsUrl encode the cursor', () => {
     expect(new URL(feedUrl('a&b=c')).searchParams.get('cursor')).toBe('a&b=c');
+    expect(new URL(listRecordsUrl('https://pds.atpota.to', 'a&b=c')).searchParams.get('cursor')).toBe('a&b=c');
   });
 });
 
@@ -288,8 +471,10 @@ describe('rendering', () => {
 
   it('loadLatest caches a found post and initLatest renders from the cache without fetching', async () => {
     let tile = mountTile();
-    await loadLatest(tile, (async () => jsonResponse({ feed: [item({ rkey: 'cached', text: 'from cache' })] })) as unknown as typeof fetch);
+    const { fn } = router({ plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse({ records: [rec('cached', { text: 'from cache' })] }) });
+    await loadLatest(tile, fn);
     expect(tile.dataset.state).toBe('ready');
+    expect(tile.querySelector('[data-latest-text]')!.textContent).toBe('from cache');
     expect(readCache()?.rkey).toBe('cached');
 
     tile = mountTile();

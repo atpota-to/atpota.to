@@ -1,11 +1,12 @@
 import { defineChannel, POST, type Session } from "eve/channels";
 import type { MessageStreamEvent } from "eve/client";
-import { MAX_TRACKED_LINKS, linksFromToolResult } from "../lib/bluesky";
+import { MAX_TRACKED_LINKS } from "../lib/bluesky";
 import {
   WEBSITE_AUTHENTICATOR,
   WEBSITE_SECRET_HEADER,
   WebsiteChat,
   buildWebsitePrompt,
+  websiteLinksFromToolResult,
   websiteSecretMatches,
 } from "../lib/website";
 
@@ -218,7 +219,7 @@ function streamTurn(opts: {
               // Every https URL a tool returned this turn. The widget links a
               // URL only when it is in this list, which is what stands in for
               // the droplet's "no composed links" gate on the website.
-              for (const url of linksFromToolResult(event.data)) {
+              for (const url of websiteLinksFromToolResult(event.data)) {
                 if (links.size >= MAX_TRACKED_LINKS) break;
                 if (url.startsWith("https://") && url.length <= 2048) links.add(url);
               }

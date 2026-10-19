@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MAX_ANSWER_TEXT } from '../src/poe/client.js';
 import {
+  MAX_POE_TEXT,
   MAX_TRANSCRIPT,
   TRANSCRIPT_KEY,
   createStore,
@@ -178,5 +180,19 @@ describe('transcript', () => {
     const entry = parseEntry({ role: 'you', text: 'x'.repeat(50_000), quote: 'q'.repeat(1000) });
     expect(entry && entry.role === 'you' && entry.text.length).toBe(12_000);
     expect(entry && entry.role === 'you' && entry.quote?.length).toBe(300);
+    const poe = parseEntry({ role: 'poe', text: 'x'.repeat(50_000), links: [] });
+    expect(poe && poe.role === 'poe' && poe.text.length).toBe(MAX_ANSWER_TEXT);
+  });
+
+  it('restores a long answer (up to what the widget renders live) unchanged, trailing link included', () => {
+    expect(MAX_POE_TEXT).toBeGreaterThanOrEqual(MAX_ANSWER_TEXT);
+    const text = `${'word '.repeat(3200)}see https://aturi.to/x`; // ~16k, the proxy's cap
+    expect(text.length).toBeGreaterThan(16_000);
+    saveTranscript([
+      { role: 'you', text: 'show me the schema' },
+      { role: 'poe', text, links: ['https://aturi.to/x'] },
+    ]);
+    const [, restored] = loadTranscript();
+    expect(restored).toEqual({ role: 'poe', text, links: ['https://aturi.to/x'] });
   });
 });

@@ -38,6 +38,7 @@ const CLOSE_ANIMATION_MS = 220;
 const PILL_SETTLE_MS = 180;
 const SWIPE_CLOSE_PX = 90;
 const QUOTE_DISPLAY_MAX = 140;
+const RESET_TIMEOUT_MS = 5000;
 
 export interface PoeWidgetOptions {
   doc?: Document;
@@ -68,12 +69,17 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function lastNonEmpty(blocks: Array<string | undefined>): string {
+function lastNonEmptyIndex(blocks: Array<string | undefined>): number {
   for (let i = blocks.length - 1; i >= 0; i--) {
     const text = blocks[i];
-    if (text && text.trim()) return text;
+    if (text && text.trim()) return i;
   }
-  return '';
+  return -1;
+}
+
+function lastNonEmpty(blocks: Array<string | undefined>): string {
+  const i = lastNonEmptyIndex(blocks);
+  return i === -1 ? '' : (blocks[i] as string);
 }
 
 function toRect(r: DOMRect | { top: number; left: number; bottom: number; right: number; width: number; height: number }): Rect {
@@ -129,6 +135,10 @@ export class PoeWidget {
   private openerWasBody = false;
   private inerted: Element[] = [];
   private turnController: AbortController | null = null;
+  /** The DELETE from "new chat", while it is in flight. The next question waits for it. */
+  private resetting: Promise<boolean> | null = null;
+  /** A back/forward cache restore arrived mid-turn: re-read storage once the turn ends. */
+  private pendingResync = false;
   private pillText: string | null = null;
   private pillPressed = false;
   private pointerDown = false;
@@ -255,7 +265,10 @@ export class PoeWidget {
     this.form.append(label, this.input, this.sendBtn);
 
     const foot = el(d, 'p', { class: 'poe-foot' });
-    foot.append(d.createTextNode(COPY.footnoteBefore), el(d, 'kbd', { class: 'poe-kbd' }, '/'), d.createTextNode(COPY.footnoteAfter));
+    // Phones get no "/" hint: there is no key to press (.only-hover hides it on touch screens).
+    const slashHint = el(d, 'span', { class: 'only-hover' });
+    slashHint.append(d.createTextNode(COPY.footnoteBefore), el(d, 'kbd', { class: 'poe-kbd' }, '/'), d.createTextNode(COPY.footnoteAfter));
+    foot.append(d.createTextNode(COPY.footnoteLead), slashHint);
     const actions = el(d, 'div', { class: 'poe-actions' });
     this.newChatBtn = el(d, 'button', { class: 'poe-textbtn', type: 'button' }, COPY.newChat);
     this.tuckBtn = el(d, 'button', { class: 'poe-textbtn', type: 'button' }, COPY.tuck);
@@ -388,6 +401,11 @@ export class PoeWidget {
     this.on(win, 'resize', () => this.hidePill(), { passive: true });
     this.on(win, 'poe:open', () => this.open({ opener: doc.activeElement, via: 'event' }));
     this.on(win, 'pagehide', () => this.onPageHide());
+    // Back/forward cache: the page comes back as it was left, while another page may have
+    // moved the chat on (or tucked Poe away). Catch up with storage before anything is saved.
+    this.on(win, 'pageshow', (e) => {
+      if ((e as PageTransitionEvent).persisted) this.resyncFromStorage();
+    });
     for (const type of ['keydown', 'wheel', 'touchstart'] as const) {
       this.on(win, type, () => this.noteActivity(), { passive: true, capture: true });
     }
@@ -600,6 +618,35 @@ export class PoeWidget {
     this.potato.focus({ preventScroll: true });
   }
 
+  /** Re-reads the transcript and the tucked flag (after a back/forward cache restore). */
+  private resyncFromStorage(): void {
+    if (this.busy) {
+      this.pendingResync = true;
+      return;
+    }
+    this.pendingResync = false;
+    this.transcript = loadTranscript();
+    this.clearLog();
+    this.rendered = false;
+    if (this.isOpen) {
+      this.ensureRendered();
+      this.scrollLog(true);
+    }
+    this.renderChips();
+    this.updatePlaceholder();
+
+    const tucked = isTucked();
+    if (tucked !== this.tucked) {
+      if (tucked) {
+        this.close({ restoreFocus: false });
+        this.hideNudge();
+      }
+      this.tucked = tucked;
+      this.applyTucked();
+      this.syncOpeners();
+    }
+  }
+
   private applyTucked(): void {
     this.root.toggleAttribute('data-tucked', this.tucked);
     this.potato.hidden = this.tucked;
@@ -698,18 +745,25 @@ export class PoeWidget {
     return bubble;
   }
 
-  private pushEntry(entry: TranscriptEntry, existing?: HTMLElement): void {
+  /** `persist: false` shows the entry without writing storage (another page may own it by now). */
+  private pushEntry(entry: TranscriptEntry, existing?: HTMLElement, persist = true): void {
     this.ensureRendered();
     this.transcript.push(entry);
     this.renderEntry(entry, existing);
     while (this.transcript.length > MAX_TRANSCRIPT) this.transcript.shift();
     while (this.renderedEntries.length > MAX_TRANSCRIPT) this.renderedEntries.shift()?.el.remove();
-    saveTranscript(this.transcript);
+    if (persist) saveTranscript(this.transcript);
+  }
+
+  /** Removes every bubble but the greeting, including a partial answer that was never saved. */
+  private clearLog(): void {
+    for (const node of Array.from(this.log.querySelectorAll('.poe-msg:not(.poe-msg--greeting)'))) node.remove();
+    this.renderedEntries = [];
   }
 
   async newChat(): Promise<void> {
     if (this.busy) return;
-    for (const r of this.renderedEntries.splice(0)) r.el.remove();
+    this.clearLog();
     this.transcript = [];
     clearTranscript();
     this.setTurnMood(null);
@@ -717,7 +771,15 @@ export class PoeWidget {
     this.renderChips();
     this.announce(COPY.newChatAnnounce);
     if (this.isOpen) this.focusInput();
-    await resetConversation({ fetchImpl: this.fetchImpl });
+    // A question asked before the DELETE lands would still carry the old cookie (and get it
+    // set again), so send() waits for this.
+    const reset = resetConversation({ fetchImpl: this.fetchImpl, timeoutMs: RESET_TIMEOUT_MS });
+    this.resetting = reset;
+    try {
+      await reset;
+    } finally {
+      if (this.resetting === reset) this.resetting = null;
+    }
   }
 
   private updatePlaceholder(): void {
@@ -735,6 +797,10 @@ export class PoeWidget {
   }
 
   private askChip(chip: string): void {
+    // The chips are re-rendered and hidden while Poe answers, which would drop focus to
+    // <body>. Phones focus the log, so the on-screen keyboard stays down.
+    if (this.isPhone()) this.log.focus({ preventScroll: true });
+    else this.focusInput();
     if (chip === COPY.summarize) {
       const root = this.doc.querySelector(ASKABLE_SELECTOR);
       const section = root ? currentSection(root, this.win.innerHeight * 0.35) : null;
@@ -780,6 +846,8 @@ export class PoeWidget {
     if (!request) return false;
 
     this.setBusy(true);
+    // Poe has answered before in this transcript; a fresh server conversation needs saying.
+    const hadAnswers = this.transcript.some((e) => e.role === 'poe');
     const you: TranscriptEntry = { role: 'you', text: request.message };
     if (extra.quote) you.quote = extra.quote.slice(0, 300);
     this.pushEntry(you);
@@ -788,7 +856,11 @@ export class PoeWidget {
     this.setTurnMood('digging');
     this.scrollLog(true);
 
+    // Streamed text per block. Deltas only append; a block event replaces the block with its
+    // final text. eve re-runs a failed step with the same block index, so a delta after a block's
+    // final text starts a new attempt, and deltas before one may hold a retried step twice.
     const blocks: string[] = [];
+    const confirmed = new Set<number>();
     let bubble: HTMLElement | null = null;
     let body: HTMLElement | null = null;
     const ensureBubble = () => {
@@ -812,19 +884,32 @@ export class PoeWidget {
     this.turnController = controller;
     let failure: PoeError | null = null;
 
+    // "new chat" just now: let its DELETE clear the cookie before this question goes out.
+    if (this.resetting) await this.resetting;
+
     const outcome = await askPoe(
       request,
       {
+        onReady: (conversation) => {
+          // "ready" comes first, so the note lands between the question and the answer.
+          if (conversation !== 'new' || !hadAnswers) return;
+          const lastNote = [...this.transcript].reverse().find((e) => e.role === 'note');
+          if (lastNote?.role === 'note' && lastNote.code === 'fresh_start') return; // once, even with cookies blocked
+          this.pushEntry({ role: 'note', code: 'fresh_start' });
+          this.announce(noteCopy('fresh_start').text);
+        },
         onStatus: (label) => {
           this.showStatus(label);
           this.announce(label);
         },
         onDelta: (block, text) => {
-          blocks[block] = (blocks[block] ?? '') + text;
+          if (confirmed.delete(block)) blocks[block] = text;
+          else blocks[block] = (blocks[block] ?? '') + text;
           showStream();
         },
         onBlock: (block, text) => {
           blocks[block] = text ?? '';
+          confirmed.add(block);
           showStream();
         },
         onDone: (text, links) => {
@@ -855,17 +940,20 @@ export class PoeWidget {
     if (this.turnController === controller) this.turnController = null;
     this.hideStatus();
 
-    const partial = lastNonEmpty(blocks);
+    const partialIndex = lastNonEmptyIndex(blocks);
+    const partial = partialIndex === -1 ? '' : (blocks[partialIndex] as string);
     if (outcome === 'error' && failure) {
       const error = failure as PoeError;
       if (bubble && partial) {
-        // keep what already streamed, rendered safely without links
+        // Keep what already streamed on screen, rendered safely without links. Only text a block
+        // event confirmed is saved as Poe's answer: raw deltas may hold a retried step twice.
         const result = renderAnswer(partial, [], this.doc);
         const target = body as HTMLElement | null;
         target?.classList.remove('poe-msg__body--plain');
         target?.replaceChildren(result.fragment);
         (bubble as HTMLElement).classList.remove('is-streaming');
-        this.pushEntry({ role: 'poe', text: partial, links: [] }, bubble);
+        if (confirmed.has(partialIndex)) this.pushEntry({ role: 'poe', text: partial, links: [] }, bubble);
+        else (bubble as HTMLElement).classList.add('poe-msg--partial'); // this page only
       } else {
         (bubble as HTMLElement | null)?.remove();
       }
@@ -876,9 +964,10 @@ export class PoeWidget {
       if (error.code === 'not_configured' || error.code === 'offline') this.setTurnMood('offline');
       else this.setTurnMood('error', ERROR_MS);
     } else if (outcome === 'aborted') {
-      // Only page unload aborts a turn. If the page comes back from the back/forward cache, say so.
+      // Only page unload aborts a turn, and onPageHide already saved the "interrupted" note.
+      // Show it here without saving: by the time this runs the next page may own the transcript.
       (bubble as HTMLElement | null)?.classList.remove('is-streaming');
-      this.pushEntry({ role: 'note', code: 'interrupted' });
+      this.pushEntry({ role: 'note', code: 'interrupted' }, undefined, false);
       this.setTurnMood(null);
     }
 
@@ -887,6 +976,7 @@ export class PoeWidget {
     this.setBusy(false);
     this.updatePlaceholder();
     this.scrollLog(stick);
+    if (this.pendingResync) this.resyncFromStorage();
     return true;
   }
 

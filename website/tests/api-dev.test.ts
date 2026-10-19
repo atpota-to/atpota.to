@@ -92,6 +92,14 @@ function sharedChecks(getBase: () => string) {
     expect(foreign.status).toBe(403);
     await foreign.body?.cancel();
 
+    const lookalike = await ask(getBase(), { message: 'hi' }, { origin: 'https://atpota-to-evil.vercel.app' });
+    expect(lookalike.status).toBe(403);
+    await lookalike.body?.cancel();
+
+    const plain = await fetch(`${getBase()}/api/poe`, { method: 'POST', body: JSON.stringify({ message: 'hi' }) });
+    expect(plain.status).toBe(415);
+    await plain.body?.cancel();
+
     const get = await fetch(`${getBase()}/api/poe`);
     expect(get.status).toBe(405);
     expect(get.headers.get('allow')).toBe('POST, DELETE');

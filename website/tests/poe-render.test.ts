@@ -279,6 +279,38 @@ describe('render: kaomoji', () => {
     expect(host.textContent).toBe('thanks (◕‿◕)');
   });
 
+  it('hides only the face in a Japanese sentence with no spaces, and keeps the sentence for the live region', () => {
+    const sentence = 'ラベラーは投稿やアカウントにラベルを付けるサービスです。詳しくはガイドの第三章を見てね';
+    for (const end of ['', '。', '！']) {
+      const { host, plain } = render(`第一段。\n\n${sentence}${end}(◕‿◕)`);
+      const faces = host.querySelectorAll('.poe-face');
+      expect(faces).toHaveLength(1);
+      expect(faces[0]!.textContent).toBe('(◕‿◕)');
+      expect(faces[0]!.getAttribute('aria-hidden')).toBe('true');
+      expect(plain).toBe(`第一段。\n\n${sentence}${end}`);
+    }
+    expect(splitTrailingFace('見てね(◕‿◕)')).toEqual(['見てね', '(◕‿◕)']);
+    expect(splitTrailingFace('見てね。(◕‿◕)')).toEqual(['見てね。', '(◕‿◕)']);
+    expect(splitTrailingFace('見てね✧(◕ᗜ◕)✧')).toEqual(['見てね', '✧(◕ᗜ◕)✧']);
+    expect(splitTrailingFace('見てね（◕‿◕）')).toEqual(['見てね', '（◕‿◕）']);
+  });
+
+  it('keeps Cyrillic, Hangul and accented words glued to the face visible', () => {
+    expect(splitTrailingFace('спасибо(◕‿◕)')).toEqual(['спасибо', '(◕‿◕)']);
+    expect(splitTrailingFace('고마워요(◕‿◕)')).toEqual(['고마워요', '(◕‿◕)']);
+    expect(splitTrailingFace('merci café(◕‿◕)')).toEqual(['merci café', '(◕‿◕)']);
+    expect(splitTrailingFace('ok!(◕‿◕)')).toEqual(['ok!', '(◕‿◕)']);
+    expect(render('merci café(◕‿◕)').plain).toBe('merci café');
+    // a bare face without brackets still splits
+    expect(splitTrailingFace('done ◕‿◕')).toEqual(['done ', '◕‿◕']);
+    expect(splitTrailingFace('done!◕‿◕')).toEqual(['done!', '◕‿◕']);
+  });
+
+  it('never hides a long run of text as a face', () => {
+    expect(splitTrailingFace('見てね(◕‿◕)ですね、ありがとうございました')).toBeNull();
+    expect(render('見てね(◕‿◕)ですね、ありがとうございました').host.querySelector('.poe-face')).toBeNull();
+  });
+
   it('works on a face alone on the last line and at the end of a list', () => {
     let r = render('done!\n(◕ᗜ◕)');
     expect(r.host.querySelectorAll('p')).toHaveLength(1);
