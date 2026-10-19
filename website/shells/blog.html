@@ -50,6 +50,24 @@
         <!-- /@blog-main -->
     </main>
 
+    <!-- Bluesky sign-in for subscribing, recommending and commenting (src/blog/ui.ts). -->
+    <dialog class="blog-signin" id="blog-signin" aria-labelledby="blog-signin-title" data-blog-signin>
+        <form class="blog-signin__panel" data-blog-signin-form novalidate>
+            <div class="blog-signin__head">
+                <h2 class="blog-signin__title" id="blog-signin-title">sign in with bluesky</h2>
+                <button type="button" class="blog-signin__close" aria-label="close" data-blog-signin-close>
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                </button>
+            </div>
+            <p class="blog-signin__lede" data-blog-signin-lede>sign in with your bluesky account.</p>
+            <label class="blog-signin__label" for="blog-signin-handle">your handle</label>
+            <input class="blog-signin__input" id="blog-signin-handle" name="handle" type="text" inputmode="url" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="alice.bsky.social" aria-describedby="blog-signin-fine" required>
+            <p class="blog-signin__error" data-blog-signin-error role="alert" hidden></p>
+            <button type="submit" class="btn btn--primary btn--block" data-blog-signin-submit>continue</button>
+            <p class="blog-signin__fine" id="blog-signin-fine">you'll confirm on your account's own server, so atpota.to never sees your password. the sign-in is kept in this browser only.</p>
+        </form>
+    </dialog>
+
     <!-- @partial footer -->
 </body>
 </html>

@@ -9,7 +9,7 @@
  * named with <link rel="alternate" type="application/at-record+json"> and atproto:uri.
  */
 
-import { BLOG_COPY, BLOG_PATH, POE_HANDLE, SITE_ORIGIN } from './config.js';
+import { BLOG_COPY, BLOG_PATH, POE_DID, POE_HANDLE, SITE_ORIGIN } from './config.js';
 import {
   bodyImageCids,
   formatDate,
@@ -19,6 +19,7 @@ import {
   type Embeds,
   type LeafletPage,
 } from './blocks.js';
+import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
@@ -152,6 +153,21 @@ const ARROW =
 const FEED_ICON =
   '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a14 14 0 0 1 14 14M5 11a8 8 0 0 1 8 8"/><circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>';
 
+const HEART =
+  '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.2A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.2C19.5 15.4 12 20 12 20z"/></svg>';
+
+/**
+ * Reader actions that need a Bluesky sign-in (src/blog/). They stay hidden until that
+ * code runs, so a page without JavaScript never shows a button that does nothing.
+ */
+function subscribeButton(site: SiteInfo, size = ''): string {
+  if (!site.publication) return '';
+  return `<button type="button" class="btn btn--leaf${size}" data-blog-subscribe aria-pressed="false" hidden><span data-blog-subscribe-label>subscribe</span></button>`;
+}
+
+/** Signed-in state ("signed in as @alice · sign out"), filled in by src/blog/. */
+const ACCOUNT_LINE = '<p class="blog-account" data-blog-account aria-live="polite" hidden></p>';
+
 function followActions(site: SiteInfo, size = ''): string {
   return (
     `<a class="btn btn--primary${size}" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} on bluesky ${ARROW}</a>` +
@@ -187,13 +203,14 @@ export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets:
       `<p class="blog-empty__text">${escapeHtml(BLOG_COPY.emptyText)}</p></section>`;
 
   const main =
-    `<div class="blog">` +
+    `<div class="blog"${pub ? ` data-blog-publication="${escapeAttr(pub.uri)}"` : ''}>` +
     `<section class="tile blog-hero" aria-labelledby="blog-title" data-mascot-trigger>` +
     `<div class="blog-hero__text">` +
     `<p class="chip blog-hero__chip">newsletter</p>` +
     `<h1 class="blog-hero__title" id="blog-title">${escapeHtml(site.name)}</h1>` +
     `<p class="blog-hero__lede">${escapeHtml(site.tagline)}</p>` +
-    `<div class="blog-hero__actions">${followActions(site)}</div>` +
+    `<div class="blog-hero__actions">${subscribeButton(site)}${followActions(site)}</div>` +
+    ACCOUNT_LINE +
     `</div>` +
     potato(assets, 'happy', 'blog-hero__potato', 260, 212, true) +
     `</section>` +
@@ -244,10 +261,12 @@ export interface PostInput {
   assets: Assets;
   /** CID of the record's coverImage blob, to spot the same image in the body. */
   coverCid?: string | null;
+  /** Comments and recommends; null when comments are switched off (BLOG_COMMENTS_DISABLED). */
+  discussion?: Discussion | null;
 }
 
 /** The post body alone (blocks + footnotes), shared with the feed. */
-export function postBody(input: Omit<PostInput, 'site' | 'newer' | 'older' | 'assets'> & { site: SiteInfo }): string {
+export function postBody(input: Omit<PostInput, 'site' | 'newer' | 'older' | 'assets' | 'discussion'> & { site: SiteInfo }): string {
   const footnotes = new FootnoteList();
   const ctx: BlockContext = {
     did: input.did,
@@ -303,8 +322,9 @@ export function postPage(input: PostInput): Page {
         `</nav>`
       : '';
 
+  const discussion = input.discussion ?? null;
   const main =
-    `<div class="post-layout">` +
+    `<div class="post-layout"${site.publication ? ` data-blog-publication="${escapeAttr(site.publication.uri)}"` : ''} data-blog-document="${escapeAttr(doc.uri)}">` +
     `<article class="post" data-poe-askable aria-labelledby="post-title">` +
     `<header class="post__header">` +
     `<nav class="post__crumbs" aria-label="breadcrumb"><ol class="post__crumbs-list" role="list"><li><a href="${BLOG_PATH}">${escapeHtml(site.name)}</a></li><li aria-current="page"><time datetime="${escapeAttr(doc.publishedAt)}">${escapeHtml(formatDate(doc.publishedAt))}</time></li></ol></nav>` +
@@ -325,10 +345,15 @@ export function postPage(input: PostInput): Page {
     potato(input.assets, 'wink', 'post-end__potato', 150, 122, true) +
     `<p class="post-end__title">${reply ? 'thoughts? talk about it on bluesky.' : 'want the next one?'}</p>` +
     `<div class="post-end__actions">` +
+    subscribeButton(site, ' btn--sm') +
+    recommendButton(discussion) +
     (reply ? `<a class="btn btn--primary btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
     `<a class="btn ${reply ? 'btn--outline' : 'btn--primary'} btn--sm" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))}</a>` +
     `<a class="btn btn--outline btn--sm" href="${FEED_PATH}">${FEED_ICON} feed</a>` +
-    `</div></div>` +
+    `</div>` +
+    ACCOUNT_LINE +
+    `</div>` +
+    (discussion ? discussionHtml(site, doc, discussion) : '') +
     nav +
     (record
       ? `<p class="post-end__record">this post is a <code>site.standard.document</code> record on ${escapeHtml(bylineName(site.owner))}'s pds. <a href="${escapeAttr(record)}">open the record</a></p>`
@@ -369,6 +394,82 @@ export function postPage(input: PostInput): Page {
 function aturiToBsky(uri: string): string | null {
   const m = /^at:\/\/(did:[a-z]+:[a-zA-Z0-9._:%-]+)\/app\.bsky\.feed\.post\/([A-Za-z0-9._:~-]+)$/.exec(uri);
   return m ? `https://bsky.app/profile/${m[1]}/post/${m[2]}` : null;
+}
+
+// ---------- comments and recommends ----------
+
+/** Replies nest this deep; anything deeper is listed at the last level, in order. */
+export const MAX_COMMENT_DEPTH = 4;
+
+function recommendButton(discussion: Discussion | null): string {
+  const n = discussion?.recommends ?? null;
+  return (
+    `<button type="button" class="btn btn--outline btn--sm post-end__recommend" data-blog-recommend${n !== null ? ` data-recommend-count="${n}"` : ''} aria-pressed="false" hidden>` +
+    `${HEART}<span data-blog-recommend-label>recommend</span><span class="post-end__count" data-blog-recommend-count>${n ? n : ''}</span></button>`
+  );
+}
+
+function descendants(c: BlogComment): BlogComment[] {
+  return c.replies.flatMap((r) => [r, ...descendants(r)]);
+}
+
+/** One comment and its replies. The browser adds reply and delete buttons (src/blog/). */
+export function commentHtml(c: BlogComment, depth = 1): string {
+  const author = c.author;
+  const profile = profileUrl(author.handle);
+  const avatar = author.avatar
+    ? `<img class="comment__avatar" src="${escapeAttr(author.avatar)}" alt="" width="36" height="36" loading="lazy" decoding="async">`
+    : `<span class="comment__avatar comment__avatar--blank" aria-hidden="true"></span>`;
+  const handle = author.handle !== author.did ? `<span class="comment__handle">@${escapeHtml(author.handle)}</span>` : '';
+  const badge = c.did === POE_DID ? `<span class="comment__badge">author</span>` : '';
+  const record = aturiUrl(c.uri);
+  const time = `<time datetime="${escapeAttr(c.createdAt)}">${escapeHtml(formatDate(c.createdAt))}</time>`;
+  // Anchors come only from renderRichText (record text is escaped), so this marks every link.
+  const text = renderRichText(c.text, c.facets).replace(/<a href=/g, '<a rel="ugc nofollow" href=');
+  const children = depth >= MAX_COMMENT_DEPTH ? descendants(c) : c.replies;
+  const replies = children.length
+    ? `<ol class="comment-list comment-list--replies" role="list">${children.map((r) => (depth >= MAX_COMMENT_DEPTH ? commentHtml({ ...r, replies: [] }, depth) : commentHtml(r, depth + 1))).join('')}</ol>`
+    : '';
+  return (
+    `<li class="comment" data-comment="${escapeAttr(c.uri)}" data-comment-author="${escapeAttr(c.did)}" data-comment-depth="${depth}">` +
+    `<div class="comment__head">${avatar}<span class="comment__who"><a class="comment__name" href="${escapeAttr(profile)}">${escapeHtml(author.name)}</a>${handle}${badge}</span>` +
+    (record ? `<a class="comment__time" href="${escapeAttr(record)}">${time}</a>` : `<span class="comment__time">${time}</span>`) +
+    `</div>` +
+    `<div class="comment__body">${text}</div>` +
+    `<div class="comment__actions" data-comment-actions></div>` +
+    replies +
+    `</li>`
+  );
+}
+
+export function commentCountLabel(n: number): string {
+  return n === 1 ? '1 comment' : `${n} comments`;
+}
+
+/** The comments section under a post. */
+export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion): string {
+  const ok = d.status === 'ok';
+  const elsewhere = docUrl(site, doc);
+  const leaflet = !elsewhere.startsWith(`${SITE_ORIGIN}/`) ? elsewhere : null;
+  let note = '';
+  if (!ok) {
+    note =
+      `<p class="post-talk__note" data-comment-note>comments didn't load just now.` +
+      (leaflet ? ` <a href="${escapeAttr(leaflet)}">read them on ${escapeHtml(new URL(leaflet).hostname)}</a>, or try again in a minute.` : ' try again in a minute.') +
+      `</p>`;
+  } else if (d.count === 0) {
+    note = `<p class="post-talk__note" data-comment-empty>no comments yet.</p>`;
+  }
+  return (
+    `<section class="tile post-talk" id="comments" aria-labelledby="comments-title" data-blog-comments${ok ? '' : ' data-comments-unavailable'}>` +
+    `<div class="post-talk__head"><h2 class="post-talk__title" id="comments-title">comments</h2>` +
+    `<span class="post-talk__count" data-comment-count="${d.count}"${d.count ? '' : ' hidden'}>${escapeHtml(commentCountLabel(d.count))}</span></div>` +
+    `<div class="post-talk__compose" data-comment-compose hidden></div>` +
+    `<ol class="comment-list" role="list" data-comment-list${d.comments.length ? '' : ' hidden'}>${d.comments.map((c) => commentHtml(c)).join('')}</ol>` +
+    note +
+    `<p class="post-talk__fine">each comment is a <code>pub.leaflet.comment</code> record in its writer's own repo, so leaflet can show it too.</p>` +
+    `</section>`
+  );
 }
 
 // ---------- not found / unavailable ----------

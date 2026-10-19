@@ -9,6 +9,11 @@
  *                          in BLOG_DID's repo whose `url` is BLOG_PUBLICATION_URL.
  *   BLOG_DID               the repo for that unpinned lookup. Default: Poe (poe.atpota.to).
  *   BLOG_PUBLICATION_URL   atpota.to's address for the blog. Default https://atpota.to/blog.
+ *   BLOG_COMMENTS_DISABLED=1  kill switch: posts render without the comments section.
+ *   BLOG_HIDDEN_COMMENTS   comments to leave off the page: at:// URIs of pub.leaflet.comment
+ *                          records, or DIDs to hide everything an account wrote. Separated
+ *                          by commas, spaces or new lines. (Blocking an account as the
+ *                          publication's owner on Bluesky hides it too; see discussion.ts.)
  *
  * A publication whose own `url` is elsewhere (poe.leaflet.pub for the dispatch) is shown
  * here as a copy: canonical links point at its url, and the /.well-known verification
@@ -54,6 +59,9 @@ export interface BlogConfig {
   publicationUri: string | null;
   /** Publication base URL without a trailing slash. */
   publicationUrl: string;
+  commentsEnabled: boolean;
+  /** Comment at:// URIs and author DIDs from BLOG_HIDDEN_COMMENTS. */
+  hiddenComments: ReadonlySet<string>;
 }
 
 const DID_RE = /^did:(?:plc:[a-z2-7]{24}|web:[a-zA-Z0-9._:%-]+)$/;
@@ -76,6 +84,22 @@ export function normalizePublicationUrl(raw: string | undefined): string | null 
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
+const COMMENT_URI_RE = /^at:\/\/did:[a-z]+:[a-zA-Z0-9._:%-]+\/pub\.leaflet\.comment\/[A-Za-z0-9._:~-]{1,512}$/;
+
+/** BLOG_HIDDEN_COMMENTS: the comment URIs and DIDs in it; anything else is ignored. */
+export function parseHiddenComments(raw: string | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const item of (raw ?? '').split(/[\s,]+/)) {
+    if (COMMENT_URI_RE.test(item) || isDid(item)) out.add(item);
+  }
+  return out;
+}
+
+function flag(value: string | undefined): boolean {
+  const v = value?.trim().toLowerCase();
+  return v === '1' || v === 'true';
+}
+
 export function readBlogConfig(env: Env): BlogConfig {
   const did = env.BLOG_DID?.trim();
   const raw = env.BLOG_PUBLICATION_URI?.trim();
@@ -86,5 +110,7 @@ export function readBlogConfig(env: Env): BlogConfig {
     did: pinnedMatch && isDid(pinnedMatch[1]!) ? pinnedMatch[1]! : did && isDid(did) ? did : POE_DID,
     publicationUri: pinnedMatch ? pinned : null,
     publicationUrl: normalizePublicationUrl(env.BLOG_PUBLICATION_URL) ?? DEFAULT_PUBLICATION_URL,
+    commentsEnabled: !flag(env.BLOG_COMMENTS_DISABLED),
+    hiddenComments: parseHiddenComments(env.BLOG_HIDDEN_COMMENTS),
   };
 }

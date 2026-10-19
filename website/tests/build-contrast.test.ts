@@ -63,6 +63,8 @@ const PAIRS: Array<[string, string, number]> = [
   ['leaf-strong', 'leaf-tint', TEXT],
   ['leaf-tint', 'leaf-strong', TEXT],
   ['leaf-strong', 'card', TEXT],
+  // blog account line notices sit on the post's end card
+  ['ink', 'flesh-tint', TEXT],
   ['on-sun', 'sun', TEXT],
   ['on-sun-soft', 'sun', TEXT],
   ['on-sun', 'sun-deep', TEXT],
