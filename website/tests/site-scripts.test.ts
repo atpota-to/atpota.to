@@ -47,7 +47,12 @@ describe('mascot', () => {
     vi.useRealTimers();
   });
 
-  it('the home page hero never pulls the scawy face', () => {
+  it('the default swap never pulls the scawy face', () => {
+    expect(SWAP_FACES).not.toContain('scawy');
+    for (let i = 0; i < 200; i++) expect(pickFace('happy', undefined)).not.toBe('scawy');
+  });
+
+  it('the home page hero only pulls friendly faces', () => {
     const hero = /<img class="home-sun__mascot"[^>]*>/.exec(read('../index.html'))![0];
     document.body.innerHTML = hero;
     const img = document.querySelector('img')!;
@@ -61,6 +66,7 @@ describe('mascot', () => {
     }
     expect(seen.size).toBeGreaterThan(1);
     expect(seen).not.toContain(MASCOT_URLS.scawy);
+    expect(seen).not.toContain(MASCOT_URLS.dead);
   });
 
   it('swaps while a focusable ancestor has focus', () => {

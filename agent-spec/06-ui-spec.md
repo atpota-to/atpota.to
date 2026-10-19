@@ -38,9 +38,12 @@ Keep `logo-hover.js`'s random-face behavior for the idle potato on pages without
 the panel open. It is charming and it costs nothing. Once the panel is open, the
 face is state, not decoration.
 
-Rules: instant swaps, no loops, no idle motion, no sound, ever. Respect
-`prefers-reduced-motion` on any transition. Give each state a real `alt` value,
-since the face carries meaning that a screen reader otherwise loses.
+Rules: instant swaps, no sound, ever. The only idle motion is the small set in
+`website/src/poe/idle.ts`: blinks, short glances, and up to three arm waves per
+page view, none of them while the panel is open, a turn is running, or the tab
+is hidden. Respect `prefers-reduced-motion` on any transition, and turn the idle
+motion off under it. Give each state a real `alt` value, since the face carries
+meaning that a screen reader otherwise loses.
 
 ## When it is allowed to speak first
 

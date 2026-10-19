@@ -28,8 +28,9 @@ export const MASCOT_BLOB_URL: string = blob;
 export const MASCOT_WAVE_URL: string = wave;
 export const MASCOT_ARM_URL: string = arm;
 
-/** Faces the hover/tap swap picks from (spec section 2, Mascot). */
-export const SWAP_FACES: readonly MascotFace[] = ['kawaii', 'wow', 'wink', 'happy', 'scawy', 'dead'];
+/** Faces the hover/tap swap picks from (spec section 2, Mascot). No scawy: Poe never looks angry
+    on its own. A page can still opt in with data-mascot-faces, as the 404 does. */
+export const SWAP_FACES: readonly MascotFace[] = ['kawaii', 'wow', 'wink', 'happy', 'dead'];
 
 const TAP_RESTORE_MS = 700;
 
