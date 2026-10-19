@@ -47,6 +47,22 @@ describe('mascot', () => {
     vi.useRealTimers();
   });
 
+  it('the home page hero never pulls the scawy face', () => {
+    const hero = /<img class="home-sun__mascot"[^>]*>/.exec(read('../index.html'))![0];
+    document.body.innerHTML = hero;
+    const img = document.querySelector('img')!;
+    expect(img.dataset.mascotFaces).toBeTruthy();
+    bindMascot(img);
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      img.dispatchEvent(pointer('pointerenter', 'mouse'));
+      seen.add(img.getAttribute('src')!);
+      img.dispatchEvent(pointer('pointerleave', 'mouse'));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+    expect(seen).not.toContain(MASCOT_URLS.scawy);
+  });
+
   it('swaps while a focusable ancestor has focus', () => {
     document.body.innerHTML = `<a href="/x"><img data-mascot="normal" src="${MASCOT_URLS.normal}" alt=""></a>`;
     const img = document.querySelector('img')!;
