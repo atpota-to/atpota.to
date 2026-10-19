@@ -9,7 +9,11 @@ export const FALLBACK_TITLE = 'atpota.to';
 const TITLES: Readonly<Record<string, string>> = {
   '/': 'atpota.to home',
   '/guides/bluesky-for-brands': 'How to use Bluesky to grow your brand',
+  '/blog': "poe's blog",
 };
+
+/** Any single post (the post's own title would come from a record, so it is not used). */
+const BLOG_POST_TITLE = "a post on poe's blog";
 
 /** "/index.html", "/guides/bluesky-for-brands.html" and trailing slashes map like their clean URLs. */
 export function canonicalPath(path: string): string {
@@ -22,6 +26,6 @@ export function canonicalPath(path: string): string {
 
 export function pageTitle(path: string): string {
   const key = canonicalPath(path);
-  const title = Object.hasOwn(TITLES, key) ? TITLES[key]! : FALLBACK_TITLE;
+  const title = Object.hasOwn(TITLES, key) ? TITLES[key]! : key.startsWith('/blog/') ? BLOG_POST_TITLE : FALLBACK_TITLE;
   return title.slice(0, MAX_TITLE);
 }

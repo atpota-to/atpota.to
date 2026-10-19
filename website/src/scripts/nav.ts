@@ -2,12 +2,13 @@
  * Header navigation. aria-current on the main nav links is set at build time by the
  * partials plugin (build/partials.ts), so this module only runs the phone menu:
  * the [data-nav-toggle] button opens the [data-nav-menu] sheet (CSS shows it as a
- * sheet at <=720px when html.js is present). While open: focus moves to the first
+ * sheet at <=880px when html.js is present; the five links and the full wordmark need
+ * about 880px side by side). While open: focus moves to the first
  * link, Tab is trapped inside the toggle + sheet, Esc or the scrim closes it and
  * focus returns to the toggle, choosing a link or "ask poe" closes it.
  */
 
-const MOBILE_QUERY = '(max-width: 720px)';
+const MOBILE_QUERY = '(max-width: 880px)';
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function initNav(root: Document = document): void {

@@ -11,6 +11,12 @@
       "supportsCancellation": true
     }
   },
+  "rewrites": [
+    { "source": "/.well-known/site.standard.publication/blog", "destination": "/api/blog?view=well-known" },
+    { "source": "/blog", "destination": "/api/blog?view=index" },
+    { "source": "/blog/feed.xml", "destination": "/api/blog?view=feed" },
+    { "source": "/blog/:path*", "destination": "/api/blog?view=post&path=:path*" }
+  ],
   "redirects": [
     {
       "source": "/(.*)",

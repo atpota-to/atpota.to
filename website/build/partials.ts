@@ -13,9 +13,9 @@ import type { Plugin, ViteDevServer } from 'vite';
  *                                             with the given attributes added to <svg>
  *                                             plus aria-hidden="true" focusable="false"
  *
- * Active navigation: links carrying data-nav="home|projects|guides|about" get
+ * Active navigation: links carrying data-nav="home|projects|guides|blog|about" get
  * aria-current="page" when they match the page. The page is read from
- * <body data-page="home|guide|notfound">; <body data-nav-current="..."> overrides it.
+ * <body data-page="home|guide|blog|notfound">; <body data-nav-current="..."> overrides it.
  * This is the ONLY place aria-current is set for the main nav (nav.ts does not).
  */
 
@@ -34,6 +34,7 @@ const BODY_RE = /<body\b[^>]*>/i;
 export const NAV_FOR_PAGE: Record<string, string> = {
   home: 'home',
   guide: 'guides',
+  blog: 'blog',
 };
 
 function insideDir(dir: string, file: string): boolean {

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import { Readable } from 'node:stream';
@@ -19,6 +19,11 @@ import { createServer, loadEnv, type Logger, type Plugin, type ViteDevServer } f
  * - A method without an export gets 405 with an Allow header. A thrown error gets a 500 JSON body.
  * - /_vercel/insights/script.js (Vercel Web Analytics, platform-provided) answers with an empty
  *   script locally so pages load without console errors.
+ * - vercel.json "rewrites" whose destination is an /api/ route apply here too (e.g. /blog ->
+ *   /api/blog?view=index), so pages served by a function work in dev and preview. Only the
+ *   source syntax this site uses is understood: literal segments, ":name", ":name*" and
+ *   ":name+". Unlike Vercel, there is no filesystem check first, so keep those sources off
+ *   paths that are real files.
  */
 
 type Handler = (request: Request) => Response | Promise<Response>;
@@ -31,6 +36,70 @@ const ROUTE_RE = /^\/api\/([A-Za-z0-9_-]+)\/?$/;
 export interface ApiMiddlewareOptions {
   /** Directory holding the function files. Default: "<root>/api". */
   apiDir?: string;
+  /** vercel.json to read rewrites from. Default: "<root>/vercel.json"; false to skip. */
+  vercelJson?: string | false;
+}
+
+export interface Rewrite {
+  source: string;
+  destination: string;
+}
+
+interface CompiledRewrite {
+  re: RegExp;
+  names: string[];
+  destination: string;
+}
+
+const PARAM_RE = /^:([A-Za-z_][A-Za-z0-9_]*)([*+]?)$/;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Compiles a vercel.json rewrite source ("/blog/:path*") into a regular expression. */
+export function compileRewrite(rule: Rewrite): CompiledRewrite {
+  const names: string[] = [];
+  let pattern = '';
+  for (const segment of rule.source.split('/').filter(Boolean)) {
+    const param = PARAM_RE.exec(segment);
+    if (!param) {
+      if (segment.includes(':') || segment.includes('(')) throw new Error(`[api] unsupported rewrite source "${rule.source}"`);
+      pattern += `/${escapeRegExp(segment)}`;
+      continue;
+    }
+    names.push(param[1]!);
+    if (param[2] === '*') pattern += '(?:/(.*))?';
+    else if (param[2] === '+') pattern += '/(.+)';
+    else pattern += '/([^/]+)';
+  }
+  return { re: new RegExp(`^${pattern || '/'}$`), names, destination: rule.destination };
+}
+
+/**
+ * The first matching rewrite's destination for this path and query, with :params filled in
+ * and the original query merged in (destination values win), or null when none match.
+ */
+export function applyRewrites(rules: readonly CompiledRewrite[], pathname: string, search: string): string | null {
+  for (const rule of rules) {
+    const match = rule.re.exec(pathname);
+    if (!match) continue;
+    const values = new Map(rule.names.map((name, i) => [name, match[i + 1] ?? '']));
+    const filled = rule.destination.replace(/:([A-Za-z_][A-Za-z0-9_]*)[*+]?/g, (_m, name: string) =>
+      values.has(name) ? values.get(name)! : '',
+    );
+    const url = new URL(filled, 'http://localhost');
+    for (const [key, value] of new URLSearchParams(search)) if (!url.searchParams.has(key)) url.searchParams.append(key, value);
+    return `${url.pathname}${url.search}`;
+  }
+  return null;
+}
+
+/** The vercel.json rewrites that point at an /api/ function, compiled. */
+export function readApiRewrites(file: string): CompiledRewrite[] {
+  if (!existsSync(file)) return [];
+  const config = JSON.parse(readFileSync(file, 'utf8')) as { rewrites?: Rewrite[] };
+  return (config.rewrites ?? []).filter((r) => r.destination.startsWith('/api/')).map(compileRewrite);
 }
 
 function jsonError(res: ServerResponse, status: number, code: string, message: string, headers: Record<string, string> = {}): void {
@@ -45,11 +114,11 @@ function jsonError(res: ServerResponse, status: number, code: string, message: s
   res.end(JSON.stringify({ error: { code, message } }));
 }
 
-export function toWebRequest(req: IncomingMessage, signal: AbortSignal): Request {
+export function toWebRequest(req: IncomingMessage, signal: AbortSignal, rewrittenPath?: string): Request {
   const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true;
   const proto = String(req.headers['x-forwarded-proto'] ?? (encrypted ? 'https' : 'http')).split(',')[0]!.trim();
   const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? req.headers[':authority'] ?? 'localhost');
-  const path = (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '/';
+  const path = rewrittenPath ?? (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '/';
   const url = new URL(path, `${proto}://${host}`);
 
   const headers = new Headers();
@@ -131,9 +200,15 @@ function analyticsStub(req: IncomingMessage, res: ServerResponse, next: (err?: u
   res.end('/* Vercel Web Analytics only runs on Vercel deployments. */\n');
 }
 
-export function createApiHandler(apiDir: string, load: Loader, logger: Logger) {
+export function createApiHandler(apiDir: string, load: Loader, logger: Logger, rewrites: readonly CompiledRewrite[] = []) {
   return async function atpotatoApiMiddleware(req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) {
-    const pathname = ((req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '').split('?')[0]!;
+    const original = (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '';
+    const queryAt = original.indexOf('?');
+    const rewritten =
+      rewrites.length > 0
+        ? applyRewrites(rewrites, queryAt === -1 ? original : original.slice(0, queryAt), queryAt === -1 ? '' : original.slice(queryAt))
+        : null;
+    const pathname = (rewritten ?? original).split('?')[0]!;
     const match = ROUTE_RE.exec(pathname);
     if (!match) return next();
     const file = resolve(apiDir, `${match[1]}.ts`);
@@ -161,7 +236,7 @@ export function createApiHandler(apiDir: string, load: Loader, logger: Logger) {
     }
 
     try {
-      const response = await handler(toWebRequest(req, controller.signal));
+      const response = await handler(toWebRequest(req, controller.signal, rewritten ?? undefined));
       if (!(response instanceof Response)) throw new TypeError('handler did not return a Response');
       await sendWebResponse(res, response, method);
       logger.info(`[api] ${method} ${pathname} ${response.status} ${Date.now() - started}ms`, { timestamp: true });
@@ -188,17 +263,19 @@ function loadDotEnv(mode: string, envDir: string | false, root: string): void {
 
 export function apiMiddleware(options: ApiMiddlewareOptions = {}): Plugin {
   let apiDir = options.apiDir ?? '';
+  let rewrites: CompiledRewrite[] = [];
   return {
     name: 'atpotato:api-middleware',
     configResolved(config) {
       apiDir = options.apiDir ?? resolve(config.root, 'api');
+      if (options.vercelJson !== false) rewrites = readApiRewrites(options.vercelJson ?? resolve(config.root, 'vercel.json'));
       if (config.command === 'serve') loadDotEnv(config.mode, config.envDir, config.root);
     },
     configureServer(server: ViteDevServer) {
       // Registered directly (not returned) so it runs before Vite's own HTML/static middlewares.
       server.middlewares.use(analyticsStub);
       server.middlewares.use(
-        createApiHandler(apiDir, (id) => server.ssrLoadModule(id) as Promise<ApiModule>, server.config.logger),
+        createApiHandler(apiDir, (id) => server.ssrLoadModule(id) as Promise<ApiModule>, server.config.logger, rewrites),
       );
     },
     configurePreviewServer(preview) {
@@ -219,7 +296,12 @@ export function apiMiddleware(options: ApiMiddlewareOptions = {}): Plugin {
       });
       preview.middlewares.use(analyticsStub);
       preview.middlewares.use(
-        createApiHandler(apiDir, async (id) => (await getLoader()).ssrLoadModule(id) as Promise<ApiModule>, preview.config.logger),
+        createApiHandler(
+          apiDir,
+          async (id) => (await getLoader()).ssrLoadModule(id) as Promise<ApiModule>,
+          preview.config.logger,
+          rewrites,
+        ),
       );
     },
   };
