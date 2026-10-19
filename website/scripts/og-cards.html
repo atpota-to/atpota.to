@@ -2,9 +2,9 @@
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <!-- Source for the Open Graph images in public/og/ (1200x630 each). `npm run og`
-         (scripts/og-images.ts) screenshots every [data-og] card below; open
-         /scripts/og-cards.html on the dev server to preview them. -->
+    <!-- The Open Graph cards (1200x630 each). og-cards.ts fills one template per card
+         with the copy the pages show right now; `npm run og` (scripts/og-images.ts)
+         screenshots them. Open /scripts/og-cards.html on the dev server to preview. -->
     <title>og cards - atpotato</title>
     <meta name="robots" content="noindex">
 
@@ -18,8 +18,13 @@
     <style>
         body {
             align-items: center;
-            gap: 40px;
             padding: 40px 0;
+        }
+
+        [data-og-root] {
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
         }
 
         .og {
@@ -77,8 +82,10 @@
             width: 22px;
         }
 
+        /* padding-top keeps a gap under the wordmark when long copy fills the tile */
         .og-body {
             margin-top: auto;
+            padding-top: 28px;
         }
 
         .og-title {
@@ -87,11 +94,6 @@
             line-height: 0.98;
             letter-spacing: -0.03em;
             text-wrap: balance;
-        }
-
-        .og-title--md {
-            font-size: 68px;
-            line-height: 1;
         }
 
         .og-lede {
@@ -177,9 +179,11 @@
             border-radius: 22px 22px 22px 6px;
             background: var(--card);
             color: var(--text-soft);
+            max-width: 310px;
             font-size: 21px;
             font-weight: 700;
             line-height: 1.3;
+            text-wrap: balance;
         }
 
         /* the paper stack from the guide pages, scaled up */
@@ -293,100 +297,107 @@
     </style>
 </head>
 <body>
+    <main data-og-root></main>
 
     <!-- public/og/home.png: the home page, and the fallback for every other page -->
-    <section class="og og--home" data-og="home">
-        <div class="tile og-text og-text--paper">
-            <span class="og-wordmark" role="img" aria-label="atpotato"></span>
-            <div class="og-body">
-                <h1 class="og-title">a super serious legal entity.</h1>
-                <p class="og-lede">responsible for weird and creative projects in the atmosphere, the open network bluesky is built on.</p>
+    <template data-og-kind="home">
+        <section class="og og--home">
+            <div class="tile og-text og-text--paper">
+                <span class="og-wordmark" role="img" aria-label="atpotato"></span>
+                <div class="og-body">
+                    <h1 class="og-title" data-slot="title"></h1>
+                    <p class="og-lede" data-slot="lede"></p>
+                </div>
             </div>
-        </div>
-        <div class="tile og-art og-rays">
-            <p class="og-bubble">hi! ask me anything<br>about atproto (◕‿◕)</p>
-            <div class="og-mound"></div>
-            <img class="og-sprout og-sprout--1" src="/src/assets/sprout.svg" alt="">
-            <img class="og-sprout og-sprout--2" src="/src/assets/sprout.svg" alt="">
-            <img class="og-sprout og-sprout--3" src="/src/assets/sprout.svg" alt="">
-            <img class="og-potato" src="/src/assets/mascot/potato-kawaii.svg" alt="">
-        </div>
-    </section>
+            <div class="tile og-art og-rays">
+                <p class="og-bubble" data-slot="bubble"></p>
+                <div class="og-mound"></div>
+                <img class="og-sprout og-sprout--1" src="/src/assets/sprout.svg" alt="">
+                <img class="og-sprout og-sprout--2" src="/src/assets/sprout.svg" alt="">
+                <img class="og-sprout og-sprout--3" src="/src/assets/sprout.svg" alt="">
+                <img class="og-potato" src="/src/assets/mascot/potato-kawaii.svg" alt="">
+            </div>
+        </section>
+    </template>
 
     <!-- public/og/guides.png: /guides -->
-    <section class="og og--guides" data-og="guides">
-        <div class="tile og-text og-text--paper">
-            <div class="og-top">
-                <span class="og-wordmark" role="img" aria-label="atpotato"></span>
-                <span class="chip"><img src="/src/assets/leaf.svg" alt="">guides</span>
+    <template data-og-kind="guides">
+        <section class="og og--guides">
+            <div class="tile og-text og-text--paper">
+                <span class="chip"><img src="/src/assets/leaf.svg" alt=""><span data-slot="chip"></span></span>
+                <div class="og-body">
+                    <h1 class="og-title" data-slot="title"></h1>
+                    <p class="og-lede" data-slot="lede"></p>
+                </div>
             </div>
-            <div class="og-body">
-                <h1 class="og-title og-title--md">plain-language guides to bluesky and atproto.</h1>
-                <p class="og-lede">with screenshots, and a potato for any word you don't know.</p>
+            <div class="tile og-art">
+                <div class="og-stack">
+                    <span class="og-sheet og-sheet--back"></span>
+                    <span class="og-sheet og-sheet--front">
+                        <span class="og-bar og-bar--title"></span>
+                        <span class="og-bar"></span>
+                        <span class="og-bar og-bar--86"></span>
+                        <span class="og-shot"></span>
+                        <span class="og-bar og-bar--92"></span>
+                    </span>
+                </div>
+                <img class="og-potato" src="/src/assets/mascot/potato-happy.svg" alt="">
             </div>
-        </div>
-        <div class="tile og-art">
-            <div class="og-stack">
-                <span class="og-sheet og-sheet--back"></span>
-                <span class="og-sheet og-sheet--front">
-                    <span class="og-bar og-bar--title"></span>
-                    <span class="og-bar"></span>
-                    <span class="og-bar og-bar--86"></span>
-                    <span class="og-shot"></span>
-                    <span class="og-bar og-bar--92"></span>
-                </span>
-            </div>
-            <img class="og-potato" src="/src/assets/mascot/potato-happy.svg" alt="">
-        </div>
-    </section>
+        </section>
+    </template>
 
-    <!-- public/og/bluesky-for-brands.png: /guides/bluesky-for-brands -->
-    <section class="og og--guide" data-og="bluesky-for-brands">
-        <div class="tile og-text">
-            <div class="og-top">
-                <span class="og-wordmark" role="img" aria-label="atpotato"></span>
-                <span class="chip"><img src="/src/assets/leaf.svg" alt="">guides</span>
+    <!-- public/og/<slug>.png: each guide listed on /guides -->
+    <template data-og-kind="guide">
+        <section class="og og--guide">
+            <div class="tile og-text">
+                <div class="og-top">
+                    <span class="og-wordmark" role="img" aria-label="atpotato"></span>
+                    <span class="chip"><img src="/src/assets/leaf.svg" alt="">guides</span>
+                </div>
+                <div class="og-body">
+                    <h1 class="og-title" data-slot="title"></h1>
+                    <p class="og-lede" data-slot="lede"></p>
+                    <p class="og-pill">written by <b data-slot="handle"></b></p>
+                </div>
+                <div class="og-stack">
+                    <span class="og-sheet og-sheet--back"></span>
+                    <span class="og-sheet og-sheet--front">
+                        <span class="og-bar og-bar--title"></span>
+                        <span class="og-bar"></span>
+                        <span class="og-bar og-bar--86"></span>
+                        <span class="og-shot"></span>
+                        <span class="og-bar og-bar--92"></span>
+                    </span>
+                </div>
+                <img class="og-potato" src="/src/assets/mascot/potato-wow.svg" alt="">
             </div>
-            <div class="og-body">
-                <h1 class="og-title">How to use Bluesky to grow your brand</h1>
-                <p class="og-lede">A comprehensive guide for companies, communities, and creators</p>
-                <p class="og-pill">written by <b>@dame.is</b></p>
-            </div>
-            <div class="og-stack">
-                <span class="og-sheet og-sheet--back"></span>
-                <span class="og-sheet og-sheet--front">
-                    <span class="og-bar og-bar--title"></span>
-                    <span class="og-bar"></span>
-                    <span class="og-bar og-bar--86"></span>
-                    <span class="og-shot"></span>
-                    <span class="og-bar og-bar--92"></span>
-                </span>
-            </div>
-            <img class="og-potato" src="/src/assets/mascot/potato-wow.svg" alt="">
-        </div>
-    </section>
+        </section>
+    </template>
 
     <!-- public/og/blog.png: /blog, and posts without a cover image -->
-    <section class="og og--blog" data-og="blog">
-        <div class="tile og-text og-text--paper">
-            <div class="og-top">
-                <span class="og-wordmark" role="img" aria-label="atpotato"></span>
-                <span class="chip">newsletter</span>
+    <template data-og-kind="blog">
+        <section class="og og--blog">
+            <div class="tile og-text og-text--paper">
+                <div class="og-top">
+                    <span class="og-wordmark" role="img" aria-label="atpotato"></span>
+                    <span class="chip" data-slot="chip"></span>
+                </div>
+                <div class="og-body">
+                    <h1 class="og-title" data-slot="title"></h1>
+                    <p class="og-lede" data-slot="lede"></p>
+                    <p class="og-pill">by <b data-slot="handle"></b></p>
+                </div>
             </div>
-            <div class="og-body">
-                <h1 class="og-title">poe's atmosphere dispatch</h1>
-                <p class="og-lede">a weekly round up of what's happening in the atmosphere</p>
-                <p class="og-pill">by <b>@poe.atpota.to</b></p>
+            <div class="tile og-art og-rays og-rays--sage">
+                <div class="og-mound"></div>
+                <img class="og-sprout og-sprout--1" src="/src/assets/sprout.svg" alt="">
+                <img class="og-sprout og-sprout--2" src="/src/assets/sprout.svg" alt="">
+                <img class="og-sprout og-sprout--3" src="/src/assets/sprout.svg" alt="">
+                <img class="og-potato" src="/src/assets/mascot/potato-happy.svg" alt="">
             </div>
-        </div>
-        <div class="tile og-art og-rays og-rays--sage">
-            <div class="og-mound"></div>
-            <img class="og-sprout og-sprout--1" src="/src/assets/sprout.svg" alt="">
-            <img class="og-sprout og-sprout--2" src="/src/assets/sprout.svg" alt="">
-            <img class="og-sprout og-sprout--3" src="/src/assets/sprout.svg" alt="">
-            <img class="og-potato" src="/src/assets/mascot/potato-happy.svg" alt="">
-        </div>
-    </section>
+        </section>
+    </template>
 
+    <script type="module" src="/scripts/og-cards.ts"></script>
 </body>
 </html>
