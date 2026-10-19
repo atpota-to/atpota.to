@@ -158,7 +158,7 @@ describe('mount', () => {
     expect(hint.querySelector('kbd')!.textContent).toBe('/');
     const header = readFileSync(join(process.cwd(), 'src/partials/header.html'), 'utf8');
     expect(header).toMatch(/<kbd class="kbd only-hover" aria-hidden="true">\/<\/kbd>/);
-    expect(Array.from(document.querySelectorAll('.poe-textbtn')).map((b) => b.textContent)).toEqual(['new chat', 'tuck poe away']);
+    expect(Array.from(document.querySelectorAll('.poe-textbtn')).map((b) => b.textContent)).toEqual(['new chat']);
   });
 
   it('uses the guide context and chips on the guide page', () => {
@@ -651,7 +651,7 @@ describe('a turn', () => {
     mount(fn);
     widget.open({ via: 'keyboard' });
     await widget.send('first question');
-    // the reader went to the guide, asked there, tucked poe away, and pressed back
+    // the reader went to the guide, asked there, and pressed back
     const later = [
       { role: 'you', text: 'first question' },
       { role: 'poe', text: 'answer', links: [] },
@@ -659,18 +659,12 @@ describe('a turn', () => {
       { role: 'poe', text: 'guide answer', links: [] },
     ];
     window.sessionStorage.setItem('poe:transcript', JSON.stringify(later));
-    window.localStorage.setItem('poe:tucked', '1');
     window.dispatchEvent(pageshow(false)); // a normal load: nothing to do
     expect(bubbles()).toHaveLength(2);
     window.dispatchEvent(pageshow(true));
     expect(bubbles()).toHaveLength(4);
     expect(bubbles()[3]!.textContent).toContain('guide answer');
-    expect(widget.opened).toBe(false);
-    expect($('.poe-potato').hidden).toBe(true);
-    expect($('.poe-tab').hidden).toBe(false);
 
-    $<HTMLButtonElement>('.poe-tab').click();
-    widget.open({ via: 'keyboard' });
     await widget.send('third question');
     expect(stored().map((e) => e.text)).toEqual(['first question', 'answer', 'second question on guide', 'guide answer', 'third question', 'answer']);
   });
@@ -879,34 +873,6 @@ describe('highlight-to-ask', () => {
   });
 });
 
-describe('tucking away', () => {
-  it('hides the potato, shows the leaf tab, remembers it, and "/" still opens', () => {
-    mount();
-    widget.open({ via: 'keyboard' });
-    $<HTMLButtonElement>('.poe-actions .poe-textbtn:last-child').click();
-    expect(widget.opened).toBe(false);
-    expect($('.poe-potato').hidden).toBe(true);
-    const tab = $<HTMLButtonElement>('.poe-tab');
-    expect(tab.hidden).toBe(false);
-    expect(tab.getAttribute('aria-label')).toBe('bring poe back');
-    expect(document.activeElement).toBe(tab);
-    expect(window.localStorage.getItem('poe:tucked')).toBe('1');
-
-    press('/', {}, document.body);
-    expect(widget.opened).toBe(true);
-    press('Escape');
-    expect(document.activeElement).toBe(tab);
-
-    unmountPoe();
-    mount();
-    expect($('.poe-potato').hidden).toBe(true);
-    $<HTMLButtonElement>('.poe-tab').click();
-    expect($('.poe-potato').hidden).toBe(false);
-    expect(window.localStorage.getItem('poe:tucked')).toBeNull();
-    expect(document.activeElement).toBe($('.poe-potato'));
-  });
-});
-
 describe('nudge', () => {
   it('shows once per visit after the idle delay, with the wink face, and hides on tap', () => {
     vi.useFakeTimers();
@@ -964,16 +930,8 @@ describe('nudge', () => {
     expect(document.activeElement).toBe($('.poe-potato'));
   });
 
-  it('never shows when tucked, when the panel was opened, or while typing', () => {
+  it('never shows when the panel was opened, or while typing', () => {
     vi.useFakeTimers();
-    window.localStorage.setItem('poe:tucked', '1');
-    mount(undefined, { nudgeDelayMs: 10 });
-    vi.advanceTimersByTime(100);
-    expect($('.poe-nudge').hidden).toBe(true);
-    unmountPoe();
-    window.localStorage.clear();
-    resetStoresForTests();
-
     mount(undefined, { nudgeDelayMs: 10 });
     widget.open({ via: 'keyboard' });
     vi.advanceTimersByTime(100);

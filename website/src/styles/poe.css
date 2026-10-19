@@ -1,6 +1,6 @@
 /*
  * Poe widget (src/poe/**): corner potato, nudge bubble, panel (desktop dialog,
- * phone bottom sheet), leaf tab, highlight-to-ask pill. Uses the shared tokens
+ * phone bottom sheet), highlight-to-ask pill. Uses the shared tokens
  * only, so both themes come for free; the one widget-specific colour is the
  * quoted-selection text inside the brown "you" bubble (--poe-quote), checked in
  * tests/poe-styles.test.ts.
@@ -194,38 +194,6 @@ html[data-theme="dark"] {
 .poe-nudge__close .poe-icon {
   width: 14px;
   height: 14px;
-}
-
-/* ---------- leaf tab (tucked away) ---------- */
-
-.poe-tab {
-  position: fixed;
-  right: 0;
-  bottom: 28px;
-  z-index: var(--z-poe);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 64px;
-  padding: 0 0 0 2px;
-  border: 0;
-  border-radius: 16px 0 0 16px;
-  background: var(--brown);
-  box-shadow: var(--shadow-soft);
-  cursor: pointer;
-  transition: width var(--dur) var(--ease-out);
-}
-
-.poe-tab:hover,
-.poe-tab:focus-visible {
-  width: 52px;
-}
-
-.poe-tab__leaf {
-  width: 24px;
-  height: auto;
-  pointer-events: none;
 }
 
 /* ---------- highlight-to-ask pill ---------- */
@@ -919,8 +887,7 @@ html.poe-locked body {
   .poe-nudge,
   .poe-panel,
   .poe-scrim,
-  .poe-pill,
-  .poe-tab {
+  .poe-pill {
     transition: none !important;
   }
 
@@ -939,11 +906,6 @@ html.poe-locked body {
   .poe-dots i {
     animation: none !important;
   }
-
-  .poe-tab:hover,
-  .poe-tab:focus-visible {
-    width: 44px;
-  }
 }
 
 /* ---------- forced colors ---------- */
@@ -952,7 +914,6 @@ html.poe-locked body {
   .poe-panel,
   .poe-nudge,
   .poe-pill,
-  .poe-tab,
   .poe-chip,
   .poe-send,
   .poe-close {
