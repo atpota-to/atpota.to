@@ -1,104 +1,109 @@
 /**
- * Renders the Open Graph images in public/og/ from scripts/og-cards.html: one 1200x630
- * PNG per [data-og] card, named after it. The cards use the site's own tokens, mascot SVGs
- * and Eigerdals through the Adobe Fonts kit (which serves localhost), so they are
- * screenshotted in a real browser rather than drawn from a font file.
+ * Renders the Open Graph cards (scripts/og-cards.html) to 1200x630 PNGs, one per card.
+ * The cards take their copy from the pages as the dev server serves them (og-cards.ts),
+ * and use the site's tokens, mascot SVGs and Eigerdals through the Adobe Fonts kit (which
+ * serves localhost), so they are screenshotted in a real browser.
  *
- *   npm run og                 render every card
- *   npm run og -- home blog    render only these
+ *   npm run og                         render every card into public/og (the committed copies)
+ *   npm run og -- home blog            only these
+ *   npm run og -- --out dist/og --soft what the Vercel build runs (vercel.json): render into
+ *                                      the build, and on any failure warn and keep the
+ *                                      committed copies the build already holds
  *
- * Needs Playwright and a Chromium for it, which the site itself does not depend on:
- *   npm install --no-save playwright && npx playwright install chromium
- *
- * To preview while editing, run `npm run dev` and open /scripts/og-cards.html.
+ * Needs a Chromium for Playwright: `npx playwright install chromium-headless-shell` once.
+ * On Vercel, scripts/og-browser.sh installs it and its system libraries.
  */
 
 import { mkdirSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import type { Browser } from 'playwright';
+import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import type { CardStatus } from './og-cards.js';
 
 export const OG_DIR = 'public/og';
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 const CARDS_PATH = '/scripts/og-cards.html';
+const READY_TIMEOUT_MS = 60_000;
 
-// The slice of Playwright used here, typed by hand so the site needs no types for it.
-interface Card {
-  getAttribute(name: string): Promise<string | null>;
-  boundingBox(): Promise<{ width: number; height: number } | null>;
-  screenshot(options: { path: string; animations?: 'disabled' }): Promise<unknown>;
-}
-interface Page {
-  goto(url: string, options: { waitUntil: 'networkidle' }): Promise<unknown>;
-  evaluate<T>(fn: () => T | Promise<T>): Promise<T>;
-  locator(selector: string): { all(): Promise<Card[]> };
-}
-interface Browser {
-  newPage(options: object): Promise<Page>;
-  close(): Promise<void>;
-}
-interface Playwright {
-  chromium: { launch(): Promise<Browser> };
+export interface OgArgs {
+  out: string;
+  soft: boolean;
+  only: Set<string>;
 }
 
-// Node's require, not import(): scripts/run.mjs closes Vite's module runner once this
-// module has loaded, so a dynamic import inside main() would fail.
-function loadPlaywright(): Playwright | null {
-  try {
-    return createRequire(import.meta.url)('playwright') as Playwright;
-  } catch {
-    return null;
+export function parseArgs(args: string[]): OgArgs {
+  const parsed: OgArgs = { out: OG_DIR, soft: false, only: new Set() };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '--soft') parsed.soft = true;
+    else if (arg === '--out') parsed.out = args[++i] ?? OG_DIR;
+    else parsed.only.add(arg);
   }
+  return parsed;
 }
 
 export async function main(args: string[]): Promise<number> {
+  const opts = parseArgs(args);
   const root = process.cwd();
-  const only = new Set(args);
-  const pw = loadPlaywright();
-  if (!pw) {
-    console.error('needs playwright: npm install --no-save playwright && npx playwright install chromium');
-    return 1;
-  }
+  const problems: string[] = [];
 
-  const server = await createServer({ root, configFile: false, logLevel: 'error' });
+  const server = await createServer({ root, configFile: resolve(root, 'vite.config.ts'), logLevel: 'error' });
   let browser: Browser | undefined;
   try {
     await server.listen();
     const base = server.resolvedUrls?.local[0]?.replace(/\/$/, '');
     if (!base) throw new Error('the Vite server did not report a local URL');
-    browser = await pw.chromium.launch();
+    browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: OG_WIDTH + 80, height: OG_HEIGHT + 80 }, deviceScaleFactor: 1 });
-    await page.goto(`${base}${CARDS_PATH}`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}${CARDS_PATH}`);
+    await page.waitForSelector('html[data-og-status]', { state: 'attached', timeout: READY_TIMEOUT_MS });
+    const status = JSON.parse((await page.getAttribute('html', 'data-og-status')) ?? '[]') as CardStatus[];
+
     // fonts.check() is true for a family that was never declared, so look for loaded faces.
-    const fontReady = await page.evaluate(async () => {
-      await document.fonts.ready;
+    const fontReady = await page.evaluate(() => {
       const loaded = [...document.fonts].filter((f) => f.family.replace(/"/g, '') === 'eigerdals' && f.status === 'loaded');
       return ['400', '700'].every((weight) => loaded.some((f) => f.weight === weight));
     });
     if (!fontReady) throw new Error("Eigerdals didn't load (the Adobe Fonts kit only serves the domains it allows)");
 
-    mkdirSync(resolve(root, OG_DIR), { recursive: true });
+    mkdirSync(resolve(root, opts.out), { recursive: true });
     let written = 0;
-    for (const card of await page.locator('[data-og]').all()) {
-      const name = await card.getAttribute('data-og');
-      if (!name || (only.size && !only.has(name))) continue;
-      const box = await card.boundingBox();
-      if (box?.width !== OG_WIDTH || box.height !== OG_HEIGHT) {
-        throw new Error(`card "${name}" is ${box?.width}x${box?.height}, not ${OG_WIDTH}x${OG_HEIGHT}`);
+    for (const card of status) {
+      if (opts.only.size && card.name !== '*' && !opts.only.has(card.name)) continue;
+      if (card.error) {
+        problems.push(`${card.name}: ${card.error}`);
+        continue;
       }
-      const file = `${OG_DIR}/${name}.png`;
-      await card.screenshot({ path: resolve(root, file), animations: 'disabled' });
-      console.log(`wrote ${file}`);
+      if (!card.fits) {
+        problems.push(`${card.name}: the text doesn't fit the card, even at the smallest size`);
+        continue;
+      }
+      const section = page.locator(`[data-og="${card.name}"]`);
+      const box = await section.boundingBox();
+      if (box?.width !== OG_WIDTH || box.height !== OG_HEIGHT) {
+        problems.push(`${card.name}: the card is ${box?.width}x${box?.height}, not ${OG_WIDTH}x${OG_HEIGHT}`);
+        continue;
+      }
+      const file = `${opts.out}/${card.name}.png`;
+      await section.screenshot({ path: resolve(root, file), animations: 'disabled' });
+      console.log(`og: wrote ${file}`);
       written++;
     }
-    if (!written) throw new Error(only.size ? `no cards named ${[...only].join(', ')}` : 'no [data-og] cards found');
-    return 0;
+    if (!written && !problems.length) {
+      problems.push(opts.only.size ? `no cards named ${[...opts.only].join(', ')}` : 'no cards to render');
+    }
   } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
-    return 1;
+    problems.push(err instanceof Error ? err.message : String(err));
   } finally {
     await browser?.close();
     await server.close();
   }
+
+  if (!problems.length) return 0;
+  for (const p of problems) console.warn(`og: ${p}`);
+  if (!opts.soft) return 1;
+  console.warn(`og: kept the committed copies (public/og) of anything not written above`);
+  return 0;
 }
