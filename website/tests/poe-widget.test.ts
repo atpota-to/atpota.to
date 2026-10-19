@@ -929,6 +929,18 @@ describe('nudge', () => {
     expect($('.poe-nudge').hidden).toBe(true);
   });
 
+  it('keeps a trailing kaomoji in the nudge out of the screen reader', () => {
+    vi.useFakeTimers();
+    setPage('home', 'hi! ask me anything about atproto (◕‿◕)');
+    mount(undefined, { nudgeDelayMs: 10 });
+    vi.advanceTimersByTime(20);
+    const text = $('.poe-nudge__text');
+    expect(text.textContent).toBe('hi! ask me anything about atproto (◕‿◕)');
+    const face = text.querySelector('.poe-face');
+    expect(face?.getAttribute('aria-hidden')).toBe('true');
+    expect(face?.textContent).toBe('(◕‿◕)');
+  });
+
   it('activity resets the idle timer', () => {
     vi.useFakeTimers();
     mount(undefined, { nudgeDelayMs: 4000 });

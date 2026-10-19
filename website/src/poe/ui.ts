@@ -12,7 +12,7 @@ import { askPoe, buildRequest, resetConversation, type PoeError } from './client
 import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, contextLabel, noteCopy } from './copy';
 import { icon } from './icons';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
-import { renderAnswer } from './render';
+import { renderAnswer, splitTrailingFace } from './render';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
 import { isSlashShortcut, isTypingTarget, otherModalOpen } from './shortcuts';
 import {
@@ -1053,7 +1053,11 @@ export class PoeWidget {
   private showNudge(): void {
     markNudged();
     this.nudgeDone = true;
-    this.nudgeText.textContent = this.nudgeText_();
+    // A trailing kaomoji stays on screen but not in the screen reader, like in answers.
+    const text = this.nudgeText_();
+    const split = splitTrailingFace(text);
+    this.nudgeText.textContent = split ? split[0] : text;
+    if (split) this.nudgeText.append(el(this.doc, 'span', { class: 'poe-face', 'aria-hidden': 'true' }, split[1]));
     this.nudge.hidden = false;
     this.nudging = true;
     this.nudgeScrollY = this.win.scrollY;
