@@ -6,15 +6,12 @@ import {
   MAX_TRANSCRIPT,
   TRANSCRIPT_KEY,
   createStore,
-  isTucked,
   loadTranscript,
-  local,
   markNudged,
   parseEntry,
   resetStoresForTests,
   saveTranscript,
   session,
-  setTucked,
   wasNudged,
   type TranscriptEntry,
 } from '../src/poe/storage.js';
@@ -91,15 +88,6 @@ describe('createStore', () => {
 });
 
 describe('flags', () => {
-  it('stores tucked in localStorage under poe:tucked', () => {
-    expect(isTucked()).toBe(false);
-    setTucked(true);
-    expect(window.localStorage.getItem('poe:tucked')).toBe('1');
-    expect(isTucked()).toBe(true);
-    setTucked(false);
-    expect(window.localStorage.getItem('poe:tucked')).toBeNull();
-  });
-
   it('stores the nudge flag in sessionStorage under poe:nudged', () => {
     expect(wasNudged()).toBe(false);
     markNudged();
@@ -108,22 +96,15 @@ describe('flags', () => {
   });
 
   it('keeps working when window storage throws on access', () => {
-    const local$ = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
-      throw new DOMException('denied', 'SecurityError');
-    });
     const session$ = vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
     resetStoresForTests();
-    expect(() => setTucked(true)).not.toThrow();
-    expect(isTucked()).toBe(true);
     expect(() => markNudged()).not.toThrow();
     expect(wasNudged()).toBe(true);
     expect(() => saveTranscript([{ role: 'you', text: 'hi' }])).not.toThrow();
     expect(loadTranscript()).toEqual([{ role: 'you', text: 'hi' }]);
-    expect(local$).toHaveBeenCalled();
     expect(session$).toHaveBeenCalled();
-    expect(local()).toBe(local());
     expect(session()).toBe(session());
   });
 });

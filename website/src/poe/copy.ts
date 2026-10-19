@@ -20,8 +20,6 @@ export const COPY = {
   footnoteBefore: ' press ',
   footnoteAfter: ' on any page to open it.',
   newChat: 'new chat',
-  tuck: 'tuck poe away',
-  bringBack: 'bring poe back',
   dismissNudge: 'dismiss tip',
   conversation: 'conversation with poe',
   suggestions: 'suggestions',

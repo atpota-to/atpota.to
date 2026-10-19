@@ -1,13 +1,12 @@
 /**
  * The Poe widget (SPEC 4.6): corner potato, nudge bubble, panel (desktop dialog /
- * phone bottom sheet), leaf tab when tucked away, and the highlight-to-ask pill.
+ * phone bottom sheet), and the highlight-to-ask pill.
  *
  * DOM is built with createElement/textContent only. Answer text goes through
  * render.ts; nothing else from the network is rendered except status labels
  * (textContent).
  */
 
-import leafUrl from '../assets/leaf.svg';
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
 import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, contextLabel, noteCopy } from './copy';
 import { icon } from './icons';
@@ -16,13 +15,11 @@ import { renderAnswer, splitTrailingFace } from './render';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
 import { isSlashShortcut, isTypingTarget, otherModalOpen } from './shortcuts';
 import {
-  isTucked,
   loadTranscript,
   markNudged,
   MAX_TRANSCRIPT,
   saveTranscript,
   clearTranscript,
-  setTucked,
   wasNudged,
   type NoteCode,
   type TranscriptEntry,
@@ -99,7 +96,6 @@ export class PoeWidget {
   private readonly potatoImg: HTMLImageElement;
   readonly nudge: HTMLDivElement;
   private readonly nudgeText: HTMLParagraphElement;
-  readonly tab: HTMLButtonElement;
   readonly scrim: HTMLDivElement;
   readonly panel: HTMLElement;
   private readonly perchedImg: HTMLImageElement;
@@ -111,7 +107,6 @@ export class PoeWidget {
   readonly input: HTMLInputElement;
   readonly sendBtn: HTMLButtonElement;
   readonly newChatBtn: HTMLButtonElement;
-  readonly tuckBtn: HTMLButtonElement;
   readonly closeBtn: HTMLButtonElement;
   readonly live: HTMLDivElement;
   readonly pill: HTMLButtonElement;
@@ -121,7 +116,6 @@ export class PoeWidget {
   // state
   private isOpen = false;
   private busy = false;
-  private tucked = false;
   private nudging = false;
   private nudgeDone = false;
   private hoverPointer = false;
@@ -186,13 +180,6 @@ export class PoeWidget {
     this.potatoImg = el(d, 'img', { class: 'poe-potato__img', alt: '', width: '136', height: '111', draggable: 'false', decoding: 'async' });
     this.potatoImg.src = faceUrl('resting');
     this.potato.append(potatoLabel, this.potatoImg);
-
-    // leaf tab (tucked away)
-    this.tab = el(d, 'button', { class: 'poe-tab', type: 'button', 'aria-label': COPY.bringBack });
-    this.tab.hidden = true;
-    const leaf = el(d, 'img', { class: 'poe-tab__leaf', alt: '', width: '24', height: '21', draggable: 'false' });
-    leaf.src = leafUrl;
-    this.tab.appendChild(leaf);
 
     // highlight-to-ask pill
     this.pill = el(d, 'button', { class: 'poe-pill', type: 'button' });
@@ -271,15 +258,14 @@ export class PoeWidget {
     foot.append(d.createTextNode(COPY.footnoteLead), slashHint);
     const actions = el(d, 'div', { class: 'poe-actions' });
     this.newChatBtn = el(d, 'button', { class: 'poe-textbtn', type: 'button' }, COPY.newChat);
-    this.tuckBtn = el(d, 'button', { class: 'poe-textbtn', type: 'button' }, COPY.tuck);
-    actions.append(this.newChatBtn, this.tuckBtn);
+    actions.append(this.newChatBtn);
 
     this.panel.append(this.perchedImg, this.handle, this.head, context, this.log, this.form, foot, actions);
 
     // live region lives outside the panel so answers are announced even when it is closed
     this.live = el(d, 'div', { class: 'poe-sr', 'aria-live': 'polite', 'aria-atomic': 'true' });
 
-    this.root.append(this.nudge, this.potato, this.tab, this.pill, this.scrim, this.panel, this.live);
+    this.root.append(this.nudge, this.potato, this.pill, this.scrim, this.panel, this.live);
   }
 
   /* ------------------------------------------------------------------ mount */
@@ -290,8 +276,6 @@ export class PoeWidget {
     doc.documentElement.classList.add('has-poe');
 
     this.transcript = loadTranscript();
-    this.tucked = isTucked();
-    this.applyTucked();
     this.renderChips();
     this.syncOpeners();
     this.updateMoods();
@@ -328,8 +312,7 @@ export class PoeWidget {
     // nudge
     this.on(this.nudge.querySelector('.poe-nudge__close') as HTMLElement, 'click', () => this.hideNudge());
 
-    // tab, panel controls
-    this.on(this.tab, 'click', () => this.untuck());
+    // panel controls
     this.on(this.closeBtn, 'click', () => this.close());
     this.on(this.scrim, 'click', () => this.close());
     this.on(this.form, 'submit', (e) => {
@@ -341,7 +324,6 @@ export class PoeWidget {
     this.on(this.newChatBtn, 'click', () => {
       if (!this.busy) void this.newChat();
     });
-    this.on(this.tuckBtn, 'click', () => this.tuck());
     this.on(this.chips, 'click', (e) => {
       const chip = (e.target as Element | null)?.closest?.('button[data-chip]') as HTMLButtonElement | null;
       if (chip && !this.busy) this.askChip(chip.dataset.chip ?? '');
@@ -402,7 +384,7 @@ export class PoeWidget {
     this.on(win, 'poe:open', () => this.open({ opener: doc.activeElement, via: 'event' }));
     this.on(win, 'pagehide', () => this.onPageHide());
     // Back/forward cache: the page comes back as it was left, while another page may have
-    // moved the chat on (or tucked Poe away). Catch up with storage before anything is saved.
+    // moved the chat on. Catch up with storage before anything is saved.
     this.on(win, 'pageshow', (e) => {
       if ((e as PageTransitionEvent).persisted) this.resyncFromStorage();
     });
@@ -461,7 +443,7 @@ export class PoeWidget {
 
     const active = doc.activeElement;
     let opener = options.via === 'pill' ? null : (options.opener ?? active);
-    if (opener && this.root.contains(opener) && opener !== this.potato && opener !== this.tab) opener = null;
+    if (opener && this.root.contains(opener) && opener !== this.potato) opener = null;
     if (opener === doc.body) opener = null;
     // "/" with nothing focused: closing puts focus back on the page, not on a widget control.
     this.openerWasBody = !opener && options.via !== 'pill';
@@ -536,7 +518,7 @@ export class PoeWidget {
       candidates.push(this.opener);
       candidates.push(this.opener.closest('[data-site-header]')?.querySelector('[data-nav-toggle]'));
     }
-    if (!this.openerWasBody) candidates.push(this.tucked ? this.tab : this.potato);
+    if (!this.openerWasBody) candidates.push(this.potato);
     for (const candidate of candidates) {
       if (!(candidate instanceof HTMLElement) || !candidate.isConnected) continue;
       if (candidate.closest('[hidden], [inert]')) continue;
@@ -600,25 +582,9 @@ export class PoeWidget {
     }
   }
 
-  /* ------------------------------------------------------------- tucking */
+  /* ------------------------------------------------------------- storage */
 
-  tuck(): void {
-    this.close({ restoreFocus: false });
-    this.tucked = true;
-    setTucked(true);
-    this.hideNudge();
-    this.applyTucked();
-    this.tab.focus({ preventScroll: true });
-  }
-
-  untuck(): void {
-    this.tucked = false;
-    setTucked(false);
-    this.applyTucked();
-    this.potato.focus({ preventScroll: true });
-  }
-
-  /** Re-reads the transcript and the tucked flag (after a back/forward cache restore). */
+  /** Re-reads the transcript (after a back/forward cache restore). */
   private resyncFromStorage(): void {
     if (this.busy) {
       this.pendingResync = true;
@@ -634,23 +600,6 @@ export class PoeWidget {
     }
     this.renderChips();
     this.updatePlaceholder();
-
-    const tucked = isTucked();
-    if (tucked !== this.tucked) {
-      if (tucked) {
-        this.close({ restoreFocus: false });
-        this.hideNudge();
-      }
-      this.tucked = tucked;
-      this.applyTucked();
-      this.syncOpeners();
-    }
-  }
-
-  private applyTucked(): void {
-    this.root.toggleAttribute('data-tucked', this.tucked);
-    this.potato.hidden = this.tucked;
-    this.tab.hidden = !this.tucked;
   }
 
   /* --------------------------------------------------------------- moods */
@@ -1031,7 +980,7 @@ export class PoeWidget {
 
   private tryNudge(): void {
     if (this.nudgeDone || this.nudging) return;
-    if (this.isOpen || this.tucked) {
+    if (this.isOpen) {
       this.nudgeDone = true;
       return;
     }
@@ -1076,7 +1025,7 @@ export class PoeWidget {
     this.nudge.hidden = true;
     this.updateMoods();
     // The dismiss button had focus and is gone now: hand focus to the potato it belonged to.
-    if (hadFocus && !this.tucked && !this.isOpen) this.potato.focus({ preventScroll: true });
+    if (hadFocus && !this.isOpen) this.potato.focus({ preventScroll: true });
   }
 
   /* ---------------------------------------------------- highlight-to-ask */

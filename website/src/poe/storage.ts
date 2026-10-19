@@ -1,14 +1,13 @@
 /**
  * Storage for the widget, safe in private windows, sandboxed iframes and when
- * site data is blocked: every access to localStorage/sessionStorage is wrapped in
- * try/catch, and when the real store is unusable an in-memory map takes its place
- * for the rest of the page view (so the widget keeps working, it just forgets on
+ * site data is blocked: every access to sessionStorage is wrapped in try/catch,
+ * and when the real store is unusable an in-memory map takes its place for the
+ * rest of the page view (so the widget keeps working, it just forgets on
  * reload).
  *
  * Keys:
  *   sessionStorage "poe:transcript"  last 20 bubbles, so home -> guide keeps the chat visible
  *   sessionStorage "poe:nudged"      "1" once the nudge bubble has shown this visit
- *   localStorage   "poe:tucked"      "1" while Poe is tucked into the edge tab
  */
 
 import { MAX_ANSWER_TEXT } from './client';
@@ -21,7 +20,6 @@ export interface KeyValueStore {
 
 export const TRANSCRIPT_KEY = 'poe:transcript';
 export const NUDGED_KEY = 'poe:nudged';
-export const TUCKED_KEY = 'poe:tucked';
 export const MAX_TRANSCRIPT = 20;
 
 /** Your messages are at most 1000 characters on the wire; this only guards storage. */
@@ -115,22 +113,15 @@ export function createStore(getStorage: () => Storage | null | undefined): KeyVa
 }
 
 let sessionStore: KeyValueStore | null = null;
-let localStore: KeyValueStore | null = null;
 
 export function session(): KeyValueStore {
   sessionStore ??= createStore(() => window.sessionStorage);
   return sessionStore;
 }
 
-export function local(): KeyValueStore {
-  localStore ??= createStore(() => window.localStorage);
-  return localStore;
-}
-
 /** Test hook: forget the cached stores so a test can swap window storage. */
 export function resetStoresForTests(): void {
   sessionStore = null;
-  localStore = null;
 }
 
 /* ---------- transcript ---------- */
@@ -234,15 +225,6 @@ export function clearTranscript(store: KeyValueStore = session()): void {
 }
 
 /* ---------- flags ---------- */
-
-export function isTucked(store: KeyValueStore = local()): boolean {
-  return store.get(TUCKED_KEY) === '1';
-}
-
-export function setTucked(tucked: boolean, store: KeyValueStore = local()): void {
-  if (tucked) store.set(TUCKED_KEY, '1');
-  else store.remove(TUCKED_KEY);
-}
 
 export function wasNudged(store: KeyValueStore = session()): boolean {
   return store.get(NUDGED_KEY) === '1';
