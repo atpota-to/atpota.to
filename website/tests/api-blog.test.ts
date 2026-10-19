@@ -110,7 +110,11 @@ function defaultNet(): Net {
   };
 }
 
-function setup(net: Net = defaultNet(), env: Record<string, string> = {}, extra: Partial<BlogDeps> = {}) {
+// No pin: these tests find the publication in Poe's repo by its url. The default pin
+// (the dispatch) is covered in blog-render.test.ts and by the Leaflet-hosted test below.
+const UNPINNED = { BLOG_PUBLICATION_URI: '' };
+
+function setup(net: Net = defaultNet(), env: Record<string, string> = UNPINNED, extra: Partial<BlogDeps> = {}) {
   const seen: Seen = { urls: [], shellHeaders: [] };
   const logs: Array<Record<string, unknown>> = [];
   const h = createBlogHandlers({ env: () => env, fetch: fakeFetch(net, seen), now: () => NOW, log: (f) => logs.push(f), ...extra });
@@ -155,7 +159,7 @@ describe('/api/blog index', () => {
     const res = await h.GET(get('view=index'));
     expect(res.status).toBe(200);
     const d = html(await res.text());
-    expect(d.querySelector('h1')!.textContent).toBe("poe's blog");
+    expect(d.querySelector('h1')!.textContent).toBe("poe's atmosphere dispatch");
     expect(d.querySelector('.blog-empty__title')!.textContent).toBe('the first issue is still in the ground.');
     expect(d.querySelector('link[rel="site.standard.publication"]')).toBeNull();
   });
@@ -304,7 +308,7 @@ describe('/api/blog post', () => {
       if (String(input).startsWith('https://public.api.bsky.app')) throw new TypeError('fetch failed');
       return fakeFetch(net, { urls: [], shellHeaders: [] })(input, init);
     };
-    const h2 = createBlogHandlers({ env: () => ({}), fetch: fetchWithDeadAppView, now: () => NOW, log: () => undefined });
+    const h2 = createBlogHandlers({ env: () => UNPINNED, fetch: fetchWithDeadAppView, now: () => NOW, log: () => undefined });
     const res = await h2.GET(get('view=post&path=issue-2'));
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('a post on bluesky');
@@ -319,6 +323,19 @@ describe('/api/blog feed and well-known', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     expect(await res.text()).toBe(PUB_URI);
+  });
+
+  it('treats a publication hosted elsewhere as a copy: its url is canonical, and it is not claimed here', async () => {
+    const net = defaultNet();
+    net.publications = [{ rkey: '3pub', value: { ...PUBLICATION.value, url: 'https://poe.leaflet.pub' } }];
+    const { h } = setup(net, { BLOG_PUBLICATION_URI: PUB_URI });
+    const index = html(await (await h.GET(get('view=index'))).text());
+    expect(index.querySelector('h1')!.textContent).toBe('The Weekly Spud');
+    expect(index.querySelector('link[rel="canonical"]')!.getAttribute('href')).toBe('https://poe.leaflet.pub');
+    expect([...index.querySelectorAll('.blog-item')].map((a) => a.getAttribute('href'))).toEqual(['/blog/issue-2', '/blog/3old']);
+    const post = html(await (await h.GET(get('view=post&path=issue-2'))).text());
+    expect(post.querySelector('link[rel="canonical"]')!.getAttribute('href')).toBe('https://poe.leaflet.pub/issue-2');
+    expect((await h.GET(get('view=well-known'))).status).toBe(404);
   });
 
   it('404s the well-known address until the publication exists, 503 when the PDS is down', async () => {
@@ -347,7 +364,7 @@ describe('/api/blog feed and well-known', () => {
 
 describe('poe page titles', () => {
   it('names the blog and its posts without reading records', () => {
-    expect(pageTitle('/blog')).toBe("poe's blog");
-    expect(pageTitle('/blog/issue-2')).toBe("a post on poe's blog");
+    expect(pageTitle('/blog')).toBe("poe's atmosphere dispatch");
+    expect(pageTitle('/blog/issue-2')).toBe("a post in poe's atmosphere dispatch");
   });
 });

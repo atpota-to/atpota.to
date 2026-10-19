@@ -17,7 +17,7 @@
 import type { Env } from '../config.js';
 import { AtprotoError, resolveDid, TtlCache, type Fetch, type Identity } from './atproto.js';
 import { embedTargets, EMPTY_EMBEDS, headingShiftFor, leafletPages, pagesText } from './blocks.js';
-import { POE_DID, readBlogConfig, type BlogConfig } from './config.js';
+import { ATPOTATO_DID, POE_DID, readBlogConfig, type BlogConfig } from './config.js';
 import { loadEmbeds } from './embeds.js';
 import { atomFeed, FEED_ENTRIES } from './feed.js';
 import {
@@ -40,8 +40,11 @@ export const CACHE_WELL_KNOWN = 'public, max-age=3600, s-maxage=3600';
 export const DATA_TTL_MS = 60_000;
 export const SHELL_TTL_MS = 10 * 60_000;
 
-/** If plc.directory is unreachable, Poe's PDS is still known. */
-const KNOWN_PDS: Readonly<Record<string, string>> = { [POE_DID]: 'https://pds.atpota.to' };
+/** If plc.directory is unreachable, the PDS for Poe's and atpota.to's repos is still known. */
+const KNOWN_PDS: Readonly<Record<string, string>> = {
+  [POE_DID]: 'https://pds.atpota.to',
+  [ATPOTATO_DID]: 'https://pds.atpota.to',
+};
 
 export interface BlogDeps {
   env?: () => Env;
@@ -157,10 +160,14 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
       }
       return unavailable(request, e, error);
     }
-    const site = siteInfo(data.publication, config.publicationUrl, data.identity.handle);
+    // A publication hosted elsewhere (the dispatch lives at poe.leaflet.pub) keeps its own
+    // url as the canonical address, and only a publication at this address is claimed here.
+    const site = siteInfo(data.publication, data.publication?.url ?? config.publicationUrl, data.identity.handle);
 
     if (view === 'well-known') {
-      if (!data.publication) return respond(request.method, '', 404, 'text/plain; charset=utf-8', CACHE_MISSING);
+      if (!data.publication || data.publication.url !== config.publicationUrl) {
+        return respond(request.method, '', 404, 'text/plain; charset=utf-8', CACHE_MISSING);
+      }
       return respond(request.method, data.publication.uri, 200, 'text/plain; charset=utf-8', CACHE_WELL_KNOWN, {
         'access-control-allow-origin': '*',
       });
