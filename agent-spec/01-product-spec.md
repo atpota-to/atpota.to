@@ -113,7 +113,7 @@ wanted is a notification, and a notification nobody wanted is a mute.
 | --- | --- |
 | Volunteered on shallow pattern match ("it looks like you're writing a letter") | Never volunteer on a pattern alone. Volunteer only on an unambiguous signal: the visitor pasted an `at://` URI, landed on a 404, or hovered the potato |
 | Forgot every dismissal | A dismissal is durable. "Not now" silences that suggestion class for 30 days in `localStorage`; the close button silences everything until the visitor opens it again |
-| Interrupted the task and stole focus | Never steal focus, never animate over content, never open a modal unprompted. The idle state is a static image that does nothing |
+| Interrupted the task and stole focus | Never steal focus, never animate over content, never open a modal unprompted. At rest the potato stays in its corner and only blinks, glances, or waves (at most three waves per page view, none once the visitor has opened it). It holds still under `prefers-reduced-motion` |
 | Was hard to turn off | One visible close affordance, always. Plus a permanent "don't do this again" in the panel footer |
 | Offered generic help | Every proactive suggestion must name a concrete thing from the current context. If the agent cannot name the specific record, handle, or error, it says nothing |
 | Had a personality but no competence | Personality is a thin layer. Every factual claim is tool-grounded and citable. When the tools do not have the answer, it says so instead of improvising |

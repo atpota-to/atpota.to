@@ -9,6 +9,7 @@
  *   optional: data-mascot-faces="wow wink"   (restrict the pool)
  */
 
+import arm from '../assets/mascot/potato-arm.svg';
 import blob from '../assets/mascot/potato-blob.svg';
 import dead from '../assets/mascot/potato-dead.svg';
 import happy from '../assets/mascot/potato-happy.svg';
@@ -16,15 +17,20 @@ import kawaii from '../assets/mascot/potato-kawaii.svg';
 import normal from '../assets/mascot/potato-normal.svg';
 import scawy from '../assets/mascot/potato-scawy.svg';
 import sleepy from '../assets/mascot/potato-sleepy.svg';
+import wave from '../assets/mascot/potato-wave.svg';
 import wink from '../assets/mascot/potato-wink.svg';
 import wow from '../assets/mascot/potato-wow.svg';
 
 export const MASCOT_URLS = { normal, kawaii, happy, wink, wow, sleepy, scawy, dead } as const;
 export type MascotFace = keyof typeof MASCOT_URLS;
 export const MASCOT_BLOB_URL: string = blob;
+/** Poe's wave (src/poe/idle.ts): the happy face without its left arm, and that arm on its own. */
+export const MASCOT_WAVE_URL: string = wave;
+export const MASCOT_ARM_URL: string = arm;
 
-/** Faces the hover/tap swap picks from (spec section 2, Mascot). */
-export const SWAP_FACES: readonly MascotFace[] = ['kawaii', 'wow', 'wink', 'happy', 'scawy', 'dead'];
+/** Faces the hover/tap swap picks from (spec section 2, Mascot). No scawy: Poe never looks angry
+    on its own. A page can still opt in with data-mascot-faces, as the 404 does. */
+export const SWAP_FACES: readonly MascotFace[] = ['kawaii', 'wow', 'wink', 'happy', 'dead'];
 
 const TAP_RESTORE_MS = 700;
 
@@ -45,7 +51,7 @@ export function preloadFaces(): void {
   if (preloaded) return;
   preloaded = true;
   const run = () => {
-    for (const url of Object.values(MASCOT_URLS)) {
+    for (const url of [...Object.values(MASCOT_URLS), MASCOT_WAVE_URL, MASCOT_ARM_URL]) {
       const img = new Image();
       img.decoding = 'async';
       img.src = url;

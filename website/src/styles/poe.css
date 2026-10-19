@@ -72,6 +72,45 @@ html[data-theme="dark"] {
   user-select: none;
 }
 
+/* The leaf arm on its own, tucked behind the body. While Poe waves (idle.ts) the
+   face swaps to one drawn without that arm and this one swings from the shoulder. */
+.poe-potato__arm {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transform-origin: 19% 53%;
+}
+
+.poe-potato[data-waving] .poe-potato__arm {
+  opacity: 1;
+  animation: poe-wave 1.6s ease-in-out;
+}
+
+@keyframes poe-wave {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: rotate(12deg);
+  }
+  40% {
+    transform: rotate(-5deg);
+  }
+  60% {
+    transform: rotate(10deg);
+  }
+  80% {
+    transform: rotate(-2deg);
+  }
+}
+
 .poe-potato__label {
   position: absolute;
   right: 48px;
@@ -904,6 +943,7 @@ html.poe-locked body {
     transform: none !important;
   }
 
+  .poe-potato__arm,
   .poe-panel__potato,
   .poe[data-busy] .poe-panel__potato,
   .poe-dots i {

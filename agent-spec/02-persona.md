@@ -64,15 +64,19 @@ cheapest possible "it's alive" signal and it costs no new art.
 | `atpotato-dead.png` | error | Tool failure, network failure, rate limit. Paired with a plain-English explanation and a retry |
 
 Two rules:
-1. State changes are instant swaps, no animation loops, no bouncing, no
-   attention-getting motion in the idle state. Motion is what made Clippy
-   intolerable.
+1. State changes are instant swaps. At rest the potato blinks every few
+   seconds, now and then glances with different eyes, and waves its arm at
+   most three times per page view (none once the visitor has opened it), so it
+   reads as something you can tap. Each of these is over within two seconds;
+   nothing bounces and nothing moves over content. Constant motion is what
+   made Clippy intolerable, so keep it this small.
 2. The state is derived from the run, not from sentiment analysis of the text.
    Wire it to eve's stream events (tool start, tool error, turn end) rather than
    guessing.
 
-Consider `prefers-reduced-motion` for any transition you do add, and give every
-image a real `alt` that describes the state, since the state carries meaning.
+Respect `prefers-reduced-motion` for any transition you add and turn the idle
+blinks and waves off under it. Give every image a real `alt` that describes the
+state, since the state carries meaning.
 
 ## Copy bank
 
