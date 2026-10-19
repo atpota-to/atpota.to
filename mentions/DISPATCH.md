@@ -134,6 +134,7 @@ Each version of the issue, after the agent's editor has finished with it.
 ```json
 {
   "issue": "2026-10-12",
+  "kind": "dispatch",
   "version": 2,
   "sha256": "hex of the UTF-8 markdown",
   "title": "the atmosphere this week: oct 12 to 18",
@@ -147,6 +148,11 @@ Each version of the issue, after the agent's editor has finished with it.
   "allowed": ["every URL, NSID and DID the draft may use; app sites the agent could not verify are left out"]
 }
 ```
+
+`kind` is `dispatch` for a weekly issue or `post` for anything else Poe writes
+(`agent-spec/13-poe-blog-and-chat.md`). A `post` uses a slug instead of the
+issue date, is published at path `/<slug>`, and has no week list or snapshot;
+review, approval and publishing work the same way.
 
 On receipt:
 
@@ -236,7 +242,7 @@ resumes where it stopped, and so no step runs twice.
 2. **Create the document** with `com.atproto.repo.createRecord` in
    `site.standard.document` (shape below). Store its at-uri and cid.
 3. **Rebuild the website.** `POST` to the Vercel deploy hook in
-   `DISPATCH_DEPLOY_HOOK_URL`. Then poll `https://atpota.to/dispatch/<issue>`
+   `DISPATCH_DEPLOY_HOOK_URL`. Then poll `https://atpota.to/poe/dispatch/<issue>`
    every 20 seconds, for up to 10 minutes, until it returns 200 **and** its HTML
    contains `<link rel="site.standard.document" href="<the document's at-uri>">`.
    The second check proves the new build is live rather than a cached page.
@@ -317,7 +323,7 @@ command, not by the service loop:
 {
   "$type": "site.standard.publication",
   "name": "<to be chosen>",
-  "url": "https://atpota.to/dispatch",
+  "url": "https://atpota.to/poe",
   "description": "<to be chosen>",
   "icon": "<blob: potato avatar, PNG, at least 256 px square, under 1 MB>",
   "preferences": { "showInDiscover": true }
@@ -325,7 +331,8 @@ command, not by the service loop:
 ```
 
 Store its at-uri as `DISPATCH_PUBLICATION_URI`. The website serves it at
-`/.well-known/site.standard.publication/dispatch`.
+`/.well-known/site.standard.publication/poe`. It is one publication for all of
+Poe's writing; the website side is `agent-spec/13-poe-blog-and-chat.md`.
 
 **Document**, `site.standard.document`:
 
@@ -333,19 +340,20 @@ Store its at-uri as `DISPATCH_PUBLICATION_URI`. The website serves it at
 {
   "$type": "site.standard.document",
   "site": "<DISPATCH_PUBLICATION_URI>",
-  "path": "/2026-10-12",
+  "path": "/dispatch/2026-10-12",
   "title": "<title>",
   "description": "<description>",
   "publishedAt": "<now>",
   "tags": ["atproto", "dispatch"],
   "textContent": "<textContent>",
-  "content": { "$type": "to.atpota.dispatch.markdown", "markdown": "<markdown>" },
+  "content": { "$type": "to.atpota.poe.markdown", "markdown": "<markdown>" },
   "bskyPostRef": { "uri": "...", "cid": "..." }
 }
 ```
 
 `bskyPostRef` is added in step 5. The canonical URL is the publication `url`
-plus `path`: `https://atpota.to/dispatch/2026-10-12`.
+plus `path`: `https://atpota.to/poe/dispatch/2026-10-12`. Posts that are not
+dispatch issues use `/<slug>`.
 
 **Announcement**, `app.bsky.feed.post`:
 

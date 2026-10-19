@@ -1,7 +1,7 @@
 # Writing the weekly dispatch
 
 The dispatch is Poe's weekly letter about what happened in the Atmosphere. It
-is published under Poe's name on atpota.to/dispatch and in Poe's repo as a
+is published under Poe's name on atpota.to/poe and in Poe's repo as a
 site.standard.document. Readers are builders, curious Bluesky users, and people
 who follow atproto from a distance. Most read it in a couple of minutes.
 

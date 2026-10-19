@@ -8,7 +8,7 @@ Every Monday Poe recaps the previous week in the Atmosphere: which lexicons
 appeared or grew, what builders talked about, and what shipped. Poe DMs the
 draft to an operator on Bluesky. The operator replies with edits until it reads
 right, then sends `approve`. The droplet publishes it as a
-`site.standard.document` in Poe's repo, and atpota.to/dispatch renders it.
+`site.standard.document` in Poe's repo, and atpota.to/poe/dispatch renders it.
 
 ## Decisions made
 
@@ -57,7 +57,7 @@ weekly lexicon report  ───────►  schedules ─► collectors ─
                                                                                      `approve`
                                                                                             ▼
                                                                   site.standard.document in Poe's repo
-                                                                  Vercel deploy hook ─► atpota.to/dispatch
+                                                                  Vercel deploy hook ─► atpota.to/poe
                                                                   announcement post from Poe
 ```
 
@@ -416,7 +416,7 @@ An optional setting can also send the full text in the DM, split into
 **Once**, a `site.standard.publication` record in Poe's repo:
 
 - `name` and `description`: to be chosen.
-- `url`: `https://atpota.to/dispatch`.
+- `url`: `https://atpota.to/poe`, shared with Poe's other writing (see 13).
 - `icon`: a potato avatar from `branding/avatars/`, as PNG, at least 256 px
   square and under 1 MB.
 - `preferences.showInDiscover`: true.
@@ -424,7 +424,7 @@ An optional setting can also send the full text in the DM, split into
 **Per issue**, after `approve`, the droplet:
 
 1. Creates the `site.standard.document`: `site` is the publication's AT-URI,
-   `path` is `/2026-10-12`, plus `title`, `publishedAt`, `description`, `tags`,
+   `path` is `/dispatch/2026-10-12`, plus `title`, `publishedAt`, `description`, `tags`,
    `textContent` (plain text, required for search and other readers), and
    `content` holding the markdown.
 2. Calls the website's Vercel deploy hook and waits until the page returns
@@ -441,34 +441,19 @@ twice. A droplet environment flag switches publishing off.
 **Content format.** Standard.site leaves `content` to each platform. All 42 of
 the most recent documents in UFOs' sample on 2026-10-18 had `textContent` and
 no `content` at all, so `textContent` is what other readers can count on. The
-markdown goes in `content` under our own type, `to.atpota.dispatch.markdown`,
-for our renderer. Publishing a schema for it is optional; doing so means a
-`_lexicon.dispatch.atpota.to` TXT record and a schema record.
+markdown goes in `content` under our own type, `to.atpota.poe.markdown`, for
+our renderer. Publishing a schema for it is optional; doing so means a
+`_lexicon.poe.atpota.to` TXT record and a schema record.
 
 ## Website
 
-- `website/scripts/build-dispatch.mjs` runs inside `npm run build`. It resolves
-  Poe's DID to its PDS, lists `site.standard.document` records, keeps those
-  whose `site` is the publication, and writes:
-  - `public/dispatch/<path>.html` with
-    `<link rel="site.standard.document" href="at://...">` in the head, a
-    canonical URL and Open Graph tags;
-  - `public/dispatch/index.html`;
-  - `public/dispatch/feed.xml` (RSS).
-- The markdown renderer has raw HTML turned off and allows only `https:` and
-  `at:` links. Draft text started as model output and should be rendered as
-  untrusted.
-- If the PDS fetch fails, the build fails, and Vercel keeps serving the last
-  good deployment rather than an empty page.
-- **Publication verification.** Standard.site's docs show a single file at
-  `/.well-known/site.standard.publication` returning the publication's
-  AT-URI. For a publication at a path, CodeTV, which runs several publications
-  on one domain, serves `/.well-known/site.standard.publication/<path>`. The
-  plan is to serve `/.well-known/site.standard.publication/dispatch` and check
-  it with a validator before launch. The fallback is publication `url`
-  `https://atpota.to` with document paths `/dispatch/<date>` and the root file.
-- A link to /dispatch on the home page.
-- Only the droplet holds the deploy hook URL.
+The publication and its pages are specified in
+[`13-poe-blog-and-chat.md`](13-poe-blog-and-chat.md), Part 1. Decided
+2026-10-19: one publication for all of Poe's writing, at `atpota.to/poe`, with
+dispatch issues at `atpota.to/poe/dispatch/<date>`. The website builds its
+pages from Poe's repo, renders the markdown as untrusted, serves the
+`site.standard.document` link tag and RSS, and fails the build rather than
+publish an empty blog when the PDS cannot be read.
 
 ## Risks and controls
 
@@ -628,7 +613,7 @@ Opt-out requests by DM.
 
 **website/** (this repo)
 - `scripts/build-dispatch.mjs`, wired into `build`
-- `.well-known/site.standard.publication/dispatch`
+- `.well-known/site.standard.publication/poe` (see 13)
 - A home page link
 
 **droplet** (on DigitalOcean, not in this repo). The standalone brief is
