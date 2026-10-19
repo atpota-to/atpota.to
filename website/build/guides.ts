@@ -66,7 +66,7 @@ export const GUIDES: GuidesConfig = {
         'A comprehensive guide for companies, communities, and creators looking to establish and grow their presence on Bluesky.',
       publishedAt: '2025-06-11T18:17:59.000Z',
       tags: ['bluesky', 'brands', 'guide'],
-      cover: '/bsky-guide-og.png',
+      cover: '/og/bluesky-for-brands.png',
       contributors: [{ did: 'did:plc:gq4fo3u6tqzzdkjlwzpb23tj', displayName: 'dame', role: 'author', handle: 'dame.is' }],
     },
   ],
