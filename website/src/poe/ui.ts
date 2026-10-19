@@ -988,7 +988,8 @@ export class PoeWidget {
       this.nudgeDone = true;
       return;
     }
-    if (this.busy || isTypingTarget(this.doc.activeElement) || this.pillText) {
+    // Typing, or another dialog (like the blog's sign-in) has the reader's attention.
+    if (this.busy || isTypingTarget(this.doc.activeElement) || this.pillText || otherModalOpen(this.doc, this.root)) {
       this.scheduleNudge(); // try again after the next quiet spell
       return;
     }

@@ -918,6 +918,21 @@ describe('nudge', () => {
     expect($('.poe-nudge').hidden).toBe(false);
   });
 
+  it('waits while another modal dialog is open', () => {
+    vi.useFakeTimers();
+    mount(undefined, { nudgeDelayMs: 10 });
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('open', '');
+    // jsdom has no showModal, so stand in for a dialog opened with it.
+    vi.spyOn(dialog, 'matches').mockImplementation((sel) => sel === ':modal');
+    document.body.append(dialog);
+    vi.advanceTimersByTime(50);
+    expect($('.poe-nudge').hidden).toBe(true);
+    dialog.remove();
+    vi.advanceTimersByTime(20);
+    expect($('.poe-nudge').hidden).toBe(false);
+  });
+
   it('the dismiss button hides it and hands focus to the potato', () => {
     vi.useFakeTimers();
     mount(undefined, { nudgeDelayMs: 10 });

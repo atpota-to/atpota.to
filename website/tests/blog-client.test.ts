@@ -2,7 +2,22 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { authMode, CALLBACK_PATH, CLIENT_ID, hasStoredSession, isCallback, loopbackClientId, SCOPE, SESSION_KEY, SITE_ORIGIN, type Auth, type Session, type StartResult } from '../src/blog/auth.js';
+import {
+  authMode,
+  CALLBACK_PATH,
+  CLIENT_ID,
+  hasStoredSession,
+  isCallback,
+  loopbackClientId,
+  PrepareError,
+  SCOPE,
+  SESSION_KEY,
+  SITE_ORIGIN,
+  type Auth,
+  type Prepared,
+  type Session,
+  type StartResult,
+} from '../src/blog/auth.js';
 import { commentRecord, createRecord, deleteRecord, findOwn, MAX_COMMENT_LENGTH, RepoError } from '../src/blog/repo.js';
 import {
   HANDLE_KEY,
@@ -14,7 +29,7 @@ import {
   rememberAdded,
   safeReturnTo,
 } from '../src/blog/state.js';
-import { COPY, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY } from '../src/blog/ui.js';
+import { COPY, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY, PREPARED_TTL_MS } from '../src/blog/ui.js';
 import { createStore, type KeyValueStore } from '../src/poe/storage.js';
 
 // The blog's reader actions in the browser (src/blog/). The OAuth library is never
@@ -229,7 +244,11 @@ interface FakeWin {
 
 interface Harness {
   calls: Array<{ path: string; body: Record<string, unknown> | null }>;
-  signIns: string[];
+  /** Inputs passed to auth.prepare, and the sign-ins auth.go left for. */
+  prepares: string[];
+  went: Prepared[];
+  /** Moves the page's clock. */
+  tick(ms: number): void;
   win: FakeWin;
   store: KeyValueStore;
   local: KeyValueStore;
@@ -237,9 +256,22 @@ interface Harness {
   owned: { subscription: string[]; recommend: string[] };
 }
 
-function setup(opts: { start?: StartResult | null; path?: string; store?: KeyValueStore; owned?: Harness['owned']; failWrites?: number } = {}): Harness {
+const AUTH_HOST = 'bsky.social';
+
+function setup(
+  opts: {
+    start?: StartResult | null;
+    path?: string;
+    store?: KeyValueStore;
+    owned?: Harness['owned'];
+    failWrites?: number;
+    prepare?: (input: string, at: number) => Promise<Prepared>;
+  } = {},
+): Harness {
   const calls: Harness['calls'] = [];
-  const signIns: string[] = [];
+  const prepares: string[] = [];
+  const went: Prepared[] = [];
+  let clock = NOW;
   const owned = opts.owned ?? { subscription: [], recommend: [] };
   let n = 0;
   const session: Session = {
@@ -266,14 +298,28 @@ function setup(opts: { start?: StartResult | null; path?: string; store?: KeyVal
     mode: 'site',
     eager: start !== null,
     start: async () => start ?? { session: null, callback: false, error: null },
-    signIn: async (input) => {
-      signIns.push(input);
-      return new Promise<void>(() => undefined);
+    warm: () => undefined,
+    prepare: async (input) => {
+      prepares.push(input);
+      if (opts.prepare) return opts.prepare(input, clock);
+      return {
+        url: `https://${AUTH_HOST}/oauth/authorize?client_id=x&request_uri=urn:${prepares.length}`,
+        host: AUTH_HOST,
+        account: input.startsWith('https://') ? null : { did: ME, handle: 'me.test' },
+        at: clock,
+      };
+    },
+    go: (prepared) => {
+      went.push(prepared);
     },
   };
   const fetchImpl = (async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
-    if (url.origin === 'https://public.api.bsky.app') return Response.json({ handle: 'me.test', displayName: 'Me', avatar: 'https://cdn.bsky.app/me.jpg' });
+    if (url.origin === 'https://public.api.bsky.app') {
+      const actor = url.searchParams.get('actor');
+      if (actor !== ME && actor !== 'me.test') return Response.json({ error: 'InvalidRequest' }, { status: 400 });
+      return Response.json({ did: ME, handle: 'me.test', displayName: 'Me', avatar: 'https://cdn.bsky.app/me.jpg' });
+    }
     if (url.origin === PDS) {
       const collection = url.searchParams.get('collection')!;
       const list = collection.endsWith('subscription') ? owned.subscription : owned.recommend;
@@ -285,8 +331,8 @@ function setup(opts: { start?: StartResult | null; path?: string; store?: KeyVal
   const win: FakeWin = { location: { pathname: opts.path ?? '/blog/3doc', replace: vi.fn() }, confirm: () => true };
   const store = opts.store ?? memory();
   const local = memory();
-  const mounted = mountBlog({ doc: document, win: win as unknown as Window, auth, fetchImpl, now: () => NOW, sessionStore: store, localStore: local, confirm: () => win.confirm() });
-  return { calls, signIns, win, store, local, mounted, owned };
+  const mounted = mountBlog({ doc: document, win: win as unknown as Window, auth, fetchImpl, now: () => clock, sessionStore: store, localStore: local, confirm: () => win.confirm() });
+  return { calls, prepares, went, tick: (ms) => (clock += ms), win, store, local, mounted, owned };
 }
 
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -300,34 +346,118 @@ describe('mountBlog', () => {
     vi.useRealTimers();
   });
 
-  it('signed out: shows the buttons and a sign-in prompt, and the dialog saves the action before leaving', async () => {
+  const submitHandle = async (value: string) => {
+    $<HTMLInputElement>('input[name="handle"]').value = value;
+    $('form[data-blog-signin-form]').dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+  };
+  const step = () => ($('form[data-blog-signin-form]').hidden ? 'confirm' : 'ask');
+
+  it('signed out: shows the buttons and a sign-in prompt', async () => {
     const h = setup({ start: null });
     await h.mounted;
     expect($('button[data-blog-subscribe]').hidden).toBe(false);
     expect($('button[data-blog-recommend]').hidden).toBe(false);
     expect($('[data-blog-account]').hidden).toBe(true);
-    const prompt = $('[data-comment-compose] button');
-    expect(prompt.textContent).toBe(COPY.signInToComment);
+    expect($('[data-comment-compose] button').textContent).toBe(COPY.signInToComment);
     expect(document.querySelectorAll('.comment__action')).toHaveLength(0);
+  });
 
+  it('sign-in asks for a handle, then shows who it found and the exact site the button leads to', async () => {
+    const h = setup({ start: null });
+    await h.mounted;
     $('button[data-blog-subscribe]').click();
-    const dialog = $<HTMLDialogElement>('dialog[data-blog-signin]');
-    expect(dialog.hasAttribute('open')).toBe(true);
+    expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
     expect($('[data-blog-signin-lede]').textContent).toBe(COPY.lede.subscribe);
+    expect(step()).toBe('ask');
 
-    const input = $<HTMLInputElement>('input[name="handle"]');
-    input.value = 'not a handle!';
-    $('form[data-blog-signin-form]').dispatchEvent(new Event('submit', { cancelable: true }));
-    await flush();
+    await submitHandle('not a handle!');
     expect($('[data-blog-signin-error]').textContent).toBe(COPY.errors.badHandle);
-    expect(h.signIns).toEqual([]);
+    expect(h.prepares).toEqual([]);
 
-    input.value = '@Me.Test';
-    $('form[data-blog-signin-form]').dispatchEvent(new Event('submit', { cancelable: true }));
-    await flush();
-    expect(h.signIns).toEqual(['me.test']);
-    expect(JSON.parse(h.store.get(PENDING_KEY)!)).toEqual({ kind: 'subscribe', returnTo: '/blog/3doc', at: NOW });
+    await submitHandle('@Me.Test');
+    expect(h.prepares).toEqual(['me.test']);
+    expect(step()).toBe('confirm');
+    expect($('[data-blog-signin-title]').textContent).toBe(COPY.signIn.isThisYou);
+    expect($('.blog-signin__name').textContent).toBe('Me');
+    expect($('.blog-signin__handle').textContent).toBe('@me.test');
+    expect($('img.blog-signin__avatar').getAttribute('src')).toBe('https://cdn.bsky.app/me.jpg');
+    expect($('[data-blog-signin-go]').textContent!.replace(/\s+/g, ' ').trim()).toBe('continue at bsky.social');
+    expect($('[data-blog-signin-where]').textContent).toBe(COPY.signIn.where('bsky.social'));
+    expect(document.activeElement).toBe($('[data-blog-signin-go]'));
+    // nothing is saved and nobody leaves until the reader says yes
+    expect(h.store.get(PENDING_KEY)).toBeNull();
+    expect(h.went).toEqual([]);
     expect(h.local.get(HANDLE_KEY)).toBe('me.test');
+
+    $('[data-blog-signin-go]').click();
+    await flush();
+    expect(h.went.map((p) => p.url)).toEqual(['https://bsky.social/oauth/authorize?client_id=x&request_uri=urn:1']);
+    expect(JSON.parse(h.store.get(PENDING_KEY)!)).toEqual({ kind: 'subscribe', returnTo: '/blog/3doc', at: NOW });
+    expect($('[data-blog-signin-go]').getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('"not you?" goes back to the handle, and a late answer after that is ignored', async () => {
+    let release: (p: Prepared) => void = () => undefined;
+    const h = setup({
+      start: null,
+      prepare: (input, at) =>
+        input === 'slow.test'
+          ? new Promise<Prepared>((r) => (release = r))
+          : Promise.resolve({ url: 'https://pds.example/oauth/authorize?x', host: 'pds.example', account: { did: ME, handle: 'me.test' }, at }),
+    });
+    await h.mounted;
+    $('[data-comment-compose] button').click();
+    await submitHandle('me.test');
+    expect(step()).toBe('confirm');
+    $('[data-blog-signin-back]').click();
+    expect(step()).toBe('ask');
+    expect($('[data-blog-signin-title]').textContent).toBe(COPY.signIn.title);
+    expect(document.activeElement).toBe($('input[name="handle"]'));
+
+    await submitHandle('slow.test');
+    expect($('[data-blog-signin-submit]').textContent).toBe(COPY.signIn.looking);
+    $('[data-blog-signin-close]').click();
+    release({ url: 'https://late.example/oauth/authorize', host: 'late.example', account: { did: ME, handle: 'slow.test' }, at: NOW });
+    await flush();
+    expect(step()).toBe('ask');
+    expect($('[data-blog-signin-submit]').textContent).toBe(COPY.signIn.next);
+    expect(h.went).toEqual([]);
+  });
+
+  it('a bare server address skips the account card and names the server', async () => {
+    const h = setup({ start: null });
+    await h.mounted;
+    $('button[data-blog-recommend]').click();
+    await submitHandle('https://pds.example.com');
+    expect(h.prepares).toEqual(['https://pds.example.com']);
+    expect($('[data-blog-signin-who]').hidden).toBe(true);
+    expect($('[data-blog-signin-title]').textContent).toBe('sign in at bsky.social');
+    expect($('[data-blog-signin-where]').textContent).toBe(COPY.signIn.whereServer('bsky.social'));
+  });
+
+  it('says which part failed: the account, or its server', async () => {
+    const failures: PrepareError[] = [new PrepareError('not_found', 'x'), new PrepareError('unreachable', 'y')];
+    const h = setup({ start: null, prepare: async () => Promise.reject(failures.shift()) });
+    await h.mounted;
+    $('button[data-blog-subscribe]').click();
+    await submitHandle('nobody.test');
+    expect($('[data-blog-signin-error]').textContent).toBe(COPY.errors.noAccount);
+    await submitHandle('me.test');
+    expect($('[data-blog-signin-error]').textContent).toBe(COPY.errors.unreachable);
+    expect(step()).toBe('ask');
+  });
+
+  it('asks the server again before leaving if the prepared sign-in has gone stale', async () => {
+    const h = setup({ start: null });
+    await h.mounted;
+    $('button[data-blog-subscribe]').click();
+    await submitHandle('me.test');
+    h.tick(PREPARED_TTL_MS + 1000);
+    $('[data-blog-signin-go]').click();
+    await vi.waitFor(() => expect(h.went).toHaveLength(1));
+    expect(h.prepares).toEqual(['me.test', 'me.test']);
+    expect(h.went[0]!.url).toContain('request_uri=urn:2');
   });
 
   it('signed in: shows who, reads subscription state from the repo, and toggles it', async () => {

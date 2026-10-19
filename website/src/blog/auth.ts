@@ -16,6 +16,10 @@
  * Handles are resolved by atpota.to's own PDS, so a typed handle isn't sent to anyone else.
  * The library is loaded on demand: a reader who never signs in never downloads it.
  *
+ * Signing in is two steps, so nobody lands on a page they didn't expect: prepare() looks
+ * the account up and gets the real authorization URL (without leaving), the dialog shows
+ * who that is and which site comes next ("continue at bsky.social"), and go() leaves.
+ *
  * Local development uses a loopback client (http://127.0.0.1:<port>, not "localhost";
  * see the library's README). Other hosts, like Vercel previews, get no sign-in at all:
  * the auth server could not fetch metadata from a protected preview anyway.
@@ -84,14 +88,45 @@ export interface StartResult {
   error: string | null;
 }
 
+/** A sign-in that is ready to go: the reader has not left the page yet. */
+export interface Prepared {
+  /** The authorization page on the reader's own server. */
+  url: string;
+  /** Its host, shown on the button ("continue at bsky.social"). */
+  host: string;
+  /** The account the input named, as the library resolved it; null for a bare server address. */
+  account: { did: string; handle: string | null } | null;
+  /** When the server was told to expect this sign-in (it forgets after about five minutes). */
+  at: number;
+}
+
+export type PrepareErrorCode = 'not_found' | 'unreachable';
+
+export class PrepareError extends Error {
+  override name = 'PrepareError';
+  constructor(
+    readonly code: PrepareErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 export interface Auth {
   readonly mode: AuthMode;
   /** True when start() is worth calling on page load (a callback, or a remembered account). */
   readonly eager: boolean;
   /** Restores the remembered session, or finishes a sign-in. Call once per page load. */
   start(): Promise<StartResult>;
-  /** Sends the reader to their auth server. Resolves only if they never leave. */
-  signIn(input: string): Promise<void>;
+  /** Starts loading the OAuth library (when the sign-in dialog opens). */
+  warm(): void;
+  /**
+   * Looks up the account and asks its server to expect a sign-in (a pushed authorization
+   * request), without leaving the page, so the reader can see where they are going first.
+   */
+  prepare(input: string): Promise<Prepared>;
+  /** Leaves for the prepared sign-in page. */
+  go(prepared: Prepared): void;
 }
 
 async function wrap(session: OAuthSession): Promise<Session> {
@@ -111,19 +146,25 @@ function errorText(error: unknown): string {
   return code ?? ((error as Error)?.name || 'error');
 }
 
-export function createAuth(win: Window = window): Auth | null {
+const HANDLE_INVALID = 'handle.invalid';
+
+export function createAuth(win: Window = window, now: () => number = () => Date.now()): Auth | null {
   const mode = authMode(win.location);
   if (!mode) return null;
   type Client = import('@atproto/oauth-client-browser').BrowserOAuthClient;
   let client: Promise<Client> | null = null;
-  const load = (): Promise<Client> =>
-    (client ??= import('@atproto/oauth-client-browser').then(({ BrowserOAuthClient }) =>
+  const load = (): Promise<Client> => {
+    client ??= import('@atproto/oauth-client-browser').then(({ BrowserOAuthClient }) =>
       BrowserOAuthClient.load({
         clientId: mode === 'site' ? CLIENT_ID : loopbackClientId(win.location),
         handleResolver: HANDLE_RESOLVER,
         responseMode: 'fragment',
       }),
-    ));
+    );
+    // A failed load (offline, a deploy replaced the chunk) is retried next time.
+    client.catch(() => (client = null));
+    return client;
+  };
   const callback = isCallback(win.location);
 
   return {
@@ -138,8 +179,33 @@ export function createAuth(win: Window = window): Auth | null {
         return { session: null, callback, error: callback ? errorText(error) : null };
       }
     },
-    async signIn(input) {
-      await (await load()).signIn(input, { scope: SCOPE });
+    warm() {
+      void load().catch(() => undefined);
+    },
+    async prepare(input) {
+      let c: Client;
+      try {
+        c = await load();
+      } catch {
+        throw new PrepareError('unreachable', 'oauth client did not load');
+      }
+      let account: Prepared['account'] = null;
+      if (!input.startsWith('https://')) {
+        // The same resolver (and cache) authorize() uses, so this is the account it signs in.
+        const info = await c.identityResolver.resolve(input).catch(() => null);
+        if (!info) throw new PrepareError('not_found', 'account not found');
+        account = { did: info.did, handle: info.handle !== HANDLE_INVALID ? info.handle : null };
+      }
+      let url: URL;
+      try {
+        url = await c.authorize(input, { scope: SCOPE });
+      } catch {
+        throw new PrepareError('unreachable', 'authorization server did not answer');
+      }
+      return { url: url.href, host: url.host, account, at: now() };
+    },
+    go(prepared) {
+      win.location.assign(prepared.url);
     },
   };
 }

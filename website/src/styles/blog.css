@@ -1445,10 +1445,94 @@ html:has(.blog-signin[open]) {
   height: 16px;
 }
 
+.blog-signin__step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .blog-signin__lede {
   margin: 0;
   color: var(--text-soft);
   line-height: 1.5;
+}
+
+/* "is this you?": the account the handle led to */
+.blog-signin__who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+}
+
+.blog-signin__avatar {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--line);
+}
+
+.blog-signin__names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.blog-signin__name {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.blog-signin__handle {
+  color: var(--muted);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+/* The host is the point of this button: it may wrap, never truncate. */
+.blog-signin__go {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.blog-signin__where {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.blog-signin__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.blog-signin__back {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
 }
 
 .blog-signin__label {

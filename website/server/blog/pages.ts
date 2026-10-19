@@ -162,15 +162,16 @@ const HEART =
  */
 function subscribeButton(site: SiteInfo, size = ''): string {
   if (!site.publication) return '';
-  return `<button type="button" class="btn btn--leaf${size}" data-blog-subscribe aria-pressed="false" hidden><span data-blog-subscribe-label>subscribe</span></button>`;
+  return `<button type="button" class="btn btn--primary${size}" data-blog-subscribe aria-pressed="false" hidden><span data-blog-subscribe-label>subscribe</span></button>`;
 }
 
 /** Signed-in state ("signed in as @alice · sign out"), filled in by src/blog/. */
 const ACCOUNT_LINE = '<p class="blog-account" data-blog-account aria-live="polite" hidden></p>';
 
 function followActions(site: SiteInfo, size = ''): string {
+  // Subscribing is the main action; following is the quieter alternative beside it.
   return (
-    `<a class="btn btn--primary${size}" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} on bluesky ${ARROW}</a>` +
+    `<a class="btn btn--outline${size}" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} on bluesky ${ARROW}</a>` +
     `<a class="btn btn--outline${size}" href="${FEED_PATH}">${FEED_ICON} atom feed</a>`
   );
 }
@@ -347,8 +348,8 @@ export function postPage(input: PostInput): Page {
     `<div class="post-end__actions">` +
     subscribeButton(site, ' btn--sm') +
     recommendButton(discussion) +
-    (reply ? `<a class="btn btn--primary btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
-    `<a class="btn ${reply ? 'btn--outline' : 'btn--primary'} btn--sm" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))}</a>` +
+    (reply ? `<a class="btn btn--outline btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
+    `<a class="btn btn--outline btn--sm" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))}</a>` +
     `<a class="btn btn--outline btn--sm" href="${FEED_PATH}">${FEED_ICON} feed</a>` +
     `</div>` +
     ACCOUNT_LINE +

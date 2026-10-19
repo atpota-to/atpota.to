@@ -13,7 +13,7 @@
  * (state.ts); when the reader is back on that page, signed in, the action finishes.
  */
 
-import { createAuth, SITE_ORIGIN, type Auth, type Session } from './auth';
+import { createAuth, PrepareError, SITE_ORIGIN, type Auth, type Prepared, type Session } from './auth';
 import {
   cleanCommentText,
   COMMENT,
@@ -71,6 +71,15 @@ export const COPY = {
   confirmDelete: "delete this comment? it's removed from your account for good.",
   empty: 'write something first.',
   justNow: 'just now',
+  signIn: {
+    title: 'sign in with bluesky',
+    isThisYou: 'is this you?',
+    signInAt: 'sign in at',
+    next: 'next',
+    looking: 'looking you up…',
+    where: (host: string) => `${host} is where your account lives. you'll approve atpota.to there, then come right back to this page.`,
+    whereServer: (host: string) => `you'll sign in at ${host}, approve atpota.to there, then come right back to this page.`,
+  },
   lede: {
     subscribe: 'sign in with your bluesky account to subscribe. the subscription is saved in your own account, where leaflet and other standard.site readers can see it.',
     recommend: 'sign in with your bluesky account to recommend this post.',
@@ -89,6 +98,7 @@ export const COPY = {
   errors: {
     badHandle: "that doesn't look like a handle. try something like alice.bsky.social.",
     noAccount: "couldn't find that account. check the handle?",
+    unreachable: "couldn't reach your account's server just now. try again in a bit?",
   },
 } as const;
 
@@ -153,20 +163,30 @@ function recordUrl(uri: string): string | null {
   return at ? `https://aturi.to/profile/${at.did}/${at.collection}/${at.rkey}` : null;
 }
 
-/** The reader's name and avatar from the public AppView; their DID if it can't be read. */
-async function loadMe(fetchImpl: typeof fetch, did: string): Promise<Me> {
+/** A profile from the public AppView by handle or DID, or null if it can't be read. */
+async function loadProfile(fetchImpl: typeof fetch, actor: string): Promise<Me | null> {
   try {
-    const res = await fetchImpl(`${APPVIEW}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`, { headers: { accept: 'application/json' } });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    const p = (await res.json()) as { handle?: unknown; displayName?: unknown; avatar?: unknown };
+    const res = await fetchImpl(`${APPVIEW}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`, { headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    const p = (await res.json()) as { did?: unknown; handle?: unknown; displayName?: unknown; avatar?: unknown };
+    if (typeof p.did !== 'string' || !DID_RE.test(p.did)) return null;
     const handle = typeof p.handle === 'string' && HANDLE_RE.test(p.handle.toLowerCase()) ? p.handle.toLowerCase() : null;
     const name = typeof p.displayName === 'string' ? p.displayName.trim().slice(0, 64) : '';
     const avatar = typeof p.avatar === 'string' && p.avatar.startsWith('https://') ? p.avatar : null;
-    return { did, handle: handle ?? did, name: name || (handle ? `@${handle}` : 'you'), avatar };
+    return { did: p.did, handle: handle ?? p.did, name: name || (handle ? `@${handle}` : 'you'), avatar };
   } catch {
-    return { did, handle: did, name: 'you', avatar: null };
+    return null;
   }
 }
+
+/** The signed-in reader's name and avatar; their DID if the profile can't be read. */
+async function loadMe(fetchImpl: typeof fetch, did: string): Promise<Me> {
+  const p = await loadProfile(fetchImpl, did);
+  return p?.did === did ? p : { did, handle: did, name: 'you', avatar: null };
+}
+
+/** A prepared sign-in is redone after this long (servers forget them after about five minutes). */
+export const PREPARED_TTL_MS = 4 * 60_000;
 
 /**
  * Wires the page. Resolves once the reader's session (if any) has been restored, the page
@@ -378,31 +398,70 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   }
 
   /* ---------- sign-in dialog ---------- */
+  // Step one asks for a handle. Step two shows who that is and the site the button leads
+  // to ("continue at bsky.social"), so nobody is sent somewhere they didn't expect.
 
-  const form = dialog?.querySelector<HTMLFormElement>('[data-blog-signin-form]') ?? null;
-  const input = dialog?.querySelector<HTMLInputElement>('input[name="handle"]') ?? null;
-  const lede = dialog?.querySelector<HTMLElement>('[data-blog-signin-lede]') ?? null;
-  const dialogError = dialog?.querySelector<HTMLElement>('[data-blog-signin-error]') ?? null;
-  const submit = dialog?.querySelector<HTMLButtonElement>('[data-blog-signin-submit]') ?? null;
-
-  function showDialogError(message: string): void {
-    if (!dialogError) return;
-    dialogError.textContent = message;
-    dialogError.hidden = !message;
-    input?.setAttribute('aria-invalid', String(Boolean(message)));
-  }
+  const q = <T extends Element = HTMLElement>(sel: string) => dialog?.querySelector<T>(sel) ?? null;
+  const title = q('[data-blog-signin-title]');
+  const form = q<HTMLFormElement>('[data-blog-signin-form]');
+  const input = q<HTMLInputElement>('input[name="handle"]');
+  const lede = q('[data-blog-signin-lede]');
+  const dialogError = q('[data-blog-signin-error]');
+  const submit = q<HTMLButtonElement>('[data-blog-signin-submit]');
+  const confirmStep = q('[data-blog-signin-confirm]');
+  const who = q('[data-blog-signin-who]');
+  const goButton = q<HTMLButtonElement>('[data-blog-signin-go]');
+  const hostLabel = q('[data-blog-signin-host]');
+  const where = q('[data-blog-signin-where]');
+  const goError = q('[data-blog-signin-go-error]');
+  const back = q<HTMLButtonElement>('[data-blog-signin-back]');
 
   let opener: HTMLElement | null = null;
+  /** The input that was looked up, and what came back. */
+  let prepared: { input: string; ready: Prepared } | null = null;
+  /** Bumped whenever a lookup's answer would no longer be wanted (back, close). */
+  let lookup = 0;
+
+  function showDialogError(target: HTMLElement | null, message: string): void {
+    if (!target) return;
+    target.textContent = message;
+    target.hidden = !message;
+    if (target === dialogError) input?.setAttribute('aria-invalid', String(Boolean(message)));
+  }
+
+  function showStep(step: 'ask' | 'confirm'): void {
+    if (form) form.hidden = step !== 'ask';
+    if (confirmStep) confirmStep.hidden = step !== 'confirm';
+    if (title) {
+      const ready = prepared?.ready;
+      title.textContent = step === 'ask' || !ready ? COPY.signIn.title : ready.account ? COPY.signIn.isThisYou : `${COPY.signIn.signInAt} ${ready.host}`;
+    }
+  }
+
+  function reset(): void {
+    lookup++;
+    prepared = null;
+    showDialogError(dialogError, '');
+    showDialogError(goError, '');
+    if (submit) {
+      setBusy(submit, false);
+      submit.textContent = COPY.signIn.next;
+    }
+    if (goButton) setBusy(goButton, false);
+    showStep('ask');
+  }
 
   // Engines without showModal/close (old Safari, jsdom) get a plain open attribute.
   function closeSignIn(): void {
     if (!dialog) return;
     if (typeof dialog.close === 'function') dialog.close();
     else dialog.removeAttribute('open');
-    if (typeof dialog.showModal !== 'function') restoreFocus();
+    if (typeof dialog.showModal !== 'function') onClosed();
   }
 
-  function restoreFocus(): void {
+  /** Esc, the close button or a backdrop click: focus goes back to the button that opened it. */
+  function onClosed(): void {
+    reset();
     if (opener?.isConnected) opener.focus();
     opener = null;
   }
@@ -410,8 +469,9 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   function openSignIn(kind: IntentKind): void {
     pendingKind = kind;
     if (!dialog || !form || !input) return;
+    authed.warm();
+    reset();
     if (lede) lede.textContent = COPY.lede[kind];
-    showDialogError('');
     if (!input.value) input.value = local.get(HANDLE_KEY) ?? '';
     opener = doc.activeElement instanceof HTMLElement && doc.activeElement !== doc.body ? doc.activeElement : null;
     if (!dialog.hasAttribute('open')) {
@@ -423,8 +483,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   }
 
   dialog?.querySelector('[data-blog-signin-close]')?.addEventListener('click', closeSignIn);
-  // Esc, the close button or a backdrop click: focus goes back to the button that opened it.
-  dialog?.addEventListener('close', restoreFocus);
+  dialog?.addEventListener('close', onClosed);
   dialog?.addEventListener('click', (event) => {
     // A click on the backdrop lands on the <dialog> itself.
     if (event.target === dialog) closeSignIn();
@@ -434,30 +493,99 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   });
   form?.addEventListener('submit', (event) => {
     event.preventDefault();
-    void startSignIn();
+    void lookUp();
+  });
+  back?.addEventListener('click', () => {
+    reset();
+    input?.focus();
+    input?.select();
+  });
+  goButton?.addEventListener('click', () => void leave());
+  // Back from the sign-in page through the browser's back/forward cache: the button works again.
+  win.addEventListener?.('pageshow', (event) => {
+    if ((event as PageTransitionEvent).persisted && goButton) setBusy(goButton, false);
   });
 
-  async function startSignIn(): Promise<void> {
+  function renderConfirm(ready: Prepared, profile: Me | null): void {
+    if (who) {
+      who.replaceChildren();
+      who.hidden = !ready.account;
+      if (ready.account) {
+        const handle = profile?.handle && !profile.handle.startsWith('did:') ? profile.handle : ready.account.handle;
+        who.append(
+          profile?.avatar
+            ? el(doc, 'img', { class: 'blog-signin__avatar', src: profile.avatar, alt: '', width: '48', height: '48' })
+            : el(doc, 'span', { class: 'blog-signin__avatar blog-signin__avatar--blank', 'aria-hidden': 'true' }),
+        );
+        const names = el(doc, 'span', { class: 'blog-signin__names' });
+        names.append(el(doc, 'span', { class: 'blog-signin__name' }, profile?.name ?? (handle ? `@${handle}` : ready.account.did)));
+        names.append(el(doc, 'span', { class: 'blog-signin__handle' }, handle ? `@${handle}` : ready.account.did));
+        who.append(names);
+      }
+    }
+    if (hostLabel) hostLabel.textContent = ready.host;
+    if (where) where.textContent = ready.account ? COPY.signIn.where(ready.host) : COPY.signIn.whereServer(ready.host);
+    showDialogError(goError, '');
+  }
+
+  async function lookUp(): Promise<void> {
     if (!input || !submit || isBusy(submit)) return;
-    const handle = normalizeHandle(input.value);
-    if (!handle) {
-      showDialogError(COPY.errors.badHandle);
+    const value = normalizeHandle(input.value);
+    if (!value) {
+      showDialogError(dialogError, COPY.errors.badHandle);
       input.focus();
       return;
     }
-    showDialogError('');
-    local.set(HANDLE_KEY, handle);
-    savePending(store, { kind: pendingKind, returnTo: safeReturnTo(win.location.pathname) ?? '/blog', at: now() });
+    showDialogError(dialogError, '');
+    local.set(HANDLE_KEY, value);
     setBusy(submit, true);
+    submit.textContent = COPY.signIn.looking;
+    const ticket = ++lookup;
+    // The profile is only for the "is this you?" card; it is fetched alongside, by what was typed.
+    const typed = value.startsWith('https://') ? Promise.resolve(null) : loadProfile(fetchImpl, value);
     try {
-      await authed.signIn(handle);
+      const ready = await authed.prepare(value);
+      let profile = ready.account ? await typed : null;
+      if (ready.account && profile?.did !== ready.account.did) profile = await loadProfile(fetchImpl, ready.account.did);
+      if (ticket !== lookup) return;
+      prepared = { input: value, ready };
+      renderConfirm(ready, profile?.did === ready.account?.did ? profile : null);
+      showStep('confirm');
+      goButton?.focus();
     } catch (error) {
-      clearPending(store);
-      // The reader came back with the browser's back button: nothing to report.
-      if ((error as Error)?.message !== 'User navigated back') showDialogError(COPY.errors.noAccount);
+      if (ticket !== lookup) return;
+      showDialogError(dialogError, error instanceof PrepareError && error.code === 'unreachable' ? COPY.errors.unreachable : COPY.errors.noAccount);
+      input.focus();
     } finally {
-      setBusy(submit, false);
+      if (ticket === lookup) {
+        setBusy(submit, false);
+        submit.textContent = COPY.signIn.next;
+      }
     }
+  }
+
+  async function leave(): Promise<void> {
+    if (!prepared || !goButton || isBusy(goButton)) return;
+    setBusy(goButton, true);
+    const ticket = lookup;
+    let ready = prepared.ready;
+    if (now() - ready.at > PREPARED_TTL_MS) {
+      // The server has likely forgotten this sign-in by now: ask again, quietly.
+      try {
+        ready = await authed.prepare(prepared.input);
+      } catch {
+        if (ticket === lookup) {
+          showDialogError(goError, COPY.errors.unreachable);
+          setBusy(goButton, false);
+        }
+        return;
+      }
+      if (ticket !== lookup) return;
+      prepared = { input: prepared.input, ready };
+      if (hostLabel) hostLabel.textContent = ready.host;
+    }
+    savePending(store, { kind: pendingKind, returnTo: safeReturnTo(win.location.pathname) ?? '/blog', at: now() });
+    authed.go(ready);
   }
 
   /* ---------- comments ---------- */
