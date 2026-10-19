@@ -114,7 +114,7 @@ describe('paragraph classes', () => {
   it('finds the real guide structures', () => {
     const { html } = renderGuide(read('../public/guides/how-to-use-bluesky-to-grow-your-brand.md'), { publicDir });
     expect(html.match(/<p class="guide-media">/g)).toHaveLength(12);
-    expect(html.match(/<p class="guide-step">/g)).toHaveLength(6);
+    expect(html.match(/<p class="guide-step">/g)).toHaveLength(7);
     expect(html.match(/<p class="guide-codes">/g)).toHaveLength(1);
   });
 });
