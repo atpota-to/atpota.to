@@ -60,11 +60,13 @@ What shipped (kind launch or release): app launches, new features, releases, new
 
 Cite the post ids that best show each finding. Prefer original posts over replies unless the reply carries the substance. Report 8 to 20 findings, most important first.`,
 
-  lexicons: `Your slice is lexicon activity for the window: new NSIDs grouped and counted by project, every new NSID with account and record counts and flags, schema and sample-record details for the busiest new ones, movers against the previous 7 days, the largest lexicons outside Bluesky's own namespaces, a sample of newly published schemas, and LEXICON TALK: for the notable projects, posts from the account at the project's domain and posts that name the domain.
+  lexicons: `Your slice is lexicon activity for the window: new NSIDs grouped and counted by project, every new NSID with account and record counts and flags, schema and sample-record details for the busiest new ones, movers against the previous 7 days, the largest lexicons outside Bluesky's own namespaces, a sample of newly published schemas, APP SITES, and LEXICON TALK: for the notable projects, posts from the account at the project's domain and posts that name the domain.
 
 Find which new lexicons matter: three or more accounts, a published schema, or a recognizable project. The NEW LEXICONS BY PROJECT table already groups and counts NSIDs that share a domain; copy its counts rather than counting rows yourself. Say what each seems to be for, from its schema description and sample records, and say that this is inferred.
 
 Among the movers, separate real change from spikes: a create count close to the account count suggests a one-time registration, and a jump from a small base suggests a launch or an import.
+
+APP SITES lists each project's website as checked by code, with its page title. A title is the app describing itself, so prefer it to guessing from sample records, and attribute it ("calls itself ..."). Only sites marked verified or likely may be linked; mention when a busy project has no linkable site.
 
 Use LEXICON TALK to explain the numbers where the posts allow it: an app's own announcement next to its jump, or what people say they use it for. Cite those post ids. When the posts do not explain a number, say so rather than guessing.
 

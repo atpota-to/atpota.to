@@ -15,7 +15,8 @@
     "typecheck": "tsc",
     "dispatch:collect": "node scripts/dispatch-demo.ts collect",
     "dispatch:write": "node scripts/dispatch-demo.ts write",
-    "dispatch:demo": "node scripts/dispatch-demo.ts demo"
+    "dispatch:demo": "node scripts/dispatch-demo.ts demo",
+    "dispatch:sites": "node scripts/dispatch-demo.ts sites"
   },
   "dependencies": {
     "@vercel/connect": "2.2.0",

@@ -50,12 +50,17 @@ paragraphs. Each bullet leads with the lexicon or project, then the numbers,
 then one clause of meaning. When the app's own posts explain a number, link
 the post in that clause.
 
+Readers want to know whether there is an app they can open. When APP SITES YOU
+MAY LINK has a site for a project, link the project's name to it. Never link a
+site from the must-not-link list, and never link a site from memory. With no
+linkable site, say nothing about one.
+
 The shapes, with made-up lexicons:
 
 ```
-- **example garden** (4 new NSIDs, up to about 30 accounts): a seed-swap app, from the sample records. [their launch post](...)
+- **[example garden](https://garden.example)** (4 new NSIDs, up to about 30 accounts): "swap seeds with your neighbors", in its own words. [their launch post](...)
 - [`com.example.note`](...), about 12 accounts: shared notes, with a published schema.
-- [`com.example.feed.post`](...): about 60 → about 2,100 accounts. most of the new posts link back from the app's own handles, which looks like cross-posting.
+- **[example video](https://video.example)** [`com.example.feed.post`](...): about 60 → about 2,100 accounts. most of the new posts link back from the app's own handles, which looks like cross-posting.
 ```
 
 ## Rules for facts

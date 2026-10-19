@@ -144,7 +144,7 @@ Each version of the issue, after the agent's editor has finished with it.
   "changes": ["what changed since v1"],
   "openQuestions": ["things the editor could not verify"],
   "previewUrl": "https://<agent host>/dispatch/preview/2026-10-12/2?t=<hmac>",
-  "allowed": ["every URL, NSID and DID the draft may use"]
+  "allowed": ["every URL, NSID and DID the draft may use; app sites the agent could not verify are left out"]
 }
 ```
 

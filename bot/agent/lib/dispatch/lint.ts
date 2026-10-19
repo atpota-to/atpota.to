@@ -21,6 +21,7 @@ export type LintReport = {
   rawHtml: boolean;
   unroundedEstimates: string[];
   vagueLinks: number;
+  blockedLinks: string[];
 };
 
 /**
@@ -94,9 +95,20 @@ export function prose(markdown: string): string {
     .replace(URL_PATTERN, " ");
 }
 
+/** Links to a blocked URL or anything under it. */
+export function blockedLinks(markdown: string, blocked: Iterable<string>): string[] {
+  const roots = [...blocked].map(normalize);
+  return [...new Set([...markdown.matchAll(URL_PATTERN)].map((m) => normalize(m[0])))]
+    .filter((url) => roots.some((root) => url === root || url.startsWith(`${root}/`)));
+}
+
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export function lintDraft(markdown: string, haystack: string, extra: Iterable<string> = []): LintReport {
+/**
+ * `blocked` names URLs that are in the data but must not be linked, such as
+ * app sites the collector could not tie to a lexicon's owner.
+ */
+export function lintDraft(markdown: string, haystack: string, extra: Iterable<string> = [], blocked: Iterable<string> = []): LintReport {
   const words = prose(markdown).toLowerCase();
   const withoutLinks = markdown.replace(/\[[^\]]*\]\([^)]*\)/g, "");
   const report = {
@@ -108,10 +120,12 @@ export function lintDraft(markdown: string, haystack: string, extra: Iterable<st
     rawHtml: /<\/?[a-zA-Z][^>]*>/.test(markdown),
     unroundedEstimates: unroundedEstimates(markdown),
     vagueLinks: vagueLinks(markdown),
+    blockedLinks: blockedLinks(markdown, blocked),
   };
   return {
     ok: report.ungrounded.length === 0 && report.bareMentions.length === 0 && report.bannedPhrases.length === 0 &&
-      report.emDashes === 0 && !report.rawHtml && report.unroundedEstimates.length === 0 && report.vagueLinks === 0,
+      report.emDashes === 0 && !report.rawHtml && report.unroundedEstimates.length === 0 && report.vagueLinks === 0 &&
+      report.blockedLinks.length === 0,
     ...report,
   };
 }

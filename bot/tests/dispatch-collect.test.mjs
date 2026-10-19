@@ -169,3 +169,52 @@ test('collectLexiconTalk reads the app account and searches its domain', async (
   assert.deepEqual(found.map((f) => [f.view.uri.split('/').pop(), f.via]), [['announce', 'lexicon:app.sonasky'], ['mention', 'lexicon:app.sonasky']]);
   assert.equal(talk[0].domain, 'sonasky.app');
 });
+
+test('judgeSite links only sites tied to the lexicon owner or to atproto', async () => {
+  const { judgeSite, nsidAuthority } = await import('../agent/lib/dispatch/collect.ts');
+  assert.equal(nsidAuthority('app.bsky.actor.link'), 'actor.bsky.app');
+  assert.equal(nsidAuthority('app.sonasky.apollo.page'), 'apollo.sonasky.app');
+  const ok = { status: 200, finalHost: 'x.example', title: 'An app' };
+  const none = { writers: new Set() };
+  assert.equal(judgeSite(ok, { handleDid: 'did:plc:a', lexiconAuthority: 'did:plc:a', writers: new Set() }).verdict, 'verified');
+  assert.equal(judgeSite(ok, { handleDid: 'did:plc:a', writers: new Set(['did:plc:a']) }).verdict, 'verified');
+  assert.equal(judgeSite(ok, { handleDid: 'did:plc:a', lexiconAuthority: 'did:plc:b', writers: new Set() }).verdict, 'likely');
+  assert.equal(judgeSite({ ...ok, title: 'photo sharing on the AT Protocol' }, none).verdict, 'likely');
+  assert.equal(judgeSite(ok, none).verdict, 'unverified');
+  assert.equal(judgeSite({ ...ok, title: 'This domain is for sale' }, { handleDid: 'did:plc:a', writers: new Set() }).verdict, 'parked');
+  assert.equal(judgeSite({ status: 404 }, none).verdict, 'unreachable');
+  assert.equal(judgeSite({ error: 'ENOTFOUND' }, none).verdict, 'unreachable');
+});
+
+test('checkSites tries the project domain first and checks a redirect target once', async () => {
+  const { checkSites } = await import('../agent/lib/dispatch/collect.ts');
+  const report = {
+    movers: { up: [], down: [] }, topOutsideBluesky: [],
+    newByProject: [{ root: 'dev.starhaven', count: 2, flagged: 0, maxAccounts: 23, creates: 10, nsids: [] }],
+    newLexicons: [{ nsid: 'dev.starhaven.mod.listing', accounts: 23, creates: 10, updates: 0, deletes: 0, explore: '', flags: [],
+      samples: [{ uri: 'at://did:plc:owner/dev.starhaven.mod.listing/1', value: '{}' }] }],
+  };
+  const fetched = [];
+  const fakeFetch = async (url) => {
+    fetched.push(url);
+    if (url.includes('cloudflare-dns.com')) return new Response(JSON.stringify({ Answer: [] }), { status: 200 });
+    if (url.includes('resolveHandle')) {
+      return url.includes('handle=starhaven.dev') ? new Response(JSON.stringify({ did: 'did:plc:owner' }), { status: 200 }) : new Response('{}', { status: 400 });
+    }
+    // mod.starhaven.dev redirects to starhaven.dev
+    const res = new Response('<title>Paper Mario mods · Star Haven</title>', { status: 200 });
+    Object.defineProperty(res, 'url', { value: 'https://starhaven.dev/' });
+    return res;
+  };
+  const sites = await checkSites(fakeFetch, report);
+  assert.deepEqual(sites.map((c) => [c.url, c.verdict, c.why]),
+    [['https://starhaven.dev', 'verified', 'the domain\'s handle writes these records']]);
+  assert.ok(fetched.some((u) => u.includes('_lexicon.mod.starhaven.dev')));
+});
+
+test('a site that only mentions the atmosphere is not tied to atproto', async () => {
+  const { judgeSite } = await import('../agent/lib/dispatch/collect.ts');
+  const none = { writers: new Set() };
+  assert.equal(judgeSite({ status: 200, title: 'Atmosphere: weather and air quality' }, none).verdict, 'unverified');
+  assert.equal(judgeSite({ status: 200, title: 'Sign in', body: 'continue with Bluesky' }, none).verdict, 'likely');
+});

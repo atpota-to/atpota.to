@@ -373,8 +373,28 @@ export type LexiconReport = {
   publishedSchemas: Array<{ nsid: string; did: string; at: string }>;
   /** Posts about the apps behind the notable lexicons; filled by collectLexiconTalk. */
   talk: LexiconTalk[];
+  /** Whether each notable project has a website to visit; filled by checkSites. */
+  sites?: SiteCheck[];
   notes: string[];
 };
+
+export type SiteVerdict = "verified" | "likely" | "unverified" | "parked" | "unreachable";
+
+export type SiteCheck = {
+  root: string;
+  host: string;
+  url: string;
+  verdict: SiteVerdict;
+  why: string;
+  title?: string;
+  description?: string;
+  finalHost?: string;
+  handleDid?: string;
+  lexiconAuthority?: string;
+};
+
+/** Verdicts the writer may link. The rest are recorded but never linked. */
+export const LINKABLE_SITES: ReadonlySet<SiteVerdict> = new Set(["verified", "likely"]);
 
 export type LexiconTalk = { root: string; domain: string; why: string; posts: string[]; notes: string[] };
 
@@ -595,6 +615,138 @@ export async function collectLexiconTalk(
 }
 
 // ---------------------------------------------------------------------------
+// App sites
+
+/** An NSID's authority domain, where its _lexicon record lives: app.bsky.actor.link is actor.bsky.app. */
+export function nsidAuthority(nsid: string): string {
+  return nsid.split(".").slice(0, -1).reverse().join(".");
+}
+
+const PARKED = /(this domain|domain) (is |may be )?for sale|buy this domain|domain parking|parked (free|domain)|hugedomains|afternic|sedo\.com|dan\.com/i;
+// Not "atmosphere": it matches weather sites as readily as the network.
+const ATPROTO = /atproto|at protocol|bluesky|bsky\.(app|social)/i;
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) =>
+    code[0] === "#" ? String.fromCodePoint(Number(code[1] === "x" || code[1] === "X" ? `0${code.slice(1)}` : code.slice(1)))
+      : ENTITIES[code.toLowerCase()] ?? whole);
+}
+
+type Probe = { status?: number; finalHost?: string; title?: string; description?: string; body?: string; error?: string };
+
+/**
+ * Whether a project's site can be linked. A site that loads is not enough: a
+ * domain can be parked, for sale, or unrelated to whoever minted records
+ * under its name. Linking needs a sign that the lexicon's owner controls it.
+ *
+ * verified: the domain is an atproto handle whose DID is the lexicon's DNS
+ *   authority, or writes the lexicon's records.
+ * likely: the site loads, is not parked, and is a handle or talks about
+ *   atproto or Bluesky.
+ */
+export function judgeSite(probe: Probe, evidence: { handleDid?: string; lexiconAuthority?: string; writers: Set<string> }): { verdict: SiteVerdict; why: string } {
+  if (probe.error || !probe.status || probe.status >= 400) return { verdict: "unreachable", why: probe.error ?? `HTTP ${probe.status}` };
+  const text = `${probe.title ?? ""} ${probe.description ?? ""} ${probe.body ?? ""}`;
+  if (PARKED.test(text)) return { verdict: "parked", why: "looks parked or for sale" };
+  const { handleDid, lexiconAuthority, writers } = evidence;
+  if (handleDid && handleDid === lexiconAuthority) return { verdict: "verified", why: "the domain's handle is the lexicon's DNS authority" };
+  if (handleDid && writers.has(handleDid)) return { verdict: "verified", why: "the domain's handle writes these records" };
+  if (handleDid) return { verdict: "likely", why: "the domain is an atproto handle" };
+  if (ATPROTO.test(text)) return { verdict: "likely", why: "the site talks about atproto or Bluesky" };
+  return { verdict: "unverified", why: "loads, but nothing ties it to the lexicon's owner" };
+}
+
+async function probeSite(fetchFn: Fetch, host: string): Promise<Probe> {
+  try {
+    const res = await fetchFn(`https://${host}/`, {
+      redirect: "follow",
+      headers: { "user-agent": "atpotato-dispatch (+https://atpota.to)", accept: "text/html" },
+      signal: AbortSignal.timeout(8000),
+    });
+    const body = (await res.text()).slice(0, 50_000);
+    const meta = (name: string) => body.match(new RegExp(`<meta[^>]+(?:name|property)=["']${name}["'][^>]+content=["']([^"']*)`, "i"))?.[1];
+    return {
+      status: res.status,
+      finalHost: new URL(res.url).host,
+      title: decodeEntities(body.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "").trim().slice(0, 120) || undefined,
+      description: decodeEntities(meta("description") ?? meta("og:description") ?? "").trim().slice(0, 240) || undefined,
+      body: body.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/g, " ").slice(0, 20_000),
+    };
+  } catch (err) {
+    return { error: String((err as { cause?: { code?: string } }).cause?.code ?? (err instanceof Error ? err.message : err)).slice(0, 80) };
+  }
+}
+
+/** A handle's DID, or undefined when the host is not a handle. */
+async function handleDid(fetchFn: Fetch, host: string): Promise<string | undefined> {
+  const body = await getJson<{ did?: string }>(fetchFn, xrpc(APPVIEW, "com.atproto.identity.resolveHandle", { handle: host })).catch(() => null);
+  return body?.did;
+}
+
+/**
+ * The DID in an authority's _lexicon TXT record, over DNS-over-HTTPS. Plain
+ * TXT lookups returned nothing in the demo container even for records that
+ * exist (2026-10-19), so this does not depend on the host's resolver.
+ */
+async function lexiconAuthorityDid(fetchFn: Fetch, authority: string): Promise<string | undefined> {
+  const body = await getJson<{ Answer?: Array<{ data?: string }> }>(fetchFn,
+    `https://cloudflare-dns.com/dns-query?name=_lexicon.${encodeURIComponent(authority)}&type=TXT`).catch(() => null);
+  for (const answer of body?.Answer ?? []) {
+    const did = answer.data?.match(/did=(did:[a-z]+:[^\s"]+)/)?.[1];
+    if (did) return did;
+  }
+  return undefined;
+}
+
+/**
+ * Check a site for each notable project, so the issue can link the app and a
+ * reader can see whether it exists. Tries the project's domain (so.sprk is
+ * sprk.so) and, when the busiest NSID has a longer authority, that too
+ * (app.sonasky.apollo.page is apollo.sonasky.app).
+ */
+export async function checkSites(fetchFn: Fetch, report: LexiconReport, log: Log = () => {}, max = 30): Promise<SiteCheck[]> {
+  const rootOf = (nsid: string) => nsid.split(".").slice(0, 2).join(".");
+  const roots = [...new Set([
+    ...talkTargets(report).map((t) => t.root),
+    ...report.newByProject.filter((g) => g.maxAccounts >= 3).map((g) => g.root),
+    ...report.topOutsideBluesky.slice(0, 15).map((r) => rootOf(r.nsid)),
+  ])].filter((root) => !BLUESKY_PREFIXES.some((prefix) => `${root}.`.startsWith(prefix))).slice(0, max);
+
+  const nsidsOf = (root: string) => [
+    ...report.newLexicons.filter((n) => n.nsid.startsWith(`${root}.`)).map((n) => ({ nsid: n.nsid, accounts: n.accounts })),
+    ...report.topOutsideBluesky.filter((r) => r.nsid.startsWith(`${root}.`)).map((r) => ({ nsid: r.nsid, accounts: r.accounts })),
+    ...[...report.movers.up, ...report.movers.down].filter((m) => m.nsid.startsWith(`${root}.`)).map((m) => ({ nsid: m.nsid, accounts: m.accountsAfter })),
+  ].sort((a, b) => b.accounts - a.accounts);
+
+  const checks: SiteCheck[] = [];
+  for (let i = 0; i < roots.length; i += 5) {
+    await Promise.all(roots.slice(i, i + 5).map(async (root) => {
+      const busiest = nsidsOf(root)[0]?.nsid;
+      const writers = new Set(report.newLexicons.filter((n) => n.nsid.startsWith(`${root}.`))
+        .flatMap((n) => (n.samples ?? []).map((s) => s.uri.split("/")[2])));
+      const authority = busiest ? nsidAuthority(busiest) : domainFor(root);
+      const lexiconAuthority = await lexiconAuthorityDid(fetchFn, authority);
+      // The project's own domain first: it is the one likely to be a handle.
+      const hosts = [...new Set([domainFor(root), authority])].filter((host) => host.split(".").length >= 2);
+      const seenFinal = new Set<string>();
+      for (const host of hosts) {
+        const [probe, did] = await Promise.all([probeSite(fetchFn, host), handleDid(fetchFn, host)]);
+        // mod.starhaven.dev redirects to starhaven.dev: one site, checked once.
+        if (probe.finalHost && seenFinal.has(probe.finalHost)) continue;
+        if (probe.finalHost) seenFinal.add(probe.finalHost);
+        const { verdict, why } = judgeSite(probe, { handleDid: did, lexiconAuthority, writers });
+        if (verdict === "unreachable" && host !== domainFor(root)) continue;
+        checks.push({ root, host, url: `https://${host}`, verdict, why, title: probe.title, description: probe.description,
+          finalHost: probe.finalHost, handleDid: did, lexiconAuthority });
+      }
+    }));
+  }
+  log(`sites: ${checks.filter((c) => LINKABLE_SITES.has(c.verdict)).length} linkable of ${checks.length} checked`);
+  return checks.sort((a, b) => roots.indexOf(a.root) - roots.indexOf(b.root));
+}
+
+// ---------------------------------------------------------------------------
 // Releases
 
 export type Release = { repo: string; tag: string; name: string; url: string; publishedAt: string; notes: string };
@@ -679,6 +831,7 @@ export async function collectWeek(
     lexicons.talk = talk;
     found.push(...talkPosts);
     counts.lexiconTalk = talkPosts.length;
+    lexicons.sites = await checkSites(fetchFn, lexicons, log);
   }
 
   const unique = [...new Map(found.map((f) => [f.view.uri, f.view])).values()];

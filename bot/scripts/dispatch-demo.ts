@@ -7,6 +7,10 @@
  *   node scripts/dispatch-demo.ts write .dispatch/runs/<date> [--label name]
  *        [--reuse <earlier label> [--rerun lexicons,posts]] [--analysts-only]
  *   node scripts/dispatch-demo.ts demo [--week | --days 7]
+ *   node scripts/dispatch-demo.ts sites .dispatch/runs/<date>
+ *
+ * `sites` adds the app-site checks to a week collected before they existed,
+ * without re-collecting it (which would renumber the posts and break --reuse).
  *
  * --week collects the last full Monday-to-Monday UTC week, the window
  * production recaps; without it, the 7 days ending now.
@@ -28,12 +32,13 @@
  * sandbox files. A demo week fits in the context window; a large builders list
  * may not, and production moves to files for that reason.
  */
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseEnv } from "node:util";
 import { Output, streamText, type LanguageModel, type LanguageModelUsage } from "ai";
 import type { z } from "zod";
-import { collectWeek, groupNewLexicons, lastDays, looksLikeNsid, previousWeek, type DispatchDataset, type DispatchPost, type LexiconReport, type ReleaseResult } from "../agent/lib/dispatch/collect.ts";
+import { checkSites, collectWeek, groupNewLexicons, lastDays, LINKABLE_SITES, looksLikeNsid, previousWeek, type DispatchDataset, type DispatchPost, type LexiconReport, type ReleaseResult } from "../agent/lib/dispatch/collect.ts";
 import { lintDraft, type LintReport } from "../agent/lib/dispatch/lint.ts";
 import { ANALYST, ANALYST_SLICES, Draft, EDITOR, Edited, Findings, WRITER } from "../agent/lib/dispatch/roles.ts";
 import { SOURCES } from "../agent/lib/dispatch/sources.ts";
@@ -117,6 +122,15 @@ async function collect(days: number, week: boolean): Promise<string> {
   return dir;
 }
 
+async function sites(dir: string): Promise<void> {
+  const path = join(dir, "lexicons.json");
+  const report = upgrade(JSON.parse(readFileSync(path, "utf8")));
+  if (!report) throw new Error(`no lexicon report in ${dir}`);
+  report.sites = await checkSites(fetch, report, log);
+  writeFileSync(path, JSON.stringify(report, null, 2));
+  for (const c of report.sites) log(`${c.verdict.padEnd(11)} ${c.url} | ${c.why} | ${c.title ?? "-"}`);
+}
+
 function load(dir: string): DispatchDataset {
   const read = (file: string) => readFileSync(join(dir, file), "utf8");
   return {
@@ -179,6 +193,8 @@ function lexiconsText(report: LexiconReport, posts: DispatchPost[], ids: Map<str
   for (const r of report.topOutsideBluesky) out.push(`${r.nsid} | ${r.accounts} | ${r.creates} | ${r.updates} | ${r.deletes}`);
   out.push("", "PUBLISHED SCHEMAS, SAMPLE. nsid | publisher did | time");
   for (const s of report.publishedSchemas) out.push(`${s.nsid} | ${s.did} | ${s.at}`);
+  out.push("", "APP SITES, checked by code. project | url | verdict | why | page title");
+  for (const c of report.sites ?? []) out.push(`${c.root} | ${c.url} | ${c.verdict} | ${c.why} | ${c.title ?? "-"}`);
   const byUri = new Map(posts.map((p) => [p.uri, p]));
   out.push("", "LEXICON TALK: posts by the account at each project's domain, and posts naming the domain");
   for (const t of report.talk ?? []) {
@@ -264,7 +280,13 @@ async function write(dir: string, label: string): Promise<void> {
   // the cost. --rerun names slices to analyse again anyway.
   const reuse = arg("reuse");
   const rerun = new Set((arg("rerun") ?? "").split(",").filter(Boolean));
-  const previous: Record<string, Findings> = reuse ? JSON.parse(readFileSync(join(dir, "drafts", reuse, "findings.json"), "utf8")) : {};
+  const previous: Record<string, Findings> & { _posts?: string } = reuse ? JSON.parse(readFileSync(join(dir, "drafts", reuse, "findings.json"), "utf8")) : {};
+  // Findings cite posts by position (p12), so they only mean something
+  // against the same posts in the same order.
+  const postsSha = createHash("sha256").update(data.posts.map((p) => p.uri).join("\n")).digest("hex");
+  if (reuse && previous._posts && previous._posts !== postsSha) {
+    throw new Error(`--reuse ${reuse}: those findings were made from a different set of posts`);
+  }
   const findings = Object.fromEntries(await Promise.all(slices.map(async ([slice, body]) => {
     if (previous[slice] && !rerun.has(slice)) {
       log(`analyst:${slice}: reusing findings from ${reuse}`);
@@ -272,7 +294,7 @@ async function write(dir: string, label: string): Promise<void> {
     }
     return [slice, await call(analyst, `analyst:${slice}`, `${ANALYST}\n\n${ANALYST_SLICES[slice]}`, `${header}\n\n${body}`, Findings)] as const;
   })));
-  writeFileSync(join(out, "findings.json"), JSON.stringify(findings, null, 2));
+  writeFileSync(join(out, "findings.json"), JSON.stringify({ ...findings, _posts: postsSha }, null, 2));
   if (process.argv.includes("--analysts-only")) return finish(out);
 
   // Everything a finding cites, resolved by code, so the writer quotes and
@@ -305,13 +327,18 @@ async function write(dir: string, label: string): Promise<void> {
   // The editor can only verify what it is handed, so the counts code computed
   // travel with the findings rather than staying with the analyst.
   const counted = data.lexicons ? { totals: data.lexicons.totals, newByProject: data.lexicons.newByProject.slice(0, 40) } : null;
-  const brief = `${header}\n\nFINDINGS\n${JSON.stringify(findings, null, 2)}\n\nLEXICON COUNTS (computed by code)\n${JSON.stringify(counted, null, 2)}\n\nSOURCES (by evidence id)\n${JSON.stringify(sources, null, 2)}`;
+  const sites = data.lexicons?.sites ?? [];
+  const linkable = sites.filter((c) => LINKABLE_SITES.has(c.verdict)).map(({ root, url, verdict, why, title }) => ({ root, url, verdict, why, title }));
+  const blocked = sites.filter((c) => !LINKABLE_SITES.has(c.verdict)).map((c) => c.url);
+  const brief = `${header}\n\nFINDINGS\n${JSON.stringify(findings, null, 2)}\n\nLEXICON COUNTS (computed by code)\n${JSON.stringify(counted, null, 2)}` +
+    `\n\nAPP SITES YOU MAY LINK (checked by code)\n${JSON.stringify(linkable, null, 2)}\n\nAPP SITES YOU MUST NOT LINK\n${JSON.stringify(blocked)}` +
+    `\n\nSOURCES (by evidence id)\n${JSON.stringify(sources, null, 2)}`;
   const draft = await call(writer, "writer", `${voice}\n\n${WRITER}`, brief, Draft);
   writeFileSync(join(out, "draft.md"), issueMarkdown(draft));
 
   const haystack = JSON.stringify({ posts: data.posts, lexicons: data.lexicons, releases: data.releases });
   const extra = data.posts.map((p) => `https://bsky.app/profile/${p.author.handle}`);
-  const lint = (d: Draft): LintReport => lintDraft(`${d.title}\n${d.description}\n${d.markdown}`, haystack, extra);
+  const lint = (d: Draft): LintReport => lintDraft(`${d.title}\n${d.description}\n${d.markdown}`, haystack, extra, blocked);
   const draftLint = lint(draft);
   writeFileSync(join(out, "lint-draft.json"), JSON.stringify(draftLint, null, 2));
   log(`draft lint: ${draftLint.ok ? "clean" : JSON.stringify({ ...draftLint, ok: undefined })}`);
@@ -342,10 +369,11 @@ const command = process.argv[2];
 const days = Number(arg("days") ?? 7);
 const label = arg("label") ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
 const week = process.argv.includes("--week");
-if (command === "collect") await collect(days, week);
+if (command === "sites" && process.argv[3]) await sites(process.argv[3]);
+else if (command === "collect") await collect(days, week);
 else if (command === "write" && process.argv[3]) await write(process.argv[3], label);
 else if (command === "demo") await write(await collect(days, week), label);
 else {
-  console.error("usage: node scripts/dispatch-demo.ts collect [--week | --days 7] | write <run dir> [--label name] [--reuse <label> [--rerun <slices>]] [--analysts-only] | demo [--week | --days 7]");
+  console.error("usage: node scripts/dispatch-demo.ts collect [--week | --days 7] | write <run dir> [--label name] [--reuse <label> [--rerun <slices>]] [--analysts-only] | demo [--week | --days 7] | sites <run dir>");
   process.exit(1);
 }

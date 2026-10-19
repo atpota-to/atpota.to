@@ -94,6 +94,7 @@ frozen and, if it is not, DMs the operator that collection failed.
 | Keyword posts | A fixed list of queries | The droplet's authenticated `/internal/bluesky-search`, `since`/`until` set to the window. Unauthenticated search serves first pages only: on 2026-10-18 every cursor request was refused | Monday |
 | Releases | Repos the operator lists | GitHub `releases.atom` per repo (no auth needed) | Monday |
 | Lexicons | Aturi's weekly report | One HTTP call | Monday |
+| App sites | For each notable project, its domain and its busiest NSID's longer authority (`app.sonasky.apollo.page` is `apollo.sonasky.app`) | Fetch the page and its title, resolve the domain as a handle, read the `_lexicon` TXT record over DNS-over-HTTPS. Only verified or likely sites may be linked; see below | Monday, after the lexicon report |
 | Talk about notable lexicons | For each mover and busy new project (up to 15), the account at its domain (`so.sprk` is `sprk.so`) and posts naming the domain | `getAuthorFeed` on the domain, plus a search for it. Search by author or domain needs auth, so production can do more through the droplet | Monday, after the lexicon report |
 | Engagement | Every collected post | `getPosts` in batches of 25, so counts reflect the week's end | Monday |
 | Authors | Every author in the dataset | `getProfiles`, for labels and current handles | Monday |
@@ -187,6 +188,30 @@ would earn a place if you later want SQL over months of issues.
 
 Collector runs write in small steps and skip work already done, so a run cut
 off by a function time limit can be re-run safely.
+
+### App sites
+
+So readers can see whether an app exists, each notable project gets a site
+check, and the issue links the project's name to its site when the check
+passes. A domain that loads is not enough: it can be parked, for sale, or
+unrelated to whoever minted records under its name. So:
+
+- **verified**: the domain is an atproto handle whose DID is the lexicon's
+  `_lexicon` DNS authority, or writes the lexicon's records.
+- **likely**: the page loads, is not parked, and the domain is a handle or the
+  page talks about atproto or Bluesky.
+- **unverified, parked, unreachable**: recorded, never linked. Lint blocks
+  them, and the agent leaves them out of the `allowed` list it sends the
+  droplet, so the droplet's gate rejects them too.
+
+On the demo week, 25 of 35 checked sites were linkable. The longer authority
+found the actual app where the bare domain was a company page or did not
+resolve: `poll.tokimeki.tech`, `apollo.sonasky.app`, `sportimon.river.berlin`.
+A page title is the app describing itself ("Spark - Take back your
+timeline"), which beats guessing from sample records; it is also text the
+app's owner wrote, so it is treated as data like a post. Linkable does not
+mean featured: whether to mention a project at all stays the writer's and the
+operator's call.
 
 ### Privacy filter
 

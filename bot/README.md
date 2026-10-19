@@ -150,6 +150,10 @@ posts.
 `npm run dispatch:collect -- --week` collects the last full Monday-to-Monday
 week (UTC), the window production recaps.
 
+Collection also checks each notable project's website, and the writer links
+only the ones it could verify. `npm run dispatch:sites -- .dispatch/runs/<dir>`
+adds those checks to a week collected before they existed.
+
 ## Learn more
 
 To learn more about eve, explore these resources:

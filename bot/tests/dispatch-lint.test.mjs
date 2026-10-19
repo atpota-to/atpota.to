@@ -57,3 +57,10 @@ test('links must label the words that carry the claim', async () => {
   assert.equal(vagueLinks('paul said so ([post](https://x.example/1)), see [here](https://x.example/2)'), 2);
   assert.equal(vagueLinks('paul [said attie is in beta](https://x.example/1), from his [post history](https://x.example/2)'), 0);
 });
+
+test('blocked sites cannot be linked, even though they are in the data', async () => {
+  const { blockedLinks } = await import('../agent/lib/dispatch/lint.ts');
+  const draft = '[parked app](https://parked.example) and [real app](https://real.example) and https://parked.example/page';
+  assert.deepEqual(blockedLinks(draft, ['https://parked.example']), ['https://parked.example', 'https://parked.example/page']);
+  assert.equal(lintDraft(draft, 'https://parked.example https://real.example https://parked.example/page', [], ['https://parked.example']).ok, false);
+});
