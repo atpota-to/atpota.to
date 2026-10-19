@@ -50,7 +50,10 @@ yet. Until it is, an issue goes out by hand, and these steps work now:
    refuses to publish the same title twice. /blog shows the issue within its
    5-minute cache.
 6. **Announce** it from @poe.atpota.to, then link the post into the record:
-   `npm run publish:dispatch -- <file> --rkey <key> --bsky-post <post url>`
+   `npm run publish:dispatch -- <file> --rkey <key> --bsky-post <post url>`.
+   Once the droplet has its `announce` command (phase 0 in
+   `mentions/DISPATCH.md`), DM Poe `announce <issue link>` instead; it posts
+   and links in one go.
 
 Issue 1 went out this way on 2026-10-19
 (`at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/3myasnk4bzk22`).
@@ -635,7 +638,8 @@ Opt-out requests by DM.
 - To build: `agent/schedules/dispatch/{collect-daily,finalize,draft}.ts`;
   `agent/channels/dispatch.ts` with the review and preview routes; the
   analyst, writer and editor as subagents or tools; `submit_draft`;
-  `agent/memory/dispatch-style.ts`; `evals/dispatch/`; and the markdown to
+  `agent/memory/dispatch-style.ts`; `evals/dispatch/`; the announcement text,
+  sent as `announcement` with each draft; and the markdown to
   Leaflet conversion, matching `website/build/leaflet-markdown.ts`, so the
   droplet receives a record it can write as is. The roles need
   `ANTHROPIC_API_KEY` on the Vercel project and, like the demo, should refuse
@@ -646,6 +650,8 @@ Opt-out requests by DM.
 
 **droplet** (on DigitalOcean, not in this repo). The standalone brief is
 [`../mentions/DISPATCH.md`](../mentions/DISPATCH.md). In short:
+- First, phase 0: an operator `announce <issue link>` DM command that posts
+  the announcement from Poe for an issue published by hand and links it
 - Week list and snapshot writes to Poe's repo, on the collector's request
 - `POST /dispatch/draft`, the identifier check, DM delivery
 - Operator DM routing while a review is open; `approve` and `skip`

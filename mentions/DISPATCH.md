@@ -28,6 +28,13 @@ the credential:
 5. **Keep opt-outs.** Record who has asked to be left out, remove their list
    items, and tell the collector.
 
+**Build phase 0 first** (next section). Issues are published by hand today,
+and the one step an operator cannot do by hand is posting from Poe, because
+only the droplet holds Poe's credential. Phase 0 is an operator command that
+announces an issue already published. It is useful now, needs nothing from the
+agent, and its steps are publishing steps 3 to 6, so the same code serves
+`approve` later. Jobs 1 to 5 wait on the agent's side, which is not built yet.
+
 ## Context you need
 
 **Poe** is the atpotato agent: `poe.atpota.to`, `did:plc:6qw63oash3jfnpykvpbwnq5z`,
@@ -93,6 +100,48 @@ the new work to its existing structure):
 
 All of them authenticate with the shared secret in `x-atpotato-secret`
 (`DROPLET_SHARED_SECRET` on the agent). New endpoints do the same.
+
+## Phase 0: announce an issue published by hand
+
+An operator sends Poe a DM:
+
+```
+announce https://poe.leaflet.pub/3myasnk4bzk22
+optional post text, on the lines after the link
+```
+
+The link can be `https://poe.leaflet.pub/<rkey>`, `https://atpota.to/blog/<rkey>`
+or `at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.document/<rkey>`. Accept
+the command only from a DID on the operator allowlist, as a message whose first
+word is `announce` (any case). Never forward it to the agent. If the link does
+not parse, reply with the usage.
+
+Then:
+
+1. **Read the document** from atpota.to's repo with the public
+   `com.atproto.repo.getRecord`, and keep its cid. Refuse unless `site` is the
+   dispatch publication. If the document already has `bskyPostRef`, or your
+   own table already records a post for this document, reply with that post's
+   link and stop. A repeated command must never post twice.
+2. **Check the page**, as in publishing step 3, at the URL the card will use.
+3. **Post from Poe** (Announcement, under Records). The text is the
+   operator's lines if there are any, otherwise the title, a blank line and
+   the description, cut at a word boundary to fit. Refuse operator text over
+   300 graphemes rather than cutting it. Record the post's uri and cid against
+   the document before anything else.
+4. **Link it.** `putRecord` the document with `bskyPostRef` set to the post
+   and `updatedAt` set, every other field unchanged, and `swapRecord` set to
+   the cid from step 1 so a concurrent edit is not overwritten. On a swap
+   failure, read the record again and retry once. If the atpota.to credential
+   is not configured yet, skip this and DM the operator the command that does
+   it by hand:
+   `npm run publish:dispatch -- <issue file> --rkey <rkey> --bsky-post <post url>`
+5. **Reply** with the post's URL.
+
+The command needs `DISPATCH_ENABLED` but not `DISPATCH_PUBLISH_ENABLED`: the
+operator's own command is the approval, and the issue is already public.
+
+Issue 1 has no announcement yet, so it is the first real use.
 
 ## New endpoints
 
@@ -168,6 +217,7 @@ Each version of the issue, after the agent's editor has finished with it.
   "textContent": "the same body as plain text",
   "content": { "$type": "pub.leaflet.content", "pages": ["the body as Leaflet blocks"] },
   "summary": "under 900 graphemes, for the DM",
+  "announcement": "the post text for publishing, under 280 graphemes",
   "changes": ["what changed since v1"],
   "openQuestions": ["things the editor could not verify"],
   "previewUrl": "https://<agent host>/dispatch/preview/2026-10-12/2?t=<hmac>",
@@ -189,7 +239,8 @@ On receipt:
 1. Recompute the sha256 of `markdown` and reject a mismatch.
 2. **Identifier gate.** Extract every `http(s)://` URL, every backticked token
    that looks like an NSID (three or more dot-separated segments), and every
-   `did:plc:` or `did:web:` string from title, description and markdown, and
+   `did:plc:` or `did:web:` string from title, description, markdown and
+   announcement, and
    every `uri` in `content`'s facets, since that is what readers click. Strip
    trailing punctuation and trailing slashes. Each must be in `allowed`, or be
    under `https://atpota.to/`. Same rule as the reply link gate: a host
@@ -253,6 +304,8 @@ it. Send:
 dispatch for oct 12 to 18, version 2 is ready ⸜(｡˃ ᵕ ˂ )⸝
 
 <summary from the agent>
+
+post: <announcement>
 
 changed since v1: <changes, one line each, cut to fit>
 not sure about: <openQuestions, cut to fit>
@@ -387,13 +440,15 @@ must stay under about 145 KB (issue 1 was 27 KB).
 
 **Announcement**, `app.bsky.feed.post`:
 
-- Text under 300 graphemes, written from the issue's title and description,
-  with the page URL as a link facet.
+- Text under 300 graphemes: the operator's text in phase 0, the approved
+  version's `announcement` later. If it contains the page URL, give that a
+  link facet.
 - An `app.bsky.embed.external` card: the page URL, title, description, and a
   thumbnail blob uploaded from the page's Open Graph image (Leaflet generates
   one per issue).
 - `langs: ["en"]`.
-- **No mention facets.** Featured people are not pinged.
+- **No mention facets.** Featured people are not pinged. The link is the only
+  facet.
 
 ## State
 
@@ -419,6 +474,7 @@ arrives while this one is still in review).
 | Variable | Meaning |
 | --- | --- |
 | `DISPATCH_ENABLED` | Off: every dispatch endpoint answers `503` and DMs are routed as today |
+| `DISPATCH_ANNOUNCE_URL_BASE` | Where the card links: `https://poe.leaflet.pub` (the default: Leaflet makes an image for each issue and has a subscribe button) or `https://atpota.to/blog` |
 | `DISPATCH_PUBLISH_ENABLED` | Off (the default): shadow mode. Drafts and reviews work; `approve` does not publish |
 | `DISPATCH_PUBLICATION_URI` | `at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n` |
 | `DISPATCH_PUBLISHER_IDENTIFIER` | `atpota.to` |
@@ -446,11 +502,18 @@ Unit tests, written before wiring anything to the real account:
 - The document written matches what `website/scripts/publish-dispatch.ts`
   writes for the same issue, apart from the record key and times.
 - An issue already published by hand is not published again.
+- `announce`: a repeated command posts once; a document from another
+  publication is refused; operator text over 300 graphemes is refused, not
+  cut; the post has no mention facets; the `bskyPostRef` write keeps every
+  other field and uses `swapRecord`; with no atpota.to credential it posts and
+  DMs the manual command.
 
 Then end to end against a test account and a test PDS before the real repos.
 
 ## Rollout
 
+0. Phase 0, the `announce` command, tested against a test account first. It
+   needs only Poe's credential; the atpota.to credential can come later.
 1. Endpoints 1 to 3 and opt-outs, with `DISPATCH_PUBLISH_ENABLED` off. The
    agent starts filling week lists.
 2. Endpoints 4 to 6 and DMs. At least two Mondays of shadow review: real drafts,
@@ -461,8 +524,8 @@ Then end to end against a test account and a test PDS before the real repos.
 ## Open questions
 
 1. App password or scoped OAuth for the atpota.to credential (see above).
-2. Should the announcement link `poe.leaflet.pub/<rkey>`, which has Leaflet's
-   subscribe button, or `atpota.to/blog/<rkey>`?
+2. Should the announcement link `poe.leaflet.pub/<rkey>` (the default, set by
+   `DISPATCH_ANNOUNCE_URL_BASE`) or `atpota.to/blog/<rkey>`?
 3. Does `pds.atpota.to` have write rate limits enabled, and what is its
    `applyWrites` batch limit?
 4. Should a later version route only DM replies to the draft message as notes?
