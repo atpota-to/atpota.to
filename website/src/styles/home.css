@@ -1,0 +1,1296 @@
+/*
+ * Home page: the hybrid bento (spec 3.1, H-Desktop / H-Mobile).
+ * Four columns on desktop, two at <=900px, the phone layout from H-Mobile at <=640px.
+ * Depends on tokens.css, base.css and components.css (.tile, .btn, .chip, .eyebrow, .kbd).
+ */
+
+/* Tile text colours that are not global tokens (mock values; AA checked in both themes). */
+:root {
+  --home-sage-text: #3F3A24;
+  --home-sage-mono: #4A5A3E;
+  --home-sky-text: #2C3A3E;
+  --home-sky-mono: #34505B;
+  --home-icon-bg: #FFFFFF;
+  --home-inset: #F7F2E5;
+  --home-sheet: #FFFFFF;
+  --home-sheet-bar: var(--line);
+  --home-sheet-title: var(--flesh);
+  --home-sheet-shot: #D7F2FE;
+  --home-bubble: #FFFFFF;
+  --home-mound: var(--skin);
+}
+
+html[data-theme="dark"] {
+  --home-sage-text: var(--text-soft);
+  --home-sage-mono: var(--muted);
+  --home-sky-text: var(--text-soft);
+  --home-sky-mono: var(--muted);
+  --home-icon-bg: rgba(255, 253, 247, 0.1);
+  --home-inset: #221B12;
+  --home-sheet: #4A3D2B;
+  --home-sheet-bar: #625237;
+  --home-sheet-title: #B89E64;
+  --home-sheet-shot: #2A4752;
+  --home-bubble: var(--card);
+  --home-mound: #6E5634;
+}
+
+/* ---------- grid ---------- */
+
+.home-grid {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 4px var(--gutter) 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.home-grid > .tile {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-hero,
+.home-sun,
+.home-guide,
+.home-poe,
+.home-latest {
+  grid-column: span 2;
+}
+
+/* Shared copy variants: the phone layout uses the shorter lines from H-Mobile. */
+.home-short {
+  display: none;
+}
+
+/* ---------- hero text ---------- */
+
+.home-hero {
+  --tile-pad: 48px;
+  min-height: 540px;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+}
+
+.home-hero__chip {
+  align-self: flex-start;
+}
+
+.home-hero__chip-icon {
+  width: 18px;
+  height: auto;
+  flex: none;
+}
+
+/* leaf.svg ships with a fixed green; follow the chip colour so it works in dark mode too. */
+.home-hero__chip-icon path {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.home-hero__title {
+  margin: 24px 0 20px;
+  font-size: clamp(46px, 5.2vw, 74px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+.home-hero__lede {
+  margin: 0 0 32px;
+  max-width: 26em;
+  font-size: 20px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.home-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.home-hero__actions .btn--outline {
+  padding: 0 24px;
+}
+
+/* ---------- sunburst + mascot ---------- */
+
+.home-sun {
+  --tile-pad: 0;
+  position: relative;
+  overflow: hidden;
+  min-height: 540px;
+  border-radius: var(--radius-lg);
+  background: repeating-conic-gradient(from 0deg at 50% 74%, var(--sun) 0deg 8deg, var(--sun-deep) 8deg 16deg);
+  isolation: isolate;
+}
+
+/* Night: the same warm rays, a little dimmer towards the top. */
+html[data-theme="dark"] .home-sun::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(120% 90% at 50% 80%, transparent 30%, rgba(28, 22, 14, 0.38) 100%);
+  pointer-events: none;
+}
+
+.home-sun__mound {
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  bottom: -10px;
+  z-index: 1;
+  height: 150px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: var(--home-mound);
+}
+
+.home-sun__sprout {
+  position: absolute;
+  z-index: 2;
+  height: auto;
+  pointer-events: none;
+}
+
+.home-sun__sprout--1 {
+  left: 12%;
+  bottom: 96px;
+  width: 70px;
+}
+
+.home-sun__sprout--2 {
+  left: calc(12% + 60px);
+  bottom: 106px;
+  width: 46px;
+}
+
+.home-sun__sprout--3 {
+  right: 13%;
+  bottom: 100px;
+  width: 58px;
+}
+
+.home-sun__mascot {
+  position: absolute;
+  left: 50%;
+  bottom: 100px;
+  z-index: 3;
+  width: 360px;
+  max-width: none;
+  height: auto;
+  margin-left: -184px;
+  transform-origin: 50% 100%;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.home-sun:hover .home-sun__mascot {
+  transform: translateY(-6px) rotate(-1.5deg);
+}
+
+.home-sun__bubble {
+  position: absolute;
+  left: 28px;
+  top: 28px;
+  z-index: 4;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 18px 18px 18px 4px;
+  background: var(--home-bubble);
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* ---------- "what's growing" heading row ---------- */
+
+.home-heading {
+  grid-column: 1 / -1;
+  padding: 40px 8px 6px;
+  scroll-margin-top: 16px;
+}
+
+.home-heading__title {
+  margin: 0 0 6px;
+  font-size: clamp(34px, 3.6vw, 48px);
+  line-height: 1.05;
+}
+
+.home-heading__sub {
+  font-size: 18px;
+  color: var(--muted);
+}
+
+/* ---------- project tiles ---------- */
+
+.home-project,
+.home-more {
+  --tile-pad: 26px;
+  min-height: 300px;
+}
+
+.home-project {
+  --project-text: var(--text-soft);
+  --project-mono: var(--muted);
+}
+
+.home-project--anisota {
+  background: var(--sage);
+  --project-text: var(--home-sage-text);
+  --project-mono: var(--home-sage-mono);
+}
+
+.home-project--aturi {
+  background: var(--sky);
+  --project-text: var(--home-sky-text);
+  --project-mono: var(--home-sky-mono);
+}
+
+.home-project--flushes {
+  background: var(--card);
+  --home-icon-bg: var(--butter);
+}
+
+.home-project__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.home-project__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  background: var(--home-icon-bg);
+  color: var(--ink);
+}
+
+.home-project__icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.home-project__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  color: var(--ink);
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.home-project__arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.home-project:hover .home-project__arrow,
+.home-project:focus-visible .home-project__arrow {
+  transform: translate(2px, -2px);
+}
+
+.home-project__name {
+  margin: auto 0 2px;
+  padding-top: 20px;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.home-project__domain {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--project-mono);
+}
+
+.home-project__desc {
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--project-text);
+}
+
+.home-more__sprout {
+  width: 60px;
+  height: auto;
+}
+
+.home-more__title {
+  margin: auto 0 6px;
+  padding-top: 20px;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.home-more__desc {
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.home-more__desc a {
+  font-weight: 700;
+}
+
+/* ---------- guide tile ---------- */
+
+.home-guide {
+  --tile-pad: 34px;
+  position: relative;
+  overflow: hidden;
+  min-height: 320px;
+  background: var(--flesh-tint);
+  isolation: isolate;
+}
+
+.home-guide__chip {
+  position: relative;
+  z-index: 2;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.home-guide__chip svg {
+  width: 16px;
+  height: 16px;
+}
+
+.home-guide__title {
+  position: relative;
+  z-index: 2;
+  margin: 18px 0 10px;
+  max-width: 11em;
+  font-size: 34px;
+  line-height: 1.06;
+}
+
+.home-guide__desc {
+  position: relative;
+  z-index: 2;
+  max-width: 20em;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.home-guide__cta {
+  position: relative;
+  z-index: 2;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 20px;
+  color: var(--leaf-strong);
+  font-weight: 700;
+}
+
+.home-guide__cta svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.home-guide:hover .home-guide__cta svg,
+.home-guide:focus-visible .home-guide__cta svg {
+  transform: translateX(3px);
+}
+
+/* Paper stack: two rotated sheets, the front one with a little page sketched on it. */
+.home-guide__stack {
+  position: absolute;
+  top: 30px;
+  right: 40px;
+  z-index: 1;
+  width: 200px;
+  height: 250px;
+  transform-origin: 100% 0;
+  pointer-events: none;
+}
+
+.home-guide__sheet {
+  position: absolute;
+  width: 170px;
+  border-radius: 18px;
+  background: var(--home-sheet);
+}
+
+.home-guide__sheet--back {
+  top: 10px;
+  right: 30px;
+  height: 200px;
+  transform: rotate(-6deg);
+}
+
+.home-guide__sheet--front {
+  top: 0;
+  right: 0;
+  height: 210px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transform: rotate(4deg);
+  box-shadow: 0 1px 0 rgba(61, 47, 27, 0.04);
+}
+
+.home-guide__bar {
+  display: block;
+  height: 8px;
+  width: 100%;
+  border-radius: 99px;
+  background: var(--home-sheet-bar);
+}
+
+.home-guide__bar--title {
+  height: 12px;
+  width: 70%;
+  background: var(--home-sheet-title);
+}
+
+.home-guide__bar--86 {
+  width: 86%;
+}
+
+.home-guide__bar--92 {
+  width: 92%;
+}
+
+.home-guide__shot {
+  display: block;
+  height: 54px;
+  width: 100%;
+  border-radius: 12px;
+  background: var(--home-sheet-shot);
+}
+
+.home-guide__potato {
+  position: absolute;
+  right: -16px;
+  bottom: -36px;
+  z-index: 3;
+  width: 170px;
+  height: auto;
+  pointer-events: none;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.home-guide:hover .home-guide__potato {
+  transform: translateY(-6px);
+}
+
+/* ---------- find us ---------- */
+
+.home-find {
+  --tile-pad: 26px;
+  min-height: 320px;
+}
+
+/* At night the soil tile is darker than the page; a hairline keeps its edge. */
+html[data-theme="dark"] .home-find {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.home-find__title {
+  margin-bottom: auto;
+  color: var(--on-soil-soft);
+}
+
+.home-find__list {
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+}
+
+.home-find__list li + li {
+  border-top: 1px solid var(--soil-line);
+}
+
+.home-find__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 0;
+  border-radius: 8px;
+  color: var(--on-soil);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.home-find__link:hover {
+  color: var(--on-soil);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.home-find__link svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.home-find__link:hover svg {
+  transform: translate(2px, -2px);
+}
+
+.home-find__list li:last-child .home-find__link {
+  padding-bottom: 2px;
+}
+
+/* ---------- say hi ---------- */
+
+.home-hi {
+  --tile-pad: 26px;
+  --focus: var(--on-sun);
+  position: relative;
+  overflow: hidden;
+  min-height: 320px;
+}
+
+.home-hi__title {
+  color: var(--on-sun-soft);
+}
+
+.home-hi__text {
+  margin-top: 10px;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.home-hi__mail {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 16px;
+  border-radius: 6px;
+  color: var(--on-sun);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.home-hi__mail span {
+  display: block;
+}
+
+.home-hi__mail:hover {
+  color: var(--on-sun);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.home-hi__potato {
+  position: absolute;
+  right: -40px;
+  bottom: 34px;
+  width: 150px;
+  height: auto;
+  pointer-events: none;
+}
+
+/* ---------- poe intro ---------- */
+
+.home-poe {
+  --tile-pad: 30px;
+  position: relative;
+  overflow: hidden;
+  min-height: 280px;
+  justify-content: center;
+  padding-left: 200px;
+}
+
+.home-poe__potato {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 160px;
+  height: auto;
+  margin-top: -76px;
+  pointer-events: none;
+}
+
+.home-poe__title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.home-poe__text {
+  margin: 0 0 18px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.home-poe__kbd {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.home-poe__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.home-poe__actions .btn {
+  min-height: 46px;
+  padding: 0 20px;
+}
+
+.home-poe__handle {
+  padding: 0 18px;
+}
+
+.home-poe__handle,
+.home-poe__handle:hover {
+  border-color: var(--line-strong);
+}
+
+/* ---------- latest on bluesky ---------- */
+
+.home-latest {
+  --tile-pad: 28px;
+  min-height: 280px;
+  gap: 16px;
+}
+
+.home-latest__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-latest__title {
+  color: var(--text-soft);
+}
+
+.home-latest__handle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.home-latest__handle:hover {
+  text-decoration: underline;
+}
+
+.home-latest__follow {
+  align-self: flex-start;
+  margin-top: auto;
+  min-height: 46px;
+}
+
+.home-post {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--home-inset);
+}
+
+.home-post__avatar {
+  flex: 0 0 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--flesh-tint);
+}
+
+.home-post__avatar img {
+  width: 42px;
+  height: auto;
+}
+
+.home-post__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.home-post__who {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.home-post__handle {
+  color: var(--muted);
+}
+
+.home-post__link {
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The whole post card opens the post; the time link stretches over it. */
+.home-post__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+}
+
+.home-post__link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.home-post:has(.home-post__link:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.home-post__link:focus-visible {
+  outline: none;
+}
+
+.home-post__text {
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.home-post__meta {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.home-post__fallback {
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.home-post__skeleton {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.home-post__skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--line) 0%, var(--line-strong) 40%, var(--line) 80%);
+  background-size: 300% 100%;
+  animation: home-shimmer 1.4s ease-in-out infinite;
+}
+
+.home-post__skeleton span:nth-child(2) {
+  width: 86%;
+}
+
+.home-post__skeleton span:nth-child(3) {
+  width: 54%;
+}
+
+@keyframes home-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.home-post__loading {
+  display: none;
+}
+
+/* States: loading (JS only), ready, error. Without JS the fallback line shows. */
+html.js .home-latest[data-state="loading"] .home-post__skeleton {
+  display: flex;
+}
+
+html.js .home-latest[data-state="loading"] .home-post__loading {
+  display: block;
+}
+
+html.js .home-latest[data-state="loading"] .home-post__fallback,
+.home-latest[data-state="ready"] .home-post__fallback {
+  display: none;
+}
+
+/* ---------- 2 columns (tablet, narrow desktop) ---------- */
+
+/* Narrow desktop: four columns get tight, so the wide tiles shrink their art a little. */
+@media (max-width: 1180px) and (min-width: 901px) {
+  .home-guide__stack {
+    transform: scale(0.82);
+  }
+
+  .home-guide__title {
+    max-width: 9em;
+    font-size: 30px;
+  }
+
+  .home-guide__desc {
+    max-width: 15em;
+  }
+
+  .home-poe {
+    padding-left: 168px;
+  }
+
+  .home-poe__potato {
+    left: 18px;
+    width: 134px;
+    margin-top: -64px;
+  }
+
+  .home-poe__title {
+    font-size: 25px;
+  }
+}
+
+@media (max-width: 900px) {
+  .home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-hero {
+    min-height: 0;
+  }
+
+  .home-sun {
+    min-height: 420px;
+  }
+
+  .home-project,
+  .home-more {
+    min-height: 260px;
+  }
+
+  .home-guide__stack {
+    transform: none;
+  }
+}
+
+/* ---------- phones (H-Mobile) ---------- */
+
+@media (max-width: 640px) {
+  .home-grid {
+    padding: 0 14px;
+    gap: 12px;
+  }
+
+  .home-long {
+    display: none;
+  }
+
+  .home-short {
+    display: inline;
+  }
+
+  /* hero text */
+  .home-hero {
+    --tile-pad: 26px 22px;
+    min-height: 0;
+    border-radius: 30px;
+  }
+
+  .home-hero__chip {
+    padding: 6px 14px 6px 10px;
+    font-size: 14px;
+  }
+
+  .home-hero__chip-icon {
+    width: 16px;
+  }
+
+  .home-hero__title {
+    margin: 16px 0 12px;
+    font-size: 44px;
+    line-height: 1;
+  }
+
+  .home-hero__lede {
+    margin-bottom: 22px;
+    font-size: 17px;
+  }
+
+  .home-hero__actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .home-hero__actions .btn {
+    --btn-h: 52px;
+    width: 100%;
+  }
+
+  .home-hero__actions .btn svg {
+    display: none;
+  }
+
+  /* sunburst comes first on phones */
+  .home-sun {
+    order: -1;
+    min-height: 330px;
+    border-radius: 30px;
+    background: repeating-conic-gradient(from 0deg at 50% 76%, var(--sun) 0deg 9deg, var(--sun-deep) 9deg 18deg);
+  }
+
+  .home-sun__mound {
+    left: -10%;
+    right: -10%;
+    bottom: -8px;
+    height: 96px;
+  }
+
+  .home-sun__sprout--1 {
+    left: 30px;
+    bottom: 62px;
+    width: 46px;
+  }
+
+  .home-sun__sprout--2 {
+    display: none;
+  }
+
+  .home-sun__sprout--3 {
+    right: 34px;
+    bottom: 64px;
+    width: 38px;
+  }
+
+  .home-sun__mascot {
+    bottom: 64px;
+    width: 240px;
+    margin-left: -122px;
+  }
+
+  .home-sun__bubble {
+    left: 16px;
+    top: 16px;
+    padding: 7px 12px;
+    border-radius: 14px 14px 14px 4px;
+    font-size: 13px;
+  }
+
+  /* heading row */
+  .home-heading {
+    padding: 22px 6px 2px;
+  }
+
+  .home-heading__title {
+    margin-bottom: 4px;
+    font-size: 30px;
+  }
+
+  .home-heading__sub {
+    font-size: 16px;
+  }
+
+  /* project tiles */
+  .home-project,
+  .home-more {
+    --tile-pad: 18px;
+    min-height: 200px;
+    border-radius: 26px;
+  }
+
+  .home-project__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 15px;
+  }
+
+  .home-project__icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .home-project__arrow,
+  .home-project__domain {
+    display: none;
+  }
+
+  .home-project__name {
+    margin-bottom: 4px;
+    padding-top: 14px;
+    font-size: 22px;
+  }
+
+  .home-project__desc,
+  .home-more__desc {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .home-more__sprout {
+    width: 44px;
+  }
+
+  .home-more__title {
+    margin-bottom: 4px;
+    padding-top: 14px;
+    font-size: 19px;
+    line-height: 1.15;
+  }
+
+  /* guide */
+  .home-guide {
+    --tile-pad: 22px 22px 24px;
+    min-height: 0;
+    border-radius: 26px;
+  }
+
+  .home-guide__chip {
+    padding: 5px 12px;
+    font-size: 13px;
+  }
+
+  .home-guide__chip svg,
+  .home-guide__stack {
+    display: none;
+  }
+
+  .home-guide__title {
+    margin: 12px 0 8px;
+    max-width: 10.5em;
+    font-size: 25px;
+    line-height: 1.1;
+  }
+
+  .home-guide__desc {
+    max-width: 14em;
+    font-size: 15px;
+  }
+
+  .home-guide__cta {
+    padding-top: 14px;
+  }
+
+  .home-guide__potato {
+    right: -22px;
+    bottom: -26px;
+    width: 140px;
+  }
+
+  /* find us + say hi */
+  .home-find,
+  .home-hi {
+    --tile-pad: 18px;
+    min-height: 196px;
+    border-radius: 26px;
+  }
+
+  .home-find__title,
+  .home-hi__title {
+    font-size: 12px;
+  }
+
+  .home-find__list {
+    padding-top: 10px;
+  }
+
+  .home-find__link {
+    justify-content: flex-start;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 17px;
+    line-height: 1.3;
+  }
+
+  .home-find__link svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .home-find__list li:last-child .home-find__link {
+    margin-bottom: -8px;
+    padding-bottom: 0;
+  }
+
+  .home-hi__text {
+    margin-top: 6px;
+    max-width: 8em;
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .home-hi__mail {
+    font-size: 17px;
+  }
+
+  .home-hi__potato {
+    top: 60px;
+    right: -34px;
+    bottom: auto;
+    width: 100px;
+  }
+
+  /* poe intro */
+  .home-poe {
+    --tile-pad: 22px;
+    min-height: 190px;
+    padding-left: 128px;
+    border-radius: 26px;
+    justify-content: flex-start;
+  }
+
+  .home-poe__potato {
+    left: 12px;
+    top: 26px;
+    width: 106px;
+    margin-top: 0;
+  }
+
+  .home-poe__title {
+    margin-bottom: 6px;
+    font-size: 21px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  .home-poe__text {
+    margin-bottom: 14px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .home-poe__actions .btn {
+    min-height: 44px;
+    padding: 0 18px;
+    font-size: 15px;
+  }
+
+  .home-poe__handle {
+    display: none !important;
+  }
+
+  /* latest */
+  .home-latest {
+    --tile-pad: 20px;
+    min-height: 0;
+    gap: 14px;
+    border-radius: 26px;
+  }
+
+  .home-latest__title {
+    font-size: 12px;
+  }
+
+  .home-latest__handle {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .home-latest__head {
+    margin-block: -12px;
+  }
+
+  .home-post {
+    gap: 12px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .home-post__link::after {
+    border-radius: 18px;
+  }
+
+  .home-post__avatar {
+    flex-basis: 40px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .home-post__avatar img {
+    width: 36px;
+  }
+
+  .home-post__who,
+  .home-post__text,
+  .home-post__fallback {
+    font-size: 15px;
+  }
+
+  .home-post__text,
+  .home-post__fallback,
+  .home-post__meta {
+    margin-top: 4px;
+  }
+
+  /* H-Mobile has no follow button here; it comes back when the post can't load. */
+  .home-latest__follow {
+    display: none;
+  }
+
+  .home-latest[data-state="error"] .home-latest__follow {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 360px) {
+  .home-hero__title {
+    font-size: 38px;
+  }
+
+  .home-poe {
+    padding-left: 22px;
+    padding-top: 116px;
+  }
+
+  .home-poe__potato {
+    top: 14px;
+    width: 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-sun:hover .home-sun__mascot,
+  .home-guide:hover .home-guide__potato {
+    transform: none;
+  }
+
+  .home-post__skeleton span {
+    animation: none;
+  }
+}

@@ -1,0 +1,151 @@
+/*
+ * 404 page (404.html), spec section 3.3: the sunburst patch from the home hero with
+ * nothing growing in it, a knocked-out potato (hover/focus/tap swaps its face via
+ * mascot.ts), "nothing growing here.", and two ways back.
+ */
+
+.notfound {
+  display: flex;
+  align-items: center;
+  padding: 24px var(--gutter) 0;
+}
+
+.notfound__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.notfound__scene {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: min(100%, 560px);
+  height: 300px;
+  margin-bottom: 36px;
+  border-radius: var(--radius-lg);
+  background: repeating-conic-gradient(from 0deg at 50% 78%, var(--sun) 0deg 8deg, var(--sun-deep) 8deg 16deg);
+}
+
+/* Soft fade so the rays read as a sky behind the mound. */
+.notfound__ray {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle at 50% 78%, transparent 0 34%, color-mix(in srgb, var(--sun) 55%, transparent) 100%);
+}
+
+.notfound__mound {
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  bottom: -10px;
+  height: 92px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: var(--skin);
+}
+
+/* The one sprout that did not make it, wilted on the dirt. */
+.notfound__sprout {
+  position: absolute;
+  left: calc(50% + 104px);
+  bottom: 66px;
+  width: 56px;
+  height: auto;
+  transform: rotate(62deg);
+  transform-origin: 50% 100%;
+}
+
+html[data-theme="dark"] .notfound__sprout {
+  filter: brightness(1.18);
+}
+
+.notfound__potato {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  width: 220px;
+  height: auto;
+  margin-left: -136px;
+  transform: rotate(-24deg);
+  transform-origin: 50% 90%;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+/* Hovering the patch swaps the face (mascot.ts) and props the potato back up a little. */
+@media (hover: hover) and (pointer: fine) {
+  .notfound__scene:hover .notfound__potato {
+    transform: rotate(-10deg) translateY(-6px);
+  }
+}
+
+.notfound__code {
+  margin-bottom: 10px;
+}
+
+.notfound__title {
+  margin: 0 0 16px;
+  font-size: clamp(40px, 4vw + 16px, 64px);
+  line-height: 1;
+}
+
+.notfound__text {
+  max-width: 30em;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.notfound__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+@media (max-width: 640px) {
+  .notfound {
+    padding-top: 12px;
+  }
+
+  .notfound__scene {
+    height: 236px;
+    margin-bottom: 28px;
+  }
+
+  .notfound__mound {
+    height: 74px;
+  }
+
+  .notfound__potato {
+    bottom: 34px;
+    width: 172px;
+    margin-left: -106px;
+  }
+
+  .notfound__sprout {
+    left: calc(50% + 78px);
+    bottom: 52px;
+    width: 44px;
+  }
+
+  .notfound__text {
+    font-size: 17px;
+  }
+
+  .notfound__actions {
+    flex-direction: column;
+    align-self: stretch;
+    margin-top: 26px;
+  }
+
+  .notfound__actions .btn {
+    width: 100%;
+  }
+}

@@ -7,7 +7,9 @@ node_modules/
 coverage/
 
 # Production
-build/
+# website/build/ holds the Vite plugins (source code), so keep it tracked
+# even though the repo root .gitignore ignores build/ directories.
+!/build/
 dist/
 .next/
 out/

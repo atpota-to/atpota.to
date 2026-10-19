@@ -1,0 +1,821 @@
+/*
+ * Guide page (guides/bluesky-for-brands.html), spec section 3.2, styled after
+ * H-Poe-Desktop / H-PoeM-Closed. Linked only from the guide page, so the page
+ * background below applies here alone. Behaviour: src/scripts/guide.ts.
+ *
+ * Layout: one reading column (max 700px). From 1200px a sticky contents tile sits
+ * on the right; below that a fixed "contents" pill (bottom-left, Poe owns
+ * bottom-right) opens the contents sheet (<dialog>).
+ */
+
+:root {
+  --guide-bg: #FCF8EE;
+  --guide-article: 700px;
+  --guide-toc: 272px;
+  --guide-gutter: max(var(--gutter), 20px);
+  --guide-text: 18px;
+}
+
+html[data-theme="dark"] {
+  --guide-bg: var(--bg);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --guide-text: 17px;
+  }
+}
+
+/* The reading page uses the lighter paper of the guide mock. */
+html,
+body {
+  background: var(--guide-bg);
+}
+
+/* ---------- reading progress ---------- */
+
+.reading-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: var(--z-progress);
+  height: 4px;
+  pointer-events: none;
+}
+
+html:not(.js) .reading-progress {
+  display: none;
+}
+
+.reading-progress__bar {
+  height: 100%;
+  background: var(--leaf);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  will-change: transform;
+}
+
+/* ---------- layout ---------- */
+
+.guide-layout {
+  width: 100%;
+  max-width: calc(var(--guide-article) + 2 * var(--guide-gutter));
+  margin-inline: auto;
+  padding: 24px var(--guide-gutter) 0;
+}
+
+.guide {
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .guide-layout {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, var(--guide-article)) var(--guide-toc);
+    column-gap: clamp(56px, 7vw, 120px);
+    justify-content: center;
+    align-items: start;
+    padding-top: 32px;
+  }
+}
+
+/* ---------- header ---------- */
+
+.guide__crumbs {
+  margin-bottom: 14px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.guide__crumbs-list {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide__crumbs-list li + li::before {
+  content: "/";
+  content: "/" / "";
+  padding-inline: 0.4em;
+}
+
+.guide__title {
+  max-width: 15em;
+  margin: 0 0 16px;
+  font-size: clamp(32px, 2.4vw + 10px, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.guide__subtitle {
+  max-width: 30em;
+  margin: 0 0 22px;
+  font-size: 21px;
+  line-height: 1.35;
+  color: var(--text-soft);
+}
+
+.guide__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.guide__reading-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.guide__reading-time svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.guide__author {
+  white-space: nowrap;
+}
+
+.guide__author a {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.guide__author a:hover {
+  text-decoration: underline;
+}
+
+.guide__thanks {
+  max-width: 40em;
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.guide__thanks a {
+  font-weight: 700;
+}
+
+/* ---------- article typography ---------- */
+
+.guide__body {
+  font-size: var(--guide-text);
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+.guide__body p,
+.guide__body ul,
+.guide__body ol {
+  margin: 0 0 1.1em;
+}
+
+.guide__body :is(h2, h3, h4, h5, h6) {
+  line-height: 1.15;
+  scroll-margin-top: 20px;
+}
+
+/* h2: a soft rule with a sprout growing on its left end (like the footer's edge). */
+.guide__body h2 {
+  position: relative;
+  /* room for the sprout above the rule when a #section link lands here */
+  scroll-margin-top: 52px;
+  margin: 76px 0 22px;
+  padding-top: 42px;
+  font-size: clamp(28px, 1vw + 22px, 36px);
+  line-height: 1.1;
+}
+
+.guide__body h2::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.guide__body h2::after {
+  content: "";
+  position: absolute;
+  top: -33px;
+  left: 8px;
+  width: 37px;
+  height: 34px;
+  background: url("../assets/sprout.svg") center bottom / contain no-repeat;
+}
+
+html[data-theme="dark"] .guide__body h2::after {
+  filter: brightness(1.18);
+}
+
+.guide__body > h2:first-child {
+  margin-top: 64px;
+}
+
+.guide__body h3 {
+  margin: 52px 0 14px;
+  font-size: clamp(24px, 0.5vw + 20px, 29px);
+}
+
+.guide__body h4 {
+  margin: 40px 0 10px;
+  font-size: clamp(21px, 0.45vw + 18px, 25px);
+  line-height: 1.2;
+}
+
+.guide__body h5 {
+  margin: 30px 0 8px;
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--text-soft);
+}
+
+.guide__body h2 + h3 {
+  margin-top: 30px;
+}
+
+.guide__body :is(h2, h3) + h4 {
+  margin-top: 26px;
+}
+
+.guide__body h4 + h5 {
+  margin-top: 18px;
+}
+
+/* A section reached through a #link (contents, deep link) flashes softly. */
+.guide__body :is(h2, h3, h4, h5)[tabindex="-1"]:focus,
+.guide__body :is(h2, h3, h4, h5)[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .guide__body :is(h2, h3, h4, h5):target {
+    animation: guide-target 1.6s var(--ease-out);
+  }
+}
+
+@keyframes guide-target {
+  0%,
+  30% {
+    background: var(--leaf-tint);
+    box-shadow: 0 0 0 10px var(--leaf-tint);
+    border-radius: 6px;
+  }
+}
+
+.guide__body strong {
+  color: var(--ink);
+}
+
+/* Whole-paragraph bold "**1. Create your account.**" steps (Quick Start). */
+.guide__body .guide-step {
+  margin: 1.6em 0 0.45em;
+  font-size: 1.05em;
+  line-height: 1.35;
+}
+
+.guide__body .guide-step + :is(ul, ol) {
+  margin-top: 0;
+}
+
+.guide__body a {
+  color: var(--link);
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.07em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.guide__body a:hover {
+  color: var(--link-hover);
+  text-decoration-color: currentColor;
+}
+
+.guide__body ul,
+.guide__body ol {
+  padding-left: 1.35em;
+}
+
+.guide__body li {
+  margin: 0 0 0.45em;
+  padding-left: 0.2em;
+}
+
+.guide__body li::marker {
+  color: var(--skin);
+}
+
+.guide__body code {
+  padding: 0.1em 0.42em;
+  border-radius: 7px;
+  background: var(--flesh-tint);
+  color: var(--ink);
+  font-size: 0.84em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* The three stacked PDS hostnames (code spans joined by <br>). */
+.guide__body .guide-codes {
+  line-height: 2.15;
+}
+
+.guide__body .guide-media {
+  margin: 30px 0 34px;
+}
+
+.guide__body img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  background: var(--line);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent);
+}
+
+.guide__body blockquote {
+  margin: 0 0 1.1em;
+  padding: 2px 0 2px 18px;
+  border-left: 4px solid var(--leaf);
+  color: var(--text-soft);
+}
+
+.guide__body pre {
+  margin: 0 0 1.1em;
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--flesh-tint);
+  overflow-x: auto;
+}
+
+.guide__body pre code {
+  padding: 0;
+  background: none;
+}
+
+.guide__body hr {
+  margin: 48px 0;
+  border: 0;
+  border-top: 2px solid var(--line-strong);
+}
+
+@media (max-width: 640px) {
+  .guide-layout {
+    padding-top: 22px;
+  }
+
+  .guide__crumbs {
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+
+  .guide__subtitle {
+    margin-bottom: 18px;
+    font-size: 18px;
+  }
+
+  .guide__body {
+    line-height: 1.6;
+  }
+
+  .guide__body h2 {
+    margin-top: 60px;
+    padding-top: 38px;
+  }
+
+  .guide__body h3 {
+    margin-top: 44px;
+  }
+
+  .guide__body h4 {
+    margin-top: 34px;
+  }
+
+  .guide__body h5 {
+    font-size: 18px;
+  }
+
+  .guide__body .guide-media {
+    margin: 22px 0 26px;
+  }
+
+  .guide__body img {
+    border-radius: 18px;
+  }
+}
+
+/* ---------- contents (shared list) ---------- */
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: toc;
+}
+
+.toc-item {
+  counter-increment: toc;
+}
+
+.toc-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 7px 12px 7px 8px;
+  border-radius: 16px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.25;
+  text-decoration: none;
+  transition:
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+
+.toc-link::before {
+  content: counter(toc);
+  content: counter(toc) / "";
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+
+.toc-link:hover {
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .toc-link:hover {
+    background: var(--bg);
+  }
+}
+
+.toc-link[aria-current="true"],
+.toc-link[aria-current="true"]:hover {
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+  font-weight: 700;
+}
+
+.toc-link[aria-current="true"]::before {
+  background: var(--leaf);
+  color: var(--card);
+}
+
+/* ---------- contents tile (desktop) ---------- */
+
+.guide-aside {
+  min-width: 0;
+}
+
+html.js .guide-aside {
+  display: none;
+}
+
+/* Without JS (no sheet), phones and tablets get the contents tile after the article. */
+html:not(.js) .guide-aside {
+  margin-top: 56px;
+}
+
+.guide-toc {
+  padding: 22px 16px 18px;
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  background: var(--card);
+}
+
+.guide-toc__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 8px 12px;
+}
+
+.guide-toc__time {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.guide-toc__poe {
+  margin: 16px 8px 0;
+  padding-top: 16px;
+  border-top: 2px dashed var(--line-strong);
+}
+
+.guide-toc__hint {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@media (min-width: 1200px) {
+  html.js .guide-aside,
+  .guide-aside {
+    display: block;
+    position: sticky;
+    top: 28px;
+    margin-top: 0;
+  }
+
+  .guide-toc {
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* ---------- contents button (phone and tablet) ---------- */
+
+.guide-toc-btn {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: calc(var(--z-poe) - 10);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 0 14px 0 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-user-select: none;
+  user-select: none;
+  transition:
+    opacity var(--dur) ease,
+    transform var(--dur) var(--ease-out),
+    visibility 0s linear 0s,
+    background-color var(--dur-fast) ease;
+}
+
+@media (hover: hover) {
+  .guide-toc-btn:hover {
+    background: var(--paper);
+  }
+}
+
+.guide-toc-btn svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.guide-toc-btn__count {
+  min-width: 2.6em;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.guide-toc-btn__count:empty {
+  display: none;
+}
+
+.guide-toc-btn[aria-expanded="true"] {
+  background: var(--brown);
+  border-color: var(--brown);
+  color: var(--on-brown);
+}
+
+/* Hidden while the footer is on screen (guide.ts). */
+.guide-toc-btn.is-away {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity var(--dur) ease,
+    transform var(--dur) var(--ease-out),
+    visibility 0s linear var(--dur);
+}
+
+@media (min-width: 1200px) {
+  .guide-toc-btn {
+    display: none;
+  }
+}
+
+/* ---------- contents sheet (<dialog>) ---------- */
+
+html.is-toc-open {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+.toc-sheet {
+  inset: 0;
+  width: 100%;
+  max-width: 100%;
+  height: fit-content;
+  max-height: none;
+  margin: auto 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.toc-sheet::backdrop {
+  background: rgba(61, 47, 27, 0.45);
+  background: var(--scrim, rgba(61, 47, 27, 0.45));
+}
+
+.toc-sheet__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(82dvh, 640px);
+  padding: 10px 16px max(16px, env(safe-area-inset-bottom));
+}
+
+.toc-sheet__handle {
+  flex: none;
+  align-self: center;
+  width: 44px;
+  height: 5px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+}
+
+.toc-sheet__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 0 8px;
+}
+
+.toc-sheet__title {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.toc-sheet__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.toc-sheet__close:hover {
+  background: var(--line);
+}
+
+.toc-sheet__close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toc-sheet__time {
+  flex: none;
+  margin: 0 0 10px 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.toc-sheet__nav {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -4px;
+  padding: 0 4px 4px;
+}
+
+.toc-sheet .toc-link {
+  min-height: 52px;
+  font-size: 17px;
+}
+
+/* Tablets: a card that pops up from the contents button instead of a full-width sheet. */
+@media (min-width: 641px) {
+  .toc-sheet {
+    width: 380px;
+    margin: auto auto max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    border-radius: 28px;
+  }
+
+  .toc-sheet__panel {
+    max-height: min(78dvh, 620px);
+    padding-bottom: 16px;
+  }
+
+  .toc-sheet__handle {
+    display: none;
+  }
+
+  .toc-sheet__head {
+    padding-top: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toc-sheet[open] {
+    animation: toc-sheet-in 260ms var(--ease-out);
+  }
+
+  .toc-sheet[open]::backdrop {
+    animation: toc-fade-in 200ms ease;
+  }
+}
+
+@keyframes toc-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+@keyframes toc-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- forced colours ---------- */
+
+@media (forced-colors: active) {
+  .reading-progress__bar {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+
+  .toc-link[aria-current="true"] {
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
+
+  .guide-toc-btn,
+  .toc-sheet {
+    border: 2px solid CanvasText;
+  }
+}
+
+/* ---------- print ---------- */
+
+@media print {
+  .reading-progress,
+  .guide-aside,
+  .guide-toc-btn,
+  .toc-sheet {
+    display: none !important;
+  }
+
+  .guide__body img {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

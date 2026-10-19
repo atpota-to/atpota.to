@@ -2,61 +2,203 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else the OS setting -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.setAttribute('data-theme',t);d.className+=' js'})()</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>atpotato</title>
-    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
-    <link rel="stylesheet" href="styles.css">
-
-    <!-- Favicon -->
-    <link rel="icon" href="/favicon.png" type="image/png">
-    
-    <!-- Primary Meta Tags -->
     <meta name="title" content="atpotato">
     <meta name="description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
-    
+    <link rel="canonical" href="https://atpota.to/">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1C160E" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
     <!-- Open Graph -->
     <meta property="og:type" content="website">
+    <meta property="og:site_name" content="atpotato">
     <meta property="og:url" content="https://atpota.to/">
     <meta property="og:title" content="atpotato">
     <meta property="og:description" content="creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem">
-    <meta property="og:image" content="/og-image.jpg">
+    <meta property="og:image" content="https://atpota.to/og-image.jpg">
+    <meta property="og:image:width" content="1920">
+    <meta property="og:image:height" content="1080">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/home.css">
+
+    <!-- Vercel Web Analytics -->
     <script>
         window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
     </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script defer src="theme.js"></script>
-    <script defer src="logo-hover.js"></script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
 </head>
-<body>
-    <div class="container">
-        <section class="profile">
-            <div class="logo-container">
-                <img src="/atpotato-normal.png" alt="atpotato logo" class="logo">
-            </div>
-            <h1>atpotato</h1>
-            <p class="subtitle">https://atpota.to</p>
-            <p class="tagline">creating fun apps, helpful tools, and approachable content for the atproto and bsky ecosystem</p>
-            <div class="buttons">
-                <a href="https://bsky.app/profile/atpota.to" class="button" target="_blank">bluesky</a>
-                <a href="https://tangled.sh/@atpota.to" class="button" target="_blank">tangled</a>
-                <a href="https://github.com/atpota-to" class="button" target="_blank">github</a>
-            </div>
-            <p class="email">contact@atpota.to</p>
-        </section>
-        <section class="projects">
-            <div class="project-list">
-                <a href="https://anisota.net" class="project-link" target="_blank">anisota.net</a>
-                <a href="https://aturi.to" class="project-link" target="_blank">aturi.to</a>
-                <a href="https://flushes.app" class="project-link" target="_blank">flushes.app</a>
-                <a href="/guides/bluesky-for-brands" class="project-link">How to use Bluesky to grow your brand</a>
-                <p class="coming-soon">...more coming soon</p>
-            </div>
-        </section>
-    </div>
+<body data-page="home" data-poe-nudge="need a hand? ask me anything about atproto.">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
 
-    <div class="button-backdrop"></div>
-    <a href="/" class="home-button">
-        <img src="/atpotato-normal.png" alt="atpotato logo" class="home-logo">
-    </a>
+    <main id="main" class="home" tabindex="-1">
+      <div class="home-grid">
+
+        <section class="tile home-hero" aria-labelledby="home-title">
+          <p class="chip home-hero__chip"><!-- @svg leaf.svg class="home-hero__chip-icon" -->for atproto &amp; bluesky</p>
+          <h1 class="home-hero__title" id="home-title">homegrown apps for the atmosphere.</h1>
+          <p class="home-hero__lede">atpotato makes fun apps, helpful tools, and approachable guides for the atproto and bluesky ecosystem.</p>
+          <div class="home-hero__actions">
+            <a class="btn btn--primary" href="#projects">see what's growing
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+            <a class="btn btn--outline" href="https://bsky.app/profile/atpota.to">follow on bluesky
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>
+            </a>
+          </div>
+        </section>
+
+        <div class="tile home-sun" data-mascot-trigger>
+          <div class="home-sun__mound" aria-hidden="true"></div>
+          <img class="home-sun__sprout home-sun__sprout--1" src="/src/assets/sprout.svg" alt="" width="70" height="65">
+          <img class="home-sun__sprout home-sun__sprout--2" src="/src/assets/sprout.svg" alt="" width="46" height="43">
+          <img class="home-sun__sprout home-sun__sprout--3" src="/src/assets/sprout.svg" alt="" width="58" height="54">
+          <img class="home-sun__mascot" data-mascot="kawaii" src="/src/assets/mascot/potato-kawaii.svg" alt="the atpotato mascot: a smiling potato with an @ on its tummy and leafy vine arms, standing on a dirt mound and waving" width="360" height="293" fetchpriority="high">
+          <p class="home-sun__bubble" aria-hidden="true"><span class="only-hover">psst, hover me</span><span class="only-touch">tap me</span></p>
+        </div>
+
+        <div class="home-heading" id="projects">
+          <h2 class="home-heading__title">what's growing</h2>
+          <p class="home-heading__sub">a few things planted so far.</p>
+        </div>
+
+        <a class="tile tile--link home-project home-project--anisota" href="https://anisota.net">
+          <span class="home-project__top">
+            <span class="home-project__icon">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v12"/><path d="M12 9.5C9.5 5 4.5 4.5 3.8 7.6 3.2 10.6 7 13 12 12"/><path d="M12 9.5c2.5-4.5 7.5-5 8.2-1.9.6 3-3.2 5.4-8.2 4.4"/><path d="M12 13c-3 .2-5.8 2-5.2 4.2.6 1.9 3.6 1.6 5.2-1"/><path d="M12 13c3 .2 5.8 2 5.2 4.2-.6 1.9-3.6 1.6-5.2-1"/><path d="M12 7l-2-3M12 7l2-3"/></svg>
+            </span>
+            <span class="home-project__arrow" aria-hidden="true">
+              <svg focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>
+            </span>
+          </span>
+          <h3 class="home-project__name">anisota</h3>
+          <p class="home-project__domain">anisota.net</p>
+          <p class="home-project__desc"><span class="home-long">a moth-themed bluesky client where your feed is a deck of cards, not an endless scroll.</span><span class="home-short">bluesky as a deck of cards, with moths.</span></p>
+        </a>
+
+        <a class="tile tile--link home-project home-project--aturi" href="https://aturi.to">
+          <span class="home-project__top">
+            <span class="home-project__icon">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
+            </span>
+            <span class="home-project__arrow" aria-hidden="true">
+              <svg focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>
+            </span>
+          </span>
+          <h3 class="home-project__name">aturi</h3>
+          <p class="home-project__domain">aturi.to</p>
+          <p class="home-project__desc"><span class="home-long">open any atproto link in the app you actually use, and peek at the records behind any account.</span><span class="home-short">open atproto links in the app you use.</span></p>
+        </a>
+
+        <a class="tile tile--link home-project home-project--flushes" href="https://flushes.app">
+          <span class="home-project__top">
+            <span class="home-project__icon">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.5 6 7.7 6 11a6 6 0 0 1-12 0c0-3.3 2.5-6.5 6-11z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg>
+            </span>
+            <span class="home-project__arrow" aria-hidden="true">
+              <svg focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>
+            </span>
+          </span>
+          <h3 class="home-project__name">flushes</h3>
+          <p class="home-project__domain">flushes.app</p>
+          <p class="home-project__desc"><span class="home-long">the internet's bathroom. a tiny, silly social app for status updates from the throne.</span><span class="home-short">the internet's bathroom.</span></p>
+        </a>
+
+        <div class="tile tile--dashed home-more">
+          <img class="home-more__sprout" src="/src/assets/sprout.svg" alt="" width="60" height="56" loading="lazy">
+          <h3 class="home-more__title">more in the ground</h3>
+          <p class="home-more__desc">new things sprout here first.<span class="home-long"> follow <a href="https://bsky.app/profile/atpota.to">@atpota.to</a> to catch them early.</span></p>
+        </div>
+
+        <a class="tile tile--link home-guide" href="/guides/bluesky-for-brands">
+          <span class="home-guide__chip">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>
+            guide
+          </span>
+          <h2 class="home-guide__title">how to use bluesky to grow your brand</h2>
+          <p class="home-guide__desc"><span class="home-long">custom feeds, starter packs, labelers, and custom handles, in plain language with screenshots.</span><span class="home-short">feeds, starter packs, labelers, and handles in plain language.</span></p>
+          <span class="home-guide__cta">read the guide
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </span>
+          <span class="home-guide__stack" aria-hidden="true">
+            <span class="home-guide__sheet home-guide__sheet--back"></span>
+            <span class="home-guide__sheet home-guide__sheet--front">
+              <span class="home-guide__bar home-guide__bar--title"></span>
+              <span class="home-guide__bar"></span>
+              <span class="home-guide__bar home-guide__bar--86"></span>
+              <span class="home-guide__shot"></span>
+              <span class="home-guide__bar home-guide__bar--92"></span>
+            </span>
+          </span>
+          <img class="home-guide__potato" src="/src/assets/mascot/potato-wow.svg" alt="" width="170" height="138" loading="lazy">
+        </a>
+
+        <section class="tile tile--soil home-find" aria-labelledby="home-find-title">
+          <h2 class="eyebrow home-find__title" id="home-find-title">find us</h2>
+          <ul class="home-find__list" role="list">
+            <li><a class="home-find__link" href="https://bsky.app/profile/atpota.to">bluesky
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></a></li>
+            <li><a class="home-find__link" href="https://tangled.sh/@atpota.to">tangled
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></a></li>
+            <li><a class="home-find__link" href="https://github.com/atpota-to">github
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg></a></li>
+          </ul>
+        </section>
+
+        <section class="tile tile--sun home-hi" aria-labelledby="home-hi-title">
+          <h2 class="eyebrow home-hi__title" id="home-hi-title">say hi</h2>
+          <p class="home-hi__text"><span class="home-long">questions, ideas, collabs, or just a hello.</span><span class="home-short">questions, ideas, or just a hello.</span></p>
+          <a class="home-hi__mail" href="mailto:contact@atpota.to" aria-label="contact@atpota.to"><span>contact@</span><span>atpota.to</span></a>
+          <img class="home-hi__potato" src="/src/assets/mascot/potato-wink.svg" alt="" width="150" height="122" loading="lazy">
+        </section>
+
+        <section class="tile home-poe" aria-labelledby="home-poe-title">
+          <img class="home-poe__potato" src="/src/assets/mascot/potato-happy.svg" alt="" width="160" height="130" loading="lazy">
+          <h2 class="home-poe__title" id="home-poe-title">poe lives in the corner of every page</h2>
+          <p class="home-poe__text only-hover">click the potato down there, press <kbd class="kbd home-poe__kbd">/</kbd> anywhere, or highlight a word you don't know. poe answers in plain words and links where it found things.</p>
+          <p class="home-poe__text only-touch">tap the potato in the bottom corner any time. poe answers atproto questions in plain words.</p>
+          <div class="home-poe__actions">
+            <button type="button" class="btn btn--primary btn--sm home-poe__btn" data-poe-open>say hi to poe</button>
+            <a class="btn btn--outline btn--sm home-poe__handle" href="https://bsky.app/profile/poe.atpota.to">@poe.atpota.to</a>
+          </div>
+        </section>
+
+        <section class="tile home-latest" aria-labelledby="home-latest-title" data-latest data-state="loading">
+          <div class="home-latest__head">
+            <h2 class="eyebrow home-latest__title" id="home-latest-title">latest on bluesky</h2>
+            <a class="home-latest__handle" href="https://bsky.app/profile/atpota.to">@atpota.to</a>
+          </div>
+          <article class="home-post" data-latest-post>
+            <span class="home-post__avatar"><img src="/src/assets/mascot/potato-normal.svg" alt="" width="42" height="34" loading="lazy" data-latest-avatar></span>
+            <div class="home-post__body">
+              <p class="home-post__who"><strong>atpotato</strong> <span class="home-post__handle">@atpota.to</span></p>
+              <div class="home-post__skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+              <p class="visually-hidden home-post__loading">loading the latest post</p>
+              <p class="home-post__text" dir="auto" data-latest-text hidden></p>
+              <p class="home-post__meta" data-latest-meta hidden><a class="home-post__link" href="https://bsky.app/profile/atpota.to" data-latest-link><span class="visually-hidden">open the post on bluesky, posted </span><time data-latest-time></time></a><span data-latest-embed-wrap hidden><span aria-hidden="true"> · </span><span data-latest-embed></span></span></p>
+              <p class="home-post__fallback" data-latest-fallback>the newest posts live on bluesky. follow along there to catch them first.</p>
+            </div>
+          </article>
+          <a class="btn btn--soil btn--sm home-latest__follow" href="https://bsky.app/profile/atpota.to">follow on bluesky</a>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- @partial footer -->
 </body>
 </html>

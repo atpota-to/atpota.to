@@ -1,0 +1,26 @@
+<header class="site-header" data-site-header>
+  <a class="site-header__brand" href="/" aria-label="atpotato home">
+    <!-- @svg wordmark.svg class="wordmark" -->
+  </a>
+  <button type="button" class="site-header__menu-btn" aria-expanded="false" aria-controls="site-menu" data-nav-toggle>
+    <svg class="icon-menu" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    <svg class="icon-close" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    <span class="visually-hidden">menu</span>
+  </button>
+  <div class="site-menu" id="site-menu" data-nav-menu>
+    <nav class="site-nav" aria-label="main">
+      <ul class="site-nav__list" role="list">
+        <li><a class="site-nav__link" href="/" data-nav="home">home</a></li>
+        <li><a class="site-nav__link" href="/#projects" data-nav="projects">projects</a></li>
+        <li><a class="site-nav__link" href="/guides/bluesky-for-brands" data-nav="guides">guides</a></li>
+        <li><a class="site-nav__link" href="/#about" data-nav="about">about</a></li>
+      </ul>
+    </nav>
+    <button type="button" class="btn btn--leaf ask-poe-btn" data-poe-open aria-keyshortcuts="/">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18l-1 3 4-2h9a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v7a3 3 0 0 0 2 3z"/></svg>
+      <span class="ask-poe-btn__label">ask poe</span>
+      <kbd class="kbd" aria-hidden="true">/</kbd>
+    </button>
+  </div>
+</header>
+<div class="site-menu-scrim" data-nav-scrim hidden></div>
