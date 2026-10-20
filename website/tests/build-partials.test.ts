@@ -25,6 +25,13 @@ describe('partials plugin', () => {
     const header = applyPartials('<body data-page="blog"><!-- @partial header --></body>', opts);
     expect(header).toMatch(/<a aria-current="page" class="site-nav__link" href="\/blog" data-nav="blog">/);
     expect(header.match(/aria-current/g)).toHaveLength(1);
+    const weather = applyPartials('<body data-page="weather"><!-- @partial header --></body>', opts);
+    expect(weather).toMatch(/<a aria-current="page" class="site-nav__link" href="\/weather" data-nav="weather">/);
+    expect(weather.match(/aria-current/g)).toHaveLength(1);
+    const home = applyPartials('<body data-page="home"><!-- @partial header --></body>', opts);
+    expect(home).toMatch(/<a aria-current="page" class="site-header__brand" href="\/"[^>]*data-nav="home">/);
+    expect(home.match(/aria-current/g)).toHaveLength(1);
+    expect(home).not.toMatch(/class="site-nav__link" href="\/"/);
     const notFound = applyPartials('<body data-page="notfound"><!-- @partial header --></body>', opts);
     expect(notFound).not.toContain('aria-current');
     const guide = applyPartials('<body data-page="guide"><!-- @partial header --></body>', opts);
