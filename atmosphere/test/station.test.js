@@ -193,6 +193,22 @@ test('a minute sums its covered seconds', () => {
   assert.equal(new Station().minute(T0).seconds, 0);
 });
 
+test('counts a record in the second it was made, up to a minute before Jetstream stamped it', () => {
+  const c = clock(T0 + 100);
+  const s = new Station({ now: c.now });
+  s.beginSession();
+  s.ingest(us(T0 + 90), POST, us(T0 + 62)); // let out late after a pause
+  s.ingest(us(T0 + 90), LIKE, us(T0 + 95)); // claims to be from after Jetstream saw it
+  s.ingest(us(T0 + 90), POST, NaN);
+  assert.equal(s.buckets.get(T0 + 62).tally.creates.get('app.bsky.feed.post'), 1);
+  assert.equal(s.buckets.get(T0 + 90).tally.creates.get('app.bsky.feed.like'), 1, 'never later than its stamp');
+  assert.equal(s.buckets.get(T0 + 90).tally.creates.get('app.bsky.feed.post'), 1);
+  assert.equal(s.counts.movedBack, 1);
+  assert.equal(s.counts.maxMovedMs, 28_000);
+  // coverage still follows the stream: nothing past T0 + 89 is covered yet
+  assert.equal(s.coveredThrough, T0 + 89);
+});
+
 test('accounts: who committed in the window, by the same coverage and replay rules', () => {
   const c = clock(T0 + 2.5);
   const s = new Station({ now: c.now });
@@ -200,12 +216,12 @@ test('accounts: who committed in the window, by the same coverage and replay rul
   const who = (i) => ({ register: registerOf(`did:plc:u${i % 40}`), app: i % 10 === 0 ? 'tangled.sh' : null });
   s.beginSession();
   let i = 0;
-  for (let t = T0 - 80; t <= T0 - 30.05; t += 0.05) s.ingest(us(t), POST, who(i++));
+  for (let t = T0 - 80; t <= T0 - 30.05; t += 0.05) s.ingest(us(t), POST, undefined, who(i++));
   s.endSession();
   // the replay overlaps; nobody new in it, and nothing is counted twice anyway
   const lastUs = s.lastUs;
   s.beginSession({ dropThroughUs: lastUs });
-  for (let t = T0 - 32; t <= T0 + 0.95; t += 0.05) s.ingest(us(t), POST, who(i++));
+  for (let t = T0 - 32; t <= T0 + 0.95; t += 0.05) s.ingest(us(t), POST, undefined, who(i++));
   const r = s.reading();
   assert.equal(r.accounts.active, 40);
   assert.equal(r.accounts.bluesky, 36);
@@ -222,7 +238,7 @@ test('accounts in seconds that were not covered do not count', () => {
   const c = clock(T0 + 2.5);
   const s = new Station({ now: c.now });
   s.beginSession();
-  for (let t = T0 - 60.5; t <= T0 + 0.95; t += 0.1) s.ingest(us(t), POST, { register: registerOf('did:plc:steady'), app: null });
+  for (let t = T0 - 60.5; t <= T0 + 0.95; t += 0.1) s.ingest(us(t), POST, undefined, { register: registerOf('did:plc:steady'), app: null });
   // the second at T0 is not covered yet: someone new in it is not in the window
   s.ingest(us(T0 + 0.99), POST, { register: registerOf('did:plc:late'), app: null });
   assert.equal(s.reading().accounts.active, 1);

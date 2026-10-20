@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as api from '../api/gardener.js';
+import { POE_DID } from '../server/blog/config.js';
 import { resetDiscussionCaches } from '../server/blog/discussion.js';
 import { SPROUT_NSID, TEND_NSID } from '../server/garden.js';
-import { CACHE_GARDENER, createGardenerHandlers, MAX_GARDENS, toGiven, toTend } from '../server/gardener.js';
-import { fetchGardener } from '../src/scripts/garden.js';
+import { CACHE_GARDENER, createGardenerHandlers, MAX_GARDENS, MEMORY_NSID, PETS_NSID, toGiven, toNotes, toPets, toTend } from '../server/gardener.js';
+import { fetchGardener, MEMORY_NSID as CLIENT_MEMORY_NSID, POE_DID as CLIENT_POE_DID } from '../src/scripts/garden.js';
 import { CID, DAY, did, fakeFetch, gardenRecord, patchRecord, patchUri, sprout, tendOf, tid, type Net } from './garden-net.js';
 
 // /api/gardener against the same scripted network as /api/garden. did(1) grew two flowers
 // in atpotato's summer patch (now closed), has one growing in the autumn patch (after
 // moving it once), planted one in did(2)'s garden, keeps a garden of its own that did(2)
-// and did(3) planted in, and has tended other people's flowers.
+// and did(3) planted in, has tended other people's flowers, has petted Poe, and Poe keeps
+// notes about it.
 
 const NOW = Date.parse('2026-10-20T12:00:00.000Z');
 const daisy = `at://${did(1)}/${SPROUT_NSID}/n1`;
@@ -55,6 +57,9 @@ function net(): Net {
       [`${did(1)}/${TEND_NSID}/${at('2026-10-20T08:00:00Z')}`]: tendOf(theirRose, 'talk'),
       [`${did(1)}/${TEND_NSID}/${at('2026-10-20T09:00:00Z')}`]: { ...tendOf(theirRose), action: 'dance' },
       [`${did(1)}/${TEND_NSID}/${at('2026-10-20T10:00:00Z')}`]: tendOf(`at://${did(2)}/app.bsky.feed.post/3p`),
+      // its pets for Poe, and Poe's notes about it (one of them blank)
+      [`${did(1)}/${PETS_NSID}/self`]: { $type: PETS_NSID, count: 108, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-20T00:00:00Z' },
+      [`${POE_DID}/${MEMORY_NSID}/${did(1)}`]: { $type: MEMORY_NSID, subject: did(1), notes: ['likes tulips', 'waters every morning', ' '], updatedAt: '2026-10-20T00:00:00Z' },
     },
     profiles: [
       { did: did(1), handle: 'one.test', displayName: 'One', avatar: 'https://cdn.bsky.app/one.jpg' },
@@ -151,7 +156,27 @@ describe('/api/gardener', () => {
           { at: new Date(daisyAt + 3600_000).toISOString(), action: 'water', flower: { uri: daisy, owner: { did: did(1), handle: 'one.test' } } },
         ],
       },
+      poe: { pets: 108, notes: 2 },
     });
+  });
+
+  it('reads pets and Poe’s notes: a whole count, and only notes about this person', () => {
+    expect(toPets({ count: 108 })).toBe(108);
+    for (const count of [-1, 1.5, '108', 10_000_001, null]) expect(toPets({ count }), String(count)).toBe(0);
+    expect(toPets(null)).toBe(0);
+    expect(toNotes({ subject: did(1), notes: ['a', 'b', '', 3] }, did(1))).toBe(2);
+    expect(toNotes({ subject: did(2), notes: ['a'] }, did(1))).toBe(0);
+    expect(toNotes({ subject: did(1), notes: 'a' }, did(1))).toBe(0);
+    expect([CLIENT_POE_DID, CLIENT_MEMORY_NSID]).toEqual([POE_DID, MEMORY_NSID]);
+  });
+
+  it('no pets and no notes is 0 each, and so is a PDS that can’t say', async () => {
+    const body = await (await handlers().GET(new Request('https://atpota.to/api/gardener?actor=three.test'))).json();
+    expect(body.poe).toEqual({ pets: 0, notes: 0 });
+    const n = net();
+    n.records[`${did(1)}/${PETS_NSID}/self`] = { $type: PETS_NSID, count: 'lots', createdAt: '2026-10-01T00:00:00Z' };
+    n.records[`${POE_DID}/${MEMORY_NSID}/${did(1)}`] = { $type: MEMORY_NSID, subject: did(2), notes: ['not about one'] };
+    expect((await (await handlers(n).GET(new Request(`https://atpota.to/api/gardener?actor=${did(1)}`))).json()).poe).toEqual({ pets: 0, notes: 0 });
   });
 
   it('in a garden of one each, their flower is the first they planted there, as the garden shows it', async () => {
@@ -216,6 +241,7 @@ describe('/api/gardener', () => {
       ['r1', '2026-summer', 'atpota.to', 0],
     ]);
     expect([view.given.total, view.given.helped, view.given.recent.length]).toEqual([4, 2, 4]);
+    expect(view.poe).toEqual({ pets: 108, notes: 2 });
     expect(await fetchGardener('one.test', browserFetch)).toMatchObject({ did: did(1) });
     expect(await fetchGardener('nobody.test', browserFetch)).toBe('missing');
     expect(await fetchGardener(did(2), (async () => new Response('down', { status: 503 })) as typeof fetch)).toBeNull();
@@ -223,6 +249,9 @@ describe('/api/gardener', () => {
     const other = (async () => Response.json({ did: did(2), handle: 'two.test', flowers: [] })) as typeof fetch;
     expect(await fetchGardener(did(1), other)).toBeNull();
     expect(await fetchGardener('one.test', other)).toBeNull();
+    // Poe's numbers that aren't counts are 0, and an answer without them has none
+    expect(await fetchGardener(did(2), (async () => Response.json({ did: did(2), handle: 'two.test', flowers: [], poe: { pets: -3, notes: 'two' } })) as typeof fetch)).toMatchObject({ poe: { pets: 0, notes: 0 } });
+    expect(await fetchGardener(did(2), (async () => Response.json({ did: did(2), handle: 'two.test', flowers: [] })) as typeof fetch)).toMatchObject({ poe: { pets: 0, notes: 0 } });
     // a flower whose patch isn't in the repo of the owner it names is left out
     const real = await (await h.GET(new Request(`https://atpota.to/api/gardener?actor=${did(1)}`))).json();
     real.flowers[0].patch.owner = { did: did(3), handle: 'three.test' };

@@ -1,7 +1,12 @@
 // station.js
-// The last hour of the firehose, one tally per second, keyed by each event's own time
-// (time_us), not by when it arrived. A reconnect that replays from a cursor therefore
-// fills the right seconds.
+// The last hour of the firehose, one tally per second, keyed by each event's own time,
+// not by when it arrived: the second a record was made (clock.js happenedUs: its rev,
+// when that's believable), else Jetstream's time_us. A reconnect that replays from a
+// cursor therefore fills the right seconds, and so does a backlog Jetstream lets out
+// after a pause.
+//
+// Coverage and replays go by time_us, the stream's position: a second is covered once
+// the stream is past it, whichever second its records end up in.
 //
 // Coverage. A second is only counted if this process saw the whole of it: within one
 // connection, every second from the first event's (rounded up) to the one before the
@@ -40,7 +45,7 @@ export class Station {
     this.lastUs = null;
     /** The latest second marked covered, on any connection. */
     this.coveredThrough = null;
-    this.counts = { messages: 0, counted: 0, replayed: 0, tooOld: 0, future: 0, badTime: 0, unparseable: 0 };
+    this.counts = { messages: 0, counted: 0, replayed: 0, tooOld: 0, future: 0, badTime: 0, unparseable: 0, movedBack: 0, maxMovedMs: 0 };
   }
 
   get connected() {
@@ -66,11 +71,12 @@ export class Station {
   }
 
   /**
-   * One Jetstream message: its time_us, what it counts as, and whose it is (accountOf,
-   * or null). A message that counts as nothing (null) still moves coverage on: the stream
-   * was flowing.
+   * One Jetstream message: its time_us, what it counts as, the microsecond it should
+   * be counted at (happenedUs, at most a minute before time_us; default time_us), and
+   * whose it is (accountOf, or null; counted in the same second as the record). A
+   * message that counts as nothing (null) still moves coverage on: the stream was flowing.
    */
-  ingest(timeUs, event, account = null) {
+  ingest(timeUs, event, atUs = timeUs, account = null) {
     const s = this.session;
     if (!s) return;
     this.counts.messages++;
@@ -78,9 +84,8 @@ export class Station {
       this.counts.badTime++;
       return;
     }
-    const second = Math.floor(timeUs / 1e6);
     const nowSec = this.now() / 1000;
-    if (second > nowSec + FUTURE_SECONDS) {
+    if (Math.floor(timeUs / 1e6) > nowSec + FUTURE_SECONDS) {
       this.counts.future++;
       return;
     }
@@ -90,6 +95,8 @@ export class Station {
       this.counts.replayed++;
       return;
     }
+    const at = typeof atUs === 'number' && Number.isFinite(atUs) && atUs <= timeUs ? atUs : timeUs;
+    const second = Math.floor(at / 1e6);
     if (second < nowSec - RETAIN_SECONDS) {
       this.counts.tooOld++;
       return;
@@ -99,6 +106,9 @@ export class Station {
     if (event) {
       addEvent(b.tally, event);
       this.counts.counted++;
+      const movedMs = (timeUs - at) / 1000;
+      if (movedMs >= 1000) this.counts.movedBack++;
+      if (movedMs > this.counts.maxMovedMs) this.counts.maxMovedMs = Math.round(movedMs);
     }
     if (account) addAccount((b.accounts ??= emptyAccounts()), account);
   }
