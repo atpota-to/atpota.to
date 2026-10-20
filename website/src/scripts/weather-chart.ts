@@ -1,8 +1,11 @@
 /**
  * A small line chart for the weather report's trends (weather-page.ts): one series, one
- * axis, drawn as SVG at the host's own width. A 2px line over a 10% wash, three hairline
- * gridlines from zero, and a gap wherever the station missed a step (it doesn't join
- * across missing time, which would read as a quiet stretch).
+ * axis, drawn as SVG at the host's own width. A smooth 2px line over a 10% wash, three
+ * hairline gridlines from zero, and a gap wherever the station missed a step (it doesn't
+ * join across missing time, which would read as a quiet stretch).
+ *
+ * The curve is monotone (smoothPath): it bends between points but never overshoots
+ * them, so a smooth line never shows a peak or a dip that isn't in the data.
  *
  * Hover, touch or the arrow keys move a crosshair to the nearest point and show its value
  * and time; every value is also in the page's table view, so nothing lives only here.
@@ -41,6 +44,45 @@ export function niceMax(max: number): number {
   const power = 10 ** Math.floor(Math.log10(max));
   for (const step of [1, 2, 2.5, 5, 10]) if (step * power >= max) return step * power;
   return 10 * power;
+}
+
+const f = (v: number) => (Math.round(v * 10) / 10).toString();
+
+/**
+ * A smooth SVG path through points in x order: a monotone cubic (Steffen's method, as in
+ * d3's curveMonotoneX), so between two points the curve stays between their values.
+ */
+export function smoothPath(pts: ReadonlyArray<readonly [number, number]>): string {
+  const n = pts.length;
+  if (n === 0) return '';
+  const [x0, y0] = pts[0]!;
+  if (n === 1) return `M${f(x0)},${f(y0)}`;
+  if (n === 2) return `M${f(x0)},${f(y0)}L${f(pts[1]![0])},${f(pts[1]![1])}`;
+  const slope = (i: number) => {
+    const h = pts[i + 1]![0] - pts[i]![0];
+    return h ? (pts[i + 1]![1] - pts[i]![1]) / h : 0;
+  };
+  // the tangent at each inner point, never steeper than either side allows
+  const t: number[] = new Array(n).fill(0);
+  for (let i = 1; i < n - 1; i++) {
+    const h0 = pts[i]![0] - pts[i - 1]![0];
+    const h1 = pts[i + 1]![0] - pts[i]![0];
+    const s0 = slope(i - 1);
+    const s1 = slope(i);
+    const p = h0 + h1 ? (s0 * h1 + s1 * h0) / (h0 + h1) : 0;
+    t[i] = (Math.sign(s0) + Math.sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), 0.5 * Math.abs(p)) || 0;
+  }
+  // the ends lean the way their first and last stretches go
+  t[0] = (3 * slope(0) - t[1]!) / 2;
+  t[n - 1] = (3 * slope(n - 2) - t[n - 2]!) / 2;
+  let d = `M${f(x0)},${f(y0)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [ax, ay] = pts[i]!;
+    const [bx, by] = pts[i + 1]!;
+    const third = (bx - ax) / 3;
+    d += `C${f(ax + third)},${f(ay + t[i]! * third)},${f(bx - third)},${f(by - t[i + 1]! * third)},${f(bx)},${f(by)}`;
+  }
+  return d;
 }
 
 /** Runs of consecutive points with data, split wherever a step is missing. */
@@ -123,7 +165,7 @@ function draw(host: HTMLElement): void {
   });
 
   for (const run of segments(points, opts.stepMs)) {
-    const line = run.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v!).toFixed(1)}`).join('');
+    const line = smoothPath(run.map((p) => [x(p.t), y(p.v!)] as const));
     if (run.length === 1) {
       svg.append(el('circle', { class: 'weather-chart__dot', cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
       continue;

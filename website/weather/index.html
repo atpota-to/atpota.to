@@ -49,6 +49,8 @@
         <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
         <div class="weather" data-weather-report data-state="loading">
             <header class="tile weather-hero" aria-labelledby="weather-title">
+                <!-- clouds that come with the diversity index (src/scripts/weather-sky.ts) -->
+                <div class="weather-sky" aria-hidden="true" data-weather-sky></div>
                 <div class="weather-hero__words">
                     <p class="eyebrow weather-hero__eyebrow">live from the firehose</p>
                     <h1 class="weather-hero__title" id="weather-title">the atmosphere weather report</h1>
@@ -215,9 +217,13 @@
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="eyebrow" id="weather-how-title">how it&#39;s measured</h2>
                 <p>atpotato&#39;s weather station listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a>, all the time, and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky. the numbers up top are the last 60 seconds, and the station writes down every minute for the trends.</p>
+                <p>the clouds up top are the diversity index: a clear sky when nearly everything is bluesky, cloudier the more records come from other apps. weather alerts pop up in the corner when an app blows in, a storm rolls in, or the sky gets more mixed.</p>
                 <p>a quiet app can still miss a minute, and one busy bot can tip the index for a while. this page checks again every few seconds while it&#39;s open. <a href="/">back home</a>.</p>
+                <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>
         </div>
+        <!-- weather alerts (src/scripts/weather-alerts.ts): cards slide in here, read out politely -->
+        <div class="weather-alerts" data-weather-alerts aria-live="polite"></div>
     </main>
 
     <!-- @partial footer -->

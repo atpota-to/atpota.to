@@ -1546,3 +1546,110 @@ html[data-theme="dark"] .site-footer__sprout {
     background: Highlight;
   }
 }
+
+/* ---------- the weather sky: clouds that come with the diversity index (weather-sky.ts) ---------- */
+
+/* On the home page's weather tile and the weather report's header. Like the sunburst
+   tile's clouds (home.css), each drift is as wide as the sky and carries its cloud right
+   across; under reduced motion they rest where they are. In the dark the clouds are only
+   a faint haze, so the light text over them stays easy to read. */
+:root {
+  --weather-cloud: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="dark"] {
+  --weather-cloud: rgba(255, 253, 247, 0.07);
+}
+
+.weather-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.weather-sky ~ :not(.visually-hidden) {
+  position: relative;
+  z-index: 1;
+}
+
+.weather-sky__drift {
+  position: absolute;
+  left: 0;
+  top: var(--y);
+  width: 100%;
+  transform: translateX(calc(var(--rest) + 130px));
+  transition: opacity 1.2s var(--ease-out);
+}
+
+.weather-sky__drift.is-going {
+  opacity: 0;
+}
+
+.weather-sky__cloud {
+  position: absolute;
+  right: 100%;
+  top: 0;
+  width: 110px;
+  height: 32px;
+  border-radius: 32px;
+  background: var(--weather-cloud);
+  transform: scale(var(--size, 1));
+  transform-origin: 100% 50%;
+}
+
+.weather-sky__cloud::before,
+.weather-sky__cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.weather-sky__cloud::before {
+  left: 18px;
+  top: -22px;
+  width: 46px;
+  height: 46px;
+}
+
+.weather-sky__cloud::after {
+  left: 54px;
+  top: -14px;
+  width: 34px;
+  height: 34px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-sky__drift {
+    animation: weather-sky-drift var(--dur) linear var(--at) infinite;
+  }
+
+  .weather-sky__drift.is-new .weather-sky__cloud {
+    animation: weather-sky-in 1.2s var(--ease-out) both;
+  }
+}
+
+@keyframes weather-sky-drift {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(100% + 130px));
+  }
+}
+
+@keyframes weather-sky-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .weather-sky {
+    display: none;
+  }
+}

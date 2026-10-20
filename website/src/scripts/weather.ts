@@ -10,10 +10,13 @@
  * numbers just change and the rays hold still.
  *
  * Under the Bluesky numbers sits the diversity index: the share of new records written
- * outside Bluesky, with a bar for the split.
+ * outside Bluesky, with a bar for the split, and the sky behind it all gets cloudier as
+ * the index climbs (weather-sky.ts).
  *
  * States live on the tile as data-state="loading" | "ready" | "error".
  */
+
+import { cloudCount, renderClouds } from './weather-sky';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
@@ -187,6 +190,8 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
   const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
   if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
   spinRays(tile, reading.perSecond.posts);
+  const sky = tile.querySelector<HTMLElement>('[data-weather-sky]');
+  if (sky && reading.diversity) renderClouds(sky, cloudCount(reading.diversity.index));
   const mix = tile.querySelector<HTMLElement>('[data-weather-mix]');
   if (mix && reading.records && reading.diversity) {
     const index = tile.querySelector<HTMLElement>('[data-weather-index]');
