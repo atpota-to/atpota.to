@@ -131,30 +131,11 @@ html[data-theme="dark"] {
   line-height: 1.35;
 }
 
-/* The station's last 60 seconds, under the reading (weather-page.ts renderSparkline). Its
-   room is kept while the page loads, since the station's reading is the usual one. It
-   scrolls left as the seconds go by, the oldest fading out at the left edge. */
-.weather-spark {
+/* The station's last 60 seconds (components.css, .weather-spark). Its room is kept while
+   the page loads, since the station's reading is the usual one. */
+.weather-hero .weather-spark {
   max-width: 260px;
-  height: 36px;
   margin-top: 14px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%);
-  mask-image: linear-gradient(90deg, transparent, #000 14%);
-}
-
-.weather-spark svg {
-  display: block;
-  width: 100%;
-  height: 36px;
-  overflow: hidden;
-}
-
-.weather-spark path {
-  fill: none;
-  stroke: var(--weather-sky-text);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
 }
 
 /* ---------- the almanac: today so far, new in the atmosphere (weather-almanac.ts) ---------- */
@@ -771,8 +752,7 @@ html[data-theme="dark"] {
 }
 
 @media (forced-colors: active) {
-  .weather-chart__line,
-  .weather-spark path {
+  .weather-chart__line {
     stroke: CanvasText;
   }
 

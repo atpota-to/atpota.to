@@ -326,11 +326,17 @@ a.tile.tile--soil:hover {
   gap: 20px;
 }
 
+/* The wordmark sits in a pill of sky as tall as the nav's, with the weather in it
+   (nav-weather.ts): a little sun at the end, clouds drifting behind the letters. */
 .site-header__brand {
+  position: relative;
   justify-self: start;
   display: flex;
-  border-radius: 10px;
+  padding: 9px 46px 9px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--sky);
   color: var(--brown);
+  transition: background-color 1.2s var(--ease-out);
 }
 
 .site-header__brand:hover {
@@ -338,7 +344,70 @@ a.tile.tile--soil:hover {
 }
 
 .site-header__brand .wordmark {
+  position: relative;
+  z-index: 1;
   height: 38px;
+}
+
+.site-header__sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.site-header__sun {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  translate: 0 -50%;
+  transition: scale var(--dur-spring) var(--ease-spring);
+}
+
+.site-header__brand:hover .site-header__sun {
+  scale: 1.15;
+}
+
+/* The tile's clouds (weather-sky.ts), at a third of the size; under reduced motion they
+   rest nearer the start of the sky, since it's so short. */
+.site-header__sky .weather-sky__drift {
+  transform: translateX(calc(var(--rest) + 40px));
+}
+
+.site-header__sky .weather-sky__cloud {
+  width: 36px;
+  height: 11px;
+  border-radius: 11px;
+}
+
+.site-header__sky .weather-sky__cloud::before {
+  left: 6px;
+  top: -7px;
+  width: 15px;
+  height: 15px;
+}
+
+.site-header__sky .weather-sky__cloud::after {
+  left: 18px;
+  top: -5px;
+  width: 11px;
+  height: 11px;
+}
+
+/* A storm greys the sky a little. */
+:root {
+  --header-storm: #A3B9C4;
+}
+
+html[data-theme="dark"] {
+  --header-storm: #122830;
+}
+
+.site-header__brand:has([data-condition="stormy"]) {
+  background: var(--header-storm);
 }
 
 .site-menu {
@@ -377,11 +446,21 @@ a.tile.tile--soil:hover {
   color: var(--text);
 }
 
-/* Narrow desktops: a little less room around each link, so the wordmark keeps its size
-   until the phone menu takes over at 880px. */
+/* Narrow desktops: a little less room around each link and in the wordmark's sky, so the
+   wordmark keeps most of its size until the phone menu takes over at 880px. */
 @media (min-width: 881px) and (max-width: 960px) {
   .site-nav__link {
     padding: 0 14px;
+  }
+
+  .site-header__brand {
+    padding: 9px 38px 9px 14px;
+  }
+
+  .site-header__sun {
+    right: 6px;
+    width: 28px;
+    height: 28px;
   }
 }
 
@@ -785,7 +864,17 @@ a.tile.tile--soil:hover {
     gap: 12px;
   }
 
+  .site-header__brand {
+    padding: 8px 40px 8px 16px;
+  }
+
   .site-header__brand .wordmark {
+    height: 30px;
+  }
+
+  .site-header__sun {
+    right: 7px;
+    width: 30px;
     height: 30px;
   }
 
@@ -1828,5 +1917,37 @@ html[data-theme="dark"] .weather-sun__night {
   .weather-sun__moon,
   .weather-sun__star {
     fill: Canvas;
+  }
+}
+
+/* ---------- the weather sparkline (weather-spark.ts) ---------- */
+
+/* The station's last 60 seconds, under the reading on the weather report's header and the
+   home page's weather tile, in the colour of the text around it. It scrolls left as the
+   seconds go by, the oldest fading out at the left edge. */
+.weather-spark {
+  height: 36px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%);
+  mask-image: linear-gradient(90deg, transparent, #000 14%);
+}
+
+.weather-spark svg {
+  display: block;
+  width: 100%;
+  height: 36px;
+  overflow: hidden;
+}
+
+.weather-spark path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+@media (forced-colors: active) {
+  .weather-spark path {
+    stroke: CanvasText;
   }
 }

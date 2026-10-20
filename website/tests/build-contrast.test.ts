@@ -68,6 +68,8 @@ const PAIRS: Array<[string, string, number]> = [
   // the blog's email field: a brown outline on paper, inside the hero or the flesh-tint end card
   ['brown', 'paper', UI],
   ['brown', 'flesh-tint', UI],
+  // the header's wordmark, in its little sky
+  ['brown', 'sky', UI],
   ['on-sun', 'sun', TEXT],
   ['on-sun-soft', 'sun', TEXT],
   ['on-sun', 'sun-deep', TEXT],
