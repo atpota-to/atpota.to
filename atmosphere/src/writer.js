@@ -3,8 +3,10 @@
 // atmosphere_minute_app row per app outside Bluesky. Counts, not rates: rates and the
 // diversity index for any range come from dividing sums, so rollups stay exact.
 //
-// A minute is sealed SETTLE_S after it ends, once the stream has got past it (so a
-// reconnect's replay can still fill it). If the stream never gets past it, it is sealed
+// A minute is sealed SETTLE_S after it ends, once the stream has got MAX_EARLIER_S past
+// it: a record goes in the second its rev says, up to a minute before Jetstream's stamp
+// (clock.js), so until then a backlog after a pause could still add to it, and a
+// reconnect's replay could still fill it. If the stream never gets there, it is sealed
 // with whatever it has once it is GIVE_UP_S old, before its seconds are pruned. A minute
 // with no covered seconds is never written.
 //
@@ -12,6 +14,7 @@
 // minute. Sealed rows wait in memory, oldest first, while Supabase is down.
 
 import { appDomain, COLLECTIONS, isBluesky, splitOf } from './atmosphere.js';
+import { MAX_EARLIER_S } from './clock.js';
 import { RETAIN_SECONDS } from './station.js';
 
 export const SETTLE_S = 15;
@@ -107,7 +110,7 @@ export function createWriter({ station, upsert, log, startMinute, now = () => Da
       next = oldest;
     }
     while (next + 60 + SETTLE_S <= nowSec) {
-      const streamPast = station.coveredThrough !== null && station.coveredThrough >= next + 59;
+      const streamPast = station.coveredThrough !== null && station.coveredThrough >= next + 59 + MAX_EARLIER_S;
       if (!streamPast && nowSec - (next + 60) < GIVE_UP_S) break;
       const { tally, seconds } = station.minute(next);
       if (seconds > 0) pending.push(minuteRows(next, tally, seconds));

@@ -45,9 +45,19 @@ curl -s -H "x-atpotato-weather-secret: $(grep ^WEATHER_SECRET= /root/atpotato-we
   falling back to `jetstream1`. That's about 450 events/s and 240 KB/s inbound
   (~20 GB a day; DigitalOcean doesn't bill inbound). It uses v1, not the v2 that
   the mentions service uses, because the website's reference sampler reads v1.
-- **Per-second buckets keyed by event time** (`floor(time_us / 1e6)`), kept for an
-  hour. Events more than an hour old, or more than 5 s in the future, are ignored.
-- **Coverage.** A second counts only if one connection saw all of it: from its
+- **Per-second buckets keyed by when each record was made**, kept for an hour
+  (`src/clock.js`). Jetstream's `time_us` is when Jetstream handled an event; when it
+  pauses, the backlog comes out together, stamped late. On 2026-10-20 jetstream2 sent
+  nothing for 25 s from 17:37:35, then up to 2,100 events a second, so 17:37 read 263
+  records/s and 17:38 read 642 around a steady ~450. A commit's `rev` is a TID its
+  PDS stamped when the record was written, so a new record goes in the second its
+  `rev` says. That's never later than `time_us`, and never more than 60 s before it.
+  A `rev` more than 5 min behind is an old record arriving now (an import, a
+  migration), and some `rev`s don't decode to a real time. Those, and identity and
+  account events (no `rev`), go by `time_us`. Normally `rev` is about 0.15 s behind,
+  so a calm day doesn't change. Events more than an hour old, or more than 5 s in
+  the future, are ignored.
+- **Coverage** goes by `time_us`, the stream's position. A second counts only if one connection saw all of it: from its
   first event (rounded up) to the second before its latest. A second with no
   coverage is *missing*, never zero.
 - **Reconnects** resume 2 s before the last `time_us` seen, and drop events at or
@@ -59,8 +69,9 @@ curl -s -H "x-atpotato-weather-secret: $(grep ^WEATHER_SECRET= /root/atpotato-we
 
 ## Minute rows
 
-About 15 s after a minute ends, once the stream has got past it, the station sums
-the minute's covered seconds and upserts:
+About a minute and a quarter after a minute ends, the station sums the minute's
+covered seconds and upserts it. It waits until the stream is 60 s past the minute,
+because a backlog after a pause can still add records to it. The rows:
 
 - `atmosphere_minute`: one row of raw counts, plus `seconds_covered`
 - `atmosphere_minute_app`: one row per app outside Bluesky
@@ -93,6 +104,45 @@ from atmosphere_minute where minute >= now() - interval '24 hours';
 a day. Once it grows, add an hourly app table and a pg_cron job that rolls up and
 deletes app rows older than 30 days.
 
+## Replaying and backfilling
+
+`src/replay.js` recounts minutes from Jetstream's own history and rewrites them. Use
+it to repair minutes a glitch got into, or to fill a gap. It counts exactly as the
+live station does, and only rewrites a minute it heard whole (60/60 s), so it can't
+overwrite a good minute with part of one. Run it with `--dry-run` first: that prints
+each minute's counts and writes nothing.
+
+```bash
+cd /root/atpotato-weather && /opt/node22/bin/node --env-file=.env \
+  /root/atpota-live/atmosphere/src/replay.js --from 2026-10-20T17:36Z --to 2026-10-20T17:40Z --dry-run
+```
+
+It rewrites a minute's row and all its app rows, then re-sums the daily roll-up
+(`atmosphere_day_app`) from `--from` on. It's safe while the live station runs:
+`--to` must be at least 3 minutes ago, and the station never goes back to a minute
+it has written. It takes up to 48 hours a run, and reads about 6 minutes of history
+in 30 s.
+
+**How far back.** Jetstream keeps a lookback of about a day and a half on Bluesky's
+hosts. Minutes before it come back partial, are listed, and are left alone.
+
+**Older history** needs Jetstream v2's network replay: an archive of the whole
+network over authenticated HTTP (`planSnapshot`, `getSegment`, `getBlock`;
+`Authorization: Bearer <key>`, metered by bytes downloaded). See
+<https://bsky.network/docs/jetstream-replay>. Its events have the same shape, `rev`
+included, so the same counting applies. It isn't built yet. It would want the key in
+`.env` as `JETSTREAM_API_KEY`, and a way to map a time range to `seq` numbers. A
+whole day of the network is several GB, so it's worth backfilling only as far back as
+the trends need.
+
+**The repair on 2026-10-20.** 17:37 and 17:38 were recounted from jetstream2
+(26,985 and 27,311 records, against 15,774 and 38,531 by `time_us`) and upserted.
+Three stale app rows from before the recount are still under 17:38:
+blacksky.community, tngl.sh and mycrab.space, 7 records that belong to 17:37. To
+clear them, run `replay.js --from 2026-10-20T17:37Z --to 2026-10-20T17:39Z` here,
+while those minutes are still inside Jetstream's lookback (before about
+2026-10-22T05:00Z).
+
 ## Config
 
 `/root/atpotato-weather/.env` on the droplet, mode 600. Start from
@@ -110,7 +160,7 @@ deletes app rows older than 30 days.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 44 tests, about a second, no network
+npm test                                         # node:test, 55 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -129,7 +179,9 @@ and CPUQuota=50%. Measured on 2026-10-20: ~7% of one core and 30–70 MB.
 src/atmosphere.js  counting rules (copy of the reference) + mergeTally
 src/station.js     per-second buckets, coverage, rolling window, minute sums
 src/jetstream.js   the connection: cursor, replay dedupe, fallback, backoff, stall watchdog
+src/clock.js       when a record was made: its rev, within limits, else time_us
 src/writer.js      minute rows, Supabase upserts, retries
+src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line

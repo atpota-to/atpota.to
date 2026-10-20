@@ -60,6 +60,9 @@ const timers = [
       future: c.future,
       badTime: c.badTime,
       unparseable: c.unparseable,
+      // records counted in an earlier second than Jetstream stamped (a backlog after a pause)
+      movedBack: c.movedBack,
+      maxMovedMs: c.maxMovedMs,
       buckets: station.buckets.size,
       pending: writer?.pending ?? null,
       rssMB: Math.round(process.memoryUsage().rss / 1048576),
