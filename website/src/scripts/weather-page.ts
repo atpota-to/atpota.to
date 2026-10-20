@@ -21,8 +21,8 @@
  * live reading has them for its 60 seconds, /api/weather-history for each range.
  *
  * The almanac tiles (today so far, new in the atmosphere, when the sky is busiest) are
- * weather-almanac.ts; the header's clouds, weather-sky.ts; and the weather alerts that
- * pop up when something changes between readings, weather-alerts.ts.
+ * weather-almanac.ts; the header's clouds, weather-sky.ts; and the weather alerts Poe
+ * pipes up with when something changes between readings, weather-alerts.ts.
  *
  * Collection names and app domains come from other people's records, so they only reach
  * the DOM through textContent (weather.ts has already dropped any that don't look right).
@@ -716,9 +716,8 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   if (!report || report.dataset.weatherBound === 'true') return;
   report.dataset.weatherBound = 'true';
   let every = REFRESH_MS;
-  const region = $(root, '[data-weather-alerts]');
-  const desk = region ? createAlertDesk(region) : null;
-  if (desk) bindHush(root, desk);
+  const desk = createAlertDesk();
+  bindHush(root, desk);
   let watch: Watch | null = null;
   const measure = createMeasure(root);
   let shown: Reading | null = null;
@@ -732,7 +731,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
       renderReport(report, reading, measure.get());
       const next = alertsFor(watch, reading);
       watch = next.watch;
-      for (const a of next.alerts) desk?.push(a);
+      for (const a of next.alerts) desk.push(a);
     } else renderReportError(report);
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
   };
@@ -744,7 +743,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, fetchImpl, measure);
-  initAlmanac(report, fetchImpl, desk ? watchNewApps(desk) : undefined);
+  initAlmanac(report, fetchImpl, watchNewApps(desk));
 }
 
 /** Alerts for apps the almanac lists as new that it didn't list last time (the first load only sets the scene). */
