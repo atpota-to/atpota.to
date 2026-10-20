@@ -26,7 +26,7 @@ if (config.supabase) {
     station,
     log,
     startMinute,
-    upsert: supabaseUpsert(config.supabase),
+    upsert: supabaseUpsert({ ...config.supabase, log }),
     onWritten: (minute) => {
       try {
         saveState(config.stateFile, { lastWrittenMinute: minute });

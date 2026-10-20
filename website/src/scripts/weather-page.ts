@@ -14,6 +14,12 @@
  * and the busiest apps over the range, each with an arrow for how it did against the
  * same span a day (or a month, or a year) earlier.
  *
+ * Records or accounts: a toggle on the trends and on the apps elsewhere (the same one,
+ * remembered in this browser) switches them from new records to active accounts, the
+ * different DIDs that wrote anything, so a bot writing a thousand records counts once.
+ * The station counts those with HyperLogLog sketches (atmosphere/src/accounts.js); the
+ * live reading has them for its 60 seconds, /api/weather-history for each range.
+ *
  * The almanac tiles (today so far, new in the atmosphere, when the sky is busiest) are
  * weather-almanac.ts; the header's clouds, weather-sky.ts; and the weather alerts that
  * pop up when something changes between readings, weather-alerts.ts.
@@ -73,6 +79,57 @@ export const BLUESKY_NAMES: Record<string, string> = {
 /** Records a second as people read them: one decimal under 100, whole after that. */
 export function formatRate(n: number): string {
   return n < 100 ? n.toLocaleString('en-US', { maximumFractionDigits: 1 }) : Math.round(n).toLocaleString('en-US');
+}
+
+/** Accounts as people read them: 21,345. */
+export const formatCount = (n: number) => Math.round(n).toLocaleString('en-US');
+
+/** Accounts on an axis: 21k, 1.2m. */
+export function compactCount(n: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n).toLowerCase();
+}
+
+export type Measure = 'records' | 'accounts';
+
+export const MEASURE_KEY = 'weather-measure';
+
+export interface MeasureToggle {
+  get(): Measure;
+  onChange(fn: (m: Measure) => void): void;
+}
+
+/**
+ * Every records / accounts toggle on the page ([data-measure] buttons), as one: pressing
+ * one presses its twin, and the choice is remembered in this browser if it can be.
+ */
+export function createMeasure(root: ParentNode): MeasureToggle {
+  let current: Measure = 'records';
+  try {
+    if (localStorage.getItem(MEASURE_KEY) === 'accounts') current = 'accounts';
+  } catch {
+    // no storage: records it is
+  }
+  const listeners: Array<(m: Measure) => void> = [];
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-measure]')];
+  const show = () => {
+    for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.measure === current));
+  };
+  for (const b of buttons) {
+    b.addEventListener('click', () => {
+      const next = b.dataset.measure;
+      if ((next !== 'records' && next !== 'accounts') || next === current) return;
+      current = next;
+      try {
+        localStorage.setItem(MEASURE_KEY, next);
+      } catch {
+        // remembered for this visit only
+      }
+      show();
+      for (const fn of listeners) fn(current);
+    });
+  }
+  show();
+  return { get: () => current, onChange: (fn) => listeners.push(fn) };
 }
 
 function formatShare(part: number, whole: number): string {
@@ -155,7 +212,7 @@ function timeOf(iso: string | undefined): string {
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
 
-export function renderReport(report: HTMLElement, r: Reading): void {
+export function renderReport(report: HTMLElement, r: Reading, measure: Measure = 'records'): void {
   // now
   count(report, '[data-r-records]', recordsPerSecond(r), (n) => String(Math.round(n)));
   setText(report, '[data-r-cond]', CONDITION_TEXT[r.condition]);
@@ -167,6 +224,12 @@ export function renderReport(report: HTMLElement, r: Reading): void {
     live ? `the last ${r.seconds ?? 60} seconds, live. updates every few seconds.` : when ? `read at ${when}${r.seconds ? `, from ${r.seconds} seconds of the firehose` : ''}. next reading in about a minute.` : '',
   );
   spinRays(report, recordsPerSecond(r));
+  const acct = r.accounts;
+  const heroAccounts = $(report, '[data-r-accounts]');
+  if (heroAccounts) {
+    heroAccounts.hidden = !acct;
+    if (acct) heroAccounts.textContent = `${formatCount(acct.active)} different accounts wrote in that time.`;
+  }
   const sky = $(report, '[data-weather-sky]');
   if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
   const spark = $(report, '[data-r-spark]');
@@ -185,6 +248,12 @@ export function renderReport(report: HTMLElement, r: Reading): void {
     if (marker) marker.style.left = `${(Math.min(r.diversity.index, SCALE_MAX) / SCALE_MAX) * 100}%`;
     setText(report, '[data-r-collections]', r.diversity.collections.toLocaleString('en-US'));
   }
+  const byAccounts = $(report, '[data-r-acct-index]');
+  if (byAccounts) {
+    byAccounts.hidden = !acct || acct.active <= 0;
+    if (acct && acct.active > 0)
+      byAccounts.textContent = `by accounts: ${formatIndex(acct.index)}% of the ${formatCount(acct.active)} accounts active just now wrote somewhere other than bluesky.`;
+  }
 
   // bluesky and everyone else
   if (r.records) {
@@ -197,14 +266,33 @@ export function renderReport(report: HTMLElement, r: Reading): void {
     setText(report, '[data-r-else-share]', formatShare(r.records.elsewhere, r.records.perSecond));
   }
 
-  // elsewhere
+  // elsewhere, by records or by accounts
+  const byAcct = measure === 'accounts' && acct !== undefined;
   const apps = r.apps ?? [];
   const appsList = $(report, '[data-r-apps]');
-  if (appsList) renderBars(appsList, apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.perSecond, count: a.count })), r.seconds);
+  if (appsList) {
+    if (byAcct) {
+      renderBars(
+        appsList,
+        acct.apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.accounts, count: a.accounts, value: formatCount(a.accounts) })),
+        undefined,
+      );
+    } else renderBars(appsList, apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.perSecond, count: a.count })), r.seconds);
+  }
+  const shown = byAcct ? acct.apps.length : apps.length;
   const empty = $(report, '[data-r-apps-empty]');
-  if (empty) empty.hidden = apps.length > 0;
+  if (empty) empty.hidden = shown > 0;
   const n = r.diversity?.apps ?? apps.length;
-  setText(report, '[data-r-apps-count]', n === 0 ? '' : `${n} app${n === 1 ? '' : 's'} heard${n > apps.length ? `, top ${apps.length}` : ''}`);
+  setText(report, '[data-r-apps-count]', n === 0 ? '' : `${n} app${n === 1 ? '' : 's'} heard${n > shown ? `, top ${shown}` : ''}`);
+  setText(
+    report,
+    '[data-r-apps-note]',
+    byAcct
+      ? `busiest first, by how many different accounts wrote to each in the last ${r.seconds ?? 60} seconds.`
+      : measure === 'accounts'
+        ? "accounts come from the weather station, which isn't answering just now, so these are records a second."
+        : 'busiest first, records a second.',
+  );
 
   // bluesky
   const bskyList = $(report, '[data-r-bsky-list]');
@@ -288,6 +376,24 @@ export interface History {
   compare?: { seconds: number; prevSeconds: number; lagMs: number };
   /** Apps outside Bluesky heard each minute, hour, day or month. */
   appsOverTime?: { bucket: Bucket; points: Array<{ t: string; apps: number }> };
+  /** Active accounts over the range and each bucket (server/weather-accounts.ts). */
+  accounts?: HistoryAccounts;
+}
+
+export interface AccountCounts {
+  active: number;
+  bluesky: number;
+  elsewhere: number;
+}
+
+export interface HistoryAccounts {
+  /** How much of the range, and of the earlier window, the station heard counting accounts. */
+  seconds: number;
+  prevSeconds: number;
+  /** Everyone active over the whole range: fewer than the buckets add up to. */
+  total: AccountCounts;
+  points: Array<AccountCounts & { t: string; seconds: number }>;
+  apps: Array<{ domain: string; active: number; prevActive: number; collections: string[] }>;
 }
 
 export type Bucket = 'minute' | 'hour' | 'day' | 'month';
@@ -301,6 +407,7 @@ export const RANGE_INFO: Record<Range, { spanMs: number; stepMs: number; words: 
 };
 
 const BUCKET_WORDS: Record<Bucket, string> = { minute: 'minute', hour: 'hour', day: 'day', month: 'month' };
+const BUCKET_OF: Record<Range, Bucket> = { hour: 'minute', day: 'hour', month: 'day', year: 'month' };
 
 const RANGES = Object.keys(RANGE_INFO) as Range[];
 
@@ -331,7 +438,7 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
   try {
     const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown };
+    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
     const history: History = { range, points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
@@ -345,10 +452,49 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
         points: o.points.filter((p): p is { t: string; apps: number } => typeof p === 'object' && p !== null && typeof p.t === 'string' && Number.isFinite(Date.parse(p.t)) && n(p.apps)),
       };
     }
+    const accounts = toAccounts(body.accounts);
+    if (accounts) history.accounts = accounts;
     return history;
   } catch {
     return null;
   }
+}
+
+/** The accounts part of a history answer, checked field by field, or null. */
+function toAccounts(x: unknown): HistoryAccounts | null {
+  const n = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+  const r = x as Record<string, unknown> | undefined;
+  const isCounts = (c: unknown): c is AccountCounts => typeof c === 'object' && c !== null && n((c as AccountCounts).active) && n((c as AccountCounts).bluesky) && n((c as AccountCounts).elsewhere);
+  if (typeof r !== 'object' || r === null || !n(r.seconds) || !n(r.prevSeconds) || !isCounts(r.total) || !Array.isArray(r.points) || !Array.isArray(r.apps)) return null;
+  return {
+    seconds: r.seconds,
+    prevSeconds: r.prevSeconds,
+    total: { active: r.total.active, bluesky: r.total.bluesky, elsewhere: r.total.elsewhere },
+    points: r.points.filter((p): p is HistoryAccounts['points'][number] => {
+      const v = p as Record<string, unknown>;
+      return isCounts(p) && typeof v.t === 'string' && Number.isFinite(Date.parse(v.t)) && n(v.seconds);
+    }),
+    apps: r.apps
+      .filter((a): a is HistoryAccounts['apps'][number] => {
+        const v = a as Record<string, unknown>;
+        return typeof v === 'object' && v !== null && typeof v.domain === 'string' && APP_NAME_RE.test(v.domain) && n(v.active) && n(v.prevActive) && Array.isArray(v.collections);
+      })
+      .map((a) => ({ ...a, collections: a.collections.filter((c) => typeof c === 'string' && APP_NAME_RE.test(c)) })),
+  };
+}
+
+/**
+ * How an app's accounts did against the earlier window. Accounts don't scale with time
+ * (two hours hold far fewer than twice an hour's), so only when the station heard both
+ * windows about as well; null otherwise.
+ */
+export function accountChange(app: HistoryAccounts['apps'][number], a: HistoryAccounts, earlier: string): Bar['change'] | null {
+  if (a.seconds <= 0 || a.prevSeconds < a.seconds * 0.9 || a.prevSeconds > a.seconds * 1.1) return null;
+  if (app.prevActive === 0) return { text: 'new', words: `nobody at all in ${earlier}`, trend: 'new' };
+  const pct = Math.round((app.active / app.prevActive - 1) * 100);
+  if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
+  return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
 
 /**
@@ -394,42 +540,90 @@ export function trendSummary(h: History): string {
   return `${info.words}${covered}: ${formatRate(records)} new records a second${idx}.`;
 }
 
-export function renderTrends(section: HTMLElement, h: History, now = Date.now()): void {
+export function accountSummary(h: History): string {
+  const info = RANGE_INFO[h.range];
+  const a = h.accounts;
+  if (!a) return 'the account counts are hard to read right now. the records are still here.';
+  if (a.seconds <= 0 || a.total.active <= 0) return `no account counts yet for ${info.words}. the station only just started counting accounts, and fills this in as it goes.`;
+  const covered = a.seconds < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(a.seconds)} of counting so far)` : '';
+  const share = (a.total.elsewhere / a.total.active) * 100;
+  return `${info.words}${covered}: ${formatCount(a.total.active)} different accounts wrote something, ${formatIndex(share)}% of them somewhere other than bluesky.`;
+}
+
+type TimeFormat = (t: number) => string;
+
+function setChartTitle(section: HTMLElement, chart: string, title: string): void {
+  setText(section, `[data-t-chart-title="${chart}"]`, title);
+}
+
+/** The table view: its header row, then its rows, newest first. */
+function renderTable(section: HTMLElement, head: string[], rows: string[][]): void {
+  const tr = $(section, '[data-t-head]');
+  if (tr) {
+    tr.replaceChildren(
+      ...head.map((text) => {
+        const th = document.createElement('th');
+        th.setAttribute('scope', 'col');
+        th.textContent = text;
+        return th;
+      }),
+    );
+  }
+  const body = $(section, '[data-t-rows]');
+  if (!body) return;
+  body.replaceChildren(
+    ...rows.map((cells) => {
+      const row = document.createElement('tr');
+      cells.forEach((text, i) => {
+        const cell = document.createElement(i === 0 ? 'th' : 'td');
+        if (i === 0) cell.setAttribute('scope', 'row');
+        cell.textContent = text;
+        row.append(cell);
+      });
+      return row;
+    }),
+  );
+}
+
+/** Starts the axis where the range starts, so a station that's new shows as a gap, not a short range. */
+function lead(h: History, firstT: number | undefined, now: number, stepMs: number): ChartPoint[] {
+  const start = now - RANGE_INFO[h.range].spanMs;
+  return h.range !== 'year' && (firstT ?? now) - start > stepMs ? [{ t: start, v: null }] : [];
+}
+
+/** The trends, by records or by accounts: the summary, two charts, apps heard, the table and the busiest apps. */
+export function renderTrends(section: HTMLElement, h: History, now = Date.now(), measure: Measure = 'records'): void {
   const info = RANGE_INFO[h.range];
   const fmt = new Intl.DateTimeFormat(undefined, info.time);
   const formatTime = (t: number) => fmt.format(new Date(t)).toLowerCase();
+  section.dataset.measure = measure;
+  const note = $(section, '[data-t-measure-note]');
+  if (note) note.hidden = measure !== 'accounts';
+  if (measure === 'accounts') renderAccountTrends(section, h, now, formatTime);
+  else renderRecordTrends(section, h, now, formatTime);
+  renderAppsOverTime(section, h, now, formatTime);
+  section.dataset.state = 'ready';
+}
+
+function renderRecordTrends(section: HTMLElement, h: History, now: number, formatTime: TimeFormat): void {
+  const info = RANGE_INFO[h.range];
   setText(section, '[data-t-summary]', trendSummary(h));
+  setChartTitle(section, 'records', 'new records a second');
+  setChartTitle(section, 'index', 'diversity index');
   const rows = h.points.map((p) => ({ t: Date.parse(p.t), ...ratesOf(p) }));
-  // Start the axis where the range starts, so a station that's new shows as a gap, not a short range.
-  const start = now - info.spanMs;
-  const lead: Array<{ t: number; records: null; posts: null; index: null }> =
-    h.range !== 'year' && (rows[0]?.t ?? now) - start > info.stepMs ? [{ t: start, records: null, posts: null, index: null }] : [];
-  const series = [...lead, ...rows];
+  const pts = (key: 'records' | 'index'): ChartPoint[] => [...lead(h, rows[0]?.t, now, info.stepMs), ...rows.map((r) => ({ t: r.t, v: r[key] }))];
   const records = $(section, '[data-t-chart="records"]');
   const index = $(section, '[data-t-chart="index"]');
-  const pts = (key: 'records' | 'index'): ChartPoint[] => series.map((r) => ({ t: r.t, v: r[key] }));
   if (records) renderChart(records, pts('records'), { label: 'new records a second', color: 'var(--weather-bsky)', format: formatRate, formatTime, stepMs: info.stepMs });
   if (index) renderChart(index, pts('index'), { label: 'diversity index', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: info.stepMs });
-  renderAppsOverTime(section, h, now, formatTime);
-  const body = $(section, '[data-t-rows]');
-  if (body) {
-    body.replaceChildren(
-      ...rows
-        .slice()
-        .reverse()
-        .map((r) => {
-          const tr = document.createElement('tr');
-          const cells = [formatTime(r.t), r.records === null ? '–' : formatRate(r.records), r.posts === null ? '–' : formatRate(r.posts), r.index === null ? '–' : formatIndex(r.index)];
-          cells.forEach((text, i) => {
-            const cell = document.createElement(i === 0 ? 'th' : 'td');
-            if (i === 0) cell.setAttribute('scope', 'row');
-            cell.textContent = text;
-            tr.append(cell);
-          });
-          return tr;
-        }),
-    );
-  }
+  renderTable(
+    section,
+    ['when', 'new records a second', 'bluesky posts a second', 'diversity index'],
+    rows
+      .slice()
+      .reverse()
+      .map((r) => [formatTime(r.t), r.records === null ? '–' : formatRate(r.records), r.posts === null ? '–' : formatRate(r.posts), r.index === null ? '–' : formatIndex(r.index)]),
+  );
   const wrap = $(section, '[data-t-apps-wrap]');
   const list = $(section, '[data-t-apps]');
   const apps = h.apps ?? [];
@@ -459,7 +653,56 @@ export function renderTrends(section: HTMLElement, h: History, now = Date.now())
       );
     }
   }
-  section.dataset.state = 'ready';
+}
+
+function renderAccountTrends(section: HTMLElement, h: History, now: number, formatTime: TimeFormat): void {
+  const info = RANGE_INFO[h.range];
+  const a = h.accounts;
+  const bucket = BUCKET_OF[h.range];
+  const step = BUCKET_MS[bucket];
+  const each = `each ${BUCKET_WORDS[bucket]}`;
+  setText(section, '[data-t-summary]', accountSummary(h));
+  setChartTitle(section, 'records', `active accounts ${each}`);
+  setChartTitle(section, 'index', 'share of accounts writing elsewhere');
+  const rows = (a?.points ?? []).map((p) => ({ ...p, t: Date.parse(p.t), share: p.active > 0 ? (p.elsewhere / p.active) * 100 : null }));
+  // the newest bucket is still filling up
+  const last = rows[rows.length - 1]?.t;
+  const when = (t: number) => (t === last && now - t < step ? `${formatTime(t)} (so far)` : formatTime(t));
+  const pts = (v: (r: (typeof rows)[number]) => number | null): ChartPoint[] => [...lead(h, rows[0]?.t, now, step), ...rows.map((r) => ({ t: r.t, v: v(r) }))];
+  const active = $(section, '[data-t-chart="records"]');
+  const share = $(section, '[data-t-chart="index"]');
+  const percent = (v: number) => `${formatIndex(v)}%`;
+  if (active) renderChart(active, pts((r) => r.active), { label: `active accounts ${each}`, color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, formatTipTime: when, stepMs: step });
+  if (share) renderChart(share, pts((r) => r.share), { label: 'share of accounts writing elsewhere', color: 'var(--weather-else)', format: percent, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime, formatTipTime: when, stepMs: step });
+  renderTable(
+    section,
+    ['when', 'active accounts', 'on bluesky', 'writing elsewhere', 'share elsewhere'],
+    rows
+      .slice()
+      .reverse()
+      .map((r) => [when(r.t), formatCount(r.active), formatCount(r.bluesky), formatCount(r.elsewhere), r.share === null ? '–' : percent(r.share)]),
+  );
+  const wrap = $(section, '[data-t-apps-wrap]');
+  const list = $(section, '[data-t-apps]');
+  if (wrap && list) {
+    wrap.hidden = !a || a.apps.length === 0 || a.seconds <= 0;
+    setText(section, '[data-t-apps-title]', `busiest apps elsewhere, ${info.words}: active accounts`);
+    if (a && !wrap.hidden) {
+      const changes = a.apps.map((app) => accountChange(app, a, info.earlier));
+      renderBars(
+        list,
+        a.apps.map((app, i) => ({ label: app.domain, sub: app.collections.join(', '), perSecond: app.active, count: app.active, value: formatCount(app.active), change: changes[i] ?? undefined })),
+        undefined,
+      );
+      setText(
+        section,
+        '[data-t-apps-note]',
+        changes.some(Boolean)
+          ? `arrows compare each app's active accounts with ${info.earlier}.`
+          : `once the station has counted accounts through ${info.earlier}, arrows show who's rising and falling.`,
+      );
+    }
+  }
 }
 
 /** The third chart: apps outside Bluesky heard each minute, hour, day or month. */
@@ -481,17 +724,26 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
   renderChart(host, points, { label: `apps heard each ${BUCKET_WORDS[o.bucket]}`, color: 'var(--weather-else)', format: (v) => String(Math.round(v)), formatTime, formatTipTime: time, stepMs: step });
 }
 
-/** The range buttons, the first load, and a refresh while the tab is visible (every minute for the last hour, else every 5). */
-export function initTrends(section: HTMLElement, fetchImpl: typeof fetch = fetch): void {
+/**
+ * The range buttons, the first load, and a refresh while the tab is visible (every minute
+ * for the last hour, else every 5). Switching records and accounts redraws what's loaded:
+ * one answer has both.
+ */
+export function initTrends(section: HTMLElement, fetchImpl: typeof fetch = fetch, measure?: MeasureToggle): void {
   const buttons = [...section.querySelectorAll<HTMLButtonElement>('[data-range]')];
   let range: Range = (buttons.find((b) => b.getAttribute('aria-pressed') === 'true')?.dataset.range as Range) ?? 'day';
   let asked = 0;
+  let shown: History | null = null;
+  measure?.onChange((m) => {
+    if (shown) renderTrends(section, shown, Date.now(), m);
+  });
   const load = async () => {
     const mine = ++asked;
     section.dataset.state = section.dataset.state === 'ready' ? 'refreshing' : 'loading';
     const history = await fetchHistory(range, fetchImpl);
     if (mine !== asked) return; // a newer range took over
-    if (history) renderTrends(section, history);
+    shown = history;
+    if (history) renderTrends(section, history, Date.now(), measure?.get());
     else {
       section.dataset.state = 'error';
       setText(section, '[data-t-summary]', 'the records are hard to read right now. try again in a bit.');
@@ -534,10 +786,16 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   const desk = region ? createAlertDesk(region) : null;
   if (desk) bindHush(root, desk);
   let watch: Watch | null = null;
+  const measure = createMeasure(root);
+  let shown: Reading | null = null;
+  measure.onChange((m) => {
+    if (shown) renderReport(report, shown, m);
+  });
   const load = async () => {
     const reading = await fetchReading(fetchImpl);
     if (reading) {
-      renderReport(report, reading);
+      shown = reading;
+      renderReport(report, reading, measure.get());
       const next = alertsFor(watch, reading);
       watch = next.watch;
       for (const a of next.alerts) desk?.push(a);
@@ -551,7 +809,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     }, every);
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
-  if (trends) initTrends(trends, fetchImpl);
+  if (trends) initTrends(trends, fetchImpl, measure);
   initAlmanac(report, fetchImpl, desk ? watchNewApps(desk) : undefined);
 }
 

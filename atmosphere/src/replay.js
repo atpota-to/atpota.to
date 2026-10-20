@@ -23,6 +23,7 @@
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { accountOf } from './accounts.js';
 import { eventOfMessage } from './atmosphere.js';
 import { happenedUs, MAX_EARLIER_S } from './clock.js';
 import { DEFAULT_URLS, withCursor } from './jetstream.js';
@@ -42,7 +43,7 @@ const iso = (second) => new Date(second * 1000).toISOString();
 
 /**
  * Reads Jetstream from just before `fromSec` until the stream is MAX_EARLIER_S past
- * `toSec`, and calls onMinute(minuteSec, tally, seconds) for each minute in
+ * `toSec`, and calls onMinute(minuteSec, tally, seconds, accounts) for each minute in
  * [fromSec, toSec) as soon as nothing more can land in it. Resolves with the time_us of
  * the first event Jetstream sent (later than asked means its lookback ends there).
  */
@@ -90,10 +91,10 @@ export function replayWindow({ host, fromSec, toSec, onMinute, open = (url) => n
       if (typeof m?.time_us !== 'number') return;
       if (firstUs === null) firstUs = m.time_us;
       clock.ms = Math.max(clock.ms, m.time_us / 1000 + 1000);
-      station.ingest(m.time_us, eventOfMessage(m), happenedUs(m));
+      station.ingest(m.time_us, eventOfMessage(m), happenedUs(m), accountOf(m));
       while (next < toSec && station.coveredThrough !== null && station.coveredThrough >= next + 59 + MAX_EARLIER_S) {
-        const { tally, seconds } = station.minute(next);
-        onMinute(next, tally, seconds);
+        const { tally, seconds, accounts } = station.minute(next);
+        onMinute(next, tally, seconds, accounts);
         next += 60;
         // Keep memory flat over a long replay: nothing can land before `next` any more.
         for (const second of station.buckets.keys()) if (second < next) station.buckets.delete(second);
@@ -167,8 +168,9 @@ async function main(argv) {
     host,
     fromSec: args.fromSec,
     toSec: args.toSec,
-    onMinute(minuteSec, tally, seconds) {
-      const rows = minuteRows(minuteSec, tally, seconds);
+    onMinute(minuteSec, tally, seconds, accounts) {
+      // the rewritten rows carry their active accounts too; the sketches (atmosphere_account_*) are left as they are
+      const rows = minuteRows(minuteSec, tally, seconds, accounts);
       const m = rows.minute;
       console.log(`${m.minute}  ${String(seconds).padStart(2)}/60 s  ${(m.creates / Math.max(1, seconds)).toFixed(1).padStart(6)} records/s  ${String(m.elsewhere).padStart(5)} elsewhere  ${String(rows.apps.length).padStart(3)} apps`);
       (seconds === 60 ? whole : partial).push(rows);
