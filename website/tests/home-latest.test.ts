@@ -10,6 +10,7 @@ import {
   fetchLatestFromFeed,
   fetchLatestPost,
   feedUrl,
+  fetchFeed,
   initLatest,
   listRecordsUrl,
   loadLatest,
@@ -17,13 +18,15 @@ import {
   pickLatestPost,
   pickLatestRecord,
   postUrl,
+  parseFeed,
   readCache,
   relativeTime,
   renderError,
-  renderPost,
+  renderItems,
+  safeItemUrl,
   truncateText,
   writeCache,
-  type LatestPost,
+  type FeedItem,
 } from '../src/scripts/home.js';
 
 const NOW = new Date('2026-10-19T12:00:00Z');
@@ -245,12 +248,13 @@ const LIST_RECORDS = {
 type Route = (url: URL) => Response | Promise<Response>;
 
 /** A fetch that routes by host: plc.directory, the PDS and the AppView. */
-function router(routes: { plc?: Route; pds?: Route; feed?: Route }) {
+function router(routes: { plc?: Route; pds?: Route; feed?: Route; latest?: Route }) {
   const calls: URL[] = [];
   const fail = () => jsonResponse({ error: 'not here' }, 404);
   const fn = vi.fn(async (input: string | URL | Request) => {
-    const url = new URL(String(input));
+    const url = new URL(String(input), 'https://atpota.to');
     calls.push(url);
+    if (url.host === 'atpota.to' && url.pathname === '/api/latest') return (routes.latest ?? fail)(url);
     if (url.host === 'plc.directory') return (routes.plc ?? fail)(url);
     if (url.host === 'pds.atpota.to') return (routes.pds ?? fail)(url);
     if (url.host === 'public.api.bsky.app') return (routes.feed ?? fail)(url);
@@ -416,37 +420,89 @@ describe('fetchLatestFromFeed (fallback)', () => {
   });
 });
 
+const ITEMS: FeedItem[] = [
+  {
+    source: 'dispatch',
+    kind: 'article',
+    text: 'spaces got close to a beta spec.',
+    title: 'attie sites and a brand new cow',
+    embed: '',
+    createdAt: '2026-10-19T09:00:00.000Z',
+    url: '/blog/3myasnk4bzk22',
+  },
+  {
+    source: 'anisota',
+    kind: 'post',
+    text: 'the forest is stirring',
+    title: null,
+    embed: 'with an image',
+    createdAt: '2026-10-09T19:49:05.439Z',
+    url: 'https://bsky.app/profile/anisota.net/post/3mxhqm2vbdk2j',
+  },
+];
+
+describe('parseFeed and safeItemUrl', () => {
+  it('keeps valid items newest first and drops unknown sources, bad links and bad dates', () => {
+    const body = {
+      items: [
+        ITEMS[1],
+        { ...ITEMS[1], source: 'someone-else' },
+        { ...ITEMS[1], url: 'javascript:alert(1)' },
+        { ...ITEMS[1], url: 'https://evil.example/profile/x/post/1' },
+        { ...ITEMS[1], url: '/blog//evil.example' },
+        { ...ITEMS[1], createdAt: 'yesterday' },
+        { ...ITEMS[1], text: '', title: null, embed: '' },
+        ITEMS[0],
+      ],
+    };
+    expect(parseFeed(body)).toEqual(ITEMS);
+    expect(parseFeed({ items: [] })).toBeNull();
+    expect(parseFeed({ nope: 1 })).toBeNull();
+  });
+
+  it('allows bluesky post links and /blog paths only', () => {
+    expect(safeItemUrl('https://bsky.app/profile/aturi.to/post/3mv3poapk7c2d')).not.toBeNull();
+    expect(safeItemUrl('/blog/my-post')).toBe('/blog/my-post');
+    expect(safeItemUrl('https://bsky.app/profile/aturi.to')).toBeNull();
+    expect(safeItemUrl('//evil.example/blog/x')).toBeNull();
+    expect(safeItemUrl(42)).toBeNull();
+  });
+});
+
+describe('fetchFeed', () => {
+  it('reads /api/latest and rejects on http errors', async () => {
+    const ok = router({ latest: () => jsonResponse({ items: ITEMS }) });
+    expect(await fetchFeed(ok.fn)).toEqual(ITEMS);
+    const down = router({ latest: () => jsonResponse({ error: 'unavailable' }, 503) });
+    await expect(fetchFeed(down.fn)).rejects.toThrow();
+  });
+});
+
 describe('rendering', () => {
   beforeEach(() => {
     sessionStorage.clear();
   });
 
-  it('renders text with textContent only, so markup in a post stays text', () => {
+  it('renders each item with textContent only, so markup in a post stays text', () => {
     const tile = mountTile();
     const evil = '<img src=x onerror="window.__pwned=1"><script>window.__pwned=2</script> & <b>bold</b>';
-    renderPost(tile, { text: evil, createdAt: '2026-10-18T12:00:00.000Z', rkey: '3abc', embed: '<i>x</i>' }, NOW);
-    const text = tile.querySelector('[data-latest-text]')!;
+    renderItems(tile, [{ ...ITEMS[1]!, text: evil, embed: '<i>x</i>', createdAt: '2026-10-18T12:00:00.000Z' }, ITEMS[0]!], NOW);
+    const rows = tile.querySelectorAll('.home-feed__item');
+    expect(rows).toHaveLength(2);
+    const text = rows[0]!.querySelector('.home-feed__text')!;
     expect(text.textContent).toBe(evil);
     expect(text.children).toHaveLength(0);
-    expect(tile.querySelector('[data-latest-embed]')!.textContent).toBe('<i>x</i>');
-    expect(tile.querySelectorAll('img:not([data-latest-avatar]), script, b, i')).toHaveLength(0);
+    expect(rows[0]!.querySelector('.home-feed__embed')!.textContent).toBe('<i>x</i>');
+    expect(tile.querySelectorAll('img, script, b, i')).toHaveLength(0);
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
+    expect(rows[0]!.querySelector('.home-feed__source')!.textContent).toBe('@anisota.net');
+    expect(rows[0]!.querySelector('time')!.textContent).toBe('yesterday');
+    expect(rows[1]!.classList.contains('home-feed__item--dispatch')).toBe(true);
+    expect(rows[1]!.querySelector('.home-feed__title')!.textContent).toBe('attie sites and a brand new cow');
+    expect(rows[1]!.querySelector<HTMLAnchorElement>('.home-feed__link')!.getAttribute('href')).toBe('/blog/3myasnk4bzk22');
     expect(tile.dataset.state).toBe('ready');
-    expect(tile.querySelector<HTMLAnchorElement>('[data-latest-link]')!.href).toBe('https://bsky.app/profile/atpota.to/post/3abc');
-    const time = tile.querySelector<HTMLTimeElement>('[data-latest-time]')!;
-    expect(time.dateTime).toBe('2026-10-18T12:00:00.000Z');
-    expect(time.textContent).toBe('yesterday');
-    expect(tile.querySelector<HTMLElement>('[data-latest-meta]')!.hidden).toBe(false);
+    expect(tile.querySelector<HTMLElement>('[data-latest-list]')!.hidden).toBe(false);
     expect(tile.querySelector('[data-latest-post]')!.getAttribute('aria-busy')).toBe('false');
-  });
-
-  it('hides empty text and the embed note when there is none', () => {
-    const tile = mountTile();
-    renderPost(tile, { text: '', createdAt: '2026-10-18T12:00:00.000Z', rkey: '3abc', embed: 'with an image' }, NOW);
-    expect(tile.querySelector<HTMLElement>('[data-latest-text]')!.hidden).toBe(true);
-    expect(tile.querySelector<HTMLElement>('[data-latest-embed-wrap]')!.hidden).toBe(false);
-    renderPost(tile, { text: 'hi', createdAt: '2026-10-18T12:00:00.000Z', rkey: '3abc', embed: '' }, NOW);
-    expect(tile.querySelector<HTMLElement>('[data-latest-embed-wrap]')!.hidden).toBe(true);
   });
 
   it('error state keeps a friendly fallback and the follow button', () => {
@@ -465,24 +521,36 @@ describe('rendering', () => {
     expect(tile.dataset.state).toBe('error');
 
     tile = mountTile();
-    await loadLatest(tile, (async () => jsonResponse({ feed: [] })) as unknown as typeof fetch);
+    await loadLatest(tile, router({ latest: () => jsonResponse({ items: [] }), plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse({ records: [] }), feed: () => jsonResponse({ feed: [] }) }).fn);
     expect(tile.dataset.state).toBe('error');
   });
 
-  it('loadLatest caches a found post and initLatest renders from the cache without fetching', async () => {
-    let tile = mountTile();
-    const { fn } = router({ plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse({ records: [rec('cached', { text: 'from cache' })] }) });
+  it("falls back to atpota.to's own newest post when /api/latest is down", async () => {
+    const tile = mountTile();
+    const { fn } = router({ plc: () => jsonResponse(DID_DOC), pds: () => jsonResponse({ records: [rec('3own', { text: 'from the repo' })] }) });
     await loadLatest(tile, fn);
     expect(tile.dataset.state).toBe('ready');
-    expect(tile.querySelector('[data-latest-text]')!.textContent).toBe('from cache');
-    expect(readCache()?.rkey).toBe('cached');
+    const rows = tile.querySelectorAll('.home-feed__item');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.querySelector('.home-feed__source')!.textContent).toBe('@atpota.to');
+    expect(rows[0]!.querySelector('.home-feed__text')!.textContent).toBe('from the repo');
+    expect(rows[0]!.querySelector<HTMLAnchorElement>('.home-feed__link')!.href).toBe('https://bsky.app/profile/atpota.to/post/3own');
+  });
+
+  it('loadLatest caches the feed and initLatest renders from the cache without fetching', async () => {
+    let tile = mountTile();
+    const { fn, calls } = router({ latest: () => jsonResponse({ items: ITEMS }) });
+    await loadLatest(tile, fn);
+    expect(calls).toHaveLength(1);
+    expect(tile.querySelectorAll('.home-feed__item')).toHaveLength(2);
+    expect(readCache()).toEqual(ITEMS);
 
     tile = mountTile();
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     initLatest(document, fetchImpl);
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(tile.dataset.state).toBe('ready');
-    expect(tile.querySelector('[data-latest-text]')!.textContent).toBe('from cache');
+    expect(tile.querySelectorAll('.home-feed__item')).toHaveLength(2);
   });
 });
 
@@ -490,15 +558,13 @@ describe('cache', () => {
   beforeEach(() => sessionStorage.clear());
   afterEach(() => vi.restoreAllMocks());
 
-  const post: LatestPost = { text: 'hi', createdAt: '2026-10-18T12:00:00.000Z', rkey: '3abc', embed: '' };
-
   it('expires after ten minutes and ignores tampered entries', () => {
-    writeCache(post, 1_000_000);
-    expect(readCache(1_000_000 + 60_000)).toEqual(post);
+    writeCache(ITEMS, 1_000_000);
+    expect(readCache(1_000_000 + 60_000)).toEqual(ITEMS);
     expect(readCache(1_000_000 + 11 * 60_000)).toBeNull();
-    sessionStorage.setItem('atpotato:latest-post', JSON.stringify({ at: 1_000_000, post: { ...post, rkey: '../x' } }));
+    sessionStorage.setItem('atpotato:latest-feed', JSON.stringify({ at: 1_000_000, items: [{ ...ITEMS[0], url: 'javascript:x' }] }));
     expect(readCache(1_000_001)).toBeNull();
-    sessionStorage.setItem('atpotato:latest-post', '{not json');
+    sessionStorage.setItem('atpotato:latest-feed', '{not json');
     expect(readCache(1_000_001)).toBeNull();
   });
 
@@ -509,7 +575,7 @@ describe('cache', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    expect(() => writeCache(post)).not.toThrow();
+    expect(() => writeCache(ITEMS)).not.toThrow();
     expect(readCache()).toBeNull();
   });
 });
