@@ -11,8 +11,8 @@
 #
 # What it does:
 #  1. Unpacks the commit once into releases/<sha>/, a plain copy with no .git.
-#  2. Does nothing more if the service's folder hasn't changed since the release it's
-#     running.
+#  2. Does nothing more if the service's code hasn't changed since the release it's
+#     running (docs and SQL don't count).
 #  3. Runs the service's tests there.
 #  4. For Poe, waits until no reply is in flight (npm run in-flight).
 #  5. Switches /root/atpota-live/<service>, installs the unit file if it changed, and
@@ -36,12 +36,12 @@ case "$service" in
   mentions)
     unit=atpotato-mentions
     data=/root/atpotato-mentions
-    health() { curl -fsS --max-time 5 http://127.0.0.1:8787/health | grep -q '"ok":true'; }
+    health() { curl -fs --max-time 5 http://127.0.0.1:8787/health 2>/dev/null | grep -q '"ok":true'; }
     ;;
   atmosphere)
     unit=atpotato-weather
     data=/root/atpotato-weather
-    health() { curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8790/healthz; }
+    health() { curl -fs --max-time 5 -o /dev/null http://127.0.0.1:8790/healthz 2>/dev/null; }
     ;;
   *)
     echo "usage: $0 <mentions|atmosphere> [commit]" >&2
@@ -98,13 +98,15 @@ prune() {
   return 0
 }
 
-if [[ -n $old_sha && -z ${FORCE:-} ]] && git -C "$REPO" diff --quiet "$old_sha" "$sha" -- "$service"; then
-  echo "== $service/ is unchanged since ${old_sha:0:12}; nothing to deploy"
+# Docs and SQL don't change what runs, so they don't restart anything.
+paths=("$service" ':!*.md' ':!*.sql')
+if [[ -n $old_sha && -z ${FORCE:-} ]] && git -C "$REPO" diff --quiet "$old_sha" "$sha" -- "${paths[@]}"; then
+  echo "== $service/ code is unchanged since ${old_sha:0:12}; nothing to deploy"
   prune
   exit 0
 fi
 if [[ -n $old_sha ]]; then
-  git -C "$REPO" --no-pager diff --stat "$old_sha" "$sha" -- "$service" || true
+  git -C "$REPO" --no-pager diff --stat "$old_sha" "$sha" -- "${paths[@]}" || true
 fi
 
 log=$LIVE/logs/test-$service-$short.log

@@ -44,7 +44,8 @@ It asks the droplet to deploy both services at that commit, and the droplet does
 this for each one:
 
 1. Fetches the commit from GitHub and unpacks it into `releases/<sha>/`.
-2. Skips the service if its folder hasn't changed since the release it's running.
+2. Skips the service if its code hasn't changed since the release it's running.
+   Changes to only `.md` or `.sql` files don't count.
 3. Runs the service's tests there. If they fail, nothing changes and the run goes
    red.
 4. For Poe, waits until no reply is in flight (`npm run in-flight`). If Poe is still
