@@ -816,7 +816,7 @@ html[data-theme="dark"] {
   color: var(--text-soft);
 }
 
-/* ---------- stats: the wire ---------- */
+/* ---------- stats: the last minute ---------- */
 
 .weather-stats {
   display: grid;
@@ -844,14 +844,7 @@ html[data-theme="dark"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* active accounts are a count over the station's minute, not a rate a second */
-.weather-stats__unit {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.weather-wire,
+.weather-minute,
 .weather-how {
   grid-column: 1 / -1;
 }

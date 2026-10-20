@@ -3,8 +3,8 @@
  * "atmospheric conditions" tile, at full size. One reading from /api/atmosphere
  * (server/atmosphere.ts) fills every tile: how busy Bluesky is, the diversity index (the
  * share of new records written outside Bluesky) on a UV-index-style scale, the split as a
- * bar, the busiest apps elsewhere, Bluesky's busiest collections, and every kind of event
- * on the wire. When the reading is the weather station's rolling 60 seconds it checks
+ * bar, the busiest apps elsewhere, Bluesky's busiest collections, and the last minute:
+ * every kind of event and the accounts active, as counts. When the reading is the weather station's rolling 60 seconds it checks
  * again every 5 seconds (with a sparkline of those 60 seconds), otherwise once a minute,
  * always only while the tab is visible; a failed check keeps the last reading on screen.
  *
@@ -279,10 +279,10 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
     );
   }
 
-  // the wire, and who's on it (the station's reading only)
-  if (r.events) for (const [key, value] of Object.entries(r.events)) count(report, `[data-r-event="${key}"]`, value);
-  const wireAccounts = $(report, '[data-r-wire-accounts]');
-  if (wireAccounts) wireAccounts.hidden = !acct;
+  // the last minute: each kind of event as a count, and who wrote (the station's reading only)
+  if (r.events) for (const [key, value] of Object.entries(r.events)) count(report, `[data-r-event="${key}"]`, value * 60, formatCount);
+  const minuteAccounts = $(report, '[data-r-minute-accounts]');
+  if (minuteAccounts) minuteAccounts.hidden = !acct;
   count(report, '[data-r-active]', acct?.active, formatCount);
 
   if (report.dataset.state !== 'ready') setText(report, '[data-r-status]', `${CONDITION_TEXT[r.condition]}. diversity index ${r.diversity ? `${formatIndex(r.diversity.index)}, ${r.diversity.level}` : 'unknown'}.`);

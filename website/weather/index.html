@@ -195,17 +195,15 @@
                 </div>
             </section>
 
-            <section class="tile weather-tile weather-wire" aria-labelledby="weather-wire-title">
-                <div class="weather-tile__head">
-                    <h2 class="eyebrow" id="weather-wire-title">everything on the wire</h2>
-                    <p class="weather-tile__aside">a second</p>
-                </div>
-                <dl class="weather-stats weather-stats--wire">
-                    <div data-r-wire-accounts hidden><dt>active accounts</dt><dd><span data-r-active>&ndash;</span> <span class="weather-stats__unit" aria-hidden="true">/min</span><span class="visually-hidden">in the last minute</span></dd></div>
+            <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second) -->
+            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title">
+                <h2 class="eyebrow" id="weather-minute-title">the last minute</h2>
+                <dl class="weather-stats">
+                    <div data-r-minute-accounts hidden><dt>active accounts</dt><dd data-r-active>&ndash;</dd></div>
                     <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd></div>
                     <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd></div>
                     <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd></div>
-                    <div><dt>identity changes</dt><dd data-r-event="identity">&ndash;</dd></div>
+                    <div><dt>handle changes</dt><dd data-r-event="identity">&ndash;</dd></div>
                     <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd></div>
                 </dl>
             </section>

@@ -73,7 +73,7 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-r-ratio]')).toBe('1 in 56 new records came from outside bluesky');
     expect(text('[data-r-else-share]')).toBe('(1.8%)');
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 2');
-    expect(text('[data-r-event="deletes"]')).toBe('13.5');
+    expect(text('[data-r-event="deletes"]')).toBe('810'); // 13.5 a second, counted over the minute
     expect(text('[data-r-collections]')).toBe('40');
     expect(report.querySelector<HTMLElement>('[data-r-marker]')!.style.left).toMatch(/^13\.8/);
   });
@@ -263,14 +263,14 @@ describe('records or accounts', () => {
   const HISTORY: History = { range: 'hour', points: [pts('2026-10-20T16:59:00.000Z')], total: pts('2026-10-20T17:00:00.000Z'), accounts: acct };
   const section = () => report.querySelector<HTMLElement>('[data-r-trends]')!;
 
-  it("puts the last minute's active accounts on the wire, and the index by accounts", () => {
+  it("puts the last minute's active accounts in the last minute, and the index by accounts", () => {
     renderReport(report, LIVE);
-    const wire = report.querySelector<HTMLElement>('[data-r-wire-accounts]')!;
-    expect(wire.hidden).toBe(false);
+    const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
+    expect(minute.hidden).toBe(false);
     expect(text('[data-r-active]')).toBe('21,345');
     expect(text('[data-r-acct-index]')).toBe('by accounts: 2.9% of the 21,345 accounts active just now wrote somewhere other than bluesky.');
     renderReport(report, READING);
-    expect(wire.hidden).toBe(true);
+    expect(minute.hidden).toBe(true);
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
   });
 
