@@ -1,0 +1,21 @@
+{
+  "name": "atpotato-mentions",
+  "version": "1.0.0",
+  "description": "Watches the atproto firehose for mentions of and replies to atpotato, gates them, asks the eve agent for a draft, gates the draft, and posts it as a reply. Holds the only atproto write credential in the system.",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "/opt/node22/bin/node --env-file=.env src/index.js",
+    "test": "PATH=/opt/node22/bin:$PATH PDS_URL=http://127.0.0.1:1 CALLBACK_PORT=0 ATPOTATO_DID=did:plc:qntsxa2i4sb24noi45fx4np2 ATPOTATO_HANDLE=atpota.to DB_FILE=:memory: STAGE=4 ATPROTO_APP_PASSWORD=test AGENT_URL=http://127.0.0.1:1 DROPLET_SHARED_SECRET=test-secret LOG_LEVEL=error GATES_FILE=/nonexistent-gates.json KILL_SWITCH_FILE=/nonexistent-kill /opt/node22/bin/node --test --test-reporter=spec test/*.test.js",
+    "dev": "LOG_LEVEL=debug /opt/node22/bin/node --env-file=.env --watch src/index.js",
+    "stats": "/opt/node22/bin/node --env-file=.env src/tools/stats.js",
+    "review": "/opt/node22/bin/node --env-file=.env src/tools/review.js",
+    "measure-voice": "/opt/node22/bin/node --env-file=.env src/tools/measure-voice.js",
+    "lessons": "/opt/node22/bin/node --env-file=.env src/tools/lessons.js",
+    "memory": "/opt/node22/bin/node --env-file=.env src/tools/memory.js"
+  },
+  "dependencies": {}
+}

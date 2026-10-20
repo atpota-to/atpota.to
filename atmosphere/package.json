@@ -1,0 +1,15 @@
+{
+  "name": "atpotato-weather",
+  "version": "1.0.0",
+  "description": "atpotato weather station: counts the whole AT Protocol firehose a second at a time, serves a rolling 60-second reading at /v1/now, and writes one summary row a minute to Supabase. Holds no atproto credential; its only secret is a Supabase service key.",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "/opt/node22/bin/node --env-file=.env src/index.js",
+    "test": "/opt/node22/bin/node --test --test-reporter=spec test/*.test.js"
+  },
+  "dependencies": {}
+}

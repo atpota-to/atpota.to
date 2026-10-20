@@ -1,0 +1,52 @@
+[Unit]
+Description=atpotato Bluesky mentions service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+# Code from the deploy checkout (mentions/ in atpota-to/atpota.to, installed by
+# droplet/deploy.sh). Secrets, the database, gates.json and KILL stay in the data
+# folder, which is the working directory, so every relative path resolves there.
+# Node resolves the symlink at start, so a running process keeps reading its own
+# release even after the next deploy switches the link (this service imports
+# modules lazily, mid-run).
+WorkingDirectory=/root/atpotato-mentions
+
+# Node 22 explicitly. The default `node` on this droplet is 18, where
+# node:sqlite does not exist and the failure is an opaque module error.
+ExecStart=/opt/node22/bin/node /root/atpota-live/mentions/src/index.js
+
+Restart=always
+RestartSec=10
+
+# Copy .env.template -> .env and fill it in before enabling.
+EnvironmentFile=/root/atpotato-mentions/.env
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=atpotato-mentions
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=192
+
+# This is the FIFTH consumer on this box. It keeps its own cursor, its own
+# database and its own directory; it does not touch jetstream-consumer
+# (anisota), mod-consumer, tracker-jetstream or turtle-jetstream.
+#
+# Unlike those four, this one cannot filter server-side to a narrow collection:
+# you cannot know in advance who will mention you, so it consumes the whole
+# app.bsky.feed.post firehose. Measured on 2026-09-18: ~59 events/s, ~55 KB/s,
+# 1.2% of one core, 61 MB RSS. The cap below is roughly 3x that peak, which
+# leaves room for a burst but still restarts a runaway instead of taking the
+# box down. The box has 960 MB and has swap-locked before.
+MemoryHigh=150M
+MemoryMax=192M
+CPUQuota=50%
+
+# Let the shutdown drain window finish before SIGKILL, so the cursor watermark
+# and any in-flight row are written rather than replayed.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
