@@ -101,6 +101,7 @@
                     <div class="weather-scale__bands"><span></span><span></span><span></span><span></span><span></span><i class="weather-scale__marker" data-r-marker></i></div>
                     <div class="weather-scale__names"><span>low</span><span>moderate</span><span>high</span><span>very high</span><span>extreme</span></div>
                 </div>
+                <p class="weather-diversity__accounts" data-r-acct-index hidden></p>
                 <p class="weather-diversity__about">the share of new records, in percent, written with lexicons that aren&#39;t bluesky&#39;s (anything outside <code>app.bsky.*</code> and <code>chat.bsky.*</code>). like the uv index, 0&ndash;2 is low and 11+ is extreme.</p>
             </section>
 
@@ -120,22 +121,28 @@
             <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
                 <div class="weather-tile__head">
                     <h2 class="eyebrow" id="weather-trends-title">trends</h2>
+                    <div class="weather-controls">
+                    <div class="weather-range weather-measure" role="group" aria-label="count new records or active accounts">
+                        <button type="button" class="weather-range__btn" data-measure="records" aria-pressed="true">records</button>
+                        <button type="button" class="weather-range__btn" data-measure="accounts" aria-pressed="false">accounts</button>
+                    </div>
                     <div class="weather-range" role="group" aria-label="time range">
                         <button type="button" class="weather-range__btn" data-range="hour" aria-pressed="false" aria-label="last hour">1h</button>
                         <button type="button" class="weather-range__btn" data-range="day" aria-pressed="true" aria-label="last 24 hours">1d</button>
                         <button type="button" class="weather-range__btn" data-range="week" aria-pressed="false" aria-label="last 7 days">1w</button>
                         <button type="button" class="weather-range__btn" data-range="month" aria-pressed="false" aria-label="last 30 days">30d</button>
                     </div>
+                    </div>
                 </div>
                 <!-- loading and errors show here; once the charts are drawn it's only read out, for screen readers -->
                 <p class="weather-trends__summary" data-t-summary aria-live="polite">digging through the records…</p>
                 <div class="weather-trends__charts">
                     <figure class="weather-chart-card">
-                        <figcaption class="weather-chart-card__title">new records a second</figcaption>
+                        <figcaption class="weather-chart-card__title" data-t-chart-title="records">new records a second</figcaption>
                         <div class="weather-chart" data-t-chart="records"></div>
                     </figure>
                     <figure class="weather-chart-card">
-                        <figcaption class="weather-chart-card__title">diversity index</figcaption>
+                        <figcaption class="weather-chart-card__title" data-t-chart-title="index">diversity index</figcaption>
                         <div class="weather-chart" data-t-chart="index"></div>
                     </figure>
                     <figure class="weather-chart-card" hidden>
@@ -154,6 +161,10 @@
                 <div class="weather-tile__head">
                     <h2 class="eyebrow" id="weather-apps-title">elsewhere in the atmosphere</h2>
                     <p class="weather-tile__aside" data-r-apps-count></p>
+                    <div class="weather-range weather-measure" role="group" aria-label="rank apps by new records or active accounts">
+                        <button type="button" class="weather-range__btn" data-measure="records" aria-pressed="true">records</button>
+                        <button type="button" class="weather-range__btn" data-measure="accounts" aria-pressed="false">accounts</button>
+                    </div>
                 </div>
                 <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
                 <ol class="weather-bars" role="list" data-r-apps></ol>
@@ -190,6 +201,7 @@
                     <p class="weather-tile__aside">a second</p>
                 </div>
                 <dl class="weather-stats weather-stats--wire">
+                    <div data-r-wire-accounts hidden><dt>active accounts</dt><dd><span data-r-active>&ndash;</span> <span class="weather-stats__unit" aria-hidden="true">/min</span><span class="visually-hidden">in the last minute</span></dd></div>
                     <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd></div>
                     <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd></div>
                     <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd></div>
@@ -201,6 +213,7 @@
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="eyebrow" id="weather-how-title">how it&#39;s measured</h2>
                 <p>atpotato&#39;s weather station listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a>, all the time, and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky. the numbers up top are the last 60 seconds, and the station writes down every minute for the trends.</p>
+                <p>flip <strong>records</strong> to <strong>accounts</strong> on the trends or the apps to count who&#39;s writing instead of how much: every different account (DID) once, however many records it writes, so one busy bot can&#39;t pass for a crowd. they&#39;re counted with hyperloglog sketches: within about 2%, and the station never keeps a DID.</p>
                 <p>the clouds up top are the diversity index: a clear sky when nearly everything is bluesky, cloudier the more records come from other apps. weather alerts pop up in the corner when an app blows in, a storm rolls in, or the sky gets more mixed.</p>
                 <p>a quiet app can still miss a minute, and one busy bot can tip the index for a while. this page checks again every few seconds while it&#39;s open. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>

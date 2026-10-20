@@ -82,6 +82,15 @@ export interface Reading {
   source?: 'station' | 'sample';
   /** The station's window, second by second, oldest first; null for a second it missed. */
   series?: Array<{ t: number; creates: number; bluesky: number; elsewhere: number; posts: number } | null>;
+  /** How many different accounts wrote anything in the station's window (the station only). */
+  accounts?: {
+    active: number;
+    bluesky: number;
+    elsewhere: number;
+    /** The share of them that wrote outside Bluesky, percent. */
+    index: number;
+    apps: Array<{ domain: string; accounts: number; collections: string[] }>;
+  };
 }
 
 const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
@@ -111,6 +120,10 @@ function clean(r: Reading): Reading {
   if (Array.isArray(r.bluesky)) out.bluesky = r.bluesky.filter((b) => nums(b, ['perSecond', 'count']) && name(b.nsid));
   if (r.source === 'station' || r.source === 'sample') out.source = r.source;
   if (Array.isArray(r.series)) out.series = r.series.slice(-120).map((p) => (nums(p, ['t', 'creates', 'bluesky', 'elsewhere', 'posts']) ? p : null));
+  const a = r.accounts;
+  if (nums(a, ['active', 'bluesky', 'elsewhere', 'index']) && Array.isArray(a?.apps)) {
+    out.accounts = { ...a, apps: a.apps.filter((x) => nums(x, ['accounts']) && name(x.domain) && Array.isArray(x.collections)).map((x) => ({ ...x, collections: x.collections.filter(name).slice(0, 3) })) };
+  }
   return out;
 }
 
