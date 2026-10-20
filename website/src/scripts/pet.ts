@@ -12,20 +12,46 @@
  * - Remembers: pets add up across visits (localStorage PETS_KEY), and some totals get
  *   a line of their own (milestoneLine). A reader who signed in on the blog is greeted
  *   by handle in the bubble (src/scripts/reader.ts).
+ * - Counts: a reader signed in with Bluesky has their pets saved to their own repo
+ *   (pet-sync.ts), so the count follows them across devices, and the tile shows it
+ *   ([data-pet-count]). The higher of the saved count and this browser's wins, so pets
+ *   from before signing in aren't lost. A signed-out reader who pets a few times is
+ *   offered the tile's own sign-in (the blog's dialog, src/blog/signin.ts), which comes
+ *   back here with a "pet" pending action; one whose session predates the permission,
+ *   or ran out, is offered it again.
  *
  * Nothing moves under reduced motion; the faces and lines still change.
  * mascot.ts keeps swapping faces on hover; data-mascot-hold pauses that while a
  * reaction face is showing.
  */
 
+import { sharedAuth, type Auth } from '../blog/auth';
+import type { SignIn } from '../blog/signin';
 import { MASCOT_URLS, restoreMascot, type MascotFace } from './mascot';
-import { readReader } from './reader';
+import { createPetSync, type PetSyncTrouble } from './pet-sync';
+import { readReader, rememberReader } from './reader';
 
 export const PET_RESET_MS = 4000;
 export const PETS_KEY = 'atpotato:pets';
 /** Longer handles don't fit the bubble; those readers get a plain "hi again". */
 const GREET_MAX_HANDLE = 24;
 const HEART_MS = 1100;
+/** A signed-out reader is offered sign-in after this many pets in a visit. */
+export const ASK_AFTER = 3;
+
+export const COUNT_COPY = {
+  ask: 'save them',
+  again: 'sign in again to save',
+  lede: 'sign in with bluesky and poe keeps count of your pets in your own account, on every device. (◕‿◕)',
+  consent: "one more step: atpota.to needs your ok to save poe's pet count. sign in again to allow it.",
+  expired: 'your sign-in ran out. sign in again to keep counting pets.',
+  welcome: "signed in! i'll remember every pet now ♥",
+} as const;
+
+/** "1,234": the tile's count (home.css puts the heart in front). */
+export function countLabel(total: number): string {
+  return total.toLocaleString('en');
+}
 
 /** The everyday pet motions (classes in home.css). The flip (is-spinning) is saved for reactions. */
 export const PET_MOTIONS = ['is-squished', 'is-wobbling', 'is-booped', 'is-wiggling'] as const;
@@ -134,7 +160,13 @@ function replay(el: Element, cls: string): void {
   el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
 }
 
-export function initPet(root: ParentNode = document): void {
+export interface PetOptions {
+  /** Defaults to sharedAuth(window); null means pets stay in this browser only. */
+  auth?: Auth | null;
+  fetchImpl?: typeof fetch;
+}
+
+export function initPet(root: ParentNode = document, opts: PetOptions = {}): void {
   const img = root.querySelector<HTMLImageElement>('img[data-pet]');
   const tile = img?.closest<HTMLElement>('[data-mascot-trigger]');
   if (!img || !tile || img.dataset.petBound === 'true') return;
@@ -167,7 +199,9 @@ export function initPet(root: ParentNode = document): void {
 
   // pet
   let count = 0;
-  let total = readPets();
+  let visit = 0;
+  const stored = readPets();
+  let total = stored;
   const oldFriend = total >= 10;
   let resetTimer: number | undefined;
 
@@ -266,5 +300,112 @@ export function initPet(root: ParentNode = document): void {
     const milestone = milestoneLine(total);
     if (milestone) say(milestone);
     else if (reaction.say) say(reaction.say);
+
+    visit += 1;
+    sync.save(total);
+    showCount();
+  });
+
+  // count, and keep it in the reader's repo when they're signed in
+  const auth = opts.auth === undefined ? sharedAuth(window) : opts.auth;
+  const countEl = tile.querySelector<HTMLElement>('[data-pet-count]');
+  const countN = countEl?.querySelector<HTMLElement>('[data-pet-count-n]');
+  const countUnit = countEl?.querySelector<HTMLElement>('[data-pet-count-unit]');
+  const askButton = countEl?.querySelector<HTMLButtonElement>('[data-pet-count-ask]');
+  let synced = false;
+  let trouble: PetSyncTrouble | null = null;
+  let shown: number | null = null;
+
+  const sync = createPetSync(auth, {
+    fetchImpl: opts.fetchImpl,
+    onTrouble: (t) => {
+      trouble = t;
+      synced = false;
+      showCount();
+    },
+  });
+
+  function showCount(): void {
+    if (!countEl || !countN) return;
+    const offer = Boolean(auth) && !synced && (trouble !== null || visit >= ASK_AFTER);
+    if (!synced && !offer) {
+      countEl.hidden = true;
+      return;
+    }
+    countEl.hidden = false;
+    countN.textContent = countLabel(total);
+    if (countUnit) countUnit.textContent = ` ${total === 1 ? 'pet' : 'pets'} from you${offer ? ', not saved yet' : ''}`;
+    if (askButton) {
+      askButton.hidden = !offer;
+      askButton.textContent = trouble ? COUNT_COPY.again : COUNT_COPY.ask;
+    }
+    if (shown !== null && shown !== total && !reducedMotion()) replay(countEl, 'is-bumping');
+    shown = total;
+  }
+
+  // the tile's sign-in, loaded on first use
+  let signIn: Promise<Pick<SignIn, 'open'> | null> | null = null;
+  const openSignIn = (lede: string) => {
+    if (!auth) return;
+    signIn ??= Promise.all([import('../blog/signin'), import('../blog/state')])
+      .then(([{ mountSignIn }, state]) => {
+        const dialog = document.querySelector<HTMLDialogElement>('dialog[data-blog-signin]');
+        if (!dialog) return null;
+        const store = state.sessionStoreFor(window);
+        return mountSignIn({
+          doc: document,
+          win: window,
+          dialog,
+          auth,
+          fetchImpl: opts.fetchImpl ?? ((...args: Parameters<typeof fetch>) => fetch(...args)),
+          local: state.localStoreFor(window),
+          now: () => Date.now(),
+          beforeLeave: () => state.savePending(store, { kind: 'pet', returnTo: '/', at: Date.now() }),
+        });
+      })
+      .catch(() => (signIn = null));
+    void signIn.then((s) => s?.open(lede));
+  };
+  askButton?.addEventListener('click', () => openSignIn(trouble === 'consent' ? COUNT_COPY.consent : trouble === 'expired' ? COUNT_COPY.expired : COUNT_COPY.lede));
+
+  const begin = async () => {
+    const saved = await sync.start();
+    if (saved === null) return;
+    // the higher of the saved count and this browser's, plus any pets since the page loaded
+    total = Math.max(stored, saved) + (total - stored);
+    savePets(total);
+    synced = trouble === null;
+    sync.save(total);
+    showCount();
+
+    // back from signing in here: say so, and learn the handle for the greeting
+    const state = await import('../blog/state');
+    const store = state.sessionStoreFor(window);
+    const pending = state.readPending(store, Date.now());
+    if (pending?.kind === 'pet' && pending.returnTo === '/') {
+      state.clearPending(store);
+      say(COUNT_COPY.welcome);
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(settle, PET_RESET_MS);
+    }
+    const did = sync.did;
+    if (did && !readReader()) {
+      const { loadMe } = await import('../blog/signin');
+      const me = await loadMe(opts.fetchImpl ?? ((...args: Parameters<typeof fetch>) => fetch(...args)), did).catch(() => null);
+      if (me && me.handle !== did) rememberReader(me.handle);
+    }
+  };
+  // after the page has settled: the OAuth library only loads for readers already signed in
+  if (auth?.eager) {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    const run = () => void begin().catch(() => undefined);
+    if (idle) idle(run, { timeout: 2000 });
+    else window.setTimeout(run, 300);
+  }
+
+  const flush = () => sync.flush();
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush();
   });
 }

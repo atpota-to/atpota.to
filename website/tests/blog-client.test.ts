@@ -61,7 +61,7 @@ describe('client metadata', () => {
     expect(META.application_type).toBe('web');
     expect(META.dpop_bound_access_tokens).toBe(true);
     expect(META.scope).toBe(SCOPE);
-    // only what the site writes: subscriptions and recommends, creating or deleting comments and flowers, tending, and your own garden, plus Poe's sign-in token
+    // only what the site writes: subscriptions and recommends, creating or deleting comments and flowers, tending, your own garden, and Poe's pet count, plus Poe's sign-in token
     expect(String(META.scope).split(' ').sort()).toEqual([
       'atproto',
       'include:site.standard.authSocial',
@@ -69,6 +69,7 @@ describe('client metadata', () => {
       'repo:to.atpota.garden.patch?action=create&action=update&action=delete',
       'repo:to.atpota.garden.sprout?action=create&action=delete',
       'repo:to.atpota.garden.tend?action=create',
+      'repo:to.atpota.poe.pets?action=create&action=update',
       'rpc:to.atpota.poe.chat?aud=*',
     ]);
   });

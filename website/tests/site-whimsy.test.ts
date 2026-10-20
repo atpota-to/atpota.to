@@ -220,7 +220,6 @@ describe('the community garden tile', () => {
     expect(t.getAttribute('href')).toBe('/garden/atpota.to');
     expect(t.querySelectorAll('a')).toHaveLength(0);
     expect(INDEX).not.toContain('data-garden-plots');
-    expect(INDEX).not.toContain('@partial signin');
     expect(INDEX).not.toContain('patch.css');
   });
 

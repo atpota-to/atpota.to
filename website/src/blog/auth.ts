@@ -16,6 +16,8 @@
  *                 repo:to.atpota.garden.tend (tending a flower), create only, and
  *                 repo:to.atpota.garden.patch (keeping your own garden), create, update
  *                 and delete, and
+ *                 repo:to.atpota.poe.pets (how many times the reader has petted the home
+ *                 page's Poe, src/scripts/pet-sync.ts), create and update, and
  *                 rpc:to.atpota.poe.chat, which lets this browser ask the reader's PDS for
  *                 a short-lived token proving to atpota.to's Poe who they are, so Poe can
  *                 remember them (src/poe/identity.ts, server/identity.ts). A reader who
@@ -45,8 +47,8 @@ export const CALLBACK_PATH = '/blog';
  * atpota.to, and that is all server/identity.ts accepts.
  */
 export const POE_CHAT_SCOPE = 'rpc:to.atpota.poe.chat?aud=*';
-/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending, your own garden, and Poe. */
-export const SCOPE = `atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete ${POE_CHAT_SCOPE}`;
+/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending, your own garden, Poe's pet count, and Poe. */
+export const SCOPE = `atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete repo:to.atpota.poe.pets?action=create&action=update ${POE_CHAT_SCOPE}`;
 export const HANDLE_RESOLVER = 'https://pds.atpota.to';
 /** Where the library remembers the signed-in account (localStorage). */
 export const SESSION_KEY = '@@atproto/oauth-client-browser(sub)';

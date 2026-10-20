@@ -680,6 +680,62 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   }
 }
 
+/* Poe's pet count (pet.ts): saved to the reader's repo when they're signed in, with a
+   sign-in button when it isn't saved yet. */
+.home-sun__count {
+  position: absolute;
+  right: 24px;
+  top: 28px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  background: var(--home-bubble);
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  transform-origin: 100% 50%;
+}
+
+.home-sun__count[hidden] {
+  display: none;
+}
+
+.home-sun__count:has(.home-sun__count-ask[hidden]) {
+  padding-right: 14px;
+}
+
+.home-sun__count-n::before {
+  content: "♥ " / "";
+  color: var(--blush);
+}
+
+.home-sun__count-ask {
+  padding: 4px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--blush) 22%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--dur) ease;
+}
+
+.home-sun__count-ask:hover,
+.home-sun__count-ask:focus-visible {
+  background: color-mix(in srgb, var(--blush) 36%, transparent);
+}
+
+.home-sun__count.is-bumping {
+  animation: home-pop var(--dur-spring) var(--ease-spring);
+}
+
 /* ---------- "what's growing" heading row ---------- */
 
 .home-heading {
@@ -1937,6 +1993,24 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
     padding: 7px 12px;
     border-radius: 14px 14px 14px 4px;
     font-size: 13px;
+  }
+
+  /* below the bubble's longest lines, on the mound */
+  .home-sun__count {
+    top: auto;
+    right: 14px;
+    bottom: 14px;
+    padding: 4px 4px 4px 11px;
+    font-size: 13px;
+  }
+
+  .home-sun__count:has(.home-sun__count-ask[hidden]) {
+    padding-right: 11px;
+  }
+
+  .home-sun__count-ask {
+    padding: 3px 9px;
+    font-size: 12px;
   }
 
   /* heading row */

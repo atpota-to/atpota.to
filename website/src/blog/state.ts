@@ -4,7 +4,8 @@
  *
  *   sessionStorage "blog:pending"           the action a reader started before signing in
  *                                           ({ kind, returnTo, at }), done once they're back;
- *                                           "plant" is the home page's flower patch
+ *                                           "plant" is the home page's flower patch, "pet"
+ *                                           the home page's Poe (pet.ts)
  *   sessionStorage "blog:draft:<document>"  the comment being written, so the sign-in round
  *                                           trip doesn't lose it
  *   sessionStorage "blog:local:<document>"  the reader's own comments added or deleted in
@@ -30,10 +31,10 @@ export const LOCAL_TTL_MS = 10 * 60_000;
 const MAX_LOCAL = 20;
 
 /** "poe": signing in so Poe can remember the reader (from the Poe panel, or /blog#sign-in). */
-export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe' | 'plant' | 'tend';
-/** The intents the blog itself handles (planting and tending belong to the flower patch). */
-export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend'>;
-const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'poe', 'plant', 'tend']);
+export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe' | 'plant' | 'tend' | 'pet';
+/** The intents the blog itself handles (planting and tending belong to the flower patch, petting to the home page). */
+export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend' | 'pet'>;
+const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'poe', 'plant', 'tend', 'pet']);
 
 export interface Pending {
   kind: IntentKind;
