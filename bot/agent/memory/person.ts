@@ -1,7 +1,9 @@
 import { defineMemory } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
 import { isChannelKind } from "../lib/channel-kind";
+import { personScope } from "../lib/person-scope";
 import { publishedFileMemory } from "../lib/published-memory";
+import { isWebsiteTurn, signedInVisitor } from "../lib/website";
 
 /**
  * Durable notes about one person, keyed on their DID.
@@ -32,6 +34,15 @@ import { publishedFileMemory } from "../lib/published-memory";
  *   eve skips the provider and its tools entirely, with no shared-scope
  *   fallback.
  *
+ * Since 2026-10-20 a visitor who signs in with Bluesky on atpota.to gets the
+ * same notes, so the potato on the website and the potato on Bluesky know a
+ * person as one. The chain there: the visitor's own PDS signs an atproto
+ * service-auth token for atpota.to, the website proxy verifies it against the
+ * key in their DID document, then asserts the DID over its authenticated call
+ * (lib/website.ts). Nobody can reach notes for a DID whose PDS will not sign
+ * for them. The scope is spelled out by lib/person-scope.ts, because eve's
+ * byPrincipal would key the website's authenticator into a second document.
+ *
  * Key on the DID and never the handle: handles move between people, DIDs do
  * not. A handle is a fact worth storing, and a fact that can go stale.
  *
@@ -54,9 +65,15 @@ export default defineMemory({
 
   scope(ctx) {
     const caller = ctx.session.auth.current;
-    const did = caller?.attributes?.did;
+
+    // A signed-in visitor on atpota.to: their Bluesky notes, by DID.
+    if (isWebsiteTurn(ctx)) {
+      const visitor = signedInVisitor(caller);
+      return visitor ? personScope(visitor.did) : null;
+    }
 
     // DM turns must never recall, write, or publish a person's notes.
+    const did = caller?.attributes?.did;
     if (!isChannelKind(ctx.channel.kind, "bluesky") || caller?.authenticator !== "atpotato-droplet" ||
         caller.principalType !== "user") return null;
     if (typeof did !== "string" || !did.startsWith("did:")) return null;

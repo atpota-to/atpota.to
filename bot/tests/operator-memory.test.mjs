@@ -5,10 +5,13 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig", "agent/lib/channel-kind.ts",
+  "agent/lib/person-scope.ts", "agent/lib/website.ts",
   "--outDir", ".eve/channel-kind-test", "--module", "esnext", "--moduleResolution", "bundler",
   "--target", "es2022", "--skipLibCheck", "--types", "node"],
   { cwd: new URL("..", import.meta.url) });
 const channelKind = await import("../.eve/channel-kind-test/channel-kind.js");
+const personScope = await import("../.eve/channel-kind-test/person-scope.js");
+const website = await import("../.eve/channel-kind-test/website.js");
 
 // Exercise each authored memory definition with a small stand-in for eve's
 // memory lifecycle. No Vercel credentials, PDS, or DM transport are involved.
@@ -37,6 +40,8 @@ function loadSlot(file) {
         publishedFileMemory: provider,
       };
       if (name === "../lib/channel-kind") return channelKind;
+      if (name === "../lib/person-scope") return personScope;
+      if (name === "../lib/website") return website;
       throw new Error(`unexpected memory dependency ${name}`);
     },
   });
@@ -102,19 +107,65 @@ test("public person notes remain unavailable to operator DMs", () => {
   assert.equal(slot.scope(publicTurn(false))[1], otherDid);
 });
 
-test("an anonymous website visitor gets no memory beyond public-safe self recall", async () => {
+test("an anonymous website visitor gets no memory beyond public-safe self and journal recall", async () => {
   for (const kind of ["website", "channel:website"]) {
     const visitor = { channel: { kind }, session: { auth: { current: {
       authenticator: "atpotato-website", principalType: "anonymous", principalId: "website-visitor",
       attributes: { conversationId: "c".repeat(43), path: "/" },
     } } } };
-    for (const file of ["person", "life", "operator-dm-life", "operator-notes"]) {
+    for (const file of ["person", "operator-dm-life", "operator-notes"]) {
       assert.equal(loadSlot(file).scope(visitor), null, `${file} on ${kind}`);
     }
+    // One journal wherever Poe is: recalled here, never written by a stranger.
+    assert.equal(loadSlot("life").scope(visitor), "poe-life");
+    assert.equal(await loadSlot("life").provider.tools(visitor), null);
     const self = loadSlot("self");
     assert.equal(self.scope, "poe-self");
     assert.equal(await self.provider.tools(visitor), null);
-    assert.equal(await loadSlot("life").provider.tools(visitor), null);
+  }
+});
+
+const signedInDid = "did:plc:abcdefghijklmnopqrstuvwx";
+const signedIn = (overrides = {}, kind = "channel:website") => ({
+  channel: { kind },
+  session: { auth: { current: {
+    authenticator: "atpotato-website", principalType: "user", principalId: signedInDid,
+    attributes: { conversationId: "c".repeat(43), path: "/", did: signedInDid, handle: "someone.example" },
+    ...overrides,
+  } } },
+});
+
+test("a signed-in website visitor gets the very notes Poe keeps for their DID on Bluesky", async () => {
+  for (const kind of ["website", "channel:website"]) {
+    const person = loadSlot("person");
+    assert.deepEqual(person.scope(signedIn({}, kind)), personScope.personScope(signedInDid));
+    assert.deepEqual(person.scope(signedIn({}, kind)),
+      [JSON.stringify(["user", "atpotato-droplet", null, signedInDid]), signedInDid]);
+    assert.equal((await person.provider.tools(signedIn({}, kind))).save_memory, true);
+    assert.equal(loadSlot("life").scope(signedIn({}, kind)), "poe-life");
+    assert.equal((await loadSlot("life").provider.tools(signedIn({}, kind))).save_memory, true);
+    // Signing in on the website never reaches operator memory or self notes.
+    for (const file of ["operator-dm-life", "operator-notes"]) {
+      assert.equal(loadSlot(file).scope(signedIn({}, kind)), null, `${file} on ${kind}`);
+    }
+    assert.equal(await loadSlot("self").provider.tools(signedIn({}, kind)), null);
+  }
+});
+
+test("website person notes need the DID the proxy asserted, under the website's own authenticator", async () => {
+  const person = loadSlot("person");
+  const life = loadSlot("life");
+  // A principal that is not the asserted DID, a malformed DID, or a website
+  // kind carrying another authenticator opens nothing.
+  const mismatched = signedIn({ principalId: otherDid });
+  const malformed = signedIn({ principalId: "did:example:x", attributes: { did: "did:example:x" } });
+  const anonymousWithDid = signedIn({ principalType: "anonymous" });
+  const droplet = signedIn({ authenticator: "atpotato-droplet" });
+  for (const ctx of [mismatched, malformed, anonymousWithDid, droplet]) {
+    assert.equal(person.scope(ctx), null);
+  }
+  for (const ctx of [mismatched, malformed, anonymousWithDid]) {
+    assert.equal(await life.provider.tools(ctx), null);
   }
 });
 

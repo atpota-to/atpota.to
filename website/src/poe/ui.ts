@@ -7,10 +7,12 @@
  * (textContent).
  */
 
+import { sharedAuth } from '../blog/auth';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../scripts/mascot';
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
 import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, contextLabel, noteCopy } from './copy';
 import { icon } from './icons';
+import { PoeIdentity, readWho, saveWho, type Who } from './identity';
 import { BLINK_GAP_MS, BLINK_MS, GLANCE_MS, WAKE_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from './idle';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
 import { renderAnswer, splitTrailingFace } from './render';
@@ -22,6 +24,7 @@ import {
   MAX_TRANSCRIPT,
   saveTranscript,
   clearTranscript,
+  session as sessionStore,
   wasNudged,
   type NoteCode,
   type TranscriptEntry,
@@ -38,12 +41,16 @@ const PILL_SETTLE_MS = 180;
 const SWIPE_CLOSE_PX = 90;
 const QUOTE_DISPLAY_MAX = 140;
 const RESET_TIMEOUT_MS = 5000;
+/** Where "sign in with bluesky" goes from a page without the blog's sign-in dialog. */
+export const SIGN_IN_HREF = '/blog#sign-in';
 
 export interface PoeWidgetOptions {
   doc?: Document;
   win?: Window & typeof globalThis;
   fetchImpl?: typeof fetch;
   nudgeDelayMs?: number;
+  /** Who the reader is on Bluesky. Defaults to the page's shared sign-in; null turns it off. */
+  identity?: PoeIdentity | null;
 }
 
 type OpenVia = 'pointer' | 'keyboard' | 'event' | 'pill';
@@ -112,8 +119,13 @@ export class PoeWidget {
   readonly closeBtn: HTMLButtonElement;
   readonly live: HTMLDivElement;
   readonly pill: HTMLButtonElement;
+  /** "poe knows you as @handle", or a link to sign in (identity.ts). */
+  readonly account: HTMLParagraphElement;
   private readonly handle: HTMLDivElement;
   private readonly head: HTMLDivElement;
+
+  private readonly identity: PoeIdentity | null;
+  private readonly ownsIdentity: boolean;
 
   // state
   private isOpen = false;
@@ -167,6 +179,8 @@ export class PoeWidget {
     this.fetchImpl = options.fetchImpl;
     this.nudgeDelay = options.nudgeDelayMs ?? NUDGE_DELAY_MS;
     this.page = this.doc.body.dataset.page ?? '';
+    this.ownsIdentity = options.identity === undefined;
+    this.identity = options.identity === undefined ? new PoeIdentity(sharedAuth(this.win), { win: this.win, store: sessionStore() }) : options.identity;
     const d = this.doc;
 
     this.root = el(d, 'div', { class: 'poe', id: 'poe-root' });
@@ -269,6 +283,9 @@ export class PoeWidget {
     this.sendBtn.appendChild(icon(d, 'send'));
     this.form.append(label, this.input, this.sendBtn);
 
+    this.account = el(d, 'p', { class: 'poe-account' });
+    this.account.hidden = true;
+
     const foot = el(d, 'p', { class: 'poe-foot' });
     // Phones get no "/" hint: there is no key to press (.only-hover hides it on touch screens).
     const slashHint = el(d, 'span', { class: 'only-hover' });
@@ -278,7 +295,7 @@ export class PoeWidget {
     this.newChatBtn = el(d, 'button', { class: 'poe-textbtn', type: 'button' }, COPY.newChat);
     actions.append(this.newChatBtn);
 
-    this.panel.append(this.perchedImg, this.handle, this.head, context, this.log, this.form, foot, actions);
+    this.panel.append(this.perchedImg, this.handle, this.head, context, this.log, this.form, this.account, foot, actions);
 
     // live region lives outside the panel so answers are announced even when it is closed
     this.live = el(d, 'div', { class: 'poe-sr', 'aria-live': 'polite', 'aria-atomic': 'true' });
@@ -400,6 +417,11 @@ export class PoeWidget {
     this.on(win, 'scroll', () => this.onScroll(), { passive: true, capture: true });
     this.on(win, 'resize', () => this.hidePill(), { passive: true });
     this.on(win, 'poe:open', () => this.open({ opener: doc.activeElement, via: 'event' }));
+    if (this.identity) {
+      const off = this.identity.onChange(() => this.renderAccount());
+      this.cleanups.push(off);
+      this.on(this.account, 'click', (e) => this.onAccountClick(e));
+    }
     this.on(win, 'pagehide', () => this.onPageHide());
     // Back/forward cache: the page comes back as it was left, while another page may have
     // moved the chat on. Catch up with storage before anything is saved.
@@ -425,6 +447,7 @@ export class PoeWidget {
     }
     this.turnController?.abort();
     this.releaseModal();
+    if (this.ownsIdentity) this.identity?.destroy();
     this.root.remove();
     this.doc.documentElement.classList.remove('has-poe');
   }
@@ -500,6 +523,34 @@ export class PoeWidget {
     if (this.isPhone() && options.via !== 'keyboard') this.panel.focus({ preventScroll: true });
     else this.focusInput();
     this.scrollLog(true);
+    // Who Poe will know them as; loads the sign-in library only for a remembered account.
+    this.renderAccount();
+    void this.identity?.prepare();
+  }
+
+  /* ---------------------------------------------------------------- account */
+
+  private renderAccount(): void {
+    const d = this.doc;
+    const state = this.identity?.state;
+    this.account.replaceChildren();
+    if (state?.kind === 'signed-out' || state?.kind === 'needs-sign-in') {
+      const again = state.kind === 'needs-sign-in';
+      const link = el(d, 'a', { class: 'poe-account__link', href: SIGN_IN_HREF }, again ? COPY.signInAgainLink : COPY.signInLink);
+      this.account.append(link, d.createTextNode(again ? COPY.signInAgainAfter : COPY.signInAfter));
+    } else if (state?.kind === 'signed-in') {
+      this.account.textContent = state.confirmed || state.handle ? COPY.knownAs(state.handle) : COPY.signedIn;
+    }
+    this.account.hidden = !this.account.firstChild;
+  }
+
+  /** On a blog page the sign-in dialog is right here (src/blog/ui.ts); elsewhere the link goes to it. */
+  private onAccountClick(event: Event): void {
+    const link = (event.target as Element | null)?.closest?.('a');
+    if (!link || !this.doc.querySelector('dialog[data-blog-signin][data-poe-ready]')) return;
+    event.preventDefault();
+    this.close({ restoreFocus: false });
+    this.win.dispatchEvent(new Event('poe:signin'));
   }
 
   close(options: { restoreFocus?: boolean } = {}): void {
@@ -902,6 +953,8 @@ export class PoeWidget {
     if (!request) return false;
 
     this.setBusy(true);
+    // Asked for now, so a slow PDS overlaps with the rest; never longer than TOKEN_WAIT_MS.
+    const tokenPromise = this.identity ? this.identity.token() : Promise.resolve(null);
     // Poe has answered before in this transcript; a fresh server conversation needs saying.
     const hadAnswers = this.transcript.some((e) => e.role === 'poe');
     const you: TranscriptEntry = { role: 'you', text: request.message };
@@ -942,33 +995,61 @@ export class PoeWidget {
 
     // "new chat" just now: let its DELETE clear the cookie before this question goes out.
     if (this.resetting) await this.resetting;
+    const token = await tokenPromise;
+
+    // Once per question, as soon as the stream says who the server took the asker for (the
+    // "visitor" event when a token went with it, else "ready"): a note between the question
+    // and the answer when Poe can't see the chat above. Signing in or out starts the bot on a
+    // conversation of its own, and so does a lost cookie.
+    let fresh = false;
+    let settled = false;
+    const settle = (who: Who) => {
+      if (settled) return;
+      settled = true;
+      const store = sessionStore();
+      const before = readWho(store);
+      saveWho(store, who);
+      if (!hadAnswers) return;
+      const code = before && before.did !== who.did ? (who.did ? 'signed_in' : 'signed_out') : fresh ? 'fresh_start' : null;
+      if (!code) return;
+      const lastNote = [...this.transcript].reverse().find((e) => e.role === 'note');
+      if (lastNote?.role === 'note' && lastNote.code === code) return; // once, even with cookies blocked
+      this.pushEntry({ role: 'note', code });
+      this.announce(noteCopy(code).text);
+    };
+    const anonymous: Who = { did: null, handle: null };
 
     const outcome = await askPoe(
       request,
       {
         onReady: (conversation) => {
-          // "ready" comes first, so the note lands between the question and the answer.
-          if (conversation !== 'new' || !hadAnswers) return;
-          const lastNote = [...this.transcript].reverse().find((e) => e.role === 'note');
-          if (lastNote?.role === 'note' && lastNote.code === 'fresh_start') return; // once, even with cookies blocked
-          this.pushEntry({ role: 'note', code: 'fresh_start' });
-          this.announce(noteCopy('fresh_start').text);
+          fresh = conversation === 'new';
+          if (!token) settle(anonymous);
+        },
+        onVisitor: (signedIn, handle) => {
+          this.identity?.confirm(signedIn, handle);
+          const state = this.identity?.state;
+          settle(signedIn && state?.kind === 'signed-in' ? { did: state.did, handle: state.handle } : anonymous);
         },
         onStatus: (label) => {
+          settle(anonymous); // a proxy that never answered the token treated it as anonymous
           this.showStatus(label);
           this.announce(label);
         },
         onDelta: (block, text) => {
+          settle(anonymous);
           if (confirmed.delete(block)) blocks[block] = text;
           else blocks[block] = (blocks[block] ?? '') + text;
           showStream();
         },
         onBlock: (block, text) => {
+          settle(anonymous);
           blocks[block] = text ?? '';
           confirmed.add(block);
           showStream();
         },
         onDone: (text, links) => {
+          settle(anonymous);
           const finalText = text.trim() ? text : lastNonEmpty(blocks);
           if (!finalText.trim()) {
             (bubble as HTMLElement | null)?.remove();
@@ -990,7 +1071,7 @@ export class PoeWidget {
           failure = error;
         },
       },
-      { signal: controller.signal, fetchImpl: this.fetchImpl },
+      { signal: controller.signal, fetchImpl: this.fetchImpl, token },
     );
 
     if (this.turnController === controller) this.turnController = null;

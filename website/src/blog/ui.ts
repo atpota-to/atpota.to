@@ -16,9 +16,15 @@
  *
  * Sign-in leaves the page (auth.ts). Before it does, the action that prompted it is saved
  * (state.ts); when the reader is back on that page, signed in, the action finishes.
+ *
+ * Poe's panel signs readers in here too, so Poe can remember them: on a blog page its link
+ * fires "poe:signin" on window, elsewhere it comes to /blog#sign-in. Either opens the dialog,
+ * and once the reader is back the panel opens again. The session is the page's shared one
+ * (sharedAuth), and every sign-in or sign-out here is announced with SESSION_EVENT so Poe
+ * never keeps using a session the reader ended.
  */
 
-import { createAuth, PrepareError, SITE_ORIGIN, type Auth, type Prepared, type Session } from './auth';
+import { PrepareError, SESSION_EVENT, sharedAuth, SITE_ORIGIN, type Auth, type Prepared, type Session, type SessionEventDetail } from './auth';
 import {
   cleanCommentText,
   COMMENT,
@@ -92,6 +98,7 @@ export const COPY = {
     subscribe: 'sign in with your bluesky account to subscribe. the subscription is saved in your own account, where leaflet and other standard.site readers can see it.',
     recommend: 'sign in with your bluesky account to recommend this post.',
     comment: 'sign in with your bluesky account to comment.',
+    poe: "sign in with your bluesky account so poe remembers you here, the same way it does when you mention it on bluesky. what poe remembers is public in its repo.",
   } satisfies Record<IntentKind, string>,
   email: {
     also: (handle: string | null) => (handle ? `also subscribe with bluesky as @${handle}` : 'also subscribe with bluesky'),
@@ -119,7 +126,7 @@ export const COPY = {
 export interface BlogOptions {
   doc?: Document;
   win?: Window;
-  /** Defaults to createAuth(win); null means sign-in isn't offered on this host. */
+  /** Defaults to sharedAuth(win); null means sign-in isn't offered on this host. */
   auth?: Auth | null;
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -226,7 +233,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   const compose = talk?.querySelector<HTMLElement>('[data-comment-compose]') ?? null;
   const commentList = talk?.querySelector<HTMLOListElement>('[data-comment-list]') ?? null;
   const dialog = doc.querySelector<HTMLDialogElement>('dialog[data-blog-signin]');
-  const auth = opts.auth === undefined ? createAuth(win) : opts.auth;
+  const auth = opts.auth === undefined ? sharedAuth(win) : opts.auth;
 
   if (!root || (!subscribeButtons.length && !recommendButton && !talk)) return;
 
@@ -901,8 +908,13 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     renderCompose();
   }
 
+  function announceSession(did: string | null): void {
+    win.dispatchEvent(new CustomEvent<SessionEventDetail>(SESSION_EVENT, { detail: { did } }));
+  }
+
   async function signedIn(s: Session): Promise<void> {
     session = s;
+    announceSession(s.did);
     subscriptions = null;
     recommends = null;
     me = await loadMe(fetchImpl, s.did);
@@ -912,6 +924,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
 
   function signedOut(): void {
     session = null;
+    announceSession(null);
     me = null;
     subscriptions = null;
     recommends = null;
@@ -929,6 +942,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   async function perform(kind: IntentKind): Promise<void> {
     if (kind === 'subscribe' && subscriptions && !subscriptions.length) await toggleSubscribe();
     else if (kind === 'recommend' && recommends && !recommends.length) await toggleRecommend();
+    else if (kind === 'poe') win.dispatchEvent(new Event('poe:open'));
     else if (kind === 'comment') {
       const area = compose?.querySelector('textarea');
       area?.scrollIntoView?.({ block: 'center' });
@@ -948,6 +962,15 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     const rest = search.toString();
     win.history?.replaceState?.(win.history.state, '', `${win.location.pathname}${rest ? `?${rest}` : ''}${win.location.hash ?? ''}`);
     notify(COPY.notices.emailSubscribed);
+  }
+
+  // Poe's panel: "sign in with bluesky so poe can remember you". The marker tells it the
+  // dialog is wired; without it the panel's link just comes to /blog#sign-in.
+  win.addEventListener('poe:signin', () => openSignIn('poe'));
+  if (dialog) dialog.dataset.poeReady = '';
+  if (win.location.hash === '#sign-in') {
+    win.history?.replaceState?.(win.history.state, '', `${win.location.pathname}${win.location.search ?? ''}`);
+    openSignIn('poe');
   }
 
   const leftover = store.get(NOTICE_KEY);

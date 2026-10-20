@@ -28,6 +28,7 @@ describe('config', () => {
       POE_RATE_LIMIT_ID: ' poe-chat ',
       POE_MOCK: '1',
       POE_UPSTREAM_TIMEOUT_MS: '5000',
+      POE_IDENTITY_DISABLED: '1',
     });
     expect(c).toEqual({
       secret: 's3cret',
@@ -37,7 +38,11 @@ describe('config', () => {
       mock: true,
       upstreamTimeoutMs: 5000,
       production: false,
+      identity: false,
     });
+    // Sign-ins are verified unless the kill switch says otherwise.
+    expect(readConfig({}).identity).toBe(true);
+    expect(readConfig({ POE_IDENTITY_DISABLED: '0' }).identity).toBe(true);
   });
 
   it('defaults and empties', () => {
@@ -372,6 +377,11 @@ describe('tool labels', () => {
     expect(toolLabel('search_bluesky_posts')).toBe('searching posts');
     expect(toolLabel('top_mentioned_posts')).toBe('finding the most mentioned posts');
     expect(toolLabel('web_search')).toBe('searching the web');
+    expect(toolLabel('read_dispatch')).toBe('reading the dispatch');
+    // A signed-in visitor watches Poe keep its notes; the slot prefix doesn't matter.
+    expect(toolLabel('person__save_memory')).toBe('making a note');
+    expect(toolLabel('life__save_memory')).toBe('making a note');
+    expect(toolLabel('person__remove_memory')).toBe('crossing out a note');
   });
 
   it('falls back for unknown, internal or hostile names', () => {

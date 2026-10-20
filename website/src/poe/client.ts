@@ -2,7 +2,9 @@
  * Browser side of the /api/poe contract (SPEC 4.1).
  *
  *   POST /api/poe  {"message","path","selection"?}  ->  text/event-stream
+ *     (with "Authorization: Bearer <token>" when the reader is signed in; see identity.ts)
  *     ready  {"conversation":"new"|"continued"}
+ *     visitor {"signedIn","handle"}     only when a token was sent: whether it was verified
  *     status {"state":"digging","label"}
  *     delta  {"text","block"}           streaming text for block N
  *     block  {"text"|null,"block"}      authoritative text for block N
@@ -65,6 +67,8 @@ export interface AskRequest {
 
 export interface StreamHandlers {
   onReady?(conversation: 'new' | 'continued'): void;
+  /** Whether the sign-in token sent with this question was verified, and the handle Poe knows. */
+  onVisitor?(signedIn: boolean, handle: string | null): void;
   onStatus?(label: string): void;
   onDelta?(block: number, text: string): void;
   onBlock?(block: number, text: string | null): void;
@@ -81,6 +85,8 @@ export interface AskOptions {
   /** Give up when nothing (not even a ping) arrives for this long. Default 60s (4 missed pings). */
   idleTimeoutMs?: number;
   isOnline?: () => boolean;
+  /** A Bluesky sign-in token (src/poe/identity.ts), sent as a bearer token. */
+  token?: string | null;
 }
 
 export function sanitizePath(path: string | null | undefined): string {
@@ -225,7 +231,11 @@ export async function askPoe(request: AskRequest, handlers: StreamHandlers, opti
     try {
       response = await fetchImpl(options.endpoint ?? ENDPOINT, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+        headers: {
+          'content-type': 'application/json',
+          accept: 'text/event-stream',
+          ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
+        },
         body: JSON.stringify(request),
         credentials: 'same-origin',
         cache: 'no-store',
@@ -256,6 +266,12 @@ export async function askPoe(request: AskRequest, handlers: StreamHandlers, opti
       switch (name) {
         case 'ready':
           if (payload.conversation === 'new' || payload.conversation === 'continued') handlers.onReady?.(payload.conversation);
+          return null;
+        case 'visitor':
+          if (typeof payload.signedIn === 'boolean') {
+            const handle = typeof payload.handle === 'string' && /^[a-z0-9.-]{1,253}$/.test(payload.handle) ? payload.handle : null;
+            handlers.onVisitor?.(payload.signedIn, handle);
+          }
           return null;
         case 'status':
           if (typeof payload.label === 'string') {

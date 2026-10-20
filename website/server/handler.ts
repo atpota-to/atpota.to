@@ -5,12 +5,19 @@
  * POST order: origin (403) -> content type (415) -> kill switch / config (503) -> body cap
  * (413) -> JSON and shape (400) -> rate limits (429) -> 200 event stream. Everything after
  * the stream starts, including upstream failures, arrives as SSE `error` events.
+ *
+ * A visitor signed in with Bluesky also sends `Authorization: Bearer <service-auth jwt>`.
+ * Once the stream has started it is verified (server/identity.ts) and answered with one
+ * `visitor` event; a verified DID goes to the bot with the message, which is what lets
+ * Poe remember them. A token that fails any check, or POE_IDENTITY_DISABLED=1, leaves the
+ * chat anonymous rather than failing it.
  */
 
 import { readConfig, type Env } from './config.js';
 import { clearedCookie, conversationCookie, newConversationId, readConversationId } from './cookie.js';
 import { defaultCheckRateLimit, firewallLimited, type CheckRateLimit } from './firewall.js';
 import { ALLOW, SSE_HEADERS, jsonError } from './http.js';
+import { bearerToken, identify, type IdentifyResult } from './identity.js';
 import { consoleLogger, errorName, type Logger } from './log.js';
 import { MESSAGES, type ErrorCode } from './messages.js';
 import { isAllowedOrigin } from './origin.js';
@@ -45,6 +52,8 @@ export interface PoeDeps {
   /** Mock pacing (tests make it instant). */
   sleep?: Sleep;
   mockStepMs?: number;
+  /** Verifies a sign-in token. Defaults to server/identity.ts with this fetch and clock. */
+  identify?: (token: string) => Promise<IdentifyResult>;
 }
 
 export interface PoeHandlers {
@@ -64,6 +73,9 @@ const INVALID_MESSAGES: Record<InvalidReason, string> = {
 
 type Run = (emit: (event: BrowserEvent) => void, ping: () => void, signal: AbortSignal) => Promise<TurnResult>;
 
+/** What the log may say about a sign-in: a fixed code, never the DID or the token. */
+type IdentityCode = 'verified' | Exclude<IdentifyResult, { ok: true }>['reason'];
+
 export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
   const env = deps.env ?? (() => process.env);
   const doFetch: typeof fetch = deps.fetch ?? ((input, init) => globalThis.fetch(input, init));
@@ -72,6 +84,21 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
   const checkRateLimit = deps.checkRateLimit ?? defaultCheckRateLimit;
   const log = deps.log ?? consoleLogger;
   const keepaliveMs = deps.keepaliveMs ?? KEEPALIVE_MS;
+  const verify = deps.identify ?? ((token: string) => identify(token, { fetch: doFetch, now }));
+
+  /**
+   * The verified visitor for a request that sent a token, after telling the widget the
+   * outcome. Null (anonymous) for no token, a failed check, or a verifier that threw.
+   */
+  async function visitorFor(token: string | null, header: boolean, emit: (event: BrowserEvent) => void) {
+    if (!header) return { visitor: null, identity: undefined };
+    const result: IdentifyResult = token
+      ? await verify(token).catch((): IdentifyResult => ({ ok: false, reason: 'no_key' }))
+      : { ok: false, reason: 'malformed' };
+    emit({ event: 'visitor', data: result.ok ? { signedIn: true, handle: result.visitor.handle } : { signedIn: false, handle: null } });
+    const identity: IdentityCode = result.ok ? 'verified' : result.reason;
+    return { visitor: result.ok ? result.visitor : null, identity };
+  }
 
   /** A pre-stream JSON failure, logged by its fixed reason code. */
   const reject = (status: number, code: ErrorCode, message: string, reason: string, headers?: Record<string, string>) => {
@@ -118,6 +145,7 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
               ...(result.code ? { code: result.code } : {}),
               ...(result.status !== undefined ? { status: result.status } : {}),
               ...(result.error ? { error: result.error } : {}),
+              ...(result.identity ? { identity: result.identity } : {}),
               ms: now() - started,
               mock,
               conversation,
@@ -175,6 +203,10 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
     if (!checked.ok) return reject(400, 'bad_request', INVALID_MESSAGES[checked.reason], checked.reason);
     const input = checked.value;
 
+    // Only when the kill switch is off; a header that isn't a usable token still gets an answer.
+    const signIn = config.identity && request.headers.has('authorization');
+    const token = signIn ? bearerToken(request) : null;
+
     const existing = readConversationId(request);
     const conversationId = existing ?? newConversationId();
     const conversation = existing ? 'continued' : 'new';
@@ -190,9 +222,10 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
         ...(deps.sleep ? { sleep: deps.sleep } : {}),
         ...(deps.mockStepMs !== undefined ? { stepMs: deps.mockStepMs } : {}),
       };
-      return stream(request, cookie, conversation, true, (emit, ping, signal) =>
-        runMockTurn({ input, emit, ping, signal, ...pacing }),
-      );
+      return stream(request, cookie, conversation, true, async (emit, ping, signal) => {
+        const { identity } = await visitorFor(token, signIn, emit);
+        return { ...(await runMockTurn({ input, emit, ping, signal, ...pacing })), ...(identity ? { identity } : {}) };
+      });
     }
 
     if (config.rateLimitId && (await firewallLimited(config.rateLimitId, request, checkRateLimit, log))) {
@@ -219,9 +252,11 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
       title: pageTitle(input.path),
       ...(input.selection ? { selection: input.selection } : {}),
     };
-    return stream(request, cookie, conversation, false, (emit, _ping, signal) =>
-      relayTurn({ agentUrl, secret, chat, signal, fetch: doFetch, emit, timeouts }),
-    );
+    return stream(request, cookie, conversation, false, async (emit, _ping, signal) => {
+      const { visitor, identity } = await visitorFor(token, signIn, emit);
+      const result = await relayTurn({ agentUrl, secret, chat: visitor ? { ...chat, visitor } : chat, signal, fetch: doFetch, emit, timeouts });
+      return identity ? { ...result, identity } : result;
+    });
   }
 
   async function DELETE(request: Request): Promise<Response> {

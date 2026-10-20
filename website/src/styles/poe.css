@@ -833,6 +833,27 @@ html[data-theme="dark"] .poe-msg--poe:not(.poe-msg--note) {
   line-height: 1.4;
 }
 
+/* Who Poe knows you as, or a link to sign in (identity.ts). Sits right under the input. */
+.poe-account {
+  flex: none;
+  margin: 8px 22px 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.poe-account__link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--dash);
+  text-underline-offset: 3px;
+}
+
+.poe-account__link:hover {
+  text-decoration-color: currentColor;
+}
+
 .poe-kbd {
   padding: 0 4px;
   border-radius: 4px;
@@ -997,6 +1018,10 @@ html[data-theme="dark"] .poe-msg--poe:not(.poe-msg--note) {
 
   .poe-foot {
     margin: 10px 20px 0;
+  }
+
+  .poe-account {
+    margin: 8px 20px 0;
   }
 
   .poe-actions {

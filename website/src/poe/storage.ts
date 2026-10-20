@@ -139,7 +139,9 @@ export type NoteCode =
   | 'interrupted'
   | 'cut_off'
   | 'empty'
-  | 'fresh_start';
+  | 'fresh_start'
+  | 'signed_in'
+  | 'signed_out';
 
 export const NOTE_CODES: readonly NoteCode[] = [
   'not_configured',
@@ -155,6 +157,8 @@ export const NOTE_CODES: readonly NoteCode[] = [
   'cut_off',
   'empty',
   'fresh_start',
+  'signed_in',
+  'signed_out',
 ];
 
 export type TranscriptEntry =
