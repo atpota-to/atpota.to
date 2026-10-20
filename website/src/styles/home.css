@@ -447,13 +447,28 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   }
 }
 
-/* Petting (pet.ts): a squash and stretch per pet, a spin on the eighth, a blush later on. */
+/* Petting (pet.ts): each pet plays one of a few motions, picked at random and never the same
+   twice in a row, and pet.ts jitters --pet-hop / --pet-tilt / --pet-dur per pet so no two
+   look alike. The eighth pet is a hop and flip, turning around Poe's middle rather than
+   its feet. A blush later on. */
 .home-sun__mascot.is-squished {
-  animation: home-squish 700ms var(--ease-out);
+  animation: home-squish var(--pet-dur, 700ms) var(--ease-out);
+}
+
+.home-sun__mascot.is-wobbling {
+  animation: home-wobble var(--pet-dur, 760ms) ease-out;
+}
+
+.home-sun__mascot.is-booped {
+  animation: home-boop var(--pet-dur, 420ms) var(--ease-out);
+}
+
+.home-sun__mascot.is-wiggling {
+  animation: home-wiggle var(--pet-dur, 620ms) ease-in-out;
 }
 
 .home-sun__mascot.is-spinning {
-  animation: home-spin 900ms var(--ease-spring);
+  animation: home-flip 1000ms cubic-bezier(0.33, 0, 0.25, 1);
 }
 
 .home-sun__mascot.is-blushing {
@@ -470,11 +485,11 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   }
 
   38% {
-    transform: translateY(-30px) scale(0.92, 1.1);
+    transform: translateY(calc(var(--pet-hop, 30px) * -1)) rotate(var(--pet-tilt, 0deg)) scale(0.92, 1.1);
   }
 
   60% {
-    transform: translateY(0) scale(1.06, 0.95);
+    transform: translateY(0) rotate(calc(var(--pet-tilt, 0deg) * -0.4)) scale(1.06, 0.95);
   }
 
   78% {
@@ -486,24 +501,124 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   }
 }
 
-@keyframes home-spin {
-  from {
-    transform: rotate(0);
+/* jelly: a side-to-side shiver that dies down */
+@keyframes home-wobble {
+  0% {
+    transform: none;
   }
 
-  to {
-    transform: rotate(360deg);
+  12% {
+    transform: scale(1.08, 0.93) skewX(calc(var(--pet-tilt, 6deg) * 1.4));
+  }
+
+  30% {
+    transform: scale(0.96, 1.05) skewX(calc(var(--pet-tilt, 6deg) * -1));
+  }
+
+  48% {
+    transform: scale(1.03, 0.98) skewX(calc(var(--pet-tilt, 6deg) * 0.6));
+  }
+
+  66% {
+    transform: skewX(calc(var(--pet-tilt, 6deg) * -0.3));
+  }
+
+  84% {
+    transform: skewX(calc(var(--pet-tilt, 6deg) * 0.1));
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+/* a quick press, like a boop on the nose */
+@keyframes home-boop {
+  0% {
+    transform: none;
+  }
+
+  30% {
+    transform: scale(1.1, 0.9) rotate(calc(var(--pet-tilt, 0deg) * 0.5));
+  }
+
+  65% {
+    transform: scale(0.97, 1.04);
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+/* a happy little side-to-side rock on its feet */
+@keyframes home-wiggle {
+  0% {
+    transform: none;
+  }
+
+  20% {
+    transform: rotate(calc(var(--pet-tilt, 6deg) * 1.3)) scale(1.02, 0.98);
+  }
+
+  45% {
+    transform: rotate(calc(var(--pet-tilt, 6deg) * -1.1));
+  }
+
+  70% {
+    transform: rotate(calc(var(--pet-tilt, 6deg) * 0.5));
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+/* Crouch, hop, flip once around the middle (translateY(-50%) moves the bottom origin up to the
+   centre for the rotate), land with a squash. Every frame keeps the same function list so the
+   rotation interpolates by angle instead of snapping through a matrix. */
+@keyframes home-flip {
+  0% {
+    transform: translateY(0) translateY(-50%) rotate(0deg) translateY(50%) scale(1, 1);
+  }
+
+  14% {
+    transform: translateY(0) translateY(-50%) rotate(0deg) translateY(50%) scale(1.14, 0.86);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  32% {
+    transform: translateY(-70px) translateY(-50%) rotate(calc(var(--flip-dir, 1) * 40deg)) translateY(50%) scale(0.94, 1.06);
+    animation-timing-function: linear;
+  }
+
+  58% {
+    transform: translateY(-86px) translateY(-50%) rotate(calc(var(--flip-dir, 1) * 300deg)) translateY(50%) scale(1, 1);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.6);
+  }
+
+  76% {
+    transform: translateY(0) translateY(-50%) rotate(calc(var(--flip-dir, 1) * 360deg)) translateY(50%) scale(1.16, 0.84);
+    animation-timing-function: var(--ease-out);
+  }
+
+  88% {
+    transform: translateY(0) translateY(-50%) rotate(calc(var(--flip-dir, 1) * 360deg)) translateY(50%) scale(0.97, 1.04);
+  }
+
+  100% {
+    transform: translateY(0) translateY(-50%) rotate(calc(var(--flip-dir, 1) * 360deg)) translateY(50%) scale(1, 1);
   }
 }
 
 .home-heart {
   position: absolute;
   z-index: 5;
-  width: 24px;
-  height: 24px;
+  width: var(--size, 24px);
+  height: var(--size, 24px);
   color: var(--blush);
   pointer-events: none;
-  animation: home-heart 1.1s ease-out forwards;
+  animation: home-heart var(--heart-dur, 1.1s) ease-out forwards;
 }
 
 .home-heart svg {
@@ -520,7 +635,7 @@ html[data-theme="dark"] .home-sun__sprout--3 {
 
   to {
     opacity: 0;
-    transform: translate(var(--dx), -120px) scale(1.2) rotate(var(--rot));
+    transform: translate(var(--dx), var(--rise, -120px)) scale(1.2) rotate(var(--rot));
   }
 }
 

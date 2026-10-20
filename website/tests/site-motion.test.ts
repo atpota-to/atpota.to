@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initCopyEmail } from '../src/scripts/home.js';
 import { MASCOT_URLS, bindMascot } from '../src/scripts/mascot.js';
 import { initNavPill } from '../src/scripts/nav.js';
-import { PET_RESET_MS, initPet, petReaction } from '../src/scripts/pet.js';
+import { PET_MOTIONS, PET_RESET_MS, initPet, petFlourish, petReaction, pickMotion } from '../src/scripts/pet.js';
 import { AWAY_TITLE, BACK_MS, BACK_TITLE, initTabTitle } from '../src/scripts/tab.js';
 import { applyTheme, revealRadius, toggleThemeFrom } from '../src/scripts/theme.js';
 
@@ -27,6 +27,18 @@ describe('hero poe petting', () => {
     expect(petReaction(8)).toMatchObject({ spin: true });
     expect(petReaction(12).say).toContain('friends');
     for (let n = 1; n <= 20; n++) expect(['scawy', 'dead']).not.toContain(petReaction(n).face);
+  });
+
+  it('never plays the same motion twice in a row, and only sometimes adds a flourish', () => {
+    let last: ReturnType<typeof pickMotion> | undefined;
+    for (const r of [0, 0, 0.5, 0.5, 0.99, 0.99]) {
+      const next = pickMotion(last, () => r);
+      expect(PET_MOTIONS).toContain(next);
+      expect(next).not.toBe(last);
+      last = next;
+    }
+    expect(petFlourish(() => 0.9)).toBeNull();
+    for (const r of [0, 0.1, 0.29]) expect(['scawy', 'dead']).not.toContain(petFlourish(() => r)?.face);
   });
 
   it('holds the reaction face over hover swaps, then settles back after a pause', () => {
@@ -55,6 +67,8 @@ describe('hero poe petting', () => {
 
   it('floats a heart up per pet', () => {
     vi.useFakeTimers();
+    // no second heart, no flourish
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     document.body.innerHTML = HERO;
     initPet();
     document.querySelector<HTMLImageElement>('img[data-pet]')!.click();
