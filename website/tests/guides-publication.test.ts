@@ -150,7 +150,7 @@ describe('markdown -> Leaflet blocks', () => {
       linkedPages: [],
       headingIds: new Set<string>(),
       otherPosts: [],
-      links: { profile: '', feed: '' },
+      links: { profile: '', feed: '', feedUrl: '' },
     };
     const fromRecord = html(`<body>${renderPages(leafletPages(out.content), ctx)}</body>`).body;
     const fromPage = html(`<body>${renderGuide(md, { publicDir: `${root}public` }).html}</body>`).body;

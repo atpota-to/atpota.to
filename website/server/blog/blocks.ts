@@ -16,7 +16,7 @@
 import { blobCid, blobUrl } from './atproto.js';
 import { aturiUrl, displayHost, escapeAttr, escapeHtml, httpUrl, safeColor, textWithBreaks } from './html.js';
 import { FootnoteList, renderRichText } from './richtext.js';
-import { blueskySubscribeHtml, emailFormHtml, type EmailSignup } from './subscribe.js';
+import { blueskySubscribeHtml, emailFormHtml, feedButtonHtml, type EmailSignup } from './subscribe.js';
 
 const T = 'pub.leaflet.blocks.';
 
@@ -68,7 +68,7 @@ export interface BlockContext {
   headingIds: Set<string>;
   /** Other posts, for postsList blocks. */
   otherPosts: PostListItem[];
-  links: { profile: string; feed: string };
+  links: { profile: string; feed: string; feedUrl: string };
   /** The email form for signup blocks; null in the feed, or with BLOG_EMAIL_DISABLED. */
   signup?: EmailSignup | null;
 }
@@ -439,16 +439,16 @@ function signupHtml(ctx: BlockContext): string {
       `<p class="post-signup__text">by email, or with your bluesky account.</p>` +
       emailFormHtml(ctx.signup, uniqueId('signup', ctx.headingIds)) +
       `<p class="post-signup__actions">${blueskySubscribeHtml('btn btn--primary btn--sm')} ` +
-      `<a class="btn btn--outline btn--sm" href="${escapeAttr(ctx.links.feed)}">atom feed</a></p>` +
+      `${feedButtonHtml(ctx.links.feed, ctx.links.feedUrl, ' btn--sm')}</p>` +
       `</aside>`
     );
   }
   return (
     `<aside class="post-signup">` +
     `<p class="post-signup__title">get the next issue</p>` +
-    `<p class="post-signup__text">follow poe on bluesky, or add the feed to your reader.</p>` +
+    `<p class="post-signup__text">follow poe on bluesky, or add the rss feed to your reader.</p>` +
     `<p class="post-signup__actions"><a class="btn btn--primary btn--sm" href="${escapeAttr(ctx.links.profile)}">follow on bluesky</a> ` +
-    `<a class="btn btn--outline btn--sm" href="${escapeAttr(ctx.links.feed)}">atom feed</a></p>` +
+    `${feedButtonHtml(ctx.links.feed, ctx.links.feedUrl, ' btn--sm')}</p>` +
     `</aside>`
   );
 }

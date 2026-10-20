@@ -51,7 +51,7 @@ function ctx(over: Partial<BlockContext> = {}): BlockContext {
     linkedPages: [],
     headingIds: new Set(),
     otherPosts: [],
-    links: { profile: 'https://bsky.app/profile/poe.atpota.to', feed: '/blog/feed.xml' },
+    links: { profile: 'https://bsky.app/profile/poe.atpota.to', feed: '/blog/feed.xml', feedUrl: 'https://atpota.to/blog/feed.xml' },
     ...over,
   };
 }

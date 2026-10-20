@@ -26,7 +26,24 @@ export const SUBSCRIBE_COPY = {
   emailButton: 'subscribe by email',
   emailFine: "leaflet.pub sends the emails. you'll confirm your address there, then come right back.",
   bluesky: 'subscribe with bluesky',
+  feed: 'copy the rss feed link',
 } as const;
+
+const FEED_ICON =
+  '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a14 14 0 0 1 14 14M5 11a8 8 0 0 1 8 8"/><circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>';
+
+/**
+ * A round rss icon. src/blog/feed-copy.ts copies `url` (absolute, so it pastes into any
+ * reader) and says so in a bubble; without JavaScript it's a plain link to the feed.
+ */
+export function feedButtonHtml(path: string, url: string, size = ''): string {
+  return (
+    `<a class="btn btn--outline btn--icon${size} blog-feed" href="${escapeAttr(path)}" data-copy-feed="${escapeAttr(url)}" ` +
+    `aria-label="${SUBSCRIBE_COPY.feed}" title="${SUBSCRIBE_COPY.feed}">${FEED_ICON}` +
+    `<span class="blog-feed__bubble" data-copy-feed-bubble aria-hidden="true"></span>` +
+    `<span class="visually-hidden" data-copy-feed-status aria-live="polite"></span></a>`
+  );
+}
 
 export interface EmailSignup {
   /** The publication's at:// URI. */
