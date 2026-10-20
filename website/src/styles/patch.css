@@ -24,6 +24,8 @@ html[data-theme="dark"] {
 
 .home-patch {
   container: patch / inline-size;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 

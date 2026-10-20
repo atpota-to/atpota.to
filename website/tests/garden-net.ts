@@ -41,8 +41,15 @@ export interface Net {
   blocks?: string[];
   /** Index entries whose records say something else (or are gone). */
   extraLinks?: Array<{ target: string; did: string; collection: string; rkey: string }>;
-  /** DIDs plc.directory doesn't know. */
+  /** DIDs plc.directory doesn't know (Slingshot doesn't either). */
   unknownDids?: string[];
+  /** What Slingshot still has for someone's garden, before it catches up: owner DID -> value. */
+  staleGardens?: Record<string, Record<string, unknown>>;
+  /** Accounts only Slingshot knows (the AppView answers "profile not found"). */
+  slingshotOnly?: Array<{ did: string; handle: string }>;
+  slingshotDown?: boolean;
+  /** Handles the AppView answers with AccountTakedown. */
+  takenDown?: string[];
   pdsDown?: boolean;
   constellationDown?: boolean;
   /** Constellation fails for tend lookups only. */
@@ -102,6 +109,20 @@ function linksTo(net: Net, target: string, collection: string, path: string): Ar
   return out.reverse();
 }
 
+/** The version of a patch record, as its CID: changes whenever the record does. */
+export function patchCid(rkey: string, value: Record<string, unknown>): string {
+  let h = 0;
+  for (const c of JSON.stringify(value)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `bafypatch${rkey.replace(/[^a-z0-9]/g, '')}${h.toString(36)}`;
+}
+
+/** Someone's patch record by rkey (or `stale`, what a cache still has instead). */
+function gardenAnswer(net: Net, repo: string, rkey: string, stale?: Record<string, unknown>): Response {
+  const patches = repo === GARDEN_SUBJECT ? net.patches : (net.gardens?.[repo] ?? {});
+  const value = stale ?? patches[rkey];
+  return value ? json({ uri: patchUri(rkey, repo), cid: patchCid(rkey, value), value }) : json({ error: 'RecordNotFound' }, 400);
+}
+
 export function fakeFetch(net: Net): typeof fetch {
   return (async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
@@ -117,7 +138,7 @@ export function fakeFetch(net: Net): typeof fetch {
       const collection = url.searchParams.get('collection')!;
       if (collection === PATCH_NSID) {
         const patches = repo === GARDEN_SUBJECT ? net.patches : (net.gardens?.[repo] ?? {});
-        return json({ records: Object.entries(patches).map(([rkey, value]) => ({ uri: patchUri(rkey, repo), cid: `bafypatch${rkey.replace(/[^a-z0-9]/g, '')}`, value })) });
+        return json({ records: Object.entries(patches).map(([rkey, value]) => ({ uri: patchUri(rkey, repo), cid: patchCid(rkey, value), value })) });
       }
       if (collection === 'app.bsky.graph.block') {
         const blocked = repo === GARDEN_SUBJECT ? (net.blocks ?? []) : (net.ownerBlocks?.[repo] ?? []);
@@ -135,12 +156,30 @@ export function fakeFetch(net: Net): typeof fetch {
       return json({ total: links.length, linking_records: links, cursor: null });
     }
     if (url.origin === SLINGSHOT) {
-      const key = `${url.searchParams.get('repo')}/${url.searchParams.get('collection')}/${url.searchParams.get('rkey')}`;
+      if (net.slingshotDown) return new Response('down', { status: 503 });
+      if (url.pathname.endsWith('com.bad-example.identity.resolveMiniDoc')) {
+        const id = url.searchParams.get('identifier')!.toLowerCase();
+        const known = [...net.profiles.map((p) => ({ did: String(p.did), handle: String(p.handle) })), ...(net.slingshotOnly ?? [])];
+        const found = known.find((p) => p.did === id || p.handle.toLowerCase() === id) ?? (id.startsWith('did:plc:') ? { did: id, handle: id === GARDEN_SUBJECT ? 'atpota.to' : `doc-${id.slice(-1)}.test` } : null);
+        if (!found || net.unknownDids?.includes(found.did)) return json({ error: 'InvalidRequest', message: 'Errored while trying to resolve handle to DID' }, 400);
+        return json({ did: found.did, handle: found.handle, pds: PDS, signing_key: 'z' });
+      }
+      const [repo, collection, rkey] = [url.searchParams.get('repo')!, url.searchParams.get('collection')!, url.searchParams.get('rkey')!];
+      if (collection === PATCH_NSID) return gardenAnswer(net, repo, rkey, net.staleGardens?.[repo]);
+      const key = `${repo}/${collection}/${rkey}`;
       const value = net.records[key];
       return value ? json({ uri: `at://${key}`, cid: CID, value }) : json({ error: 'RecordNotFound' }, 404);
     }
+    if (url.origin === PDS && url.pathname.endsWith('com.atproto.repo.getRecord')) {
+      if (net.pdsDown) return new Response('down', { status: 503 });
+      const [repo, collection, rkey] = [url.searchParams.get('repo')!, url.searchParams.get('collection')!, url.searchParams.get('rkey')!];
+      if (collection === PATCH_NSID) return gardenAnswer(net, repo, rkey);
+      const value = net.records[`${repo}/${collection}/${rkey}`];
+      return value ? json({ uri: `at://${repo}/${collection}/${rkey}`, cid: CID, value }) : json({ error: 'RecordNotFound' }, 400);
+    }
     if (url.pathname.endsWith('app.bsky.actor.getProfile')) {
       const actor = url.searchParams.get('actor')!.toLowerCase();
+      if (net.takenDown?.includes(actor)) return json({ error: 'AccountTakedown', message: 'Account has been taken down' }, 400);
       const found = net.profiles.find((p) => p.did === actor || String(p.handle).toLowerCase() === actor);
       return found ? json(found) : json({ error: 'InvalidRequest', message: 'Profile not found' }, 400);
     }

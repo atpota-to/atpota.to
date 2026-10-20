@@ -114,37 +114,39 @@
                     </form>
                 </section>
 
-                <details class="tile garden-card garden-settings" data-settings hidden>
-                    <summary class="garden-settings__summary">garden settings</summary>
-                    <form class="garden-form" data-settings-form>
-                        <label class="garden-form__field">
-                            <span>what it's called</span>
-                            <input type="text" name="name" maxlength="40" required autocomplete="off">
-                        </label>
-                        <fieldset class="garden-form__sizes">
-                            <legend>how big</legend>
-                            <label class="garden-form__size"><input type="radio" name="size" value="small"> <span><strong>small</strong> 6 × 4, 24 plots</span></label>
-                            <label class="garden-form__size"><input type="radio" name="size" value="medium" checked> <span><strong>medium</strong> 8 × 6, 48 plots</span></label>
-                            <label class="garden-form__size"><input type="radio" name="size" value="large"> <span><strong>large</strong> 12 × 8, 96 plots</span></label>
-                        </fieldset>
-                        <label class="garden-form__field">
-                            <span>a few words for visitors <em>(optional)</em></span>
-                            <textarea name="note" maxlength="140" rows="2"></textarea>
-                        </label>
-                        <label class="garden-form__check">
-                            <input type="checkbox" name="open" checked>
-                            <span>open for planting. <em>closing it presses every flower in it, just as they are.</em></span>
-                        </label>
-                        <p class="garden-card__note">making it smaller moves flowers that no longer fit to a free plot, or leaves them out if there's no room.</p>
-                        <button type="submit" class="btn btn--primary garden-form__save">save changes</button>
-                        <p class="garden-form__status" role="status" data-settings-status></p>
-                    </form>
-                </details>
+                <div class="garden-side">
+                    <details class="tile garden-card garden-settings" data-settings hidden>
+                        <summary class="garden-settings__summary">garden settings</summary>
+                        <form class="garden-form" data-settings-form>
+                            <label class="garden-form__field">
+                                <span>what it's called</span>
+                                <input type="text" name="name" maxlength="40" required autocomplete="off">
+                            </label>
+                            <fieldset class="garden-form__sizes">
+                                <legend>how big</legend>
+                                <label class="garden-form__size"><input type="radio" name="size" value="small"> <span><strong>small</strong> 6 × 4, 24 plots</span></label>
+                                <label class="garden-form__size"><input type="radio" name="size" value="medium" checked> <span><strong>medium</strong> 8 × 6, 48 plots</span></label>
+                                <label class="garden-form__size"><input type="radio" name="size" value="large"> <span><strong>large</strong> 12 × 8, 96 plots</span></label>
+                            </fieldset>
+                            <label class="garden-form__field">
+                                <span>a few words for visitors <em>(optional)</em></span>
+                                <textarea name="note" maxlength="140" rows="2"></textarea>
+                            </label>
+                            <label class="garden-form__check">
+                                <input type="checkbox" name="open" checked>
+                                <span>open for planting. <em>closing it presses every flower in it, just as they are.</em></span>
+                            </label>
+                            <p class="garden-card__note">making it smaller moves flowers that no longer fit to a free plot, or leaves them out if there's no room.</p>
+                            <button type="submit" class="btn btn--primary garden-form__save">save changes</button>
+                            <p class="garden-form__status" role="status" data-settings-status></p>
+                        </form>
+                    </details>
 
-                <section class="tile garden-card garden-visitors" aria-labelledby="garden-visitors-title" data-visitors hidden>
-                    <h2 class="eyebrow" id="garden-visitors-title" data-visitors-title>who's planted here</h2>
-                    <ul class="garden-chips" role="list" data-visitors-list></ul>
-                </section>
+                    <section class="tile garden-card garden-visitors" aria-labelledby="garden-visitors-title" data-visitors hidden>
+                        <h2 class="eyebrow" id="garden-visitors-title" data-visitors-title>who's planted here</h2>
+                        <ul class="garden-chips" role="list" data-visitors-list></ul>
+                    </section>
+                </div>
 
                 <section class="tile garden-card garden-none" data-none hidden>
                     <p class="garden-none__text" data-none-text></p>

@@ -358,14 +358,16 @@ function toGiven(v: unknown): GardenerView['given'] {
 /**
  * A garden from /api/garden, checked; null when it didn't load (or isn't there). By
  * default atpotato's community garden; `owner` (a DID or handle) for anyone's, and `rkey`
- * for one of its patches (a bare string means an rkey of atpotato's).
+ * for one of its patches (a bare string means an rkey of atpotato's). `version` is the CID
+ * its keeper just saved, so the answer has it (and isn't an older cached one).
  */
-export async function fetchGarden(fetchImpl: typeof fetch = fetch, opts: string | { owner?: string; rkey?: string } = {}): Promise<GardenView | null> {
-  const { owner, rkey } = typeof opts === 'string' ? { owner: undefined, rkey: opts } : opts;
+export async function fetchGarden(fetchImpl: typeof fetch = fetch, opts: string | { owner?: string; rkey?: string; version?: string } = {}): Promise<GardenView | null> {
+  const { owner, rkey, version } = typeof opts === 'string' ? { owner: undefined, rkey: opts, version: undefined } : opts;
   try {
     const params = new URLSearchParams();
     if (owner) params.set('owner', owner);
     if (rkey) params.set('patch', rkey);
+    if (version) params.set('v', version);
     const query = params.toString();
     const res = await fetchImpl(query ? `${GARDEN_ENDPOINT}?${query}` : GARDEN_ENDPOINT, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;

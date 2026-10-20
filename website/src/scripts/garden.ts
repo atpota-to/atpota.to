@@ -236,6 +236,8 @@ export interface GardenOptions {
   openSignIn?: (lede: string, beforeLeave: () => void) => void;
   /** Called whenever what the garden shows changes (loaded, a tab, planting, digging). */
   onView?: (view: GardenView) => void;
+  /** The garden's version its keeper just saved (its record's CID), to load that one. */
+  version?: string;
   fetchImpl?: typeof fetch;
   now?: () => number;
   sessionStore?: KeyValueStore;
@@ -244,8 +246,8 @@ export interface GardenOptions {
 }
 
 export interface GardenController {
-  /** Loads the garden again (after its keeper changed it). */
-  reload(): Promise<void>;
+  /** Loads the garden again: after its keeper changed it, `version` is the CID they saved. */
+  reload(version?: string): Promise<void>;
 }
 
 export async function initGarden(opts: GardenOptions = {}): Promise<GardenController | null> {
@@ -631,10 +633,10 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     if (hadFocus) tabs.querySelector<HTMLElement>(`[data-patch="${hadFocus}"]`)?.focus();
   }
 
-  async function showPatch(rkey?: string): Promise<void> {
+  async function showPatch(rkey?: string, version?: string): Promise<void> {
     closeCard(false);
     box.dataset.state = 'loading';
-    const garden = await fetchGarden(fetchImpl, { owner: opts.owner, rkey });
+    const garden = await fetchGarden(fetchImpl, { owner: opts.owner, rkey, version });
     if (garden) {
       owner = garden.owner ?? owner;
       patch = garden.patch;
@@ -802,7 +804,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     toWater = null;
   }
   const storedPatch = backToPlant ? store.get(PATCH_KEY) : typeof toWater?.patch === 'string' ? toWater.patch : null;
-  const loaded = fetchGarden(fetchImpl, { owner: opts.owner, rkey: storedPatch && RKEY_RE.test(storedPatch) ? storedPatch : undefined }).then((garden) => {
+  const loaded = fetchGarden(fetchImpl, { owner: opts.owner, rkey: storedPatch && RKEY_RE.test(storedPatch) ? storedPatch : undefined, version: opts.version }).then((garden) => {
     if (garden) {
       owner = garden.owner ?? owner;
       patch = garden.patch;
@@ -839,5 +841,5 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   } else {
     await loaded;
   }
-  return { reload: () => showPatch(patch?.rkey) };
+  return { reload: (version) => showPatch(patch?.rkey, version) };
 }

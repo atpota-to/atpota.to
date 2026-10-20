@@ -83,6 +83,8 @@ interface Rig {
   calls: Array<{ path: string; body: Record<string, unknown> | null }>;
   went: Prepared[];
   asked: string[];
+  /** Query strings /api/garden was asked with. */
+  gardenAsked: string[];
   run: () => Promise<void>;
 }
 
@@ -93,6 +95,7 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
   const calls: Rig['calls'] = [];
   const went: Prepared[] = [];
   const asked: string[] = [];
+  const gardenAsked: string[] = [];
   const people: Record<string, PersonOpts> = {
     [ME]: { flowers: [flowerOf(ME), flowerOf(ME, { rkey: '3kbo', patch: boGarden, kind: 'tulip', plot: 4, daysOld: 9, care: 0.43, thirsty: true }), pressedOf(ME, '3kold1', 'daisy')], garden: true },
     [CY]: { flowers: [flowerOf(CY), pressedOf(CY, '3kold1', 'daisy')], garden: true, displayName: 'Cy' },
@@ -147,6 +150,7 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
       });
     }
     if (url.pathname === '/api/garden') {
+      gardenAsked.push(url.search);
       const did = didFor(url.searchParams.get('owner') ?? GARDEN_SUBJECT)!;
       const g = gardens[did];
       const owner = { did, handle: handles[did], displayName: null, avatar: null };
@@ -164,6 +168,7 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
     calls,
     went,
     asked,
+    gardenAsked,
     run: () =>
       initGardenPage({
         auth: opts.auth === null ? null : auth,
@@ -363,6 +368,8 @@ describe('the garden page', () => {
     const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
     expect(put).toMatchObject({ repo: ME, collection: PATCH_NSID, rkey: 'self' });
     expect(put.record).toMatchObject({ $type: PATCH_NSID, name: "me's garden", note: 'come say hi', cols: 6, rows: 4 });
+    // the garden is loaded at the version just saved, not an older cached one
+    expect(new URLSearchParams(r.gardenAsked.at(-1)).get('v')).toBe('bafypatch1');
     expect(shown('[data-setup]')).toBe(false);
     expect(shown('[data-garden]')).toBe(true);
     expect(document.querySelectorAll('[data-garden] [data-plot]')).toHaveLength(24);
@@ -386,6 +393,7 @@ describe('the garden page', () => {
     const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
     expect(put.record).toMatchObject({ name: 'the back yard', cols: 12, rows: 8, createdAt: '2026-10-01T00:00:00Z', closesAt: new Date(NOW).toISOString() });
     expect(text('[data-settings-status]')).toBe(COPY.setup.saved);
+    expect(new URLSearchParams(r.gardenAsked.at(-1)).get('v')).toBe('bafypatch1');
     expect(text('[data-garden-name]')).toBe('the back yard');
     expect(document.querySelector('[data-garden] [data-garden-plots]')!.hasAttribute('data-pressed')).toBe(true);
   });

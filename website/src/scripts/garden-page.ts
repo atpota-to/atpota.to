@@ -593,14 +593,15 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     };
   }
 
-  async function writeGarden(form: HTMLFormElement, status: HTMLElement | null, button: HTMLButtonElement | null, done: string, base: Patch | null): Promise<boolean> {
+  /** Saves the garden from a form; the saved version's CID, or null when it didn't save. */
+  async function writeGarden(form: HTMLFormElement, status: HTMLElement | null, button: HTMLButtonElement | null, done: string, base: Patch | null): Promise<string | null> {
     if (!session || !me || !owner) {
       openSignIn(COPY.tendLede);
-      return false;
+      return null;
     }
-    if (button && isBusy(button)) return false;
+    if (button && isBusy(button)) return null;
     const v = readForm(form, base ?? GARDEN_SIZES.medium);
-    if (!v.name) return false;
+    if (!v.name) return null;
     if (button) setBusy(button, true);
     setText(status, COPY.setup.planting);
     try {
@@ -609,12 +610,12 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
         { name: v.name, note: v.note || null, cols: v.cols, rows: v.rows, createdAt: base?.createdAt, closesAt: v.open ? null : base?.closesAt && !base.open ? base.closesAt : at.toISOString() },
         at,
       );
-      await saveGarden(session, record);
+      const saved = await saveGarden(session, record);
       setText(status, done);
-      return true;
+      return saved.cid;
     } catch (error) {
       failed(error, (text) => setText(status, text));
-      return false;
+      return null;
     } finally {
       if (button) setBusy(button, false);
     }
@@ -625,9 +626,10 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     setupForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const status = setup!.querySelector<HTMLElement>('[data-setup-status]');
-      if (!(await writeGarden(setupForm, status, setupForm.querySelector('button[type="submit"]'), COPY.setup.done, null))) return;
+      const version = await writeGarden(setupForm, status, setupForm.querySelector('button[type="submit"]'), COPY.setup.done, null);
+      if (!version) return;
       setup!.hidden = true;
-      await showGarden(true);
+      await showGarden(version);
       setText(headStatus, COPY.setup.done);
       burst(patchTile ?? setupForm, 'leaves', win);
       cheer(win);
@@ -636,15 +638,18 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     settingsForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const status = settings!.querySelector<HTMLElement>('[data-settings-status]');
-      if (!(await writeGarden(settingsForm, status, settingsForm.querySelector('button[type="submit"]'), COPY.setup.saved, gardenView?.patch ?? null))) return;
-      await controller?.reload();
+      const version = await writeGarden(settingsForm, status, settingsForm.querySelector('button[type="submit"]'), COPY.setup.saved, gardenView?.patch ?? null);
+      if (version) await controller?.reload(version);
     });
   }
 
-  /** The person's garden: their patch (planting, tabs, cards), or setting one up, or a note. */
-  async function showGarden(fresh = false): Promise<void> {
+  /**
+   * The person's garden: their patch (planting, tabs, cards), or setting one up, or a note.
+   * `version` is the garden its keeper just saved (its CID), to show that one.
+   */
+  async function showGarden(version?: string): Promise<void> {
     if (!person) return;
-    const has = fresh || person.garden !== null;
+    const has = Boolean(version) || person.garden !== null;
     if (patchTile) patchTile.hidden = !has;
     if (setup) setup.hidden = !(owner && !has);
     if (none) none.hidden = owner || has;
@@ -652,10 +657,11 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     if (owner && !has && setup) fillForm(setup.querySelector<HTMLFormElement>('[data-setup-form]')!, { name: COPY.setup.name(person.handle), note: '', size: 'medium' });
     if (!has) return;
     if (controller) {
-      await controller.reload();
+      await controller.reload(version);
       return;
     }
     controller = await initGarden({
+      version,
       doc,
       win,
       root: patchTile ?? undefined,
@@ -670,6 +676,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       random: opts.random,
       onView: (v) => {
         gardenView = v;
+        if (v.patch) patchTile?.style.setProperty('--garden-cols', String(v.patch.cols));
         renderVisitors();
         renderStats();
         renderNumbers();

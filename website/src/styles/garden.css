@@ -217,9 +217,37 @@ html[data-theme="dark"] {
   display: none;
 }
 
-/* A small garden on a wide screen keeps plots a friendly size. */
-.garden-patch .home-plots {
-  max-width: calc(var(--plot-cols, 12) * 88px);
+/* The patch is as wide as its plots need at about 56px each (garden-page.ts sets
+   --garden-cols), never so narrow its controls crowd; who planted and the settings sit
+   beside it when there's room, under it when there isn't. */
+.garden-level[data-level="garden"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.garden-patch {
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  width: min(100%, calc(var(--garden-cols, 8) * 61px + 72px));
+  min-width: min(100%, 460px);
+}
+
+.garden-side {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.garden-side:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.garden-setup,
+.garden-none {
+  flex: 1 1 100%;
 }
 
 .garden-setup__title {

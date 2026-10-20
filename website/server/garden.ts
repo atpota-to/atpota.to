@@ -55,6 +55,7 @@ import { APPVIEW, AtprotoError, fetchJson, listRecords, resolveDid, TtlCache, ty
 import { ATPOTATO_DID, isDid } from './blog/config.js';
 import { backlinks, commentAuthors, HIDDEN_LABELS, mapPool, ownerBlocks, SLINGSHOT, type CommentAuthor } from './blog/discussion.js';
 import { httpUrl } from './blog/html.js';
+import { getRecord, getRecordFromPds, resolveMiniDoc } from './slingshot.js';
 
 export const PATCH_NSID = 'to.atpota.garden.patch';
 export const SPROUT_NSID = 'to.atpota.garden.sprout';
@@ -424,12 +425,19 @@ type Planted = Omit<Flower, 'care' | 'helpers' | 'lastTended' | 'thirsty'>;
 export interface GardenReader {
   now(): number;
   log: NonNullable<GardenDeps['log']>;
-  /** Who a DID or handle is (the AppView's profile); null for an unknown or hidden account. */
+  /**
+   * Who a DID or handle is: the AppView's profile, or Slingshot's when the AppView doesn't
+   * know them; null for an unknown, hidden or taken-down account.
+   */
   owner(actor: string): Promise<Owner | null>;
-  /** A DID's document: where its PDS is. */
+  /** Where a DID's PDS is (Slingshot, else its DID document). */
   identity(did: string): Promise<Identity>;
-  /** Every valid patch in `owner`'s repo, oldest first. */
-  patches(owner: string): Promise<Patch[]>;
+  /**
+   * `owner`'s valid patches, oldest first: atpotato's seasonal ones (listed from its PDS), or
+   * someone's garden (their record at "self", from Slingshot). With `version`, a list that
+   * doesn't have that version yet is read again, from the PDS if Slingshot hasn't caught up.
+   */
+  patches(owner: string, version?: string): Promise<Patch[]>;
   /** A patch's flowers as shown, oldest first, without care. `all` is its owner's patches. */
   planted(patch: Patch, all: readonly Patch[]): Promise<Planted[]>;
   care(flower: Pick<Flower, 'did' | 'uri' | 'plantedAt'>, open: boolean): Promise<Care>;
@@ -484,22 +492,36 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
     const cached = ownerCache.get(key);
     if (cached) return cached;
     const atpotato = actor === GARDEN_SUBJECT || key === ATPOTATO_OWNER.handle;
+    // Someone the AppView doesn't know (or can't reach) may still be on the network:
+    // Slingshot resolves them, with no name or avatar.
+    const fromSlingshot = async (): Promise<Owner | null> => {
+      const id = await resolveMiniDoc(doFetch, actor).catch(() => null);
+      if (!id) return null;
+      identityCache.set(id.did, Promise.resolve(id));
+      return { did: id.did, handle: id.handle ?? id.did, displayName: null, avatar: null };
+    };
     const pending = (async () => {
       let res: Response;
       try {
         res = await doFetch(`${APPVIEW}/xrpc/app.bsky.actor.getProfile?${new URLSearchParams({ actor })}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       } catch (error) {
         if (atpotato) return ATPOTATO_OWNER;
+        const found = await fromSlingshot();
+        if (found) return found;
         throw new AtprotoError('upstream', `profile fetch failed: ${(error as Error)?.name ?? 'Error'}`);
       }
-      // The AppView answers an unknown actor with a 400.
+      // The AppView answers an unknown actor with a 400 InvalidRequest, and a suspended or
+      // taken-down one with its own error, which stays missing.
       if (res.status === 400 || res.status === 404) {
-        await res.body?.cancel().catch(() => undefined);
-        return atpotato ? ATPOTATO_OWNER : null;
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        if (atpotato) return ATPOTATO_OWNER;
+        return body?.error === 'InvalidRequest' || body?.error === undefined ? fromSlingshot() : null;
       }
       if (!res.ok) {
         await res.body?.cancel().catch(() => undefined);
         if (atpotato) return ATPOTATO_OWNER;
+        const found = await fromSlingshot();
+        if (found) return found;
         throw new AtprotoError('upstream', `status ${res.status}`);
       }
       const found = toOwner(await res.json().catch(() => null), atpotato ? GARDEN_SUBJECT : actor);
@@ -513,23 +535,42 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
   function identity(did: string): Promise<Identity> {
     const cached = identityCache.get(did);
     if (cached) return cached;
-    const pending = resolveDid(doFetch, did).catch((error) => {
-      if (did === GARDEN_SUBJECT) return { did, pds: 'https://pds.atpota.to', handle: 'atpota.to' };
-      throw error;
-    });
+    const pending = resolveMiniDoc(doFetch, did)
+      .catch(() => null)
+      .then((found) => found ?? resolveDid(doFetch, did))
+      .catch((error) => {
+        if (did === GARDEN_SUBJECT) return { did, pds: 'https://pds.atpota.to', handle: 'atpota.to' };
+        throw error;
+      });
     identityCache.set(did, pending);
     pending.catch(() => identityCache.delete(did));
     return pending;
   }
 
-  function patches(ownerDid: string): Promise<Patch[]> {
+  function patches(ownerDid: string, version?: string): Promise<Patch[]> {
     const cached = patchCache.get(ownerDid);
-    if (cached) return cached;
-    const pending = identity(ownerDid).then(async (o) => {
-      const records = await listRecords(doFetch, o.pds, ownerDid, PATCH_NSID, 3);
-      const list = records.map((r) => toPatch(r, ownerDid)).filter((p): p is Patch => p !== null);
-      return list.sort((a, b) => opensFrom(a).localeCompare(opensFrom(b)) || a.rkey.localeCompare(b.rkey));
-    });
+    if (cached && !version) return cached;
+    const pending = (async () => {
+      if (cached) {
+        const had = await cached.catch(() => null);
+        if (had?.some((p) => p.cid === version)) return had;
+      }
+      if (ownerDid === GARDEN_SUBJECT) {
+        const o = await identity(ownerDid);
+        const records = await listRecords(doFetch, o.pds, ownerDid, PATCH_NSID, 3);
+        const list = records.map((r) => toPatch(r, ownerDid)).filter((p): p is Patch => p !== null);
+        return list.sort((a, b) => opensFrom(a).localeCompare(opensFrom(b)) || a.rkey.localeCompare(b.rkey));
+      }
+      // Someone's garden is one record, at "self". Slingshot has it; right after its keeper
+      // changes it, Slingshot may not yet, so a version it doesn't have comes from the PDS.
+      let entry = await getRecord(doFetch, ownerDid, PATCH_NSID, OWN_PATCH_RKEY);
+      if (version && entry?.cid !== version) {
+        const o = await identity(ownerDid);
+        entry = await getRecordFromPds(doFetch, o.pds, ownerDid, PATCH_NSID, OWN_PATCH_RKEY);
+      }
+      const patch = entry ? toPatch(entry, ownerDid) : null;
+      return patch ? [patch] : [];
+    })();
     patchCache.set(ownerDid, pending);
     pending.catch(() => patchCache.delete(ownerDid));
     return pending;
@@ -679,8 +720,8 @@ export function createGardenHandlers(deps: GardenDeps = {}): GardenHandlers {
   const reader = createGardenReader(deps);
   const cache = new TtlCache<Promise<Omit<Garden, 'owner'>>>(GARDEN_TTL_MS, reader.now, 500);
 
-  async function read(ownerDid: string, rkey: string | null): Promise<Omit<Garden, 'owner'>> {
-    const all = await reader.patches(ownerDid).catch((error) => {
+  async function read(ownerDid: string, rkey: string | null, version: string | null): Promise<Omit<Garden, 'owner'>> {
+    const all = await reader.patches(ownerDid, version ?? undefined).catch((error) => {
       // A DID document that isn't there: nobody to show.
       if (error instanceof AtprotoError && error.code === 'not_found') throw new NotFound();
       throw error;
@@ -706,11 +747,11 @@ export function createGardenHandlers(deps: GardenDeps = {}): GardenHandlers {
     return { patch: view(patch, at), patches: summaries, flowers, total: flowers.length };
   }
 
-  function load(ownerDid: string, rkey: string | null): Promise<Omit<Garden, 'owner'>> {
-    const key = `${ownerDid} ${rkey ?? ''}`;
+  function load(ownerDid: string, rkey: string | null, version: string | null): Promise<Omit<Garden, 'owner'>> {
+    const key = `${ownerDid} ${rkey ?? ''} ${version ?? ''}`;
     const cached = cache.get(key);
     if (cached) return cached;
-    const pending = read(ownerDid, rkey);
+    const pending = read(ownerDid, rkey, version);
     cache.set(key, pending);
     pending.catch((error) => {
       cache.delete(key);
@@ -723,12 +764,14 @@ export function createGardenHandlers(deps: GardenDeps = {}): GardenHandlers {
     const params = new URL(request.url).searchParams;
     const actor = params.get('owner') ?? GARDEN_SUBJECT;
     const asked = params.get('patch');
+    // ?v=<cid>: the version its keeper just saved, so the page shows it straight away.
+    const version = params.get('v');
     const missing = () => jsonResponse(request, 404, { error: 'not_found' }, CACHE_MISSING);
-    if (!isActor(actor) || (asked !== null && !RKEY_RE.test(asked))) return missing();
+    if (!isActor(actor) || (asked !== null && !RKEY_RE.test(asked)) || (version !== null && !CID_RE.test(version))) return missing();
     try {
       const owner = await reader.owner(actor);
       if (!owner || (owner.did !== GARDEN_SUBJECT && (await reader.blocked()).has(owner.did))) return missing();
-      return jsonResponse(request, 200, { owner, ...(await load(owner.did, asked)) }, CACHE_OK);
+      return jsonResponse(request, 200, { owner, ...(await load(owner.did, asked, version)) }, CACHE_OK);
     } catch (error) {
       if (error instanceof NotFound) return missing();
       return jsonResponse(request, 503, { error: 'unavailable' }, 'no-store');
