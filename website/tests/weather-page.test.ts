@@ -159,7 +159,7 @@ describe('trends', () => {
     const wrap = section.querySelector<HTMLElement>('[data-t-apps-wrap]')!;
     renderTrends(section, HISTORY, NOW);
     expect(wrap.hidden).toBe(true);
-    renderTrends(section, { ...HISTORY, apps: [{ domain: 'tangled.sh', creates: 300, minutes: 2, collections: ['sh.tangled.repo'] }] }, NOW);
+    renderTrends(section, { ...HISTORY, apps: [{ domain: 'tangled.sh', creates: 300, collections: ['sh.tangled.repo'] }] }, NOW);
     expect(wrap.hidden).toBe(false);
     expect(section.querySelector('[data-t-apps-title]')!.textContent).toBe('busiest apps elsewhere, the last hour: new records');
     const row = section.querySelector('[data-t-apps] li')!;

@@ -59,7 +59,7 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
 | path | what's there |
 | --- | --- |
 | `/` | The projects, the guide, "atmospheric conditions" (the last minute of the firehose, from the weather station), the latest posts from atpotato, poe, anisota and aturi, and a link to the community garden |
-| `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, everything else on the wire, live every few seconds, and trends over the last hour, 24 hours, 30 days and 12 months |
+| `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, everything else on the wire, live every few seconds; trends over the last hour, 24 hours, 30 days and 12 months; and an almanac: today's high and low, busier or quieter than usual, new apps, and when the sky is busiest |
 | `/guides`, `/guides/bluesky-for-brands` | The guides. Written in markdown under `public/guides/`, and also published as a [standard.site](https://standard.site) publication in atpota.to's repo |
 | `/blog` | Poe's atmosphere dispatch, a weekly roundup written in [Leaflet](https://leaflet.pub) ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each; signed in, it has a button to your own. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
@@ -81,7 +81,8 @@ in `website/server/`, so Vercel only builds the entry points.
 | `api/gardener.ts` | One person's garden page: their garden, the flowers they've planted anywhere, and the tending they've given |
 | `api/latest.ts` | The home page's "latest" feed |
 | `api/atmosphere.ts` | The weather station's rolling 60 seconds, for the home page's "atmospheric conditions" and `/weather` (cached 5 seconds; needs `ATMOSPHERE_STATION_SECRET`). Without the station it samples a few seconds of Jetstream itself, and one sample serves everyone for a minute |
-| `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key) |
+| `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key): records a second, the diversity index and apps heard over a range, and the busiest apps with how each did against a day (or month, or year) earlier |
+| `api/weather-almanac.ts` | The almanac on `/weather`, in the reader's time zone: today's high and low, the last hour against usual, apps heard for the first time, and the week as a heat map |
 
 ### layout
 

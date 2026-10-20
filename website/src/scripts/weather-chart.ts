@@ -25,6 +25,8 @@ export interface ChartOptions {
   /** For the axis labels; default `format`. */
   formatTick?: (v: number) => string;
   formatTime: (t: number) => string;
+  /** For the tooltip and readout; default `formatTime`. */
+  formatTipTime?: (t: number) => string;
   /** The time between points; a bigger gap breaks the line. */
   stepMs: number;
 }
@@ -164,10 +166,10 @@ function draw(host: HTMLElement): void {
       mark.setAttribute('visibility', 'visible');
     }
     tipValue.textContent = value;
-    tipTime.textContent = opts.formatTime(p.t);
+    tipTime.textContent = (opts.formatTipTime ?? opts.formatTime)(p.t);
     tip.hidden = false;
     tip.style.left = `${Math.min(Math.max(px, 70), width - 70)}px`;
-    if (announce) live.textContent = `${opts.formatTime(p.t)}: ${value}`;
+    if (announce) live.textContent = `${(opts.formatTipTime ?? opts.formatTime)(p.t)}: ${value}`;
   };
   const hide = () => {
     at = -1;

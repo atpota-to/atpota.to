@@ -230,8 +230,18 @@ and a rate is `sum(x) / sum(seconds_covered)`. Never average per-minute
 indexes: a quiet minute would count as much as a busy one.
 
 PostgREST's aggregate functions are off on this project, so per-app sums over a range
-come from one read-only function, `atmosphere_top_apps(since, max_apps)`, in
-[`sql/atmosphere_top_apps.sql`](sql/atmosphere_top_apps.sql) (applied).
+come from read-only functions (applied):
+
+- [`sql/atmosphere_top_apps.sql`](sql/atmosphere_top_apps.sql): `atmosphere_top_apps`, the
+  first version of the busiest apps (superseded by `atmosphere_app_trends`; safe to drop
+  once the website no longer calls it).
+- [`sql/atmosphere_almanac.sql`](sql/atmosphere_almanac.sql): the almanac and the trends'
+  extras. `atmosphere_day_app` keeps one row per app per UTC day, re-summed for yesterday
+  and today every 10 minutes by the pg_cron job `atmosphere-day-apps`
+  (`atmosphere_roll_up_day_apps`, which the public can't call), so long ranges and "first
+  heard" stay quick as the minute rows grow. On top of it: `atmosphere_today(tz)`,
+  `atmosphere_normal()`, `atmosphere_new_apps(since)`, `atmosphere_app_trends(...)`,
+  `atmosphere_apps_over_time(since, bucket)` and `atmosphere_heatmap(tz, since)`.
 
 **Size.** `atmosphere_minute` is 1440 rows a day (about 0.5M a year, which is
 fine to keep forever). `atmosphere_minute_app` is the long tail: expect tens of
