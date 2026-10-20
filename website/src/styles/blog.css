@@ -71,6 +71,43 @@
   font-size: 16px;
 }
 
+.blog-hero__actions .btn--icon {
+  padding: 0;
+}
+
+/* The round rss button (feedButtonHtml): a tap copies the link, and this says so. */
+.blog-feed {
+  position: relative;
+  flex: none;
+}
+
+.blog-feed__bubble {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  padding: 8px 14px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--soil);
+  color: var(--on-soil);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(6px) scale(0.8);
+  transform-origin: 100% 100%;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) ease,
+    transform var(--dur-spring) var(--ease-spring);
+}
+
+.blog-feed__bubble.is-showing {
+  opacity: 1;
+  transform: none;
+}
+
 .blog-hero__potato {
   width: 200px;
   height: auto;
@@ -235,12 +272,17 @@
     font-size: 17px;
   }
 
-  .blog-hero__actions {
-    flex-direction: column;
+  /* Subscribe gets its own row; follow shares the next with the rss button. */
+  .blog-hero__actions .btn {
+    flex: 1 1 100%;
   }
 
-  .blog-hero__actions .btn {
-    width: 100%;
+  .blog-hero__actions .btn--outline {
+    flex: 1 1 0;
+  }
+
+  .blog-hero__actions .blog-feed {
+    flex: none;
   }
 
   .blog-hero__potato {

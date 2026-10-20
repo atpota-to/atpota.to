@@ -23,10 +23,11 @@ import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
-import { blueskySubscribeHtml, emailFormHtml, type EmailSignup } from './subscribe.js';
+import { blueskySubscribeHtml, emailFormHtml, feedButtonHtml, type EmailSignup } from './subscribe.js';
 
 export const WORDS_PER_MINUTE = 200;
 export const FEED_PATH = `${BLOG_PATH}/feed.xml`;
+export const FEED_URL = `${SITE_ORIGIN}${FEED_PATH}`;
 /** The blog's card (scripts/og-cards.html), for every page without a cover image of its own. */
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og/blog.png`;
 const DEFAULT_OG_IMAGE_TAGS = [
@@ -161,8 +162,6 @@ function potato(assets: Assets, face: string, className: string, width: number, 
 
 const ARROW =
   '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>';
-const FEED_ICON =
-  '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a14 14 0 0 1 14 14M5 11a8 8 0 0 1 8 8"/><circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>';
 
 const HEART =
   '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.2A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.2C19.5 15.4 12 20 12 20z"/></svg>';
@@ -194,7 +193,7 @@ function followActions(site: SiteInfo, size = ''): string {
   // Subscribing is the main action; following is the quieter alternative beside it.
   return (
     `<a class="btn btn--outline${size}" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} on bluesky ${ARROW}</a>` +
-    `<a class="btn btn--outline${size}" href="${FEED_PATH}">${FEED_ICON} atom feed</a>`
+    feedButtonHtml(FEED_PATH, FEED_URL, size)
   );
 }
 
@@ -308,7 +307,7 @@ export function postBody(
     linkedPages: [],
     headingIds: new Set(),
     otherPosts: input.others.map((d) => ({ href: docHref(d), title: d.title, date: d.publishedAt })),
-    links: { profile: profileUrl(input.site.handle), feed: FEED_PATH },
+    links: { profile: profileUrl(input.site.handle), feed: FEED_PATH, feedUrl: FEED_URL },
     signup: input.signupReturn ? emailSignup(input.site, input.signupReturn) : null,
   };
   let body = input.pages.length ? renderPages(input.pages, ctx) : '';
@@ -381,10 +380,10 @@ export function postPage(input: PostInput): Page {
     endForm +
     `<div class="post-end__actions">` +
     subscribeButton(site, ' btn--sm') +
+    feedButtonHtml(FEED_PATH, FEED_URL, ' btn--sm') +
     recommendButton(discussion) +
     (reply ? `<a class="btn btn--outline btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
     `<a class="btn btn--outline btn--sm" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))}</a>` +
-    `<a class="btn btn--outline btn--sm" href="${FEED_PATH}">${FEED_ICON} feed</a>` +
     `</div>` +
     ACCOUNT_LINE +
     `</div>` +
