@@ -835,7 +835,7 @@ export function watchNewApps(desk: AlertDesk, tz = readerTimeZone()): (a: Almana
   };
 }
 
-/** The "hush weather alerts" button in "how it's measured", kept in step with the desk. */
+/** The "hush weather alerts" button in "how i measure it", kept in step with the desk. */
 function bindHush(root: ParentNode, desk: AlertDesk): void {
   const button = $<HTMLButtonElement>(root, '[data-alerts-toggle]');
   if (!button) return;
