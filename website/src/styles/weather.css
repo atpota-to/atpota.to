@@ -124,12 +124,6 @@ html[data-theme="dark"] {
   fill: var(--sun);
 }
 
-.weather-hero__face {
-  fill: none;
-  stroke: var(--on-sun-soft);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
 
 .weather-hero__reading {
   min-width: 0;
@@ -188,6 +182,199 @@ html[data-theme="dark"] {
 .weather-spark__caption {
   font-size: 12px;
   color: var(--weather-sky-mono);
+}
+
+/* ---------- the almanac: today so far, new in the atmosphere (weather-almanac.ts) ---------- */
+
+.weather-today__usual {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.weather-today__detail {
+  color: var(--text-soft);
+}
+
+.weather-today__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.weather-today__facts div {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.weather-today__facts dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.weather-today__facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.weather-today__facts strong {
+  display: block;
+  font-size: 24px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-new__lede {
+  color: var(--text-soft);
+}
+
+.weather-new__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weather-new__app {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.weather-new__domain {
+  overflow-wrap: anywhere;
+}
+
+.weather-new__when {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.weather-new__collections {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.weather-today[data-state="loading"] .weather-today__facts,
+.weather-new[data-state="loading"] .weather-new__list {
+  opacity: 0.5;
+}
+
+/* ---------- when the sky is busiest: the week as a heat map ---------- */
+
+.weather-heat {
+  grid-column: 1 / -1;
+}
+
+.weather-heat__lede {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.weather-heat__scroll {
+  overflow-x: auto;
+}
+
+.weather-heat__grid {
+  width: 100%;
+  min-width: 300px;
+  border-collapse: separate;
+  border-spacing: 2px;
+  table-layout: fixed;
+}
+
+.weather-heat__grid th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.weather-heat__grid thead th {
+  height: 16px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.weather-heat__grid tbody th,
+.weather-heat__grid thead td {
+  width: 34px;
+  text-align: left;
+}
+
+.weather-heat__cell {
+  height: 20px;
+  border-radius: 4px;
+}
+
+/* One hue, lighter to deeper with busier hours. */
+.weather-heat__cell--1 { background: color-mix(in srgb, var(--weather-bsky) 16%, var(--card)); }
+.weather-heat__cell--2 { background: color-mix(in srgb, var(--weather-bsky) 34%, var(--card)); }
+.weather-heat__cell--3 { background: color-mix(in srgb, var(--weather-bsky) 54%, var(--card)); }
+.weather-heat__cell--4 { background: color-mix(in srgb, var(--weather-bsky) 76%, var(--card)); }
+.weather-heat__cell--5 { background: var(--weather-bsky); }
+
+.weather-heat__cell--empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.weather-heat__cell--now {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.weather-heat__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.weather-heat__ramp {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.weather-heat__legend i {
+  display: inline-block;
+  width: 18px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.weather-heat__legend-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+@media (forced-colors: active) {
+  .weather-heat__cell:not(.weather-heat__cell--empty) {
+    forced-color-adjust: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .weather-heat__cell {
+    height: 14px;
+    border-radius: 3px;
+  }
+
+  .weather-heat__grid tbody th,
+  .weather-heat__grid thead td {
+    width: 28px;
+  }
 }
 
 /* ---------- the diversity index ---------- */
@@ -407,7 +594,7 @@ html[data-theme="dark"] {
 
 .weather-trends__charts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
 }
 
@@ -591,7 +778,7 @@ html[data-theme="dark"] {
 
 .weather-bars__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 4px 12px;
   align-items: baseline;
 }
@@ -599,6 +786,39 @@ html[data-theme="dark"] {
 .weather-bars__label {
   overflow-wrap: anywhere;
   font-weight: 700;
+}
+
+/* How an app did against the earlier window (weather-page.ts appChange): an arrow and a
+   number, in words for screen readers; the tint only repeats what the arrow says. */
+.weather-bars__change {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.weather-bars__change[data-trend] {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.weather-bars__change[data-trend="up"] {
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+}
+
+.weather-bars__change[data-trend="down"] {
+  background: var(--flesh-tint);
+  color: var(--text);
+}
+
+.weather-bars__change[data-trend="new"] {
+  background: var(--butter);
+  color: var(--text);
+}
+
+.weather-bars__change[data-trend="steady"] {
+  color: var(--muted);
 }
 
 .weather-bars__value {

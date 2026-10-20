@@ -1371,12 +1371,6 @@ html:not(.js) .home-weather {
   fill: var(--sun);
 }
 
-.home-weather__face {
-  fill: none;
-  stroke: var(--on-sun-soft);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
 
 .home-weather__reading {
   min-width: 0;

@@ -9,8 +9,13 @@
  * always only while the tab is visible; a failed check keeps the last reading on screen.
  *
  * Trends come from /api/weather-history (server/weather-history.ts): the station's
- * minute rows for the last hour, 24 hours, 30 days or 12 months, as two charts
- * (weather-chart.ts) and a table.
+ * minute rows for the last hour, 24 hours, 30 days or 12 months, as three charts
+ * (weather-chart.ts: records a second, the diversity index, apps heard) and a table,
+ * and the busiest apps over the range, each with an arrow for how it did against the
+ * same span a day (or a month, or a year) earlier.
+ *
+ * The almanac tiles (today so far, new in the atmosphere, when the sky is busiest) are
+ * weather-almanac.ts.
  *
  * Collection names and app domains come from other people's records, so they only reach
  * the DOM through textContent (weather.ts has already dropped any that don't look right).
@@ -18,6 +23,7 @@
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
+import { initAlmanac } from './weather-almanac';
 import { renderChart, type ChartPoint } from './weather-chart';
 import {
   CONDITION_TEXT,
@@ -91,6 +97,8 @@ export interface Bar {
   count: number;
   /** What to print beside the bar; default its rate a second. */
   value?: string;
+  /** A short change beside the value ("↑ 42%"), and what it means in words for screen readers. */
+  change?: { text: string; words: string; trend: 'up' | 'down' | 'steady' | 'new' };
 }
 
 /** A list of horizontal bars, each as long as its share of the busiest one, its value in words beside it. */
@@ -114,7 +122,19 @@ export function renderBars(list: HTMLElement, bars: Bar[], seconds: number | und
       fill.className = 'weather-bars__fill';
       fill.style.width = `${max > 0 ? Math.max(1.5, (b.perSecond / max) * 100) : 0}%`;
       track.append(fill);
-      li.append(label, value, track);
+      const change = document.createElement('span');
+      change.className = 'weather-bars__change';
+      if (b.change) {
+        change.dataset.trend = b.change.trend;
+        const shown = document.createElement('span');
+        shown.setAttribute('aria-hidden', 'true');
+        shown.textContent = b.change.text;
+        const said = document.createElement('span');
+        said.className = 'visually-hidden';
+        said.textContent = b.change.words;
+        change.append(shown, said);
+      }
+      li.append(label, change, value, track);
       if (b.sub) {
         const sub = document.createElement('span');
         sub.className = 'weather-bars__sub';
@@ -243,7 +263,8 @@ export interface HistoryPoint {
 export interface HistoryApp {
   domain: string;
   creates: number;
-  minutes: number;
+  /** Its records in the earlier window (compare), when the server had them. */
+  prevCreates?: number;
   collections: string[];
 }
 
@@ -253,14 +274,23 @@ export interface History {
   total: HistoryPoint;
   /** The busiest apps outside Bluesky over the range, when the server could get them. */
   apps?: HistoryApp[];
+  /** How much of the range, and of the earlier window the apps are compared with, the station heard. */
+  compare?: { seconds: number; prevSeconds: number; lagMs: number };
+  /** Apps outside Bluesky heard each minute, hour, day or month. */
+  appsOverTime?: { bucket: Bucket; points: Array<{ t: string; apps: number }> };
 }
 
-export const RANGE_INFO: Record<Range, { spanMs: number; stepMs: number; words: string; time: Intl.DateTimeFormatOptions }> = {
-  hour: { spanMs: 3600_000, stepMs: 60_000, words: 'the last hour', time: { hour: 'numeric', minute: '2-digit' } },
-  day: { spanMs: 24 * 3600_000, stepMs: 3600_000, words: 'the last 24 hours', time: { weekday: 'short', hour: 'numeric', minute: '2-digit' } },
-  month: { spanMs: 30 * 86_400_000, stepMs: 86_400_000, words: 'the last 30 days', time: { month: 'short', day: 'numeric' } },
-  year: { spanMs: 366 * 86_400_000, stepMs: 32 * 86_400_000, words: 'the last 12 months', time: { month: 'short', year: 'numeric' } },
+export type Bucket = 'minute' | 'hour' | 'day' | 'month';
+const BUCKET_MS: Record<Bucket, number> = { minute: 60_000, hour: 3600_000, day: 86_400_000, month: 32 * 86_400_000 };
+
+export const RANGE_INFO: Record<Range, { spanMs: number; stepMs: number; words: string; earlier: string; time: Intl.DateTimeFormatOptions }> = {
+  hour: { spanMs: 3600_000, stepMs: 60_000, words: 'the last hour', earlier: 'the same hour yesterday', time: { hour: 'numeric', minute: '2-digit' } },
+  day: { spanMs: 24 * 3600_000, stepMs: 3600_000, words: 'the last 24 hours', earlier: 'the day before', time: { weekday: 'short', hour: 'numeric', minute: '2-digit' } },
+  month: { spanMs: 30 * 86_400_000, stepMs: 86_400_000, words: 'the last 30 days', earlier: 'the 30 days before', time: { month: 'short', day: 'numeric' } },
+  year: { spanMs: 366 * 86_400_000, stepMs: 32 * 86_400_000, words: 'the last 12 months', earlier: 'the year before', time: { month: 'short', year: 'numeric' } },
 };
+
+const BUCKET_WORDS: Record<Bucket, string> = { minute: 'minute', hour: 'hour', day: 'day', month: 'month' };
 
 const RANGES = Object.keys(RANGE_INFO) as Range[];
 
@@ -281,7 +311,7 @@ function isApp(a: unknown): a is HistoryApp {
     typeof r.domain === 'string' &&
     APP_NAME_RE.test(r.domain) &&
     n(r.creates) &&
-    n(r.minutes) &&
+    (r.prevCreates === undefined || n(r.prevCreates)) &&
     Array.isArray(r.collections) &&
     r.collections.every((c) => typeof c === 'string' && APP_NAME_RE.test(c))
   );
@@ -291,14 +321,38 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
   try {
     const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown };
+    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
     const history: History = { range, points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
+    const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+    const c = body.compare as Record<string, unknown> | undefined;
+    if (c && n(c.seconds) && n(c.prevSeconds) && n(c.lagMs)) history.compare = { seconds: c.seconds, prevSeconds: c.prevSeconds, lagMs: c.lagMs };
+    const o = body.appsOverTime as Record<string, unknown> | undefined;
+    if (o && typeof o.bucket === 'string' && Object.hasOwn(BUCKET_MS, o.bucket) && Array.isArray(o.points)) {
+      history.appsOverTime = {
+        bucket: o.bucket as Bucket,
+        points: o.points.filter((p): p is { t: string; apps: number } => typeof p === 'object' && p !== null && typeof p.t === 'string' && Number.isFinite(Date.parse(p.t)) && n(p.apps)),
+      };
+    }
     return history;
   } catch {
     return null;
   }
+}
+
+/**
+ * How an app did against the earlier window, by rate (the station may have heard more of
+ * one window than the other). null when the earlier window is too thin to say.
+ */
+export function appChange(app: HistoryApp, compare: History['compare'], earlier: string): Bar['change'] | null {
+  if (!compare || app.prevCreates === undefined || compare.seconds <= 0 || compare.prevSeconds < compare.seconds * 0.5) return null;
+  if (app.prevCreates === 0) return { text: 'new', words: `none at all in ${earlier}`, trend: 'new' };
+  const ratio = app.creates / compare.seconds / (app.prevCreates / compare.prevSeconds);
+  const pct = Math.round((ratio - 1) * 100);
+  if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
+  return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
 
 /** Records a second and the diversity index of a point (null when it covers nothing). */
@@ -346,6 +400,7 @@ export function renderTrends(section: HTMLElement, h: History, now = Date.now())
   const pts = (key: 'records' | 'index'): ChartPoint[] => series.map((r) => ({ t: r.t, v: r[key] }));
   if (records) renderChart(records, pts('records'), { label: 'new records a second', color: 'var(--weather-bsky)', format: formatRate, formatTime, stepMs: info.stepMs });
   if (index) renderChart(index, pts('index'), { label: 'diversity index', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: info.stepMs });
+  renderAppsOverTime(section, h, now, formatTime);
   const body = $(section, '[data-t-rows]');
   if (body) {
     body.replaceChildren(
@@ -372,14 +427,48 @@ export function renderTrends(section: HTMLElement, h: History, now = Date.now())
     wrap.hidden = apps.length === 0 || h.total.seconds <= 0;
     setText(section, '[data-t-apps-title]', `busiest apps elsewhere, ${info.words}: new records`);
     if (!wrap.hidden) {
+      const changes = apps.map((a) => appChange(a, h.compare, info.earlier));
       renderBars(
         list,
-        apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.creates / h.total.seconds, count: a.creates, value: a.creates.toLocaleString('en-US') })),
+        apps.map((a, i) => ({
+          label: a.domain,
+          sub: a.collections.join(', '),
+          perSecond: a.creates / h.total.seconds,
+          count: a.creates,
+          value: a.creates.toLocaleString('en-US'),
+          change: changes[i] ?? undefined,
+        })),
         h.total.seconds,
+      );
+      setText(
+        section,
+        '[data-t-apps-note]',
+        changes.some(Boolean)
+          ? `arrows compare each app's records a second with ${info.earlier}.`
+          : `once the station has heard ${info.earlier}, arrows show who's rising and falling.`,
       );
     }
   }
   section.dataset.state = 'ready';
+}
+
+/** The third chart: apps outside Bluesky heard each minute, hour, day or month. */
+function renderAppsOverTime(section: HTMLElement, h: History, now: number, formatTime: (t: number) => string): void {
+  const host = $(section, '[data-t-chart="apps"]');
+  const card = host?.closest<HTMLElement>('.weather-chart-card');
+  const o = h.appsOverTime;
+  if (!host || !card) return;
+  card.hidden = !o;
+  if (!o) return;
+  const step = BUCKET_MS[o.bucket];
+  setText(card, '[data-t-apps-chart-title]', `apps heard each ${BUCKET_WORDS[o.bucket]}`);
+  const points: ChartPoint[] = o.points.map((p) => ({ t: Date.parse(p.t), v: p.apps }));
+  const start = now - RANGE_INFO[h.range].spanMs;
+  if (h.range !== 'year' && (points[0]?.t ?? now) - start > step) points.unshift({ t: start, v: null });
+  // The newest bucket is still filling up, so the tooltip says so.
+  const last = o.points.length ? Date.parse(o.points[o.points.length - 1]!.t) : NaN;
+  const time = (t: number) => (t === last && now - t < step ? `${formatTime(t)} (so far)` : formatTime(t));
+  renderChart(host, points, { label: `apps heard each ${BUCKET_WORDS[o.bucket]}`, color: 'var(--weather-else)', format: (v) => String(Math.round(v)), formatTime, formatTipTime: time, stepMs: step });
 }
 
 /** The range buttons, the first load, and a refresh while the tab is visible (every minute for the last hour, else every 5). */
@@ -445,4 +534,5 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, fetchImpl);
+  initAlmanac(report, fetchImpl);
 }
