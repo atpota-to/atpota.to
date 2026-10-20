@@ -78,7 +78,7 @@ in `website/server/`, so Vercel only builds the entry points.
 | `api/poe.ts` | `POST` streams one chat turn from the bot as server-sent events. `DELETE` ends the conversation, or with a forget token, empties Poe's notes about the visitor |
 | `api/blog.ts` | The `/blog` pages, the Atom feed, and the standard.site `/.well-known` verification (`vercel.json` rewrites these here) |
 | `api/garden.ts` | One garden's patches and flowers |
-| `api/gardener.ts` | One person's garden page: their garden, the flowers they've planted anywhere, and the tending they've given |
+| `api/gardener.ts` | One person's garden page: their garden, the flowers they've planted anywhere, the tending they've given, their pets for Poe, and how many notes Poe keeps about them |
 | `api/latest.ts` | The home page's "latest" feed |
 | `api/atmosphere.ts` | The weather station's rolling 60 seconds, for the home page's "atmospheric conditions" and `/weather` (cached 5 seconds; needs `ATMOSPHERE_STATION_SECRET`). Without the station it samples a few seconds of Jetstream itself, and one sample serves everyone for a minute |
 | `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key): records a second, the diversity index and apps heard over a range, and the busiest apps with how each did against a day (or month, or year) earlier |

@@ -11,6 +11,11 @@
  * key), newest first. Tenders atpotato blocks, or whose accounts are hidden, are left out.
  * The tending they've given comes from their own tend records.
  *
+ * And how they get on with Poe: the pets they've given it (their to.atpota.poe.pets record,
+ * from their PDS; src/scripts/pet-sync.ts writes it) and how many notes Poe keeps about them
+ * (its to.atpota.poe.memory record for their DID, from Poe's PDS, so a "forget me" shows at
+ * once). Either one that can't be read is 0; neither ever fails the page.
+ *
  *   GET /api/gardener?actor=<did or handle>  (or ?did=)  ->
  *     { did, handle, displayName, avatar,
  *       garden: { rkey, uri, name, note, open, plots, planted } | null   their "self" patch,
@@ -18,13 +23,15 @@
  *       flowers: [{ ...a flower from /api/garden,
  *                   patch: { rkey, uri, name, season, open, cols, rows, owner: { did, handle } },
  *                   tends: [{ did, handle, action, at }] }]                newest first
- *       given: { total, helped, recent: [{ at, action, flower: { uri, owner: { did, handle } } }] } }
+ *       given: { total, helped, recent: [{ at, action, flower: { uri, owner: { did, handle } } }] },
+ *       poe: { pets, notes } }                                               pets given, notes Poe keeps
  *
  * Junk is a 400; an account that can't be found, is hidden, or atpotato blocks is a 404.
  * Fresh for 30 seconds at the CDN, so tending shows up soon.
  */
 
 import { fetchJson, listRecords, type RecordEntry } from './blog/atproto.js';
+import { POE_DID } from './blog/config.js';
 import { backlinks, mapPool, SLINGSHOT } from './blog/discussion.js';
 import {
   CACHE_MISSING,
@@ -52,6 +59,7 @@ import {
   type Season,
   type TendAction,
 } from './garden.js';
+import { getRecordFromPds } from './slingshot.js';
 
 export const CACHE_GARDENER = 'public, max-age=0, s-maxage=30, stale-while-revalidate=120';
 /** Tending shown per flower, newest first. */
@@ -63,6 +71,13 @@ export const MAX_GIVEN_SHOWN = 20;
 /** Pages of 100 records read from their repo. */
 const SPROUT_PAGES = 2;
 const TEND_PAGES = 5;
+
+/** Poe's pet count, in the petter's repo at "self" (src/scripts/pet-sync.ts). */
+export const PETS_NSID = 'to.atpota.poe.pets';
+/** Poe's notes about someone, in Poe's repo with their DID as the key (mentions/src/memory.js). */
+export const MEMORY_NSID = 'to.atpota.poe.memory';
+/** A pet count past this is no record (pet-sync.ts's MAX_PETS). */
+const MAX_PETS = 10_000_000;
 
 const SPROUT_URI_RE = /^at:\/\/(did:[a-z]+:[A-Za-z0-9._:%-]+)\/to\.atpota\.garden\.sprout\/[A-Za-z0-9._:~-]{1,512}$/;
 
@@ -113,6 +128,7 @@ export interface Gardener {
   garden: OwnGarden | null;
   flowers: GardenerFlower[];
   given: { total: number; helped: number; recent: GivenTend[] };
+  poe: { pets: number; notes: number };
 }
 
 /** A tend record pointing at `flower`, checked; its time from the TID key. Null otherwise. */
@@ -133,6 +149,19 @@ export function toGiven(entry: RecordEntry): { action: TendAction; at: number | 
   const created = typeof v.createdAt === 'string' ? Date.parse(v.createdAt) : NaN;
   const at = tidTime(rkey) ?? (Number.isFinite(created) ? created : null);
   return { action: v.action, at, uri: subject.uri, owner: m[1]! };
+}
+
+/** The count in a pets record: a whole number up to MAX_PETS, else 0. */
+export function toPets(value: unknown): number {
+  const count = (value as { count?: unknown } | null)?.count;
+  return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 && count <= MAX_PETS ? count : 0;
+}
+
+/** How many notes a memory record holds about `did`; 0 when it's about someone else. */
+export function toNotes(value: unknown, did: string): number {
+  const v = value as { subject?: unknown; notes?: unknown } | null;
+  if (v?.subject !== did || !Array.isArray(v.notes)) return 0;
+  return v.notes.filter((n) => typeof n === 'string' && n.trim() !== '').length;
 }
 
 class Missing extends Error {}
@@ -245,6 +274,21 @@ export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
     return { total: all.length, helped: helped.size, recent };
   }
 
+  /** Their pets for Poe, and the notes Poe keeps about them. */
+  async function poe(did: string, pds: string): Promise<Gardener['poe']> {
+    const [pets, notes] = await Promise.all([
+      getRecordFromPds(reader.fetch, pds, did, PETS_NSID, 'self')
+        .then((r) => toPets(r?.value))
+        .catch(() => 0),
+      reader
+        .identity(POE_DID)
+        .then((p) => getRecordFromPds(reader.fetch, p.pds, POE_DID, MEMORY_NSID, did))
+        .then((r) => toNotes(r?.value, did))
+        .catch(() => 0),
+    ]);
+    return { pets, notes };
+  }
+
   async function read(actor: string): Promise<Gardener> {
     const who = await reader.owner(actor);
     if (!who) throw new Missing();
@@ -257,7 +301,7 @@ export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
       listRecords(reader.fetch, identity.pds, did, SPROUT_NSID, SPROUT_PAGES),
       listRecords(reader.fetch, identity.pds, did, TEND_NSID, TEND_PAGES).catch(() => [] as RecordEntry[]),
     ]);
-    const [found, garden, gave] = await Promise.all([planted(did, sprouts), ownGarden(did), given(did, tendRecords)]);
+    const [found, garden, gave, withPoe] = await Promise.all([planted(did, sprouts), ownGarden(did), given(did, tendRecords), poe(did, identity.pds)]);
 
     const tended = await mapPool(found, 4, tends);
     const { authors: tenders, blocked: blockedTenders } = await reader.authors(tended.flat().map((t) => t.did));
@@ -269,7 +313,7 @@ export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
         return [{ did: t.did, handle: tender.handle, action: t.action, at: new Date(t.at).toISOString() }];
       }),
     }));
-    return { did, handle: who.handle, displayName: who.displayName, avatar: who.avatar, garden, flowers, given: gave };
+    return { did, handle: who.handle, displayName: who.displayName, avatar: who.avatar, garden, flowers, given: gave, poe: withPoe };
   }
 
   async function GET(request: Request): Promise<Response> {

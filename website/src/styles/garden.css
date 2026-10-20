@@ -131,6 +131,29 @@ html[data-theme="dark"] {
   background: var(--bg);
 }
 
+.garden-stats__item--link {
+  padding: 0;
+}
+
+.garden-stats__link {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: inherit;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.garden-stats__link:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+.garden-stats__link .garden-stats__label {
+  text-decoration: underline;
+}
+
 .garden-stats__value {
   font-size: 20px;
   font-weight: 800;

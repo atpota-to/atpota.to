@@ -46,6 +46,9 @@ export const GARDEN_SIZES = { small: { cols: 6, rows: 4 }, medium: { cols: 8, ro
 /** A garden's name and note, in graphemes. */
 export const NOTE_MAX = 140;
 export const NAME_MAX = 40;
+/** Poe, whose repo keeps its notes about people: one MEMORY_NSID record each, keyed by their DID. */
+export const POE_DID = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
+export const MEMORY_NSID = 'to.atpota.poe.memory';
 
 export interface Owner {
   did: string;
@@ -154,6 +157,8 @@ export interface GardenerView {
   garden: OwnGarden | null;
   flowers: GardenerFlower[];
   given: { total: number; helped: number; recent: GivenTend[] };
+  /** The pets they've given Poe, and how many notes Poe keeps about them. */
+  poe: { pets: number; notes: number };
 }
 
 export function isFlowerKind(value: unknown): value is FlowerKind {
@@ -371,6 +376,11 @@ function toGiven(v: unknown): GardenerView['given'] {
   return { total: isCount(g?.total) ? g.total : 0, helped: isCount(g?.helped) ? g.helped : 0, recent };
 }
 
+function toPoe(v: unknown): GardenerView['poe'] {
+  const p = v as { pets?: unknown; notes?: unknown } | undefined;
+  return { pets: isCount(p?.pets) ? p.pets : 0, notes: isCount(p?.notes) ? p.notes : 0 };
+}
+
 /* ---------- reading ---------- */
 
 /**
@@ -438,6 +448,7 @@ export async function fetchGardener(actor: string, fetchImpl: typeof fetch = fet
       garden: body.garden == null ? null : toOwnGarden(body.garden, did),
       flowers,
       given: toGiven(body.given),
+      poe: toPoe(body.poe),
     };
   } catch {
     return null;

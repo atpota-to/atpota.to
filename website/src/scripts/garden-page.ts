@@ -47,10 +47,12 @@ import {
   gardenRecord,
   initGarden,
   markWatered,
+  MEMORY_NSID,
   NAME_MAX,
   NOTE_MAX,
   OWN_PATCH_RKEY,
   PLANTING,
+  POE_DID,
   saveGarden,
   tend,
   TEND_KEY,
@@ -111,6 +113,8 @@ export const COPY = {
     visitors: (n: number) => (n === 1 ? 'visitor' : 'visitors'),
     tended: (n: number) => (n === 1 ? 'time tending' : 'times tending'),
     rare: (n: number) => (n === 1 ? 'rare find' : 'rare finds'),
+    pets: (n: number) => (n === 1 ? 'pet for poe' : 'pets for poe'),
+    notes: (n: number) => (n === 1 ? 'thing poe remembers' : 'things poe remembers'),
   },
   levels: { garden: 'garden', flowers: 'flowers' } satisfies Record<Level, string>,
   setup: {
@@ -289,6 +293,11 @@ export function numbersFor(person: Pick<GardenerView, 'did' | 'flowers'>, now: n
   n.gardens = gardens.size;
   n.helpers = helpers.size;
   return n;
+}
+
+/** Where to read the notes Poe keeps about someone: its record for their DID, on aturi. */
+export function poeNotesUrl(did: string): string {
+  return `https://aturi.to/profile/${POE_DID}/${MEMORY_NSID}/${encodeURIComponent(did)}`;
 }
 
 /** Which flower to show up close: one waiting to be seen, then one that needs tending, then the newest. */
@@ -496,21 +505,26 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   /** atpotato's page is the community garden, unless atpotato itself is reading. */
   const isCommunity = () => person?.did === GARDEN_SUBJECT && !owner;
 
-  /** Someone's numbers: what they've planted and tended. */
-  function personChips(p: GardenerView): Array<[number, string]> {
+  /** A number in the header, and where it links, if anywhere. */
+  type Stat = [value: number, label: string, href?: string];
+
+  /** Someone's numbers: what they've planted and tended, and how they get on with Poe. */
+  function personChips(p: GardenerView): Stat[] {
     const n = numbersFor(p, now());
     const visitors = visitorList().length;
-    const chips: Array<[number, string]> = [
+    const chips: Stat[] = [
       [n.planted, COPY.stats.planted(n.planted)],
       [n.gardens, COPY.stats.gardens(n.gardens)],
     ];
     if (p.garden) chips.push([visitors, COPY.stats.visitors(visitors)]);
     chips.push([p.given.total, COPY.stats.tended(p.given.total)], [n.rare, COPY.stats.rare(n.rare)]);
+    if (p.poe.pets) chips.push([p.poe.pets, COPY.stats.pets(p.poe.pets)]);
+    if (p.poe.notes) chips.push([p.poe.notes, COPY.stats.notes(p.poe.notes), poeNotesUrl(p.did)]);
     return chips;
   }
 
   /** The community garden's numbers: this season's patch, and every season's flowers. */
-  function seasonChips(): Array<[number, string]> {
+  function seasonChips(): Stat[] {
     const patch = season?.patch;
     if (!season || !patch) return [];
     const t = now();
@@ -519,7 +533,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     const bloom = flowers.filter((f) => stageFor(f.plantedAt, t, true) === 'bloom').length;
     const thirsty = flowers.filter((f) => f.thirsty).length;
     const free = Math.max(0, patch.cols * patch.rows - flowers.length);
-    const chips: Array<[number, string]> = [
+    const chips: Stat[] = [
       [flowers.length, C.growing(flowers.length)],
       [bloom, C.bloom],
     ];
@@ -539,9 +553,14 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     if (!headStats || !person) return;
     const chips = isCommunity() ? seasonChips() : personChips(person);
     headStats.replaceChildren(
-      ...chips.map(([value, label]) => {
-        const li = el(doc, 'li', { class: 'garden-stats__item' });
-        li.append(el(doc, 'strong', { class: 'garden-stats__value' }, String(value)), el(doc, 'span', { class: 'garden-stats__label' }, label));
+      ...chips.map(([value, label, href]) => {
+        const li = el(doc, 'li', { class: href ? 'garden-stats__item garden-stats__item--link' : 'garden-stats__item' });
+        const words = [el(doc, 'strong', { class: 'garden-stats__value' }, String(value)), el(doc, 'span', { class: 'garden-stats__label' }, label)];
+        if (href) {
+          const a = el(doc, 'a', { class: 'garden-stats__link', href });
+          a.append(...words);
+          li.append(a);
+        } else li.append(...words);
         return li;
       }),
     );
