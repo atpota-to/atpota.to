@@ -4,7 +4,7 @@
   "client_uri": "https://atpota.to",
   "logo_uri": "https://atpota.to/favicon.png",
   "redirect_uris": ["https://atpota.to/blog"],
-  "scope": "atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete repo:to.atpota.poe.pets?action=create&action=update rpc:to.atpota.poe.chat?aud=*",
+  "scope": "atproto include:site.standard.authSocial include:to.atpota.authFull repo:pub.leaflet.comment?action=create&action=delete",
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],
   "token_endpoint_auth_method": "none",

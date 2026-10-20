@@ -61,16 +61,13 @@ describe('client metadata', () => {
     expect(META.application_type).toBe('web');
     expect(META.dpop_bound_access_tokens).toBe(true);
     expect(META.scope).toBe(SCOPE);
-    // only what the site writes: subscriptions and recommends, creating or deleting comments and flowers, tending, your own garden, and Poe's pet count, plus Poe's sign-in token
+    // only what the site writes: subscriptions and recommends (standard.site's set), creating or
+    // deleting comments, and atpotato's own set (tests/lexicons.test.ts checks what it grants)
     expect(String(META.scope).split(' ').sort()).toEqual([
       'atproto',
       'include:site.standard.authSocial',
+      'include:to.atpota.authFull',
       'repo:pub.leaflet.comment?action=create&action=delete',
-      'repo:to.atpota.garden.patch?action=create&action=update&action=delete',
-      'repo:to.atpota.garden.sprout?action=create&action=delete',
-      'repo:to.atpota.garden.tend?action=create',
-      'repo:to.atpota.poe.pets?action=create&action=update',
-      'rpc:to.atpota.poe.chat?aud=*',
     ]);
   });
 

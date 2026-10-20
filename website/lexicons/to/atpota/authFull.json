@@ -1,0 +1,43 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.authFull",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "atpotato",
+      "detail": "Plant and tend flowers in the gardens on atpota.to, keep a garden of your own, save how many times you've petted Poe, and let Poe know it's you.",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": ["to.atpota.garden.patch"],
+          "action": ["create", "update", "delete"]
+        },
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": ["to.atpota.garden.sprout"],
+          "action": ["create", "delete"]
+        },
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": ["to.atpota.garden.tend"],
+          "action": ["create"]
+        },
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": ["to.atpota.poe.pets"],
+          "action": ["create", "update"]
+        },
+        {
+          "type": "permission",
+          "resource": "rpc",
+          "lxm": ["to.atpota.poe.chat"],
+          "aud": "*"
+        }
+      ]
+    }
+  }
+}

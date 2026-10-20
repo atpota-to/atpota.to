@@ -11,18 +11,18 @@
  *   redirect_uri  https://atpota.to/blog. The sign-in comes back to the blog index, and
  *                 src/blog/ui.ts sends the reader on to the page they started from.
  *   scope         include:site.standard.authSocial (subscriptions and recommends),
- *                 repo:pub.leaflet.comment and repo:to.atpota.garden.sprout (the home
- *                 page's flower patch), create and delete only, and
- *                 repo:to.atpota.garden.tend (tending a flower), create only, and
- *                 repo:to.atpota.garden.patch (keeping your own garden), create, update
- *                 and delete, and
- *                 repo:to.atpota.poe.pets (how many times the reader has petted the home
- *                 page's Poe, src/scripts/pet-sync.ts), create and update, and
+ *                 repo:pub.leaflet.comment, create and delete only, and
+ *                 include:to.atpota.authFull, atpotato's own permission set
+ *                 (lexicons/to/atpota/authFull.json, published by
+ *                 scripts/publish-lexicons.ts): flowers and tending in the gardens, your
+ *                 own garden, Poe's pet count (src/scripts/pet-sync.ts), and
  *                 rpc:to.atpota.poe.chat, which lets this browser ask the reader's PDS for
  *                 a short-lived token proving to atpota.to's Poe who they are, so Poe can
- *                 remember them (src/poe/identity.ts, server/identity.ts). A reader who
- *                 signed in before it was added has a session without it, and Poe asks
- *                 them to sign in again.
+ *                 remember them (src/poe/identity.ts, server/identity.ts). New to.atpota
+ *                 records go in the set, not here: authorization servers re-read a set
+ *                 when sessions refresh, so readers don't have to sign in again for them.
+ *                 A reader who signed in before the set has a session without it, and is
+ *                 asked to sign in again when a write is refused.
  *
  * Handles are resolved by atpota.to's own PDS, so a typed handle isn't sent to anyone else.
  * The library is loaded on demand: a reader who never signs in never downloads it.
@@ -42,13 +42,14 @@ export const SITE_ORIGIN = 'https://atpota.to';
 export const CLIENT_ID = `${SITE_ORIGIN}/oauth-client-metadata.json`;
 export const CALLBACK_PATH = '/blog';
 /**
- * The one method a Poe sign-in token may name. Any audience is allowed so the scope stays
- * valid on every PDS (some don't take a did#service audience yet); the token itself names
- * atpota.to, and that is all server/identity.ts accepts.
+ * atpotato's permission set. Its rpc permission (the one method a Poe sign-in token may
+ * name) allows any audience so the set stays valid on every PDS (some don't take a
+ * did#service audience yet); the token itself names atpota.to, and that is all
+ * server/identity.ts accepts.
  */
-export const POE_CHAT_SCOPE = 'rpc:to.atpota.poe.chat?aud=*';
-/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending, your own garden, Poe's pet count, and Poe. */
-export const SCOPE = `atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete repo:to.atpota.poe.pets?action=create&action=update ${POE_CHAT_SCOPE}`;
+export const ATPOTATO_SET = 'to.atpota.authFull';
+/** Subscriptions and recommends (standard.site's own permission set), comments, and everything atpotato (its set). */
+export const SCOPE = `atproto include:site.standard.authSocial include:${ATPOTATO_SET} repo:pub.leaflet.comment?action=create&action=delete`;
 export const HANDLE_RESOLVER = 'https://pds.atpota.to';
 /** Where the library remembers the signed-in account (localStorage). */
 export const SESSION_KEY = '@@atproto/oauth-client-browser(sub)';

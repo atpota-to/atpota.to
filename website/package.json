@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "publish:guides": "node scripts/run.mjs scripts/publish-guides.ts",
+    "publish:lexicons": "node scripts/run.mjs scripts/publish-lexicons.ts",
     "garden:patches": "node scripts/run.mjs scripts/open-patches.ts",
     "og": "node scripts/run.mjs scripts/og-images.ts"
   },

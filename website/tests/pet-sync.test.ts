@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SCOPE, type Auth, type Session } from '../src/blog/auth.js';
+import { grants } from './lexicon-helpers.js';
 import { readPending, resetBlogStoresForTests, sessionStoreFor } from '../src/blog/state.js';
 import { ASK_AFTER, COUNT_COPY, initPet, PETS_KEY } from '../src/scripts/pet.js';
 import { createPetSync, MAX_PETS, PETS_NSID, PETS_RKEY, petsRecord, readSavedPets, SAVE_DELAY_MS, toSavedPets, troubleFrom } from '../src/scripts/pet-sync.js';
@@ -64,7 +65,8 @@ describe('the pets record', () => {
     expect(lexicon.id).toBe(PETS_NSID);
     expect(lexicon.defs.main.key).toBe(`literal:${PETS_RKEY}`);
     expect(lexicon.defs.main.record.required).toEqual(['count', 'createdAt', 'updatedAt']);
-    expect(SCOPE.split(' ')).toContain(`repo:${PETS_NSID}?action=create&action=update`);
+    expect(SCOPE.split(' ')).toContain('include:to.atpota.authFull');
+    expect(grants(PETS_NSID)).toEqual(['create', 'update']);
     const record = petsRecord(5, CREATED, new Date('2026-10-20T12:00:00Z'));
     expect(record).toEqual({ $type: PETS_NSID, count: 5, createdAt: CREATED, updatedAt: '2026-10-20T12:00:00.000Z' });
     expect(Object.keys(record).filter((k) => k !== '$type').sort()).toEqual(Object.keys(lexicon.defs.main.record.properties).sort());
