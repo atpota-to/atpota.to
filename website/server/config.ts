@@ -8,6 +8,8 @@
  *   POE_RATE_LIMIT_ID        optional @vercel/firewall rate limit id
  *   POE_MOCK=1               deterministic mock stream, ignored when VERCEL_ENV=production
  *   POE_UPSTREAM_TIMEOUT_MS  whole-turn upstream timeout, default 240000
+ *   POE_IDENTITY_DISABLED=1  kill switch: ignore Bluesky sign-ins, every chat is anonymous
+ *                            (server/identity.ts); Poe then remembers nobody on the website
  */
 
 export const DEFAULT_AGENT_URL = 'https://atpotato-bot.vercel.app';
@@ -29,6 +31,8 @@ export interface PoeConfig {
   mock: boolean;
   upstreamTimeoutMs: number;
   production: boolean;
+  /** Verify a visitor's Bluesky sign-in and tell the bot who they are (unless POE_IDENTITY_DISABLED=1). */
+  identity: boolean;
 }
 
 function flag(value: string | undefined): boolean {
@@ -72,5 +76,6 @@ export function readConfig(env: Env = process.env): PoeConfig {
     mock: flag(env.POE_MOCK) && !production,
     upstreamTimeoutMs: parseTimeout(env.POE_UPSTREAM_TIMEOUT_MS),
     production,
+    identity: !flag(env.POE_IDENTITY_DISABLED),
   };
 }

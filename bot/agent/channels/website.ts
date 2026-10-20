@@ -2,10 +2,11 @@ import { defineChannel, POST, type Session } from "eve/channels";
 import type { MessageStreamEvent } from "eve/client";
 import { MAX_TRACKED_LINKS } from "../lib/bluesky";
 import {
-  WEBSITE_AUTHENTICATOR,
   WEBSITE_SECRET_HEADER,
   WebsiteChat,
   buildWebsitePrompt,
+  websiteAddress,
+  websiteAuth,
   websiteLinksFromToolResult,
   websiteSecretMatches,
 } from "../lib/website";
@@ -275,14 +276,15 @@ export default defineChannel({
   // One answer per message. "steer" would fold a second message into the turn
   // already streaming, and two responses would end up reading one turn.
   turnPolicy: "queue",
-  // Anonymous one-to-one chats. Keeps their content out of traces, which on
-  // Vercel record content only for "public" sessions.
+  // One-to-one chats, anonymous or signed in. Keeps their content out of
+  // traces, which on Vercel record content only for "public" sessions.
   audience: () => "private",
 
   routes: [
     // Server to server: the proxy on atpota.to is the only caller. There is
     // no CORS, no route that accepts input responses, and no session id from
-    // the caller; the conversation is addressed by the proxy's cookie value.
+    // the caller; the conversation is addressed by the proxy's cookie value
+    // (and the visitor's DID, when the proxy verified one).
     POST("/website/chat", async (request, { from, resolveSession }) => {
       if (!websiteSecretMatches(request.headers.get(WEBSITE_SECRET_HEADER))) {
         return new Response(null, { status: 401 });
@@ -293,20 +295,15 @@ export default defineChannel({
       if (!parsed.success) return new Response(null, { status: 400 });
       const chat = parsed.data;
       const prompt = buildWebsitePrompt(chat);
-      const options = {
-        auth: {
-          authenticator: WEBSITE_AUTHENTICATOR,
-          // Anonymous: no principal-scoped memory, and eve never coalesces
-          // anonymous deliveries into one turn.
-          principalType: "anonymous",
-          principalId: "website-visitor",
-          attributes: { conversationId: chat.conversationId, path: chat.page.path },
-        },
-      };
+      // Anonymous unless the proxy verified a Bluesky sign-in; see websiteAuth.
+      const options = { auth: websiteAuth(chat) };
+      // One session per cookie and identity, so a sign-in, sign-out or switch
+      // of account never continues a conversation someone else was having.
+      const address = websiteAddress(chat);
 
       // Continuing: send to the exact owner, so the result carries a
       // deliveryId that picks our turn out of the shared stream.
-      let session: Session | undefined = await resolveSession(chat.conversationId);
+      let session: Session | undefined = await resolveSession(address);
       let startIndex = 0;
       let deliveryId: string | undefined;
       if (session) {
@@ -328,7 +325,7 @@ export default defineChannel({
         // New conversation: send() creates the session and its first turn is
         // ours. Two first messages racing for one id is the one case this
         // cannot tell apart; the proxy's cookie makes it unlikely.
-        session = await from(chat.conversationId).send(prompt, options);
+        session = await from(address).send(prompt, options);
         startIndex = 0;
       }
 

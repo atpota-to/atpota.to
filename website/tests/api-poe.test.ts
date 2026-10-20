@@ -456,6 +456,95 @@ describe('upstream request', () => {
   });
 });
 
+describe('bluesky sign-in', () => {
+  const DID = 'did:plc:abcdefghijklmnopqrstuvwx';
+  const verified = async () => ({ ok: true as const, visitor: { did: DID, handle: 'someone.example' } });
+  const auth = { authorization: 'Bearer aaa.bbb.ccc' };
+
+  it('tells the bot who a verified visitor is, and the widget that they are known', async () => {
+    const { calls } = happyFetch();
+    const tokens: string[] = [];
+    const h = handlers(ENV, { identify: async (token) => (tokens.push(token), verified()) });
+    const out = await collect(await h.POST(post({ message: 'hi', path: '/' }, { headers: auth })));
+    expect(tokens).toEqual(['aaa.bbb.ccc']);
+    expect(calls[0]!.body.visitor).toEqual({ did: DID, handle: 'someone.example' });
+    expect(out.events.map((e) => e.event)).toEqual(['ready', 'visitor', 'status', 'delta', 'delta', 'block', 'done']);
+    expect(out.events[1]!.data).toEqual({ signedIn: true, handle: 'someone.example' });
+    expect(out.raw.includes(DID)).toBe(false);
+    expect(h.logs.find((l) => l.event === 'turn')).toMatchObject({ outcome: 'done', identity: 'verified' });
+    expect(JSON.stringify(h.logs).includes(DID)).toBe(false);
+  });
+
+  it('leaves out a handle the verifier could not confirm', async () => {
+    const { calls } = happyFetch();
+    const h = handlers(ENV, { identify: async () => ({ ok: true, visitor: { did: DID, handle: null } }) });
+    await collect(await h.POST(post({ message: 'hi', path: '/' }, { headers: auth })));
+    expect(calls[0]!.body.visitor).toEqual({ did: DID });
+  });
+
+  it('keeps a visitor whose token fails anonymous, and says so, without failing the chat', async () => {
+    for (const [headers, reason] of [
+      [auth, 'bad_signature'],
+      [{ authorization: 'Basic dXNlcjpwYXNz' }, 'malformed'],
+    ] as const) {
+      const { calls } = happyFetch();
+      const h = handlers(ENV, { identify: async () => ({ ok: false, reason: 'bad_signature' }) });
+      const out = await collect(await h.POST(post({ message: 'hi', path: '/' }, { headers })));
+      expect(calls[0]!.body.visitor).toBeUndefined();
+      expect(out.events[1]).toEqual({ event: 'visitor', data: { signedIn: false, handle: null } });
+      expect(out.events.at(-1)!.event).toBe('done');
+      expect(h.logs.find((l) => l.event === 'turn')!.identity).toBe(reason);
+    }
+  });
+
+  it('treats a verifier that throws as no sign-in', async () => {
+    const { calls } = happyFetch();
+    const h = handlers(ENV, {
+      identify: async () => {
+        throw new Error('boom');
+      },
+    });
+    const out = await collect(await h.POST(post({ message: 'hi', path: '/' }, { headers: auth })));
+    expect(calls[0]!.body.visitor).toBeUndefined();
+    expect(out.events.at(-1)!.event).toBe('done');
+  });
+
+  it('says nothing about sign-in to a visitor who sent no token', async () => {
+    const { calls } = happyFetch();
+    let asked = false;
+    const h = handlers(ENV, { identify: async () => ((asked = true), verified()) });
+    const out = await collect(await h.POST(post({ message: 'hi', path: '/' })));
+    expect(asked).toBe(false);
+    expect(calls[0]!.body.visitor).toBeUndefined();
+    expect(out.events.some((e) => e.event === 'visitor')).toBe(false);
+    expect(h.logs.find((l) => l.event === 'turn')!.identity).toBeUndefined();
+  });
+
+  it('ignores every token under POE_IDENTITY_DISABLED=1', async () => {
+    const { calls } = happyFetch();
+    let asked = false;
+    const h = handlers({ ...ENV, POE_IDENTITY_DISABLED: '1' }, { identify: async () => ((asked = true), verified()) });
+    const out = await collect(await h.POST(post({ message: 'hi', path: '/' }, { headers: auth })));
+    expect(asked).toBe(false);
+    expect(calls[0]!.body.visitor).toBeUndefined();
+    expect(out.events.some((e) => e.event === 'visitor')).toBe(false);
+  });
+
+  it('never takes a visitor from the request body', async () => {
+    const { calls } = happyFetch();
+    const h = handlers();
+    await collect(await h.POST(post({ message: 'hi', path: '/', visitor: { did: DID } })));
+    expect(calls[0]!.body.visitor).toBeUndefined();
+  });
+
+  it('verifies in mock mode too, so local development shows who is signed in', async () => {
+    const h = handlers({ POE_MOCK: '1' }, { identify: verified, sleep: async () => undefined, mockStepMs: 0 });
+    const out = await collect(await h.POST(post({ message: 'hi', path: '/' }, { headers: auth })));
+    expect(out.events[1]).toEqual({ event: 'visitor', data: { signedIn: true, handle: 'someone.example' } });
+    expect(out.events.at(-1)!.event).toBe('done');
+  });
+});
+
 describe('conversation cookie', () => {
   it('mints an httpOnly cookie on the first message and reuses it after', async () => {
     const { calls } = happyFetch();

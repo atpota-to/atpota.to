@@ -29,10 +29,11 @@ export const PENDING_TTL_MS = 15 * 60_000;
 export const LOCAL_TTL_MS = 10 * 60_000;
 const MAX_LOCAL = 20;
 
-export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'plant' | 'tend';
+/** "poe": signing in so Poe can remember the reader (from the Poe panel, or /blog#sign-in). */
+export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe' | 'plant' | 'tend';
 /** The intents the blog itself handles (planting and tending belong to the flower patch). */
 export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend'>;
-const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'plant', 'tend']);
+const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'poe', 'plant', 'tend']);
 
 export interface Pending {
   kind: IntentKind;

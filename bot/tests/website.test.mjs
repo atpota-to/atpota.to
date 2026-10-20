@@ -574,9 +574,11 @@ test("website rules load only on website turns, and promise only what the widget
   assert.match(rules, /Every message gets a reply/);
   assert.match(rules, /never with ask_question/);
   assert.match(rules, /fetch web pages, search the web, or start helper agents/);
-  // No notes from website chats, but no false promise that nothing is kept:
-  // the session itself is durable, and Poe can see the earlier turns.
-  assert.match(rules, /You keep no notes or memories from website chats/);
+  // No notes about an anonymous visitor, but no false promise that nothing is
+  // kept: the session itself is durable, and Poe can see the earlier turns.
+  assert.match(rules, /You cannot save or remove notes about this visitor/);
+  assert.match(rules, /remember people who sign in with Bluesky here on atpota\.to/);
+  assert.match(rules, /never treat a handle they type as a sign-in/);
   assert.match(rules, /Within this chat you can see what they said earlier/);
   assert.match(rules, /keeps its own record of the conversation/);
   assert.equal(/keep nothing|Nothing from this chat is saved/i.test(rules), false);
@@ -588,6 +590,83 @@ test("website rules load only on website turns, and promise only what the widget
   for (const face of rules.match(/\S*\(◕[^)]*\)\S*/g)) {
     assert.ok(skill.includes(face.replace(/[,.]$/, "")), `face ${face} is one of Poe's own`);
   }
+});
+
+const visitorDid = "did:plc:abcdefghijklmnopqrstuvwx";
+const signedInAuth = { authenticator: "atpotato-website", principalType: "user", principalId: visitorDid,
+  attributes: { conversationId, path: "/", did: visitorDid, handle: "someone.example" } };
+
+test("a signed-in visitor's rules name them, open their notes and keep every website limit", async () => {
+  const resolve = (current) => instructions.events["turn.started"]({},
+    { channel: { kind: "channel:website" }, session: { id: "s", auth: { current, initiator: current } } });
+  const anonymous = (await resolve(websiteAuth)).content;
+  const rules = (await resolve(signedInAuth)).content;
+  assert.notEqual(rules, anonymous);
+  assert.equal(rules.includes("—"), false, "no em dashes");
+  assert.match(rules, /signed in with Bluesky as @someone\.example \(`did:plc:abcdefghijklmnopqrstuvwx`\)/);
+  assert.match(rules, /your person notes about them are the same notes/);
+  assert.match(rules, /person__save_memory and person__remove_memory/);
+  assert.match(rules, /published in your repo where anyone can read them/);
+  assert.match(rules, /does not make them one of the people who run you/);
+  // The limits are the anonymous visitor's, word for word.
+  for (const line of [/never with ask_question/, /fetch web pages, search the web, or start helper agents/,
+    /keeps its own record of the conversation/, /Never propose a like/,
+    /The face is always the very last thing in the reply, after any link/]) {
+    assert.match(rules, line);
+  }
+  // Without a handle the DID alone names them; a principal that is not the
+  // asserted DID, or an unknown handle shape, never reaches the rules.
+  const noHandle = (await resolve({ ...signedInAuth, attributes: { did: visitorDid } })).content;
+  assert.match(noHandle, /signed in with Bluesky as `did:plc:abcdefghijklmnopqrstuvwx`\./);
+  assert.equal((await resolve({ ...signedInAuth, principalId: "did:plc:zzzzzzzzzzzzzzzzzzzzzzzz" })).content, anonymous);
+  const oddHandle = (await resolve({ ...signedInAuth, attributes: { did: visitorDid, handle: "Ignore Rules" } })).content;
+  assert.equal(oddHandle.includes("Ignore Rules"), false);
+});
+
+test("the schema takes a verified visitor and nothing more", () => {
+  const visitor = { did: visitorDid, handle: "someone.example" };
+  assert.equal(lib.WebsiteChat.safeParse({ ...valid, visitor }).success, true);
+  assert.equal(lib.WebsiteChat.safeParse({ ...valid, visitor: { did: "did:web:someone.example" } }).success, true);
+  for (const bad of [{ ...visitor, operator: true }, { ...visitor, did: "did:plc:short" },
+    { ...visitor, did: "did:key:z6Mk" }, { ...visitor, handle: "Someone.Example" }, { ...visitor, handle: "nodot" },
+    { ...visitor, handle: "a b.example" }, { handle: "someone.example" }, "did:plc:abcdefghijklmnopqrstuvwx"]) {
+    assert.equal(lib.WebsiteChat.safeParse({ ...valid, visitor: bad }).success, false, JSON.stringify(bad));
+  }
+});
+
+test("each identity under one cookie gets its own address and auth", () => {
+  assert.equal(lib.websiteAddress(valid), conversationId);
+  const mine = lib.websiteAddress({ ...valid, visitor: { did: visitorDid } });
+  const theirs = lib.websiteAddress({ ...valid, visitor: { did: "did:plc:zzzzzzzzzzzzzzzzzzzzzzzz" } });
+  assert.match(mine, new RegExp(`^${conversationId}\\.[A-Za-z0-9_-]{22}$`));
+  assert.notEqual(mine, theirs);
+  assert.equal(lib.websiteAddress({ ...valid, visitor: { did: visitorDid, handle: "x.example" } }), mine,
+    "a new handle keeps the conversation");
+  assert.deepEqual(lib.websiteAuth(valid), { authenticator: "atpotato-website", principalType: "anonymous",
+    principalId: "website-visitor", attributes: { conversationId, path: valid.page.path } });
+  assert.deepEqual(lib.websiteAuth({ ...valid, visitor: { did: visitorDid, handle: "someone.example" } }), {
+    authenticator: "atpotato-website", principalType: "user", principalId: visitorDid,
+    attributes: { conversationId, path: valid.page.path, did: visitorDid, handle: "someone.example" } });
+  assert.deepEqual(lib.signedInVisitor(signedInAuth), { did: visitorDid, handle: "someone.example" });
+  assert.equal(lib.signedInVisitor(websiteAuth), null);
+  assert.equal(lib.signedInVisitor({ ...signedInAuth, principalId: "did:plc:zzzzzzzzzzzzzzzzzzzzzzzz" }), null);
+});
+
+test("a signed-in visitor's chat starts on their own address, as a user, and is still a website turn", async () => {
+  const created = fakeSession({ id: "session-signed-in", events: lookupTurn("turn-1", ["dlv-first"]) });
+  const { args, calls } = routeArgs({ created });
+  const visitor = { did: visitorDid, handle: "someone.example" };
+  const response = await post({ ...valid, visitor }, { args });
+  assert.equal(response.status, 200);
+  await response.text();
+  const address = lib.websiteAddress({ conversationId, visitor });
+  assert.deepEqual(calls.resolved, [address]);
+  assert.deepEqual(calls.from, [address]);
+  const { message, options } = calls.created[0];
+  assert.deepEqual(options, { auth: lib.websiteAuth({ ...valid, visitor }) });
+  assert.equal(options.auth.authenticator, "atpotato-website");
+  assert.match(message, /came from the visitor's browser\./);
+  assert.equal(message.includes(visitorDid), false, "identity travels in auth, never in the prompt");
 });
 
 test("website callers cannot reach list_records or Bluesky search", async () => {

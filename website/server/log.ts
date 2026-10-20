@@ -18,6 +18,8 @@ export interface LogFields {
   error?: string;
   deltas?: number;
   tools?: number;
+  /** A sign-in token's outcome: "verified" or a fixed reason code, never the DID. */
+  identity?: string;
 }
 
 export type Logger = (fields: LogFields) => void;

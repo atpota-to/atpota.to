@@ -15,7 +15,12 @@
  *                 page's flower patch), create and delete only, and
  *                 repo:to.atpota.garden.tend (tending a flower), create only, and
  *                 repo:to.atpota.garden.patch (keeping your own garden), create, update
- *                 and delete
+ *                 and delete, and
+ *                 rpc:to.atpota.poe.chat, which lets this browser ask the reader's PDS for
+ *                 a short-lived token proving to atpota.to's Poe who they are, so Poe can
+ *                 remember them (src/poe/identity.ts, server/identity.ts). A reader who
+ *                 signed in before it was added has a session without it, and Poe asks
+ *                 them to sign in again.
  *
  * Handles are resolved by atpota.to's own PDS, so a typed handle isn't sent to anyone else.
  * The library is loaded on demand: a reader who never signs in never downloads it.
@@ -34,8 +39,14 @@ import type { OAuthSession } from '@atproto/oauth-client-browser';
 export const SITE_ORIGIN = 'https://atpota.to';
 export const CLIENT_ID = `${SITE_ORIGIN}/oauth-client-metadata.json`;
 export const CALLBACK_PATH = '/blog';
-/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending and your own garden. */
-export const SCOPE = 'atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete';
+/**
+ * The one method a Poe sign-in token may name. Any audience is allowed so the scope stays
+ * valid on every PDS (some don't take a did#service audience yet); the token itself names
+ * atpota.to, and that is all server/identity.ts accepts.
+ */
+export const POE_CHAT_SCOPE = 'rpc:to.atpota.poe.chat?aud=*';
+/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending, your own garden, and Poe. */
+export const SCOPE = `atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete ${POE_CHAT_SCOPE}`;
 export const HANDLE_RESOLVER = 'https://pds.atpota.to';
 /** Where the library remembers the signed-in account (localStorage). */
 export const SESSION_KEY = '@@atproto/oauth-client-browser(sub)';
@@ -120,7 +131,10 @@ export interface Auth {
   readonly mode: AuthMode;
   /** True when start() is worth calling on page load (a callback, or a remembered account). */
   readonly eager: boolean;
-  /** Restores the remembered session, or finishes a sign-in. Call once per page load. */
+  /**
+   * Restores the remembered session, or finishes a sign-in. Runs once per page load: later
+   * calls (the blog and Poe both ask) get the same answer.
+   */
   start(): Promise<StartResult>;
   /** Starts loading the OAuth library (when the sign-in dialog opens). */
   warm(): void;
@@ -170,18 +184,23 @@ export function createAuth(win: Window = window, now: () => number = () => Date.
     return client;
   };
   const callback = isCallback(win.location);
+  let started: Promise<StartResult> | null = null;
 
   return {
     mode,
     eager: callback || hasStoredSession(() => win.localStorage),
-    async start() {
-      try {
-        const result = await (await load()).init();
-        return { session: result ? await wrap(result.session) : null, callback, error: null };
-      } catch (error) {
-        // An expired or revoked session lands here too; the library has already forgotten it.
-        return { session: null, callback, error: callback ? errorText(error) : null };
-      }
+    start() {
+      // A callback's code can only be redeemed once, so the second caller must not try.
+      started ??= (async () => {
+        try {
+          const result = await (await load()).init();
+          return { session: result ? await wrap(result.session) : null, callback, error: null };
+        } catch (error) {
+          // An expired or revoked session lands here too; the library has already forgotten it.
+          return { session: null, callback, error: callback ? errorText(error) : null };
+        }
+      })();
+      return started;
     },
     warm() {
       void load().catch(() => undefined);
@@ -213,3 +232,21 @@ export function createAuth(win: Window = window, now: () => number = () => Date.
     },
   };
 }
+
+const shared = new WeakMap<Window, Auth | null>();
+
+/**
+ * The page's one Auth, for the blog's reader actions and for Poe alike, so a sign-in is
+ * finished and a session restored exactly once whichever asks first.
+ */
+export function sharedAuth(win: Window = window): Auth | null {
+  if (!shared.has(win)) shared.set(win, createAuth(win));
+  return shared.get(win)!;
+}
+
+/**
+ * Fired on window when the reader signs in or out on this page, so Poe can stop using a
+ * session the blog just ended. detail.did is null after a sign-out.
+ */
+export const SESSION_EVENT = 'atpotato:session';
+export type SessionEventDetail = { did: string | null };
