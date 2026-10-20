@@ -6,7 +6,20 @@ import type { Auth, Prepared, Session } from '../src/blog/auth.js';
 import { PENDING_KEY } from '../src/blog/state.js';
 import { createStore } from '../src/poe/storage.js';
 import { burst, cheer } from '../src/scripts/burst.js';
-import { COPY, flowerSpot, initGarden, KIND_KEY, SPROUT_NSID, GARDEN_SUBJECT } from '../src/scripts/garden.js';
+import {
+  COPY,
+  freePlotFrom,
+  GARDEN_SUBJECT,
+  GRID_COLS,
+  initGarden,
+  KIND_KEY,
+  MAX_PLOTS,
+  middlePlot,
+  MIN_ROWS,
+  PLOT_KEY,
+  rowsFor,
+  SPROUT_NSID,
+} from '../src/scripts/garden.js';
 import { initLatest, LOADING_LINES } from '../src/scripts/home.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
 import { greeting, initPet, milestoneLine, PETS_KEY, petReaction } from '../src/scripts/pet.js';
@@ -164,17 +177,19 @@ describe('atmospheric conditions', () => {
 
 describe('the flower patch', () => {
   const ME = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
+  const FRIEND = 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb';
   const PDS = 'https://pds.me.test';
+  const NOW = Date.parse('2026-10-20T12:00:00Z');
+  const friendRose = { did: FRIEND, rkey: '3kfriend', handle: 'friend.test', kind: 'rose', plot: 20, plantedAt: '2026-10-10T00:00:00Z' };
 
   interface Rig {
     calls: Array<{ path: string; body: Record<string, unknown> | null }>;
     went: Prepared[];
     owned: string[];
-    store: ReturnType<typeof createStore>;
     run: () => Promise<void>;
   }
 
-  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[] } = {}): Rig {
+  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; rows?: number } = {}): Rig {
     document.body.innerHTML = section('home-patch') + DIALOG;
     const calls: Rig['calls'] = [];
     const went: Prepared[] = [];
@@ -205,72 +220,146 @@ describe('the flower patch', () => {
       prepare: async () => ({ url: 'https://bsky.social/oauth/authorize?x', host: 'bsky.social', account: { did: ME, handle: 'me.test' }, at: Date.now() }),
       go: (p) => went.push(p),
     };
+    const flowers = opts.flowers ?? [friendRose];
     const fetchImpl = (async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'https://atpota.to');
-      if (url.pathname === '/api/garden') return Response.json({ flowers: opts.flowers ?? [{ did: 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb', handle: 'friend.test', kind: 'rose', plantedAt: '2026-10-19T00:00:00Z' }], total: 1 });
+      if (url.pathname === '/api/garden') return Response.json({ flowers, total: flowers.length, cols: GRID_COLS, rows: opts.rows ?? MIN_ROWS });
       if (url.origin === 'https://public.api.bsky.app') return Response.json({ did: ME, handle: 'me.test', displayName: 'Me' });
       if (url.origin === PDS) return Response.json({ records: owned.map((uri) => ({ uri, value: { subject: GARDEN_SUBJECT } })) });
       return new Response('unexpected', { status: 599 });
     }) as typeof fetch;
-    const store = createStore(() => window.sessionStorage);
     return {
       calls,
       went,
       owned,
-      store,
-      run: () => initGarden({ auth: opts.auth === null ? null : auth, fetchImpl, sessionStore: store, localStore: createStore(() => window.localStorage) }),
+      run: () =>
+        initGarden({
+          auth: opts.auth === null ? null : auth,
+          fetchImpl,
+          now: () => NOW,
+          random: () => 0,
+          sessionStore: createStore(() => window.sessionStorage),
+          localStore: createStore(() => window.localStorage),
+        }),
     };
   }
 
   const flush = async () => {
     for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
   };
+  const plot = (i: number) => document.querySelector<HTMLButtonElement>(`[data-plot="${i}"]`)!;
+  const plantButton = () => document.querySelector<HTMLButtonElement>('[data-garden-plant]')!;
+  const statusText = () => document.querySelector('[data-garden-status]')!.textContent;
 
-  it('grows everyone in the same spot each time', async () => {
-    const r = rig();
-    await r.run();
-    const flowers = document.querySelectorAll('.home-flower');
-    expect(flowers).toHaveLength(1);
-    expect(flowers[0]!.classList.contains('home-flower--rose')).toBe(true);
-    expect(flowers[0]!.querySelector('.home-flower__tag')!.textContent).toBe('@friend.test');
-    expect(document.querySelector('[data-garden-count]')!.textContent).toBe('1 flower');
-    expect(flowerSpot('did:plc:x')).toEqual(flowerSpot('did:plc:x'));
-    const spot = flowerSpot('did:plc:bbbbbbbbbbbbbbbbbbbbbbbb');
-    expect(spot.x).toBeGreaterThanOrEqual(4);
-    expect(spot.x).toBeLessThanOrEqual(96);
+  it('lays out the plots, with everyone in the plot they picked', async () => {
+    await rig().run();
+    expect(document.querySelectorAll('[data-plot]')).toHaveLength(MIN_ROWS * GRID_COLS);
+    expect(document.querySelector('[data-garden-count]')!.textContent).toBe(COPY.count(1, MIN_ROWS * GRID_COLS));
+    const rose = plot(20);
+    expect(rose.classList.contains('home-plot--planted')).toBe(true);
+    expect(rose.querySelector('svg.home-flower')).not.toBeNull();
+    expect(rose.querySelector('.home-plot__tag')!.textContent).toBe('@friend.test');
+    expect(rose.getAttribute('aria-label')).toBe(COPY.flowerPlot("@friend.test's", 'rose', 'bloom'));
+    // the same flower looks the same every time
+    const first = rose.querySelector('svg')!.outerHTML;
+    await rig().run();
+    expect(plot(20).querySelector('svg')!.outerHTML).toBe(first);
+    // the kinds picker shows each flower
+    expect(document.querySelectorAll('[data-garden-kinds] [data-kind] svg.home-flower')).toHaveLength(6);
   });
 
-  it('signed in: plants the picked flower in your repo, swapping an old one', async () => {
+  it('grows the grid as it fills, always leaving a free plot', async () => {
+    const full = Array.from({ length: 60 }, (_, i) => ({ ...friendRose, did: `did:plc:${String(i).padStart(24, 'c')}`, plot: i }));
+    await rig({ flowers: full, rows: 5 }).run();
+    expect(document.querySelectorAll('[data-plot]')).toHaveLength(6 * GRID_COLS);
+    expect(rowsFor(full)).toBe(6);
+  });
+
+  it('picking: tap an empty plot, tap it again to unpick, or let it pick one near the middle', async () => {
+    await rig().run();
+    expect(plantButton().textContent).toBe(COPY.pick);
+    document.querySelector<HTMLButtonElement>('[data-kind="violet"]')!.click();
+    plot(3).click();
+    expect(plot(3).classList.contains('is-picked')).toBe(true);
+    expect(plot(3).getAttribute('aria-pressed')).toBe('true');
+    expect(plot(3).querySelector('.home-flower--ghost')).not.toBeNull();
+    expect(plantButton().textContent).toBe(COPY.plantHere('violet'));
+    expect(statusText()).toBe(COPY.choose('violet'));
+    plot(3).click();
+    expect(plot(3).classList.contains('is-picked')).toBe(false);
+    expect(plantButton().textContent).toBe(COPY.pick);
+    // a planted plot can't be picked
+    plot(20).click();
+    expect(document.querySelector('.is-picked')).toBeNull();
+    // "pick a plot" picks a free one near the middle
+    plantButton().click();
+    await flush();
+    const picked = document.querySelector<HTMLElement>('.is-picked')!;
+    expect(Number(picked.dataset.plot)).toBe(middlePlot(new Set([20]), MIN_ROWS, () => 0));
+  });
+
+  it('arrow keys move between the plots', async () => {
+    await rig().run();
+    plot(0).focus();
+    plot(0).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(document.activeElement).toBe(plot(1));
+    plot(1).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(plot(1 + GRID_COLS));
+    expect(plot(1 + GRID_COLS).tabIndex).toBe(0);
+    expect(plot(0).tabIndex).toBe(-1);
+    // from whichever plot has focus
+    plot(30).focus();
+    plot(30).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    expect(document.activeElement).toBe(plot(29));
+    expect(document.querySelectorAll('[data-plot][tabindex="0"]')).toHaveLength(1);
+  });
+
+  it('signed in: plants the picked flower in your repo in the picked plot, moving an old one', async () => {
     const r = rig({ signedIn: true });
     await r.run();
     r.owned.push(`at://${ME}/${SPROUT_NSID}/3old`);
     document.querySelector<HTMLButtonElement>('[data-kind="violet"]')!.click();
-    expect(document.querySelector('[data-garden-plant]')!.textContent).toBe('plant a violet');
-    document.querySelector<HTMLButtonElement>('[data-garden-plant]')!.click();
+    plot(7).click();
+    plantButton().click();
     await flush();
     expect(r.calls.map((c) => c.path.split('.').pop())).toEqual(['deleteRecord', 'createRecord']);
     const created = r.calls[1]!.body!;
     expect(created.collection).toBe(SPROUT_NSID);
-    expect(created.record).toMatchObject({ $type: SPROUT_NSID, subject: GARDEN_SUBJECT, kind: 'violet' });
-    const mine = document.querySelector('.home-flower.is-yours')!;
-    expect(mine.classList.contains('home-flower--violet')).toBe(true);
-    expect(mine.textContent).toBe(COPY.yours('me.test'));
-    expect(document.querySelector('[data-garden-status]')!.textContent).toBe(COPY.replanted('violet'));
+    expect(created.record).toMatchObject({ $type: SPROUT_NSID, subject: GARDEN_SUBJECT, kind: 'violet', plot: 7 });
+    const mine = plot(7);
+    expect(mine.classList.contains('is-yours')).toBe(true);
+    expect(mine.classList.contains('is-new')).toBe(true);
+    expect(mine.querySelector('.home-plot__tag')!.textContent).toBe(COPY.you);
+    expect(mine.getAttribute('aria-label')).toBe(COPY.flowerPlot('your', 'violet', 'sprout'));
+    expect(statusText()).toBe(COPY.moved('violet'));
+    expect(plantButton().textContent).toBe(COPY.pick);
     expect(document.querySelector<HTMLElement>('[data-garden-dig]')!.hidden).toBe(false);
     expect(readReader()).toBe('me.test');
 
     document.querySelector<HTMLButtonElement>('[data-garden-dig]')!.click();
     await flush();
     expect(r.owned).toEqual([]);
-    expect(document.querySelector('.home-flower.is-yours')).toBeNull();
-    expect(document.querySelector('[data-garden-status]')!.textContent).toBe(COPY.dug);
+    expect(document.querySelector('.is-yours')).toBeNull();
+    expect(plot(7).classList.contains('home-plot--empty')).toBe(true);
+    expect(statusText()).toBe(COPY.dug);
   });
 
-  it('signed out: asks to sign in, then plants once back from signing in', async () => {
+  it('a plot taken while the page was open goes to the next free one', () => {
+    expect(freePlotFrom(20, new Set([20, 21]))).toBe(22);
+    expect(freePlotFrom(4, new Set([20]))).toBe(4);
+    expect(freePlotFrom(MAX_PLOTS - 1, new Set([MAX_PLOTS - 1]))).toBe(0);
+    expect(middlePlot(new Set(Array.from({ length: 60 }, (_, i) => i)), 5)).toBeNull();
+    // six across on narrow screens: the middle of that shape
+    expect(middlePlot(new Set(), 5, () => 0, 6)).toBe(4 * 6 + 2);
+    expect(middlePlot(new Set(), 5, () => 0)).toBe(2 * 12 + 5);
+  });
+
+  it('signed out: asks to sign in, then plants in the same plot once back', async () => {
     const r = rig();
     await r.run();
     document.querySelector<HTMLButtonElement>('[data-kind="tulip"]')!.click();
-    document.querySelector<HTMLButtonElement>('[data-garden-plant]')!.click();
+    plot(9).click();
+    plantButton().click();
     await flush();
     expect(document.querySelector<HTMLDialogElement>('dialog[data-blog-signin]')!.hasAttribute('open')).toBe(true);
     expect(document.querySelector('[data-blog-signin-lede]')!.textContent).toBe(COPY.lede);
@@ -283,19 +372,31 @@ describe('the flower patch', () => {
     expect(r.went).toHaveLength(1);
     expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'plant', returnTo: '/' });
     expect(sessionStorage.getItem(KIND_KEY)).toBe('tulip');
+    expect(sessionStorage.getItem(PLOT_KEY)).toBe('9');
 
     // back on the home page, signed in
     const back = rig({ signedIn: true });
     await back.run();
-    expect(back.calls.find((c) => c.path.endsWith('createRecord'))!.body!.record).toMatchObject({ kind: 'tulip' });
+    expect(back.calls.find((c) => c.path.endsWith('createRecord'))!.body!.record).toMatchObject({ kind: 'tulip', plot: 9 });
+    expect(plot(9).classList.contains('is-yours')).toBe(true);
     expect(sessionStorage.getItem(PENDING_KEY)).toBeNull();
     expect(sessionStorage.getItem(KIND_KEY)).toBeNull();
+    expect(sessionStorage.getItem(PLOT_KEY)).toBeNull();
+  });
+
+  it('back from signing in without a stored plot, it plants near the middle', async () => {
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ kind: 'plant', returnTo: '/', at: NOW }));
+    const back = rig({ signedIn: true });
+    await back.run();
+    const want = middlePlot(new Set([20]), MIN_ROWS, () => 0);
+    expect(back.calls.find((c) => c.path.endsWith('createRecord'))!.body!.record).toMatchObject({ kind: 'sunflower', plot: want });
   });
 
   it('an older sign-in without flower permission is asked to sign in again', async () => {
     const r = rig({ signedIn: true, failCreate: 403 });
     await r.run();
-    document.querySelector<HTMLButtonElement>('[data-garden-plant]')!.click();
+    plot(0).click();
+    plantButton().click();
     await flush();
     expect(document.querySelector<HTMLDialogElement>('dialog[data-blog-signin]')!.hasAttribute('open')).toBe(true);
     expect(document.querySelector('[data-blog-signin-lede]')!.textContent).toBe(COPY.consent);
@@ -304,15 +405,18 @@ describe('the flower patch', () => {
   it('elsewhere (previews) it says planting works on atpota.to', async () => {
     const r = rig({ auth: null });
     await r.run();
-    document.querySelector<HTMLButtonElement>('[data-garden-plant]')!.click();
+    plot(0).click();
+    plantButton().click();
     await flush();
-    expect(document.querySelector('[data-garden-status]')!.textContent).toBe(COPY.otherHost);
+    expect(statusText()).toBe(COPY.otherHost);
   });
 
   it('says so when the patch does not load', async () => {
     document.body.innerHTML = section('home-patch') + DIALOG;
     await initGarden({ auth: null, fetchImpl: (async () => new Response('down', { status: 503 })) as typeof fetch });
     expect(document.querySelector<HTMLElement>('[data-garden]')!.dataset.state).toBe('error');
-    expect(document.querySelector('[data-garden-status]')!.textContent).toBe(COPY.loadFailed);
+    expect(statusText()).toBe(COPY.loadFailed);
+    // still plantable: the empty grid is there
+    expect(document.querySelectorAll('[data-plot]')).toHaveLength(MIN_ROWS * GRID_COLS);
   });
 });

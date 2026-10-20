@@ -25,6 +25,9 @@
   --home-star: #FFF6D6;
   --home-cloud: rgba(255, 255, 255, 0.82);
   --home-weather-cell: rgba(255, 255, 255, 0.6);
+  --home-plot-path: #E6D6B0;
+  --home-plot-seed: #8C7146;
+  --home-plot-ring: var(--brown);
   --home-firefly: #FFF3A6;
 }
 
@@ -42,6 +45,9 @@ html[data-theme="dark"] {
   --home-bubble: var(--card);
   --home-mound: #6E5634;
   --home-weather-cell: rgba(255, 253, 247, 0.07);
+  --home-plot-path: #3A2F20;
+  --home-plot-seed: #4A3820;
+  --home-plot-ring: #E3CE90;
 }
 
 /* ---------- motion shared across the page ---------- */
@@ -1244,6 +1250,7 @@ html:not(.js) .home-patch {
 /* ---------- the flower patch (garden.ts, /api/garden) ---------- */
 
 .home-patch {
+  container: patch / inline-size;
   gap: 12px;
 }
 
@@ -1267,114 +1274,128 @@ html:not(.js) .home-patch {
   color: var(--text-soft);
 }
 
-.home-patch__bed {
-  position: relative;
-  height: 150px;
-  overflow: hidden;
-  border-radius: 20px;
-  background: linear-gradient(var(--sky), color-mix(in srgb, var(--sky) 30%, var(--card)));
+/* The grid of plots, seen from above (garden.ts builds the plots, flowers.ts the flowers). */
+.home-plots {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 5px;
+  padding: 10px;
+  border-radius: 18px;
+  background: var(--home-plot-path);
 }
 
-/* the soil */
-.home-patch__bed::after {
-  content: "";
-  position: absolute;
-  left: -6%;
-  right: -6%;
-  bottom: -8px;
-  height: 40px;
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+/* Narrow: the same plots wrap six across (each row of twelve shows as two), so they stay big
+   enough to tap. garden.ts reads the column count for arrow keys. */
+@container patch (max-width: 380px) {
+  .home-plots {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+}
+
+.home-plot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20%;
   background: var(--home-mound);
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* an empty plot shows where a seed would go */
+.home-plot--empty::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--home-plot-seed);
+}
+
+.home-plot--empty {
+  cursor: pointer;
+}
+
+.home-plot--empty.is-picked::after {
+  display: none;
+}
+
+.home-plot--empty:hover,
+.home-plot.is-picked {
+  outline: 2px dashed var(--home-plot-ring);
+  outline-offset: 2px;
+}
+
+.home-plot.is-yours {
+  outline: 2.5px solid var(--home-plot-ring);
+  outline-offset: 2px;
+}
+
+.home-plot:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .home-flower {
+  width: 88%;
+  height: 88%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.home-flower--ghost {
+  opacity: 0.5;
+}
+
+.home-plot__tag {
   position: absolute;
-  left: var(--x);
-  bottom: 20px;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform-origin: 50% 100%;
-}
-
-.home-flower__head {
-  width: 20px;
-  height: 20px;
-  margin-bottom: -3px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--center) 0 28%, var(--petal) 31% 100%);
-  box-shadow: 0 0 0 1px rgba(61, 47, 27, 0.12);
-}
-
-.home-flower__stem {
-  position: relative;
-  width: 3px;
-  height: var(--h);
-  border-radius: 3px;
-  background: var(--vine);
-}
-
-.home-flower__stem::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 45%;
-  width: 9px;
-  height: 5px;
-  border-radius: 0 80% 0 80%;
-  background: var(--vine);
-}
-
-.home-flower__tag {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  padding: 3px 8px;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  z-index: 2;
+  padding: 3px 9px;
   border-radius: 8px;
-  background: var(--card);
-  color: var(--text);
+  background: var(--soil);
+  color: var(--on-soil);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   opacity: 0;
-  transform: translateY(4px);
+  transform: translate(-50%, 4px);
   pointer-events: none;
   transition:
     opacity var(--dur-fast) ease,
     transform var(--dur-spring) var(--ease-spring);
 }
 
-.home-flower:hover {
+.home-plot:hover .home-plot__tag,
+.home-plot:focus-visible .home-plot__tag {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.home-plot:hover,
+.home-plot:focus-visible,
+.home-plot.is-picked {
   z-index: 3;
 }
 
-.home-flower:hover .home-flower__tag,
-.home-flower.is-yours .home-flower__tag {
-  opacity: 1;
-  transform: none;
-}
-
-.home-flower.is-yours {
-  z-index: 2;
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .home-flower {
-    animation: home-sway var(--sway, 4s) ease-in-out infinite alternate;
+  .home-plot--planted .home-flower {
+    transition: transform var(--dur-spring) var(--ease-spring);
   }
 
-  .home-flower.is-new {
+  .home-plot--planted:hover .home-flower {
+    transform: scale(1.08) rotate(6deg);
+  }
+
+  .home-plot.is-new .home-flower {
     animation: home-sprout 900ms var(--ease-spring);
-  }
-}
-
-@keyframes home-sway {
-  from {
-    transform: rotate(-3deg);
-  }
-
-  to {
-    transform: rotate(3deg);
   }
 }
 
@@ -1386,36 +1407,6 @@ html:not(.js) .home-patch {
   to {
     transform: none;
   }
-}
-
-.home-flower--sunflower {
-  --petal: #FFCD5E;
-  --center: #7A4E1D;
-}
-
-.home-flower--rose {
-  --petal: #E9879A;
-  --center: #B9506A;
-}
-
-.home-flower--daisy {
-  --petal: #FFFFFF;
-  --center: #FFCD5E;
-}
-
-.home-flower--violet {
-  --petal: #B9A6F2;
-  --center: #FFE7A3;
-}
-
-.home-flower--poppy {
-  --petal: #FF7A59;
-  --center: #3D2F1B;
-}
-
-.home-flower--tulip {
-  --petal: #F6A5B5;
-  --center: #E97A92;
 }
 
 .home-patch__controls {
@@ -1431,15 +1422,21 @@ html:not(.js) .home-patch {
 }
 
 .home-patch__kind {
-  width: 30px;
-  height: 30px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--center) 0 28%, var(--petal) 31% 100%);
-  box-shadow: 0 0 0 1px rgba(61, 47, 27, 0.15);
+  background: var(--home-mound);
   cursor: pointer;
   transition: transform var(--dur-spring) var(--ease-spring);
+}
+
+.home-patch__kind .home-flower {
+  width: 82%;
+  height: 82%;
 }
 
 .home-patch__kind:hover {

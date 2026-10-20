@@ -8,7 +8,7 @@
       "key": "tid",
       "record": {
         "type": "object",
-        "required": ["subject", "kind", "createdAt"],
+        "required": ["subject", "kind", "plot", "createdAt"],
         "properties": {
           "subject": {
             "type": "string",
@@ -18,6 +18,12 @@
           "kind": {
             "type": "string",
             "knownValues": ["sunflower", "rose", "daisy", "violet", "poppy", "tulip"]
+          },
+          "plot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 479,
+            "description": "The plot in the patch's grid, 12 wide, counted from the top left. If an earlier flower already has it, this one moves to the next free plot."
           },
           "createdAt": { "type": "string", "format": "datetime" }
         }
