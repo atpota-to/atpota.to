@@ -11,13 +11,18 @@
  * `visitor` event; a verified DID goes to the bot with the message, which is what lets
  * Poe remember them. A token that fails any check, or POE_IDENTITY_DISABLED=1, leaves the
  * chat anonymous rather than failing it.
+ *
+ * DELETE clears the conversation cookie. With a token for to.atpota.poe.forget (the settings
+ * page), it first has Poe forget the verified visitor (server/forget.ts): origin (403) ->
+ * kill switch / config (503) -> token (401) -> bot (502) -> 200 { hadNotes, published }.
  */
 
 import { readConfig, type Env } from './config.js';
 import { clearedCookie, conversationCookie, newConversationId, readConversationId } from './cookie.js';
 import { defaultCheckRateLimit, firewallLimited, type CheckRateLimit } from './firewall.js';
 import { ALLOW, SSE_HEADERS, jsonError } from './http.js';
-import { bearerToken, identify, type IdentifyResult } from './identity.js';
+import { forgetOnBot } from './forget.js';
+import { bearerToken, identify, POE_FORGET_LXM, POE_LXM, type IdentifyResult } from './identity.js';
 import { consoleLogger, errorName, type Logger } from './log.js';
 import { MESSAGES, type ErrorCode } from './messages.js';
 import { isAllowedOrigin } from './origin.js';
@@ -52,8 +57,8 @@ export interface PoeDeps {
   /** Mock pacing (tests make it instant). */
   sleep?: Sleep;
   mockStepMs?: number;
-  /** Verifies a sign-in token. Defaults to server/identity.ts with this fetch and clock. */
-  identify?: (token: string) => Promise<IdentifyResult>;
+  /** Verifies a sign-in token for a method. Defaults to server/identity.ts with this fetch and clock. */
+  identify?: (token: string, lxm: typeof POE_LXM | typeof POE_FORGET_LXM) => Promise<IdentifyResult>;
 }
 
 export interface PoeHandlers {
@@ -84,7 +89,7 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
   const checkRateLimit = deps.checkRateLimit ?? defaultCheckRateLimit;
   const log = deps.log ?? consoleLogger;
   const keepaliveMs = deps.keepaliveMs ?? KEEPALIVE_MS;
-  const verify = deps.identify ?? ((token: string) => identify(token, { fetch: doFetch, now }));
+  const verify = deps.identify ?? ((token: string, lxm: typeof POE_LXM | typeof POE_FORGET_LXM) => identify(token, { fetch: doFetch, now, lxm }));
 
   /**
    * The verified visitor for a request that sent a token, after telling the widget the
@@ -93,7 +98,7 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
   async function visitorFor(token: string | null, header: boolean, emit: (event: BrowserEvent) => void) {
     if (!header) return { visitor: null, identity: undefined };
     const result: IdentifyResult = token
-      ? await verify(token).catch((): IdentifyResult => ({ ok: false, reason: 'no_key' }))
+      ? await verify(token, POE_LXM).catch((): IdentifyResult => ({ ok: false, reason: 'no_key' }))
       : { ok: false, reason: 'malformed' };
     emit({ event: 'visitor', data: result.ok ? { signedIn: true, handle: result.visitor.handle } : { signedIn: false, handle: null } });
     const identity: IdentityCode = result.ok ? 'verified' : result.reason;
@@ -263,11 +268,60 @@ export function createPoeHandlers(deps: PoeDeps = {}): PoeHandlers {
     if (!isAllowedOrigin(request.headers.get('origin'), request.url)) {
       return reject(403, 'bad_request', MESSAGES.origin, 'origin');
     }
+    if (request.headers.has('authorization')) return forget(request);
     log({ event: 'reset', status: 204 });
     return new Response(null, {
       status: 204,
       headers: { 'set-cookie': clearedCookie(request.url), 'cache-control': 'no-store' },
     });
+  }
+
+  /** "Forget me": wipe what Poe remembers about the verified visitor, then clear the cookie. */
+  async function forget(request: Request): Promise<Response> {
+    const config = readConfig(env());
+    // POE_CHAT_DISABLED does not stop this: switching the chat off must never stop someone
+    // from being forgotten. Without identity there is no way to tell who is asking.
+    if (!config.identity) return reject(503, 'not_configured', MESSAGES.forget_unavailable, 'forget_identity_disabled');
+    if (!config.mock && (!config.secret || !config.agentUrl)) {
+      return reject(503, 'not_configured', MESSAGES.forget_unavailable, config.secret ? 'bad_agent_url' : 'no_secret');
+    }
+    const token = bearerToken(request);
+    const result: IdentifyResult = token
+      ? await verify(token, POE_FORGET_LXM).catch((): IdentifyResult => ({ ok: false, reason: 'no_key' }))
+      : { ok: false, reason: 'malformed' };
+    if (!result.ok) {
+      log({ event: 'forget', status: 401, identity: result.reason });
+      return jsonError(401, 'bad_request', MESSAGES.forget_sign_in);
+    }
+
+    const done = (forgotten: { hadNotes: boolean; published: boolean }) =>
+      new Response(JSON.stringify(forgotten), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          // The visitor's own chat may hold notes recalled before; the next one starts clean.
+          'set-cookie': clearedCookie(request.url),
+        },
+      });
+
+    if (config.mock) {
+      log({ event: 'forget', status: 200, identity: 'verified', mock: true });
+      return done({ hadNotes: true, published: true });
+    }
+    const outcome = await forgetOnBot({ agentUrl: config.agentUrl!, secret: config.secret!, did: result.visitor.did, fetch: doFetch });
+    if (!outcome.ok) {
+      log({
+        event: 'forget_error',
+        status: 502,
+        ...(outcome.status !== undefined ? { code: `bot_${outcome.status}` } : {}),
+        ...(outcome.error !== undefined ? { error: errorName(outcome.error) } : {}),
+      });
+      return jsonError(502, 'upstream', MESSAGES.forget_failed);
+    }
+    log({ event: 'forget', status: 200, identity: 'verified', code: outcome.forgotten.hadNotes ? 'had_notes' : 'no_notes' });
+    return done(outcome.forgotten);
   }
 
   async function methodNotAllowed(_request: Request): Promise<Response> {

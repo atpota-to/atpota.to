@@ -1,13 +1,14 @@
 /**
  * The reader's account in the header, on every page: a round "sign in" button (the usual
  * arrow-through-a-door icon) when nobody is signed in, and their avatar once they are, which opens a little card with their name, a
- * link to their garden and to their Bluesky profile, and "sign out".
+ * link to their garden, their Bluesky profile and their settings (/settings), and "sign out".
  *
  * Signing in uses the same dialog and session as everything else (src/blog/signin.ts,
  * src/blog/auth.ts); the header partial brings the dialog to every page. Before leaving,
  * this saves an "account" intent (state.ts) so the blog's callback page sends the reader
  * back here. This module also answers Poe's "poe:signin" (src/poe/ui.ts), saving a "poe"
- * intent, so the panel's sign-in link opens the dialog in place on any page.
+ * intent, so the panel's sign-in link opens the dialog in place on any page, and the settings
+ * page's "account:signin" (src/scripts/settings.ts) with an "account" intent.
  *
  * Back from signing in on a page that isn't the blog: an "account" intent just ends with a
  * little cheer, a "poe" one opens the panel again. On blog pages src/blog/ui.ts does that.
@@ -35,6 +36,7 @@ export const ACCOUNT_COPY = {
   menuLabel: (who: string) => `your account, ${who}`,
   garden: 'your garden',
   profile: 'bluesky profile',
+  settings: 'settings',
   signOut: 'sign out',
   signingOut: 'signing out…',
 } as const;
@@ -128,9 +130,10 @@ export function mountAccount(opts: AccountOptions = {}): void {
     const list = el(doc, 'ul', { class: 'site-account__links', role: 'list' });
     const garden = el(doc, 'a', { class: 'site-account__link', href: `/garden/${encodeURIComponent(me.handle)}` }, ACCOUNT_COPY.garden);
     const profile = el(doc, 'a', { class: 'site-account__link', href: `https://bsky.app/profile/${encodeURIComponent(me.handle)}`, target: '_blank', rel: 'noopener' }, ACCOUNT_COPY.profile);
+    const settings = el(doc, 'a', { class: 'site-account__link', href: '/settings' }, ACCOUNT_COPY.settings);
     const out = el(doc, 'button', { type: 'button', class: 'site-account__link site-account__out' }, ACCOUNT_COPY.signOut);
     out.addEventListener('click', () => void signOut(out));
-    for (const item of [garden, profile, out]) {
+    for (const item of [garden, profile, settings, out]) {
       const li = el(doc, 'li');
       li.append(item);
       list.append(li);
@@ -250,6 +253,8 @@ export function mountAccount(opts: AccountOptions = {}): void {
   // Poe's panel: its sign-in link opens this dialog in place. On blog pages too: the blog
   // finishes a "poe" sign-in itself once the reader is back.
   win.addEventListener('poe:signin', () => openSignIn('poe'));
+  // The settings page: signing in, or again to grant Poe's forget permission. Comes back there.
+  win.addEventListener('account:signin', () => openSignIn('account'));
   if (dialog) dialog.dataset.poeReady = '';
 
   win.addEventListener(SESSION_EVENT, (event) => {
