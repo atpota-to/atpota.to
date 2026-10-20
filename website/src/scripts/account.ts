@@ -1,6 +1,6 @@
 /**
- * The reader's account in the header, on every page: a "sign in" button when nobody is
- * signed in, and their avatar once they are, which opens a little card with their name, a
+ * The reader's account in the header, on every page: a round "sign in" button (an empty
+ * potato, where an avatar will go) when nobody is signed in, and their avatar once they are, which opens a little card with their name, a
  * link to their garden and to their Bluesky profile, and "sign out".
  *
  * Signing in uses the same dialog and session as everything else (src/blog/signin.ts,
@@ -29,9 +29,9 @@ import { forgetReader, readReader, rememberReader } from './reader';
 
 export const ACCOUNT_COPY = {
   signIn: 'sign in',
-  signInLabel: 'sign in with bluesky',
-  lede: 'sign in with your bluesky account to plant flowers, comment on the blog, and let poe remember you.',
-  poeLede: "sign in with your bluesky account so poe remembers you, the same way it does when you mention it on bluesky. what poe remembers is public in its repo.",
+  signInLabel: 'sign in with your bluesky or atmosphere account',
+  lede: 'sign in with your bluesky or atmosphere account to plant flowers, comment on the blog, and let poe remember you.',
+  poeLede: "sign in with your bluesky or atmosphere account so poe remembers you, the same way it does when you mention it on bluesky. what poe remembers is public in its repo.",
   menuLabel: (who: string) => `your account, ${who}`,
   garden: 'your garden',
   profile: 'bluesky profile',
@@ -101,8 +101,8 @@ export function mountAccount(opts: AccountOptions = {}): void {
     slot!.dataset.state = view.kind;
     menuOpen = false;
     if (view.kind === 'signed-out') {
-      const button = el(doc, 'button', { type: 'button', class: 'btn btn--outline site-account__signin', 'aria-label': ACCOUNT_COPY.signInLabel });
-      button.append(butterfly(), el(doc, 'span', {}, ACCOUNT_COPY.signIn));
+      const button = el(doc, 'button', { type: 'button', class: 'btn btn--outline site-account__signin', 'aria-label': ACCOUNT_COPY.signInLabel, title: ACCOUNT_COPY.signInLabel });
+      button.append(potato(), el(doc, 'span', { class: 'site-account__label' }, ACCOUNT_COPY.signIn));
       button.addEventListener('click', () => openSignIn('account'));
       slot!.append(button);
       return;
@@ -141,16 +141,22 @@ export function mountAccount(opts: AccountOptions = {}): void {
     slot!.append(toggle, card);
   }
 
-  function butterfly(): SVGSVGElement {
+  /** A little potato with a face: the spot where the reader's avatar will be. */
+  function potato(): SVGSVGElement {
     const NS = 'http://www.w3.org/2000/svg';
     const svg = doc.createElementNS(NS, 'svg');
-    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false', fill: 'currentColor', class: 'site-account__icon' })) svg.setAttribute(k, v);
-    const path = doc.createElementNS(NS, 'path');
-    path.setAttribute(
-      'd',
-      'M6.3 4.2C8.6 5.9 11 9.4 12 11.4c1-2 3.4-5.5 5.7-7.2 1.6-1.2 4.3-2.2 4.3.9 0 .6-.4 5.2-.6 5.9-.7 2.6-3.3 3.2-5.7 2.8 4.1.7 5.2 3 2.9 5.3-4.3 4.4-6.2-1.1-6.6-2.5l-.1-.3-.1.3c-.4 1.4-2.3 6.9-6.6 2.5-2.3-2.3-1.2-4.6 2.9-5.3-2.4.4-5-.2-5.7-2.8C2.4 10.3 2 5.7 2 5.1c0-3.1 2.7-2.1 4.3-.9z',
-    );
-    svg.append(path);
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', class: 'site-account__icon' })) svg.setAttribute(k, v);
+    const shapes: Array<[string, Record<string, string>]> = [
+      ['path', { d: 'M12.4 2.8c4 .2 6.8 3.8 6.6 8.7-.2 5.5-3.6 9.8-7.8 9.7-4.1-.1-6.6-3.7-6.2-8.8.4-5.6 3.4-9.8 7.4-9.6z' }],
+      ['circle', { cx: '9.6', cy: '10.6', r: '1', fill: 'currentColor', stroke: 'none' }],
+      ['circle', { cx: '14.4', cy: '10.4', r: '1', fill: 'currentColor', stroke: 'none' }],
+      ['path', { d: 'M10.2 14.2c1.1.9 2.7.9 3.7-.1' }],
+    ];
+    for (const [tag, attrs] of shapes) {
+      const node = doc.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+      svg.append(node);
+    }
     return svg as SVGSVGElement;
   }
 

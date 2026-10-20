@@ -22,7 +22,7 @@ export const PREPARED_TTL_MS = 4 * 60_000;
 
 export const SIGNIN_COPY = {
   signIn: {
-    title: 'sign in with bluesky',
+    title: 'sign in with the atmosphere',
     isThisYou: 'is this you?',
     signInAt: 'sign in at',
     next: 'next',

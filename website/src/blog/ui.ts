@@ -81,7 +81,7 @@ export const COPY = {
   recommended: 'recommended',
   signedInAs: 'signed in as',
   signOut: 'sign out',
-  signInToComment: 'sign in with bluesky to comment',
+  signInToComment: 'sign in to comment',
   otherHost: 'sign in to comment on atpota.to',
   commentLabel: 'write a comment',
   replyLabel: 'write a reply',
@@ -95,10 +95,10 @@ export const COPY = {
   justNow: 'just now',
   signIn: SIGNIN_COPY.signIn,
   lede: {
-    subscribe: 'sign in with your bluesky account to subscribe. the subscription is saved in your own account, where leaflet and other standard.site readers can see it.',
-    recommend: 'sign in with your bluesky account to recommend this post.',
-    comment: 'sign in with your bluesky account to comment.',
-    poe: "sign in with your bluesky account so poe remembers you here, the same way it does when you mention it on bluesky. what poe remembers is public in its repo.",
+    subscribe: 'sign in with your bluesky or atmosphere account to subscribe. the subscription is saved in your own account, where leaflet and other standard.site readers can see it.',
+    recommend: 'sign in with your bluesky or atmosphere account to recommend this post.',
+    comment: 'sign in with your bluesky or atmosphere account to comment.',
+    poe: "sign in with your bluesky or atmosphere account so poe remembers you here, the same way it does when you mention it on bluesky. what poe remembers is public in its repo.",
   } satisfies Record<BlogIntent, string>,
   email: {
     also: (handle: string | null) => (handle ? `also subscribe with bluesky as @${handle}` : 'also subscribe with bluesky'),
@@ -736,7 +736,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     cheer(win);
   }
 
-  // Poe's panel: "sign in with bluesky so poe can remember you". Its link opens the dialog
+  // Poe's panel: "sign in … so poe can remember you". Its link opens the dialog
   // in place (src/scripts/account.ts answers "poe:signin"); /blog#sign-in still works.
   if (win.location.hash === '#sign-in') {
     win.history?.replaceState?.(win.history.state, '', `${win.location.pathname}${win.location.search ?? ''}`);

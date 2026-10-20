@@ -41,7 +41,7 @@ const PILL_SETTLE_MS = 180;
 const SWIPE_CLOSE_PX = 90;
 const QUOTE_DISPLAY_MAX = 140;
 const RESET_TIMEOUT_MS = 5000;
-/** Where "sign in with bluesky" goes from a page without the blog's sign-in dialog. */
+/** Where "sign in" goes from a page without the blog's sign-in dialog. */
 export const SIGN_IN_HREF = '/blog#sign-in';
 
 export interface PoeWidgetOptions {

@@ -434,20 +434,10 @@ a.tile.tile--soil:hover {
   font-size: 16px;
 }
 
-.ask-poe-btn .kbd {
-  background: var(--card);
-  color: var(--leaf-strong);
-}
-
 /* Set by the widget while the panel is open (aria-expanded on [data-poe-open]). */
 .ask-poe-btn[aria-expanded="true"],
 .ask-poe-btn[aria-expanded="true"]:hover {
   background: var(--leaf-strong);
-  color: var(--leaf-tint);
-}
-
-.ask-poe-btn[aria-expanded="true"] .kbd {
-  background: color-mix(in srgb, var(--leaf-tint) 22%, var(--leaf-strong));
   color: var(--leaf-tint);
 }
 
@@ -476,9 +466,10 @@ a.tile.tile--soil:hover {
   font-size: 16px;
 }
 
-.site-account__icon {
-  width: 18px;
-  height: 18px;
+.site-account__signin .site-account__icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
 }
 
 .site-account__toggle {
@@ -637,14 +628,22 @@ a.tile.tile--soil:hover {
   color: var(--text-soft);
 }
 
-/* Tight desktop widths: the sign-in button keeps just its butterfly, so the wordmark fits. */
-@media (min-width: 881px) and (max-width: 1120px) {
+/* In the header bar the sign-in button is a circle the size of an avatar; its title and
+   label say what it is. In the phone sheet (below) it is a full row with its label. */
+@media (min-width: 881px) {
   .site-account__signin {
     width: 48px;
     padding: 0;
+    transition:
+      transform var(--dur-spring) var(--ease-spring),
+      background-color var(--dur) ease;
   }
 
-  .site-account__signin span {
+  .site-account__signin:hover {
+    transform: translateY(-2px) rotate(-6deg);
+  }
+
+  .site-account__label {
     display: none;
   }
 }
@@ -721,8 +720,13 @@ a.tile.tile--soil:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .site-account__toggle,
-  .site-account__card {
+  .site-account__card,
+  .site-account__signin {
     transition: none;
+  }
+
+  .site-account__signin:hover {
+    transform: none;
   }
 
   .site-account.is-new .site-account__toggle {

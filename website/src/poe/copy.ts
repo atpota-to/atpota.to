@@ -35,12 +35,12 @@ export const COPY = {
   answerAnnounce: 'poe says: ',
   // The account line under the input (identity.ts). Poe's notes about a person are public
   // records in its repo, so the line says so before anyone signs in.
-  signInLink: 'sign in with bluesky',
-  signInAfter: ' so poe can remember you. its notes are public.',
+  signInLink: 'sign in',
+  signInAfter: ' with your bluesky or atmosphere account so poe can remember you. its notes are public.',
   signInAgainLink: 'sign in again',
   signInAgainAfter: ' so poe can remember you.',
-  signedIn: 'signed in with bluesky, so poe can remember you. its notes are public.',
-  knownAs: (handle: string | null) => (handle ? `poe knows you as @${handle}. its notes about you are public.` : 'poe knows you by your bluesky account. its notes about you are public.'),
+  signedIn: 'signed in, so poe can remember you. its notes are public.',
+  knownAs: (handle: string | null) => (handle ? `poe knows you as @${handle}. its notes about you are public.` : 'poe knows you by your atmosphere account. its notes about you are public.'),
 } as const;
 
 /** What Poe says while it starts on a question, before any tool reports in (the widget adds "…"). */
@@ -130,7 +130,7 @@ export function noteCopy(code: NoteCode, retryAfter?: number): NoteCopy {
     case 'empty':
       return { text: 'i came up empty on that one. try asking another way?' };
     case 'signed_in':
-      return { text: "you're signed in with bluesky now, so this is a fresh chat. i can remember you from here on." };
+      return { text: "you're signed in now, so this is a fresh chat. i can remember you from here on." };
     case 'signed_out':
       return { text: "you're not signed in anymore, so this is a fresh chat, and i won't remember it." };
     case 'fresh_start':

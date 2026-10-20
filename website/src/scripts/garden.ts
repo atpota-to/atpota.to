@@ -89,7 +89,7 @@ export const COPY = {
   closed: (name: string) => `the ${name} patch has closed. its flowers stay, pressed.`,
   notYet: (name: string) => `the ${name} patch opens soon.`,
   full: 'this patch is full. a new one opens soon.',
-  lede: "sign in with your bluesky account to plant a flower. it's saved in your own account, so it's yours.",
+  lede: "sign in with your bluesky or atmosphere account to plant a flower. it's saved in your own account, so it's yours.",
   consent: 'one more step: atpota.to needs your ok to plant and tend flowers. sign in again to allow it.',
   expired: 'your sign-in expired. sign in again to plant.',
   failed: "that didn't work. try again in a moment?",
@@ -111,7 +111,7 @@ export const COPY = {
   watered: (whose: string) => `watered! ${whose} perked right up (◕‿◕)`,
   lookAfter: 'look after it',
   theirGarden: 'their garden',
-  tendLede: 'sign in with your bluesky account to water flowers. each watering is a small record in your own repo.',
+  tendLede: 'sign in with your bluesky or atmosphere account to water flowers. each watering is a small record in your own repo.',
   close: 'close',
 } as const;
 
