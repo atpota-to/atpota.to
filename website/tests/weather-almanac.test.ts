@@ -5,16 +5,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   aturiFor,
   bigNumber,
+  changeText,
   daypart,
   fetchAlmanac,
+  gaugeAt,
   heatStep,
   hourWords,
+  rangeAt,
   readAlmanac,
   renderHeatmap,
   renderNewApps,
   renderToday,
   roughly,
   summarizeHeat,
+  USUAL_EDGES,
   usualText,
   type Almanac,
 } from '../src/scripts/weather-almanac.js';
@@ -80,11 +84,70 @@ describe('today so far', () => {
   it("shows the high, the low and the totals, in the reader's time", () => {
     renderToday(root.querySelector('[data-a-today]')!, ALMANAC, NOW, TZ);
     expect(text('[data-a-high]')).toBe('642');
-    expect(text('[data-a-high-at]')).toBe('new records a second at 3:14 pm');
-    expect(text('[data-a-low-at]')).toBe('new records a second at 4:02 am');
+    expect(text('[data-a-high-at]')).toBe('high at 3:14 pm');
+    expect(text('[data-a-low]')).toBe('263');
+    expect(text('[data-a-low-at]')).toBe('low at 4:02 am');
     expect(text('[data-a-total]')).toBe('16.0 million');
-    expect(text('[data-a-total-note]')).toBe('new records, 0.33% from other apps');
+    expect(text('[data-a-else-share]')).toBe('0.33%');
+    expect(text('[data-a-else-total]')).toBe('52,000 new records');
     expect(text('[data-a-usual]')).toBe('busier than usual for a tuesday afternoon');
+  });
+
+  it('puts the last hour on the range between the low and the high, and says it in words', () => {
+    renderToday(root.querySelector('[data-a-today]')!, ALMANAC, NOW, TZ);
+    // 468 a second, between 262.9 and 642.2
+    expect(text('[data-a-now]')).toBe('last hour 468');
+    expect(root.querySelector<HTMLElement>('[data-a-now]')!.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('[data-a-range]')!.style.getPropertyValue('--at')).toBe('0.541');
+    expect(text('[data-a-range-said]')).toBe("today's low was 263 new records a second, at 4:02 am, and the high 642, at 3:14 pm. the last hour averaged 468.");
+  });
+
+  it('leaves the dot off until it has a low and a high', () => {
+    renderToday(root.querySelector('[data-a-today]')!, { ...ALMANAC, today: { ...ALMANAC.today!, high: null, low: null } }, NOW, TZ);
+    expect(text('[data-a-high]')).toBe('–');
+    expect(text('[data-a-low-at]')).toBe('low');
+    expect(root.querySelector<HTMLElement>('[data-a-now]')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>('[data-a-now-dot]')!.hidden).toBe(true);
+    expect(text('[data-a-range-said]')).toBe('no whole minute heard yet today.');
+  });
+
+  it('turns the barometer to the last hour against usual', () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    renderToday(tile, ALMANAC, NOW, TZ);
+    const gauge = tile.querySelector<HTMLElement>('[data-a-gauge]')!;
+    expect(gauge.dataset.state).toBe('ready');
+    expect(gauge.querySelectorAll('.weather-gauge__zone')).toHaveLength(5);
+    // 468 over 396 is 18% busier: right of usual, short of "much busier"
+    expect(gauge.querySelector('.weather-gauge__change')!.textContent).toBe('+18%');
+    const turn = parseFloat(gauge.style.getPropertyValue('--turn'));
+    expect(turn).toBeGreaterThan((gaugeAt(USUAL_EDGES[2]) - 0.5) * 180);
+    expect(turn).toBeLessThan((gaugeAt(USUAL_EDGES[3]) - 0.5) * 180);
+    // drawn once: another reading only moves the needle
+    renderToday(tile, ALMANAC, NOW, TZ);
+    expect(gauge.querySelectorAll('svg')).toHaveLength(1);
+  });
+
+  it('keeps the barometer still while it learns what usual looks like', () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    renderToday(tile, { ...ALMANAC, normal: { ...ALMANAC.normal!, days: { ...S(0, 0), windows: 0 }, weeks: { ...S(0, 0), windows: 0 } } }, NOW, TZ);
+    const gauge = tile.querySelector<HTMLElement>('[data-a-gauge]')!;
+    expect(gauge.dataset.state).toBe('learning');
+    expect(gauge.querySelector('.weather-gauge__change')!.textContent).toBe('');
+  });
+
+  it('spaces the barometer evenly either side of usual', () => {
+    expect(gaugeAt(1)).toBe(0.5);
+    expect(gaugeAt(2)).toBe(1);
+    expect(gaugeAt(0.5)).toBe(0);
+    expect(gaugeAt(0.1)).toBe(0);
+    expect(gaugeAt(0)).toBe(0);
+    expect(gaugeAt(1.25) - 0.5).toBeCloseTo(0.5 - gaugeAt(0.8), 5);
+    expect(changeText(1.184)).toBe('+18%');
+    expect(changeText(0.93)).toBe('−7%');
+    expect(changeText(1.001)).toBe('±0%');
+    expect(rangeAt(5, 0, 10)).toBe(0.5);
+    expect(rangeAt(20, 0, 10)).toBe(1);
+    expect(rangeAt(7, 7, 7)).toBe(0.5);
   });
 
   it('words big numbers and lengths of time', () => {
