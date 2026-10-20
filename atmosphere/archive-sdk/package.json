@@ -1,0 +1,10 @@
+{
+  "name": "atpotato-weather-archive-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The official Jetstream SDK, pinned for src/archive.js. Installed once on the droplet outside the release (deploys copy code only): see README.md, \"Backfilling from the archive\". The station itself has no dependencies.",
+  "dependencies": {
+    "@atproto/lex": "0.3.14",
+    "@bsky/jetstream": "1.0.0"
+  }
+}

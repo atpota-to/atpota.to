@@ -13,8 +13,8 @@
 //     /root/atpota-live/atmosphere/src/replay.js --from ... --to ... --dry-run
 //
 // Jetstream only keeps a lookback (about a day and a half on Bluesky's hosts); minutes
-// before it come back partial and are left alone. Older history needs the archive
-// (Jetstream v2's network replay, with an API key; see README.md).
+// before it come back partial and are left alone. Older history comes from Jetstream
+// v2's archive: archive.js, which counts with the same minuteCounter.
 //
 // Rewriting replaces the minute's row and all its app rows (a recount can drop an app the
 // glitch put there), then re-sums the daily roll-up from --from on. It's safe while the
@@ -41,6 +41,36 @@ export const MAX_WINDOW_S = 48 * 3600;
 const iso = (second) => new Date(second * 1000).toISOString();
 
 /**
+ * Counts a stream into minutes [fromSec, toSec) exactly as the live station does, and
+ * calls onMinute(minuteSec, tally, seconds) for each as soon as nothing more can land in
+ * it. Feed it messages in stream order with push(timeUs, event, atUs), from a little
+ * before fromSec; push returns true once every minute is out. Shared with archive.js.
+ */
+export function minuteCounter({ fromSec, toSec, onMinute }) {
+  // The station's clock follows the stream, so an hour-old replay isn't "too old".
+  const clock = { ms: (fromSec - LEAD_S) * 1000 };
+  const station = new Station({ now: () => clock.ms });
+  station.beginSession();
+  let next = fromSec;
+  return {
+    station,
+    push(timeUs, event, atUs) {
+      if (next >= toSec) return true;
+      if (typeof timeUs === 'number' && Number.isFinite(timeUs)) clock.ms = Math.max(clock.ms, timeUs / 1000 + 1000);
+      station.ingest(timeUs, event, atUs);
+      while (next < toSec && station.coveredThrough !== null && station.coveredThrough >= next + 59 + MAX_EARLIER_S) {
+        const { tally, seconds } = station.minute(next);
+        onMinute(next, tally, seconds);
+        next += 60;
+        // Keep memory flat over a long replay: nothing can land before `next` any more.
+        for (const second of station.buckets.keys()) if (second < next) station.buckets.delete(second);
+      }
+      return next >= toSec;
+    },
+  };
+}
+
+/**
  * Reads Jetstream from just before `fromSec` until the stream is MAX_EARLIER_S past
  * `toSec`, and calls onMinute(minuteSec, tally, seconds) for each minute in
  * [fromSec, toSec) as soon as nothing more can land in it. Resolves with the time_us of
@@ -48,10 +78,7 @@ const iso = (second) => new Date(second * 1000).toISOString();
  */
 export function replayWindow({ host, fromSec, toSec, onMinute, open = (url) => new WebSocket(url), setTimer = setTimeout, clearTimer = clearTimeout }) {
   return new Promise((resolve, reject) => {
-    // The station's clock follows the stream, so an hour-old replay isn't "too old".
-    const clock = { ms: (fromSec - LEAD_S) * 1000 };
-    const station = new Station({ now: () => clock.ms });
-    let next = fromSec;
+    let counter = null;
     let firstUs = null;
     let done = false;
     let quiet = null;
@@ -75,11 +102,11 @@ export function replayWindow({ host, fromSec, toSec, onMinute, open = (url) => n
     };
 
     sock.onopen = () => {
-      station.beginSession();
+      counter = minuteCounter({ fromSec, toSec, onMinute });
       listen();
     };
     sock.onmessage = (msg) => {
-      if (done) return;
+      if (done || !counter) return;
       listen();
       let m;
       try {
@@ -89,49 +116,53 @@ export function replayWindow({ host, fromSec, toSec, onMinute, open = (url) => n
       }
       if (typeof m?.time_us !== 'number') return;
       if (firstUs === null) firstUs = m.time_us;
-      clock.ms = Math.max(clock.ms, m.time_us / 1000 + 1000);
-      station.ingest(m.time_us, eventOfMessage(m), happenedUs(m));
-      while (next < toSec && station.coveredThrough !== null && station.coveredThrough >= next + 59 + MAX_EARLIER_S) {
-        const { tally, seconds } = station.minute(next);
-        onMinute(next, tally, seconds);
-        next += 60;
-        // Keep memory flat over a long replay: nothing can land before `next` any more.
-        for (const second of station.buckets.keys()) if (second < next) station.buckets.delete(second);
-      }
-      if (next >= toSec) finish(null);
+      if (counter.push(m.time_us, eventOfMessage(m), happenedUs(m))) finish(null);
     };
     sock.onerror = (e) => finish(new Error(`jetstream error: ${e?.message ?? 'unknown'}`));
     sock.onclose = () => finish(new Error('jetstream closed before the window was read'));
   });
 }
 
-/** Rewrites one minute: its row, then all its app rows. Throws on anything but success. */
+/** Rewrites minutes in Supabase: their rows, then all their app rows. Throws on anything but success. */
 export function supabaseReplace({ url, key, fetch = globalThis.fetch }) {
   const base = url.replace(/\/+$/, '');
   const headers = { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json' };
-  async function call(method, path, body, prefer) {
+  async function call(method, path, body, prefer, timeoutMs = REQUEST_TIMEOUT_MS) {
     const res = await fetch(`${base}/rest/v1/${path}`, {
       method,
       headers: prefer ? { ...headers, prefer } : headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error(`${method} ${path.split('?')[0]}: HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    return method === 'GET' ? res.json() : null;
   }
-  return {
+  const db = {
+    /** Rewrites a batch of minutes (an hour, say) in three requests. */
+    async minutes(list) {
+      if (!list.length) return;
+      await call('POST', 'atmosphere_minute?on_conflict=minute', list.map((r) => r.minute), 'resolution=merge-duplicates,return=minimal');
+      await call('DELETE', `atmosphere_minute_app?minute=in.(${list.map((r) => encodeURIComponent(r.minute.minute)).join(',')})`, undefined, 'return=minimal');
+      const apps = list.flatMap((r) => r.apps);
+      if (apps.length) await call('POST', 'atmosphere_minute_app?on_conflict=minute,domain', apps, 'resolution=merge-duplicates,return=minimal');
+    },
     async minute(rows) {
-      await call('POST', 'atmosphere_minute?on_conflict=minute', [rows.minute], 'resolution=merge-duplicates,return=minimal');
-      await call('DELETE', `atmosphere_minute_app?minute=eq.${encodeURIComponent(rows.minute.minute)}`, undefined, 'return=minimal');
-      if (rows.apps.length) await call('POST', 'atmosphere_minute_app?on_conflict=minute,domain', rows.apps, 'resolution=merge-duplicates,return=minimal');
+      await db.minutes([rows]);
+    },
+    /** The minutes in [fromIso, toIso) that already have a row (at most an hour's worth). */
+    async existing(fromIso, toIso) {
+      const rows = await call('GET', `atmosphere_minute?select=minute&minute=gte.${encodeURIComponent(fromIso)}&minute=lt.${encodeURIComponent(toIso)}`);
+      return new Set(rows.map((r) => new Date(r.minute).toISOString()));
     },
     /** Re-sums the daily per-app roll-up from `sinceIso` on. */
     async rollUp(sinceIso) {
-      await call('POST', 'rpc/atmosphere_roll_up_day_apps', { since: sinceIso });
+      await call('POST', 'rpc/atmosphere_roll_up_day_apps', { since: sinceIso }, undefined, 60_000);
     },
   };
+  return db;
 }
 
-export function parseArgs(argv, nowMs = Date.now()) {
+export function parseArgs(argv, nowMs = Date.now(), { maxWindowS = MAX_WINDOW_S } = {}) {
   const args = { dryRun: false, host: null, from: null, to: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -147,7 +178,7 @@ export function parseArgs(argv, nowMs = Date.now()) {
   const fromSec = minute(args.from, 'from');
   const toSec = minute(args.to, 'to');
   if (toSec <= fromSec) throw new Error('--to must be after --from');
-  if (toSec - fromSec > MAX_WINDOW_S) throw new Error(`at most ${MAX_WINDOW_S / 3600} hours in one run`);
+  if (toSec - fromSec > maxWindowS) throw new Error(`at most ${maxWindowS / 3600} hours in one run`);
   if (toSec > nowMs / 1000 - WRITE_LAG_S) throw new Error(`--to must be at least ${WRITE_LAG_S / 60} minutes ago, so the live station isn't still writing it`);
   return { ...args, fromSec, toSec };
 }
@@ -179,7 +210,7 @@ async function main(argv) {
   if (args.dryRun || !whole.length) return;
 
   const db = supabaseReplace({ url, key });
-  for (const rows of whole) await db.minute(rows);
+  for (let i = 0; i < whole.length; i += 60) await db.minutes(whole.slice(i, i + 60));
   await db.rollUp(iso(args.fromSec));
   console.log(`rewrote ${whole.length} minute(s), and re-summed the daily roll-up from ${iso(args.fromSec)}`);
 }

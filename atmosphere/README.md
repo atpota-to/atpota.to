@@ -126,14 +126,8 @@ in 30 s.
 **How far back.** Jetstream keeps a lookback of about a day and a half on Bluesky's
 hosts. Minutes before it come back partial, are listed, and are left alone.
 
-**Older history** needs Jetstream v2's network replay: an archive of the whole
-network over authenticated HTTP (`planSnapshot`, `getSegment`, `getBlock`;
-`Authorization: Bearer <key>`, metered by bytes downloaded). See
-<https://bsky.network/docs/jetstream-replay>. Its events have the same shape, `rev`
-included, so the same counting applies. It isn't built yet. It would want the key in
-`.env` as `JETSTREAM_API_KEY`, and a way to map a time range to `seq` numbers. A
-whole day of the network is several GB, so it's worth backfilling only as far back as
-the trends need.
+**Older history** comes from Jetstream v2's archive, with `src/archive.js` (next
+section).
 
 **The repair on 2026-10-20.** 17:37 and 17:38 were recounted from jetstream2
 (26,985 and 27,311 records, against 15,774 and 38,531 by `time_us`) and upserted.
@@ -142,6 +136,79 @@ blacksky.community, tngl.sh and mycrab.space, 7 records that belong to 17:37. To
 clear them, run `replay.js --from 2026-10-20T17:37Z --to 2026-10-20T17:39Z` here,
 while those minutes are still inside Jetstream's lookback (before about
 2026-10-22T05:00Z).
+
+## Backfilling from the archive
+
+`src/archive.js` fills minutes from Jetstream v2's archive
+(<https://bsky.network/docs/jetstream-replay>): history older than the day and a
+half `replay.js` can reach. It counts with the same code as the station and
+`replay.js`, and writes the same rows an hour at a time, so the website can't tell
+the difference except in one way, below.
+
+**What the archive holds.** On 2026-10-20, Bluesky's us-east instance listed 7,542
+segments, about 2 TB. Almost all of that (about 1.9 TB, 2026-10-02 to 2026-10-06
+13:37Z) is a one-time crawl of every repo: records that already existed, stamped when
+they were crawled. That's no history of activity, so `archive.js` refuses any range
+that reaches into it. Since then the archive is the live stream, about 3.5 GB a day.
+So the earliest it can fill is **2026-10-06 14:00Z**; before that, nothing official
+has the history.
+
+**Why archive minutes run a little low.** The server periodically rewrites older
+segments to remove records that were deleted since (a like taken back, a post
+deleted, a whole account deleted). As far as the archive knows, those were never
+made, so a minute's creates come out a few percent below what the station would have
+counted. For that reason `archive.js` leaves alone any minute that already has a row
+(the station's own minutes are exact) unless you pass `--overwrite`. That also makes
+a run that stopped safe to start again.
+
+**Cost.** The API key is free. Downloads count against the key's byte allowance, which
+Bluesky doesn't publish. When it runs out, the server answers 429 and the SDK waits
+and resumes from its byte offset, so a small allowance makes a run slower, not
+broken. It says when it's waiting.
+
+**Once, on the droplet:**
+
+1. Make a key at <https://bsky.network/account> and add it to `.env` as
+   `JETSTREAM_API_KEY` (this reads it without echoing it, or putting it in the
+   shell's history):
+
+   ```bash
+   cd /root/atpotato-weather && read -rsp 'paste the key: ' KEY && echo && printf 'JETSTREAM_API_KEY=%s\n' "$KEY" >> .env && unset KEY
+   ```
+
+2. Install the official SDK (`@bsky/jetstream`), pinned by `archive-sdk/`'s lockfile.
+   It lives outside the release because deploys copy code only; the station itself
+   has no dependencies:
+
+   ```bash
+   mkdir -p /root/atpotato-weather/jetstream-sdk && cp /root/atpota-live/atmosphere/archive-sdk/package*.json /root/atpotato-weather/jetstream-sdk/ \
+     && (cd /root/atpotato-weather/jetstream-sdk && PATH=/opt/node22/bin:$PATH npm ci --ignore-scripts)
+   ```
+
+**Running it.** Do a dry run of one hour the station already has first, and compare
+it with what the station wrote: that shows how far below the archive runs. It prints
+one line an hour and writes nothing:
+
+```bash
+cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
+  /root/atpota-live/atmosphere/src/archive.js --from 2026-10-20T17:00Z --to 2026-10-20T18:00Z --dry-run
+```
+
+Then the real run, in `tmux` or `screen` since it takes hours (14 days is about
+50 GB). It's safe while the station runs:
+
+```bash
+cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
+  /root/atpota-live/atmosphere/src/archive.js --from 2026-10-06T14:00Z --to 2026-10-20T16:50Z
+```
+
+It takes up to 31 days in one run, re-sums each UTC day's app roll-up
+(`atmosphere_day_app`) as it finishes it, and ends with a summary: minutes written,
+minutes left alone because they already existed, and any it didn't hear whole. If it
+stops, run it again with `--from` at the last hour it printed.
+
+`--host` picks another v2 instance (default `https://jetstream.us-east.bsky.network`),
+and `JETSTREAM_SDK_DIR` another SDK folder.
 
 ## Config
 
@@ -182,6 +249,7 @@ src/jetstream.js   the connection: cursor, replay dedupe, fallback, backoff, sta
 src/clock.js       when a record was made: its rev, within limits, else time_us
 src/writer.js      minute rows, Supabase upserts, retries
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
+src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line
