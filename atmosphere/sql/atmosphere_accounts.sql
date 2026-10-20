@@ -19,11 +19,13 @@
 --   atmosphere_minute_app.dids
 --       each app's, each minute, forever
 --   atmosphere_account_sketch
---       Bluesky / elsewhere sketches by minute (2 hours), hour (8 days), day and month
+--       Bluesky / elsewhere sketches by minute (2 hours), hour, day and month
 --       (forever), with the seconds they cover
 --   atmosphere_account_app_sketch
 --       each app's, by minute (26 hours: the last hour is compared with the same hour
---       yesterday), hour (8 days), day and month
+--       yesterday), hour (30 days), day and month (forever)
+-- (Hours were first kept 8 days. atmosphere_retention.sql changed that: its
+-- atmosphere_prune_sketches replaces the one below.)
 --
 -- Minutes are written as they're sealed. Hours, days and months are rewritten every 5
 -- minutes and when they end; `through` is the last minute merged into one, so after a

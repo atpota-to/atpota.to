@@ -92,6 +92,7 @@ test('rewriting a minute replaces its app rows, then re-sums the roll-up', async
     'POST atmosphere_minute?on_conflict=minute',
     'DELETE atmosphere_minute_app?minute=eq.2026-10-20T17%3A37%3A00.000Z',
     'POST atmosphere_minute_app?on_conflict=minute,domain',
+    'POST rpc/atmosphere_roll_up_hour_apps',
     'POST rpc/atmosphere_roll_up_day_apps',
   ]);
 });
