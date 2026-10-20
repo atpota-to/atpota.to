@@ -2,8 +2,9 @@
  * Garden pages (garden/index.html): everyone's garden on atpota.to.
  *
  *   /garden                  the community garden (atpotato's page, as /garden/atpota.to),
- *                            for everyone: where the nav goes. Signed in, a button there goes
- *                            to your own page
+ *                            for everyone: where the nav goes. Its header is the garden's,
+ *                            not atpotato's: a flower for a face, this season's numbers, and
+ *                            (signed in) a button to your own page
  *   /garden/dame.is          someone's page, by handle or DID: their garden, where anyone can
  *                            plant a flower (the "garden" level)
  *   /garden/dame.is/flowers  every flower they've planted, in any garden: the one that needs
@@ -85,6 +86,14 @@ export const COPY = {
     docTitle: 'the community garden · atpotato',
     yours: 'go to your garden',
     visit: 'visit the community garden',
+    stats: {
+      growing: (n: number) => (n === 1 ? 'flower this season' : 'flowers this season'),
+      bloom: 'in bloom',
+      thirsty: (n: number) => (n === 1 ? 'needs water' : 'need water'),
+      free: (n: number) => (n === 1 ? 'plot free' : 'plots free'),
+      daysLeft: (n: number) => (n === 1 ? 'day left this season' : 'days left this season'),
+      ever: 'planted all time',
+    },
   },
   otherHost: 'gardens work on atpota.to.',
   missing: { title: 'no garden here', lede: (actor: string) => `we couldn't find ${actor.startsWith('did:') ? actor : `@${actor}`} on bluesky.` },
@@ -412,6 +421,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   let actor = '';
   let level: Level = 'garden';
   let gardenView: GardenView | null = null;
+  /** The community garden's season: the last view of one of its open patches. */
+  let season: GardenView | null = null;
   let controller: GardenController | null = null;
   let featured: GardenerFlower | null = null;
   let revealing = false;
@@ -482,16 +493,51 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
 
   /* ---------- the header ---------- */
 
-  function renderStats(): void {
-    if (!headStats || !person) return;
-    const n = numbersFor(person, now());
+  /** atpotato's page is the community garden, unless atpotato itself is reading. */
+  const isCommunity = () => person?.did === GARDEN_SUBJECT && !owner;
+
+  /** Someone's numbers: what they've planted and tended. */
+  function personChips(p: GardenerView): Array<[number, string]> {
+    const n = numbersFor(p, now());
     const visitors = visitorList().length;
     const chips: Array<[number, string]> = [
       [n.planted, COPY.stats.planted(n.planted)],
       [n.gardens, COPY.stats.gardens(n.gardens)],
     ];
-    if (person.garden) chips.push([visitors, COPY.stats.visitors(visitors)]);
-    chips.push([person.given.total, COPY.stats.tended(person.given.total)], [n.rare, COPY.stats.rare(n.rare)]);
+    if (p.garden) chips.push([visitors, COPY.stats.visitors(visitors)]);
+    chips.push([p.given.total, COPY.stats.tended(p.given.total)], [n.rare, COPY.stats.rare(n.rare)]);
+    return chips;
+  }
+
+  /** The community garden's numbers: this season's patch, and every season's flowers. */
+  function seasonChips(): Array<[number, string]> {
+    const patch = season?.patch;
+    if (!season || !patch) return [];
+    const t = now();
+    const C = COPY.community.stats;
+    const flowers = season.flowers;
+    const bloom = flowers.filter((f) => stageFor(f.plantedAt, t, true) === 'bloom').length;
+    const thirsty = flowers.filter((f) => f.thirsty).length;
+    const free = Math.max(0, patch.cols * patch.rows - flowers.length);
+    const chips: Array<[number, string]> = [
+      [flowers.length, C.growing(flowers.length)],
+      [bloom, C.bloom],
+    ];
+    if (thirsty) chips.push([thirsty, C.thirsty(thirsty)]);
+    chips.push([free, C.free(free)]);
+    if (patch.closesAt) {
+      const days = Math.max(0, Math.ceil((Date.parse(patch.closesAt) - t) / DAY_MS));
+      chips.push([days, C.daysLeft(days)]);
+    }
+    // This season's as shown (planting shows straight away), and every other season's.
+    const ever = flowers.length + season.patches.reduce((n, p) => n + (p.rkey === patch.rkey ? 0 : p.planted), 0);
+    if (ever > flowers.length) chips.push([ever, C.ever]);
+    return chips;
+  }
+
+  function renderStats(): void {
+    if (!headStats || !person) return;
+    const chips = isCommunity() ? seasonChips() : personChips(person);
     headStats.replaceChildren(
       ...chips.map(([value, label]) => {
         const li = el(doc, 'li', { class: 'garden-stats__item' });
@@ -499,14 +545,20 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
         return li;
       }),
     );
-    headStats.hidden = false;
+    headStats.hidden = chips.length === 0;
+  }
+
+  /** The community garden's face: a flower in bloom on its mound. */
+  function gardenBadge(): HTMLElement {
+    const span = el(doc, 'span', { class: 'garden-head__avatar garden-head__avatar--garden', 'aria-hidden': 'true' });
+    span.append(drawFlower(doc, 'sunflower', 'bloom', sampleVariant('sunflower')));
+    return span;
   }
 
   function renderHead(): void {
     if (!person) return;
-    // atpotato's page is the community garden, unless atpotato itself is reading.
-    const community = person.did === GARDEN_SUBJECT && !owner;
-    headAvatar?.replaceWith(face(doc, person, 'garden-head__avatar'));
+    const community = isCommunity();
+    headAvatar?.replaceWith(community ? gardenBadge() : face(doc, person, 'garden-head__avatar'));
     setText(headEyebrow, community ? COPY.community.eyebrow : COPY.eyebrow(owner));
     setText(headTitle, community ? COPY.community.title : person.displayName || `@${person.handle}`);
     setText(headLede, community ? COPY.community.lede : COPY.lede(person.handle, owner));
@@ -689,6 +741,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       random: opts.random,
       onView: (v) => {
         gardenView = v;
+        if (v.patch?.open) season = v;
         if (v.patch) patchTile?.style.setProperty('--garden-cols', String(v.patch.cols));
         renderVisitors();
         renderStats();
@@ -1177,7 +1230,9 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   root.dataset.state = 'ready';
   root.classList.toggle('is-own', owner);
   renderHead();
-  if (levelsNav) levelsNav.hidden = false;
+  // The community garden's "flowers" would be atpotato's own, so it's just the garden
+  // (unless that's the address asked for).
+  if (levelsNav) levelsNav.hidden = isCommunity() && route.level === 'garden';
   showLevel(route.level);
   wireForms();
 
@@ -1188,7 +1243,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   renderPeople();
   renderGuide();
   // How it grows: for anyone at the community garden, and on your own page until you plant.
-  if ((person.did === GARDEN_SUBJECT && !owner) || (owner && !person.flowers.length)) fillHow();
+  if (isCommunity() || (owner && !person.flowers.length)) fillHow();
   await showGarden();
 }
 

@@ -155,10 +155,18 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
       const did = didFor(url.searchParams.get('owner') ?? GARDEN_SUBJECT)!;
       const g = gardens[did];
       const owner = { did, handle: handles[did], displayName: null, avatar: null };
+      const visitor = (who: string, plot: number) => ({ did: who, rkey: `3k${plot}`, uri: `at://${who}/${SPROUT_NSID}/3k${plot}`, cid: 'bafyv', handle: handles[who], kind: 'daisy', plot, plantedAt: '2026-10-12T00:00:00Z', care: 0.5, helpers: 0, lastTended: null, thirsty: false });
+      if (did === GARDEN_SUBJECT) {
+        // atpotato's: this season's patch (two in bloom, one thirsty, one just planted), and last season's, pressed
+        const autumn = { rkey: '2026-autumn', uri: patchUri('2026-autumn'), cid: 'bafyautumn', name: 'autumn 2026', note: null, season: 'autumn', cols: 12, rows: 8, opensAt: '2026-09-01T00:00:00.000Z', closesAt: '2026-12-01T00:00:00.000Z', createdAt: '2026-08-01T00:00:00.000Z', open: true };
+        const flowers = [visitor(BO, 3), { ...visitor(MO, 9), thirsty: true }, { ...visitor(CY, 20), plantedAt: '2026-10-19T00:00:00Z' }];
+        const summary = (p: typeof autumn, planted: number, open: boolean) => ({ rkey: p.rkey, name: p.name, season: p.season, open, planted, plots: 96, opensAt: p.opensAt, closesAt: p.closesAt });
+        const summer = { ...autumn, rkey: '2026-summer', name: 'summer 2026', opensAt: '2026-06-01T00:00:00.000Z', closesAt: '2026-09-01T00:00:00.000Z' };
+        return Response.json({ owner, patch: autumn, patches: [summary(summer, 5, false), summary(autumn, 3, true)], flowers, total: flowers.length });
+      }
       if (!g) return Response.json({ owner, patch: null, patches: [], flowers: [], total: 0 });
       const open = !g.closesAt;
       const patch = { rkey: 'self', uri: patchUri('self', did), cid: 'bafypatch', name: g.name, note: g.note ?? null, season: null, cols: g.cols, rows: g.rows, opensAt: null, closesAt: g.closesAt ?? null, createdAt: g.createdAt, planting: g.planting, open };
-      const visitor = (who: string, plot: number) => ({ did: who, rkey: `3k${plot}`, uri: `at://${who}/${SPROUT_NSID}/3k${plot}`, cid: 'bafyv', handle: handles[who], kind: 'daisy', plot, plantedAt: '2026-10-12T00:00:00Z', care: 0.5, helpers: 0, lastTended: null, thirsty: false });
       const flowers = [visitor(BO, 3), visitor(MO, 9)];
       return Response.json({ owner, patch, patches: [{ rkey: 'self', name: g.name, season: null, open, planted: flowers.length, plots: Number(g.cols) * Number(g.rows), opensAt: null, closesAt: g.closesAt ?? null }], flowers, total: flowers.length });
     }
@@ -237,10 +245,25 @@ describe('the garden page', () => {
     expect(text('[data-head-title]')).toBe(COPY.community.title);
     expect(text('[data-head-lede]')).toBe(COPY.community.lede);
     expect(document.title).toBe(COPY.community.docTitle);
-    // atpotato's patch, from the home tile's own code
+    // the garden's face is a flower, not atpotato's avatar
+    expect($('.garden-head__avatar').classList.contains('garden-head__avatar--garden')).toBe(true);
+    expect(document.querySelector('.garden-head__avatar svg.home-flower')).not.toBeNull();
+    expect(document.querySelector('.garden-head__avatar img')).toBeNull();
+    // this season's numbers, not atpotato's own
+    const S = COPY.community.stats;
+    expect([...document.querySelectorAll('.garden-stats__item')].map((li) => li.textContent)).toEqual([
+      `3${S.growing(3)}`,
+      `2${S.bloom}`,
+      `1${S.thirsty(1)}`,
+      `93${S.free(93)}`,
+      `42${S.daysLeft(42)}`,
+      `8${S.ever}`,
+    ]);
+    // atpotato's patch, from the home tile's own code, and no "flowers" (that would be atpotato's own)
     expect(shown('[data-garden]')).toBe(true);
+    expect(text('[data-garden-name]')).toBe('autumn 2026');
     expect(new URLSearchParams(r.gardenAsked[0]).get('owner')).toBe(GARDEN_SUBJECT);
-    expect($('[data-level-link="flowers"]').getAttribute('href')).toBe('/garden/atpota.to/flowers');
+    expect(shown('[data-levels]')).toBe(false);
     expect(shown('[data-how]')).toBe(true);
     expect(document.querySelector('[data-your-garden]')).toBeNull();
     $<HTMLButtonElement>('[data-head-actions] button').click();
@@ -257,10 +280,13 @@ describe('the garden page', () => {
     expect(text('[data-head-title]')).toBe(COPY.community.title);
     const go = $('[data-your-garden]');
     expect([go.textContent, go.getAttribute('href'), go.classList.contains('btn--primary')]).toEqual([COPY.community.yours, '/garden/me.test', true]);
-    // /garden/atpota.to is the same page
+    // /garden/atpota.to is the same page; its flowers, asked for by address, keep the way back
     await rig({ signedIn: true, path: '/garden/atpota.to' }).run();
     expect(text('[data-head-title]')).toBe(COPY.community.title);
     expect($('[data-your-garden]').getAttribute('href')).toBe('/garden/me.test');
+    await rig({ path: '/garden/atpota.to/flowers' }).run();
+    expect(shown('[data-levels]')).toBe(true);
+    expect($('[data-level-link="garden"]').getAttribute('href')).toBe('/garden/atpota.to');
     // someone else's page has a quieter one
     await rig({ signedIn: true, path: '/garden/cy.example' }).run();
     expect([text('[data-your-garden]'), $('[data-your-garden]').classList.contains('btn--outline')]).toEqual([COPY.yourGarden, true]);
