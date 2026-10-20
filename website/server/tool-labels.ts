@@ -65,6 +65,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   top_author_posts: 'finding top posts',
   top_mentioned_posts: 'finding the most mentioned posts',
   read_dispatch: 'reading the dispatch',
+  read_weather: 'checking the weather station',
   // Memory slots (person__save_memory, life__save_memory, ...): a signed-in visitor sees these
   save_memory: 'making a note',
   remove_memory: 'crossing out a note',

@@ -60,7 +60,8 @@ export const MAX_SERIES = 120;
 /**
  * New records a second (every app, not just Bluesky) at which each condition starts;
  * anything below "light" is calm. A usual afternoon is about 450, so "breezy".
- * The weather station (atmosphere/src/atmosphere.js) uses the same rule.
+ * The weather station (atmosphere/src/atmosphere.js) uses the same rule, and so does
+ * Poe's read_weather (bot/agent/lib/weather.ts), for the words it puts on whole weeks.
  */
 export const CONDITIONS = [
   ['stormy', 600],
