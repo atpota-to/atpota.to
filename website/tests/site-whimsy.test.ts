@@ -23,6 +23,7 @@ import {
   TEND_NSID,
   tend,
 } from '../src/scripts/garden.js';
+import { COPY as TEASER, initGardenTeaser } from '../src/scripts/garden-teaser.js';
 import { initLatest, LOADING_LINES } from '../src/scripts/home.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
 import { greeting, initPet, milestoneLine, PETS_KEY, petReaction } from '../src/scripts/pet.js';
@@ -32,9 +33,10 @@ import { CONDITION_TEXT, ERROR_TEXT, fetchReading, renderReading, renderWeatherE
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const INDEX = read('../index.html');
-const section = (cls: string) => {
-  const start = INDEX.indexOf(`<section class="tile ${cls}"`);
-  return INDEX.slice(start, INDEX.indexOf('</section>', start) + '</section>'.length);
+const GARDEN_PAGE = read('../garden/index.html');
+const section = (cls: string, html = INDEX) => {
+  const start = html.indexOf(`<section class="tile ${cls}"`);
+  return html.slice(start, html.indexOf('</section>', start) + '</section>'.length);
 };
 const DIALOG = (() => {
   const partial = read('../src/partials/signin.html');
@@ -178,6 +180,73 @@ describe('atmospheric conditions', () => {
   });
 });
 
+describe('the community garden tile', () => {
+  const PATCH = {
+    rkey: '2026-autumn',
+    uri: patchUri('2026-autumn'),
+    cid: 'bafypatchautumn',
+    name: 'autumn 2026',
+    season: 'autumn',
+    cols: 12,
+    rows: 8,
+    opensAt: '2026-09-01T00:00:00.000Z',
+    closesAt: '2026-12-01T00:00:00.000Z',
+    open: true,
+  };
+  const flower = (plot: number) => ({
+    did: 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb',
+    rkey: `3k${plot}`,
+    uri: `at://did:plc:bbbbbbbbbbbbbbbbbbbbbbbb/${SPROUT_NSID}/3k${plot}`,
+    cid: `bafy${plot}`,
+    handle: 'friend.test',
+    kind: 'rose',
+    plot,
+    plantedAt: '2026-10-01T00:00:00Z',
+    care: 0.5,
+    helpers: 0,
+    lastTended: null,
+    thirsty: false,
+  });
+  const answer = (body: unknown, status = 200) => (async () => Response.json(body, { status })) as typeof fetch;
+  const tile = () => {
+    const start = INDEX.indexOf('<a class="tile tile--link home-garden"');
+    document.body.innerHTML = INDEX.slice(start, INDEX.indexOf('</a>\n', start) + '</a>'.length);
+    return document.querySelector<HTMLElement>('[data-garden-teaser]')!;
+  };
+
+  it('is a way in, not the garden: the whole tile links to /garden/atpota.to', () => {
+    const t = tile();
+    expect(t.tagName).toBe('A');
+    expect(t.getAttribute('href')).toBe('/garden/atpota.to');
+    expect(t.querySelectorAll('a')).toHaveLength(0);
+    expect(INDEX).not.toContain('data-garden-plots');
+    expect(INDEX).not.toContain('@partial signin');
+    expect(INDEX).not.toContain('patch.css');
+  });
+
+  it('shows a row of flowers, one of each kind, and how many plots are planted', async () => {
+    const t = tile();
+    await initGardenTeaser(t, answer({ patch: PATCH, patches: [], flowers: [flower(3), flower(40)], total: 2 }), () => 0.5);
+    expect(t.dataset.state).toBe('ready');
+    const row = t.querySelector<HTMLElement>('[data-teaser-row]')!;
+    expect(row.getAttribute('aria-hidden')).toBe('true');
+    expect(row.querySelectorAll('.home-garden__mound svg.home-flower')).toHaveLength(6);
+    expect(t.querySelector('[data-teaser-season]')!.textContent).toBe('autumn 2026');
+    expect(t.querySelector('[data-teaser-count]')!.textContent).toBe('2 of 96 plots planted');
+  });
+
+  it('an empty patch invites; a failed load keeps the flowers, words and link', async () => {
+    const t = tile();
+    await initGardenTeaser(t, answer({ patch: PATCH, patches: [], flowers: [], total: 0 }));
+    expect(t.querySelector('[data-teaser-count]')!.textContent).toBe(TEASER.count(0, 96));
+    const broken = tile();
+    await initGardenTeaser(broken, answer({ error: 'unavailable' }, 503));
+    expect(broken.dataset.state).toBe('error');
+    expect(broken.querySelectorAll('[data-teaser-row] svg')).toHaveLength(6);
+    expect(broken.querySelector('[data-teaser-count]')!.textContent).toBe('plant a flower, watch it bloom');
+  });
+});
+
 describe('the flower patch', () => {
   const ME = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
   const FRIEND = 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb';
@@ -226,7 +295,7 @@ describe('the flower patch', () => {
   }
 
   function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: typeof autumn | null; summerFlowers?: unknown[] } = {}): Rig {
-    document.body.innerHTML = section('home-patch') + DIALOG;
+    document.body.innerHTML = section('home-patch garden-patch', GARDEN_PAGE) + DIALOG;
     const calls: Rig['calls'] = [];
     const went: Prepared[] = [];
     const owned = new Map<string, string>();
@@ -458,7 +527,7 @@ describe('the flower patch', () => {
     document.querySelector<HTMLButtonElement>('[data-blog-signin-go]')!.click();
     await flush();
     expect(r.went).toHaveLength(1);
-    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'plant', returnTo: '/' });
+    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'plant', returnTo: '/garden/atpota.to' });
     expect(sessionStorage.getItem(KIND_KEY)).toBe('tulip');
     expect(sessionStorage.getItem(PLOT_KEY)).toBe('9');
     expect(sessionStorage.getItem(PATCH_KEY)).toBe('2026-autumn');
@@ -473,7 +542,7 @@ describe('the flower patch', () => {
   });
 
   it('back from signing in without a stored plot, it plants near the middle', async () => {
-    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ kind: 'plant', returnTo: '/', at: NOW }));
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ kind: 'plant', returnTo: '/garden/atpota.to', at: NOW }));
     const back = rig({ signedIn: true });
     await back.run();
     expect(back.asked).toEqual(['']);
@@ -607,7 +676,7 @@ describe('the flower patch', () => {
     document.querySelector<HTMLButtonElement>('[data-blog-signin-go]')!.click();
     await flush();
     expect(r.went).toHaveLength(1);
-    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'tend', returnTo: '/' });
+    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'tend', returnTo: '/garden/atpota.to' });
     expect(JSON.parse(sessionStorage.getItem(TEND_KEY)!)).toMatchObject({ uri: friendRose.uri, patch: '2026-autumn' });
 
     const back = rig({ signedIn: true });
@@ -636,7 +705,7 @@ describe('the flower patch', () => {
   });
 
   it('says so when the patch does not load', async () => {
-    document.body.innerHTML = section('home-patch') + DIALOG;
+    document.body.innerHTML = section('home-patch garden-patch', GARDEN_PAGE) + DIALOG;
     await initGarden({ auth: null, fetchImpl: (async () => new Response('down', { status: 503 })) as typeof fetch });
     expect(document.querySelector<HTMLElement>('[data-garden]')!.dataset.state).toBe('error');
     expect(statusText()).toBe(COPY.loadFailed);

@@ -212,12 +212,16 @@ describe('garden addresses', () => {
   });
 
   it('vercel.json serves garden/index.html for every garden address', () => {
-    const vercel = JSON.parse(read('../vercel.json')) as { rewrites: Array<{ source: string; destination: string }> };
+    const vercel = JSON.parse(read('../vercel.json')) as { cleanUrls?: boolean; rewrites: Array<{ source: string; destination: string }> };
     const garden = vercel.rewrites.filter((r) => r.source.startsWith('/garden'));
+    // With cleanUrls, garden/index.html is served at /garden and /garden/index.html only
+    // redirects there, so a rewrite has to land on /garden or it 404s.
+    expect(vercel.cleanUrls).toBe(true);
     expect(garden).toEqual([
-      { source: '/garden/:actor', destination: '/garden/index.html' },
-      { source: '/garden/:actor/flowers', destination: '/garden/index.html' },
+      { source: '/garden/:actor', destination: '/garden' },
+      { source: '/garden/:actor/flowers', destination: '/garden' },
     ]);
+    expect(vercel.rewrites.some((r) => r.destination.endsWith('.html'))).toBe(false);
   });
 });
 

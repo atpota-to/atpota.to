@@ -1141,14 +1141,13 @@ html[data-theme="dark"] .home-find {
 /* ---------- atmospheric conditions (weather.ts, /api/atmosphere) ---------- */
 
 .home-weather,
-.home-patch {
+.home-garden {
   grid-column: span 2;
   --tile-pad: 26px;
 }
 
-/* Both need JavaScript to show anything; without it the row is left out. */
-html:not(.js) .home-weather,
-html:not(.js) .home-patch {
+/* The weather needs JavaScript to show anything; without it the tile is left out. */
+html:not(.js) .home-weather {
   display: none;
 }
 
@@ -1261,6 +1260,105 @@ html:not(.js) .home-patch {
   margin-top: auto;
   font-size: 13px;
   color: var(--home-sky-mono);
+}
+
+/* ---------- the community garden (garden-teaser.ts, /api/garden) ---------- */
+
+/* A way into /garden/atpota.to, the whole tile one link: a row of flowers and a count. */
+.home-garden {
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--sage);
+  color: var(--home-sage-text);
+  text-decoration: none;
+}
+
+.home-garden__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.home-garden__season {
+  font-size: 14px;
+  color: var(--home-sage-mono);
+}
+
+/* one of each kind, on its mound (drawn by garden-teaser.ts; empty without JavaScript) */
+.home-garden__row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-garden__row:empty {
+  display: none;
+}
+
+.home-garden__mound {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, var(--home-mound) 0 62%, color-mix(in srgb, var(--home-mound) 80%, #000) 100%);
+}
+
+.home-garden__mound .home-flower {
+  width: 92%;
+  height: 92%;
+  overflow: visible;
+}
+
+.home-garden__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.home-garden__count {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* On hover the flowers nod, one after another. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .home-garden:hover .home-garden__mound .home-flower {
+    animation: home-garden-nod 700ms var(--ease-spring) both;
+  }
+
+  .home-garden__mound:nth-child(2) .home-flower {
+    animation-delay: 60ms;
+  }
+
+  .home-garden__mound:nth-child(3) .home-flower {
+    animation-delay: 120ms;
+  }
+
+  .home-garden__mound:nth-child(4) .home-flower {
+    animation-delay: 180ms;
+  }
+
+  .home-garden__mound:nth-child(5) .home-flower {
+    animation-delay: 240ms;
+  }
+
+  .home-garden__mound:nth-child(6) .home-flower {
+    animation-delay: 300ms;
+  }
+}
+
+@keyframes home-garden-nod {
+  40% {
+    transform: rotate(14deg) scale(1.08);
+  }
+
+  100% {
+    transform: none;
+  }
 }
 
 /* ---------- poe intro ---------- */
