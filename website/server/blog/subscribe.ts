@@ -24,7 +24,7 @@ export const SUBSCRIBE_COPY = {
   emailLabel: 'your email',
   emailPlaceholder: 'you@example.com',
   emailButton: 'subscribe',
-  emailFine: "sent via leaflet.pub, where you'll confirm.",
+  emailFine: "sent by leaflet.pub. you'll confirm there first.",
   bluesky: 'subscribe with bluesky',
   feed: 'copy the rss feed link',
 } as const;
@@ -86,10 +86,10 @@ export function emailFormHtml(signup: EmailSignup, id: string): string {
     `<input type="hidden" name="redirect" value="${escapeAttr(emailRedirect(signup.redirect, id))}">` +
     `<div class="blog-email__row">` +
     `<label class="blog-email__field"><span class="visually-hidden">${SUBSCRIBE_COPY.emailLabel}</span>` +
-    `<input class="blog-email__input" type="email" name="email" placeholder="${SUBSCRIBE_COPY.emailPlaceholder}" autocomplete="email" required></label>` +
+    `<input class="blog-email__input" type="email" name="email" placeholder="${SUBSCRIBE_COPY.emailPlaceholder}" autocomplete="email" aria-describedby="${escapeAttr(id)}-fine" required></label>` +
     `<button type="submit" class="btn btn--primary">${SUBSCRIBE_COPY.emailButton}</button>` +
     `</div>` +
-    `<p class="blog-email__fine">${escapeHtml(SUBSCRIBE_COPY.emailFine)}</p>` +
+    `<p class="blog-email__fine" id="${escapeAttr(id)}-fine">${escapeHtml(SUBSCRIBE_COPY.emailFine)}</p>` +
     `</form>`
   );
 }
