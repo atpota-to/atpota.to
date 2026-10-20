@@ -61,7 +61,7 @@
                         <p class="weather-hero__big"><span data-r-records>&ndash;</span> <span class="weather-hero__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
                         <!-- new records a second over the station's 60 seconds, when it's live; the number above says it in words -->
-                        <div class="weather-spark" data-r-spark aria-hidden="true" hidden></div>
+                        <div class="weather-spark" data-r-spark aria-hidden="true"></div>
                     </div>
                 </div>
                 <p class="visually-hidden" role="status" data-r-status></p>
@@ -85,7 +85,10 @@
                     <p class="weather-tile__aside" data-a-new-count></p>
                 </div>
                 <p class="weather-new__lede" data-a-new-lede>listening for new arrivals…</p>
+                <!-- a word cloud, each app a link to its lexicons in aturi; the card is for the mouse, the links say the same in words -->
                 <ul class="weather-new__list" role="list" data-a-new-list></ul>
+                <div class="weather-new__tip" data-a-new-tip aria-hidden="true" hidden></div>
+                <p class="weather-tile__note" data-a-new-note hidden>bigger names have written more records. pick one to explore its lexicons in aturi.</p>
             </section>
 
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
@@ -209,16 +212,14 @@
             </section>
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
-                <h2 class="eyebrow" id="weather-how-title">how it&#39;s measured</h2>
-                <p>atpotato&#39;s weather station listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a>, all the time, and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky. the numbers up top are the last 60 seconds, and the station writes down every minute for the trends.</p>
-                <p>flip <strong>records</strong> to <strong>accounts</strong> on the trends or the apps to count who&#39;s writing instead of how much: every different account (DID) once, however many records it writes, so one busy bot can&#39;t pass for a crowd. they&#39;re counted with hyperloglog sketches: within about 2%, and the station never keeps a DID.</p>
-                <p>the clouds up top are the diversity index: a clear sky when nearly everything is bluesky, cloudier the more records come from other apps. weather alerts pop up in the corner when an app blows in, a storm rolls in, or the sky gets more mixed.</p>
-                <p>a quiet app can still miss a minute, and one busy bot can tip the index for a while. this page checks again every few seconds while it&#39;s open. <a href="/">back home</a>.</p>
+                <h2 class="eyebrow" id="weather-how-title">how i measure it</h2>
+                <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by. the numbers up top are the last minute, and they keep updating while you&#39;re here.</p>
+                <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. it&#39;s a close estimate, and i never keep track of who&#39;s who.</p>
+                <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in, once a minute at most (◕‿◕)</p>
+                <p>a quiet app can slip past me now and then, and one busy bot can tip things for a while. i&#39;m a potato, not a satellite! <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>
         </div>
-        <!-- weather alerts (src/scripts/weather-alerts.ts): cards slide in here, read out politely -->
-        <div class="weather-alerts" data-weather-alerts aria-live="polite"></div>
     </main>
 
     <!-- @partial footer -->

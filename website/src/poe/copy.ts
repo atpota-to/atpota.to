@@ -21,6 +21,7 @@ export const COPY = {
   footnoteAfter: ' on any page to open it.',
   newChat: 'new chat',
   dismissNudge: 'dismiss tip',
+  dismissSay: 'dismiss message',
   conversation: 'conversation with poe',
   suggestions: 'suggestions',
   you: 'you said:',

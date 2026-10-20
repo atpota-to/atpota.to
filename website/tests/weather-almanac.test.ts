@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  aturiFor,
   bigNumber,
   daypart,
   fetchAlmanac,
@@ -97,18 +98,36 @@ describe('today so far', () => {
 });
 
 describe('new in the atmosphere', () => {
-  it('lists apps heard for the first time', () => {
+  it('lists apps heard for the first time as a cloud, each a link to its lexicons in aturi', () => {
     renderNewApps(root.querySelector('[data-a-new]')!, ALMANAC, NOW, TZ);
     expect(text('[data-a-new-lede]')).toBe('one app blew in for the first time in the last 24 hours.');
-    const app = root.querySelector('[data-a-new-list] li')!;
-    expect(app.querySelector('.weather-new__domain')!.textContent).toBe('mu.social');
-    expect(app.querySelector('.weather-new__when')!.textContent).toBe('first heard at 11:46 am · 4 records');
+    const link = root.querySelector<HTMLAnchorElement>('[data-a-new-list] li a')!;
+    expect(link.querySelector('.weather-new__domain')!.textContent).toBe('mu.social');
+    expect(link.href).toBe('https://aturi.to/explore/lexicons/group/social.mu');
+    expect(link.target).toBe('_blank');
+    expect(link.rel).toBe('noopener');
+    // the hover card's details, in words for screen readers too
+    expect(link.dataset.heard).toBe('first heard at 11:46 am · 4 records');
+    expect(link.textContent).toBe('mu.social, first heard at 11:46 am · 4 records: social.mu.newsFeedPrefs. opens aturi in a new tab');
+    expect(root.querySelector<HTMLElement>('[data-a-new-note]')!.hidden).toBe(false);
+  });
+
+  it('sizes names by their records, biggest for the busiest', () => {
+    const app = (domain: string, creates: number) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates, collections: [] });
+    renderNewApps(root.querySelector('[data-a-new]')!, { ...ALMANAC, newApps: { ...ALMANAC.newApps!, apps: [app('a.one', 1), app('b.two', 10), app('c.three', 100)] } }, NOW, TZ);
+    const sizes = [...root.querySelectorAll<HTMLElement>('[data-a-new-list] li')].map((li) => li.style.getPropertyValue('--w'));
+    expect(sizes).toEqual(['0.00', '0.50', '1.00']);
+  });
+
+  it('reads an app\'s namespace off its domain', () => {
+    expect(aturiFor('mado.blue')).toBe('https://aturi.to/explore/lexicons/group/blue.mado');
   });
 
   it('says it is warming up during the first week', () => {
     renderNewApps(root.querySelector('[data-a-new]')!, { ...ALMANAC, newApps: { ...ALMANAC.newApps!, warmingUp: true, apps: [] } }, Date.parse('2026-10-24T16:50:00.000Z'), TZ);
     expect(text('[data-a-new-lede]')).toMatch(/after a week of listening it can tell a new app from a quiet one: 3 days to go\./);
     expect(root.querySelectorAll('[data-a-new-list] li')).toHaveLength(0);
+    expect(root.querySelector<HTMLElement>('[data-a-new-note]')!.hidden).toBe(true);
   });
 
   it('puts app names on the page as text, never markup', () => {

@@ -1,45 +1,61 @@
 /**
- * Weather alerts on the weather report (/weather): a card that slides up in the bottom
- * left corner (Poe lives in the bottom right) with a little burst of leaves, when
- * something happens in the sky:
+ * Weather alerts on the weather report (/weather): Poe pipes up from its corner, in a chat
+ * bubble by the potato (src/poe/say.ts), when something happens in the sky:
  *
- *   arrival  an app outside Bluesky shows up in the live 60 seconds that this visit
- *            hasn't seen yet ("delve.town just blew in")
+ *   arrival  an app this visit hasn't heard at all blows in with at least ARRIVAL_MIN
+ *            records in the live 60 seconds ("techne.app just blew in"). Apps with a
+ *            record or two drift through the top ten every few seconds, and apps already
+ *            about rise and fall; neither is news.
  *   new      the station hears an app for the very first time (the almanac's
  *            "new in the atmosphere", once the station has warmed up)
  *   storm    new records a second climb into "stormy"
  *   mixed    the diversity index climbs a level
  *
  * The first reading of a visit only sets the scene; alerts come from what changes after
- * it. One card at a time, at least GAP_MS apart, each gone after ALERT_MS (held while
- * it's hovered or focused); a small queue keeps the most important ones. The reader can
+ * it. Poe says one at a time, at least GAP_MS apart, each for ALERT_MS (held while it's
+ * hovered or focused). A storm or a more mixed sky alerts at most once every COOLDOWN_MS,
+ * so a sky sitting on a line doesn't keep on about it. A small queue keeps the most
+ * important ones and waits while Poe is busy (its panel open, its nudge up) or the tab is
+ * hidden, and lets go of any older than STALE_MS: by then it isn't news. The reader can
  * hush them, and that sticks in this browser (localStorage ALERTS_KEY).
  *
- * The cards sit in a polite live region, so screen readers hear them without losing
- * their place. Under reduced motion they just appear and go, with no leaves. App and
- * collection names are other people's text and only reach the DOM through textContent.
+ * Poe reads them out politely to screen readers. App and collection names are other
+ * people's text and only reach the page through textContent (say.ts).
  */
 
-import { burst, cheer } from './burst';
+import { say, type PoeLine, type PoeSpeech } from '../poe/say';
+import type { MascotFace } from './mascot';
 import { formatIndex, ratioText, recordsPerSecond, type DiversityLevel, type Reading } from './weather';
 
-export const ALERT_MS = 7000;
-export const GAP_MS = 15_000;
+/** How long Poe's bubble stays up. */
+export const ALERT_MS = 9000;
+/** From one alert to the next, at least. */
+export const GAP_MS = 60_000;
+/** Records in the last minute before an app this visit hasn't heard counts as blowing in. */
+export const ARRIVAL_MIN = 5;
+/** A storm, or a more mixed sky, alerts at most this often. */
+export const COOLDOWN_MS = 10 * 60_000;
+/** A queued alert older than this is old news. */
+export const STALE_MS = 90_000;
+/** How soon to ask again while Poe is busy or the tab is hidden. */
+export const RETRY_MS = 5000;
 export const MAX_QUEUE = 2;
 export const ALERTS_KEY = 'weather:alerts';
-const LEAVE_MS = 260;
 
 export type AlertKind = 'arrival' | 'new' | 'storm' | 'mixed';
 
 export interface WeatherAlert {
   kind: AlertKind;
-  eyebrow: string;
-  title: string;
+  label: string;
+  text: string;
   sub: string;
 }
 
 /** Which alert wins a place in a full queue. */
 const RANK: Record<AlertKind, number> = { storm: 3, new: 2, mixed: 1, arrival: 0 };
+/** Poe's face while it says each one. */
+const FACE: Record<AlertKind, MascotFace> = { storm: 'wow', new: 'happy', mixed: 'wink', arrival: 'kawaii' };
+const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['storm', 'mixed']);
 const LEVELS: DiversityLevel[] = ['low', 'moderate', 'high', 'very high', 'extreme'];
 
 // ---------- what's worth an alert ----------
@@ -58,28 +74,28 @@ export interface Watch {
 export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alerts: WeatherAlert[] } {
   const apps = r.source === 'station' ? (r.apps ?? []) : [];
   const watch: Watch = { seen: new Set(prev?.seen), condition: r.condition, level: r.diversity?.level ?? null };
-  const fresh = apps.filter((a) => !watch.seen.has(a.domain));
+  const fresh = apps.filter((a) => !watch.seen.has(a.domain) && a.count >= ARRIVAL_MIN);
   for (const a of apps) watch.seen.add(a.domain);
   if (!prev) return { watch, alerts: [] };
   const alerts: WeatherAlert[] = [];
   if (r.condition === 'stormy' && prev.condition !== 'stormy') {
-    alerts.push({ kind: 'storm', eyebrow: 'storm warning', title: 'a storm just rolled in', sub: `${Math.round(recordsPerSecond(r))} new records a second. somebody said something.` });
+    alerts.push({ kind: 'storm', label: 'storm warning', text: 'whoa, a storm just rolled in', sub: `${Math.round(recordsPerSecond(r))} new records a second. somebody said something.` });
   }
   const level = r.diversity?.level;
   if (level && prev.level && LEVELS.indexOf(level) > LEVELS.indexOf(prev.level) && r.records) {
-    alerts.push({ kind: 'mixed', eyebrow: 'weather alert', title: `the sky's getting mixed: ${level}`, sub: `diversity index ${formatIndex(r.diversity!.index)}. ${ratioText(r.records)}.` });
+    alerts.push({ kind: 'mixed', label: 'weather alert', text: `the sky's getting mixed: ${level}`, sub: `diversity index ${formatIndex(r.diversity!.index)}. ${ratioText(r.records)}.` });
   }
   const app = fresh[0];
   if (app) {
-    const records = `${app.count.toLocaleString('en-US')} record${app.count === 1 ? '' : 's'} in the last minute`;
-    alerts.push({ kind: 'arrival', eyebrow: 'weather alert', title: `${app.domain} just blew in`, sub: app.collections[0] ? `${records}: ${app.collections[0]}` : records });
+    const records = `${app.count.toLocaleString('en-US')} records in the last minute`;
+    alerts.push({ kind: 'arrival', label: 'weather alert', text: `${app.domain} just blew in`, sub: app.collections[0] ? `${records}: ${app.collections[0]}` : records });
   }
   return { watch, alerts };
 }
 
 /** An alert for an app the station has just heard for the very first time. */
 export function newAppAlert(domain: string, at: string): WeatherAlert {
-  return { kind: 'new', eyebrow: 'new in the atmosphere', title: `${domain} is brand new here`, sub: `the station heard it for the first time at ${at}.` };
+  return { kind: 'new', label: 'new in the atmosphere', text: `${domain} is brand new here (◕‿◕)`, sub: `the station heard it for the first time at ${at}.` };
 }
 
 // ---------- hushing ----------
@@ -101,31 +117,7 @@ export function setAlertsHushed(hushed: boolean, win: Window = window): void {
   }
 }
 
-// ---------- the cards ----------
-
-function reducedMotion(win: Window): boolean {
-  return typeof win.matchMedia === 'function' && win.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-const SVG = 'http://www.w3.org/2000/svg';
-
-function icon(doc: Document, kind: AlertKind): SVGSVGElement {
-  const svg = doc.createElementNS(SVG, 'svg');
-  svg.setAttribute('class', 'weather-alert__icon');
-  svg.setAttribute('viewBox', '0 0 100 100');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  const cloud = doc.createElementNS(SVG, 'path');
-  cloud.setAttribute('class', 'weather-alert__cloud');
-  cloud.setAttribute('d', 'M28 74 C16 74 10 66 10 58 C10 49 17 43 26 43 C28 32 38 25 49 25 C61 25 70 33 72 44 C81 44 88 51 88 59 C88 68 81 74 72 74 Z');
-  svg.append(cloud);
-  const mark = doc.createElementNS(SVG, 'path');
-  mark.setAttribute('class', 'weather-alert__mark');
-  // a bolt for a storm, a gust of wind for everything else
-  mark.setAttribute('d', kind === 'storm' ? 'M52 52 L42 70 H54 L46 90' : 'M14 88 H58 a8 8 0 1 0 -8 -8 M24 96 H44');
-  svg.append(mark);
-  return svg;
-}
+// ---------- Poe says them ----------
 
 export interface AlertDesk {
   push(alert: WeatherAlert): void;
@@ -137,105 +129,75 @@ export interface AlertDesk {
   onHushChange(fn: (hushed: boolean) => void): void;
 }
 
-/** The cards, in `region` (a polite live region). `now` is for tests. */
-export function createAlertDesk(region: HTMLElement, win: Window = window, now: () => number = () => Date.now()): AlertDesk {
-  const doc = region.ownerDocument;
+interface Queued {
+  alert: WeatherAlert;
+  /** When it was pushed, and in what order. */
+  at: number;
+  n: number;
+}
+
+/** The alerts, said by Poe. `speak` and `now` are for tests. */
+export function createAlertDesk(win: Window = window, speak: (line: PoeLine) => PoeSpeech | null = say, now: () => number = () => Date.now()): AlertDesk {
   let hushed = alertsHushed(win);
-  let queue: WeatherAlert[] = [];
-  let showing: HTMLElement | null = null;
+  let queue: Queued[] = [];
+  let pushed = 0;
+  let speech: PoeSpeech | null = null;
   let lastShown = -Infinity;
+  const lastOfKind = new Map<AlertKind, number>();
   let wait: number | undefined;
   const listeners: Array<(hushed: boolean) => void> = [];
 
-  const next = () => {
-    if (showing || hushed || !queue.length) return;
-    const delay = Math.max(0, lastShown + GAP_MS - now());
+  const later = (ms: number) => {
+    wait = win.setTimeout(next, ms);
+  };
+
+  function next(): void {
     win.clearTimeout(wait);
-    if (delay > 0) {
-      wait = win.setTimeout(next, delay);
-      return;
-    }
-    show(queue.shift()!);
-  };
-
-  const dismiss = (card: HTMLElement) => {
-    if (showing !== card) return;
-    showing = null;
-    if (reducedMotion(win)) card.remove();
-    else {
-      card.classList.add('is-leaving');
-      win.setTimeout(() => card.remove(), LEAVE_MS);
-    }
-    next();
-  };
-
-  function show(a: WeatherAlert): void {
-    lastShown = now();
-    const card = doc.createElement('div');
-    card.className = 'weather-alert';
-    card.dataset.kind = a.kind;
-    const pic = icon(doc, a.kind);
-    const eyebrow = doc.createElement('p');
-    eyebrow.className = 'weather-alert__eyebrow';
-    eyebrow.textContent = a.eyebrow;
-    const title = doc.createElement('p');
-    title.className = 'weather-alert__title';
-    title.textContent = a.title;
-    const sub = doc.createElement('p');
-    sub.className = 'weather-alert__sub';
-    sub.textContent = a.sub;
-    const quiet = doc.createElement('button');
-    quiet.type = 'button';
-    quiet.className = 'weather-alert__hush';
-    quiet.textContent = 'hush alerts';
-    quiet.addEventListener('click', () => desk.hush());
-    const close = doc.createElement('button');
-    close.type = 'button';
-    close.className = 'weather-alert__close';
-    close.setAttribute('aria-label', 'dismiss the alert');
-    close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-    close.addEventListener('click', () => dismiss(card));
-    card.append(pic, eyebrow, title, sub, quiet, close);
-    card.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') dismiss(card);
-    });
-
-    // Gone after ALERT_MS, but not while someone's reading it.
-    let left = ALERT_MS;
-    let started = now();
-    let timer = win.setTimeout(() => dismiss(card), left);
-    const hold = () => {
-      win.clearTimeout(timer);
-      left -= now() - started;
+    wait = undefined;
+    if (speech || hushed) return;
+    const t = now();
+    queue = queue.filter((q) => t - q.at < STALE_MS);
+    const first = queue[0];
+    if (!first) return;
+    if (lastShown + GAP_MS > t) return later(lastShown + GAP_MS - t);
+    if (win.document.visibilityState === 'hidden') return later(RETRY_MS);
+    const { alert } = first;
+    const line: PoeLine = {
+      label: alert.label,
+      text: alert.text,
+      sub: alert.sub,
+      face: FACE[alert.kind],
+      ms: ALERT_MS,
+      action: { label: 'hush alerts', run: () => desk.hush() },
+      onGone: () => {
+        speech = null;
+        next();
+      },
     };
-    const go = () => {
-      started = now();
-      timer = win.setTimeout(() => dismiss(card), Math.max(1500, left));
-    };
-    card.addEventListener('pointerenter', hold);
-    card.addEventListener('pointerleave', go);
-    card.addEventListener('focusin', hold);
-    card.addEventListener('focusout', (e) => {
-      if (!card.contains(e.relatedTarget as Node | null)) go();
-    });
-
-    showing = card;
-    region.append(card);
-    burst(pic, 'leaves', win);
-    if (a.kind === 'new') cheer(win);
+    if (alert.kind === 'new') line.burst = 'leaves';
+    const said = speak(line);
+    // Poe's busy: its panel is open, or its nudge is up.
+    if (!said) return later(RETRY_MS);
+    queue.shift();
+    speech = said;
+    lastShown = t;
   }
 
   const desk: AlertDesk = {
     push(alert) {
       if (hushed) return;
-      queue.push(alert);
-      // Keep the most important ones; among equals, the newest.
+      const t = now();
+      if (COOLS_DOWN.has(alert.kind)) {
+        const last = lastOfKind.get(alert.kind);
+        if (last !== undefined && t - last < COOLDOWN_MS) return;
+        lastOfKind.set(alert.kind, t);
+      }
+      queue.push({ alert, at: t, n: pushed++ });
+      // Keep the most important ones; among equals, the newest. Say them most important first.
       queue = queue
-        .map((a, i) => ({ a, i }))
-        .sort((x, y) => RANK[y.a.kind] - RANK[x.a.kind] || y.i - x.i)
+        .sort((x, y) => RANK[y.alert.kind] - RANK[x.alert.kind] || y.n - x.n)
         .slice(0, MAX_QUEUE)
-        .sort((x, y) => RANK[y.a.kind] - RANK[x.a.kind] || x.i - y.i)
-        .map((x) => x.a);
+        .sort((x, y) => RANK[y.alert.kind] - RANK[x.alert.kind] || x.n - y.n);
       next();
     },
     get hushed() {
@@ -246,7 +208,9 @@ export function createAlertDesk(region: HTMLElement, win: Window = window, now: 
       setAlertsHushed(true, win);
       queue = [];
       win.clearTimeout(wait);
-      if (showing) dismiss(showing);
+      const showing = speech;
+      speech = null;
+      showing?.close();
       listeners.forEach((fn) => fn(true));
     },
     unhush() {

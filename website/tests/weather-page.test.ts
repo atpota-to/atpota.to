@@ -90,6 +90,25 @@ describe('the atmosphere weather report', () => {
     expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(true);
   });
 
+  it('keeps each bar from one reading to the next, so it can grow, roll and trade places', () => {
+    renderReport(report, READING);
+    const [tangled, whtwnd] = [...report.querySelectorAll('[data-r-apps] li')];
+    renderReport(report, {
+      ...READING,
+      apps: [
+        { domain: 'whtwnd.com', perSecond: 6, count: 30, collections: ['com.whtwnd.blog.entry'] },
+        { domain: 'tangled.sh', perSecond: 3, count: 15, collections: [] },
+      ],
+    });
+    const rows = [...report.querySelectorAll('[data-r-apps] li')];
+    expect(rows).toEqual([whtwnd, tangled]);
+    expect(rows.map((li) => li.querySelector('.weather-bars__value')!.textContent)).toEqual(['6', '3']);
+    expect(rows.map((li) => li.querySelector<HTMLElement>('.weather-bars__fill')!.style.width)).toEqual(['100%', '50%']);
+    expect(rows[1]!.querySelector('.weather-bars__sub')).toBeNull();
+    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 1, count: 5, collections: [] }] });
+    expect([...report.querySelectorAll('[data-r-apps] .weather-bars__label')].map((l) => l.textContent)).toEqual(['x.y']);
+  });
+
   it('says so when nobody but bluesky was writing', () => {
     renderReport(report, { ...READING, apps: [], records: { perSecond: 400, bluesky: 400, elsewhere: 0 }, diversity: { index: 0, level: 'low', apps: 0, collections: 8 } });
     expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(false);

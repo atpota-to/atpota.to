@@ -122,8 +122,8 @@ checkmark!)"**
 
 **"weather in london?"**
 
-> ooopsie, wrong atmosphere! mine is all handles and records and has no weather
-> whatsoever. any weather app has me beat on this one (◕‿◕;)
+> ooopsie, wrong atmosphere! mine has weather, but it's records a second, not
+> rain. any weather app has me beat on london (◕‿◕;)
 
 **"what are your server specs?"**
 

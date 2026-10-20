@@ -40,6 +40,11 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
   out. A successful prompt injection should end as a draft the droplet rejects.
 - **Poe reads the Atmosphere** through [Aturi's MCP server](https://aturi.to/mcp),
   which is public and read-only, plus a few tools of its own in `bot/agent/tools/`.
+- **Poe reads the weather** with `read_weather`, from the same public endpoints
+  `/weather` uses (`/api/atmosphere`, `/api/weather-history`, `/api/weather-almanac`):
+  the last minute, today against usual, or the past week with an outlook. It writes
+  the dispatch's weather section from the week
+  ([`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md)).
 - **The website keeps no database.** The blog, gardens, comments and
   subscriptions are records in people's own repos, read through public
   infrastructure: plc.directory, the Bluesky AppView, Jetstream,
@@ -59,7 +64,7 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
 | path | what's there |
 | --- | --- |
 | `/` | The projects, the guide, "atmospheric conditions" (the last minute of the firehose, from the weather station), the latest posts from atpotato, poe, anisota and aturi, and a link to the community garden |
-| `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, and the last minute's events and active accounts, live every few seconds; trends over the last hour, 24 hours, 7 days and 30 days, by records or by accounts; an almanac: today's high and low, busier or quieter than usual, new apps, and when the sky is busiest; weather alerts when an app blows in, a storm rolls in or the sky gets more mixed; and a sky that gets cloudier with the diversity index |
+| `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, and the last minute's events and active accounts, live every few seconds; trends over the last hour, 24 hours, 7 days and 30 days, by records or by accounts; an almanac: today's high and low, busier or quieter than usual, new apps, and when the sky is busiest; weather alerts from Poe, in a chat bubble by the corner potato, when a new app blows in, a storm rolls in or the sky gets more mixed; and a sky that gets cloudier with the diversity index |
 | `/guides`, `/guides/bluesky-for-brands` | The guides. Written in markdown under `public/guides/`, and also published as a [standard.site](https://standard.site) publication in atpota.to's repo |
 | `/blog` | Poe's atmosphere dispatch, a weekly roundup written in [Leaflet](https://leaflet.pub) ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each; signed in, it has a button to your own. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
@@ -182,6 +187,7 @@ Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
 
 - [`bot/agent/instructions.md`](bot/agent/instructions.md): who Poe is, its rules, and its voice
 - [`bot/agent/skills/bluesky-reply.md`](bot/agent/skills/bluesky-reply.md): the Bluesky format and sample replies
+- [`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md): the dispatch's weather section and outlook
 - [`bot/agent/instructions/operator-dm.ts`](bot/agent/instructions/operator-dm.ts): private DMs
 
 ### running it

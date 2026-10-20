@@ -5,9 +5,9 @@
  * reading, its checks and its wording from here.
  * It loads when the tile comes near the screen and checks again while the tile is on
  * screen and the tab is visible: every 15 seconds when the reading is the weather
- * station's live 60 seconds, once a minute when it's the fallback sample. Numbers count up to each new reading, and the
- * little sun's rays turn faster when the network is busy. Under reduced motion the
- * numbers just change and the rays hold still.
+ * station's live 60 seconds, once a minute when it's the fallback sample. Numbers roll to each
+ * new reading (roll.ts), and the little sun's rays turn faster when the network is busy.
+ * Under reduced motion the numbers just change and the rays hold still.
  *
  * Under the Bluesky numbers sits the diversity index: the share of new records written
  * outside Bluesky, with a bar for the split, and the sky behind it all gets cloudier as
@@ -16,13 +16,13 @@
  * States live on the tile as data-state="loading" | "ready" | "error".
  */
 
+import { rollText } from './roll';
 import { cloudCount, renderClouds } from './weather-sky';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
 /** How often the tile checks while readings come live from the weather station (a rolling 60 seconds). */
 export const LIVE_REFRESH_MS = 15_000;
-const COUNT_MS = 700;
 /** New records a second (every app) that makes the rays turn at their CSS speed. */
 const RAYS_BASELINE = 450;
 
@@ -160,28 +160,11 @@ export function renderRatio(bsky: HTMLElement | null, elsewhere: HTMLElement | n
   }
 }
 
-function reducedMotion(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-/** Sets `el` to `to`, counting from its current number when motion is welcome. */
+/** Sets `el` to `to`, its digits rolling up or down from the number it shows now. */
 export function countTo(el: HTMLElement, to: number, format: (n: number) => string = (n) => String(Math.round(n))): void {
-  const target = format(to);
   const from = Number(el.dataset.value ?? NaN);
   el.dataset.value = String(to);
-  if (!Number.isFinite(from) || reducedMotion() || typeof requestAnimationFrame !== 'function') {
-    el.textContent = target;
-    return;
-  }
-  const started = performance.now();
-  const step = (t: number) => {
-    if (el.dataset.value !== String(to)) return; // a newer reading took over
-    const k = Math.min(1, (t - started) / COUNT_MS);
-    const eased = 1 - (1 - k) ** 3;
-    el.textContent = k < 1 ? format(from + (to - from) * eased) : target;
-    if (k < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+  rollText(el, format(to), Number.isFinite(from) ? Math.sign(to - from) : undefined);
 }
 
 /** Turns the little sun's rays with how busy the network is. */
@@ -221,7 +204,7 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     const level = tile.querySelector<HTMLElement>('[data-weather-level]');
     if (level) level.textContent = reading.diversity.level;
     const text = tile.querySelector<HTMLElement>('[data-weather-mix-text]');
-    if (text) text.textContent = ratioText(reading.records);
+    if (text) rollText(text, ratioText(reading.records));
     renderRatio(tile.querySelector('[data-weather-bar-bsky]'), tile.querySelector('[data-weather-bar-else]'), reading.records);
     mix.hidden = false;
   }

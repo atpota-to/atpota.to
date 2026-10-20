@@ -120,6 +120,9 @@ html[data-theme="dark"] {
 
 .weather-hero__cond {
   max-width: 26ch;
+  /* every forecast is two lines at this width; holding two (and the padding and rule above
+     them) from the start keeps the reading still when the first one lands */
+  min-height: calc(2lh + 14px);
   margin-top: 12px;
   padding-top: 12px;
   border-top: 2px solid color-mix(in srgb, var(--weather-sky-text) 18%, transparent);
@@ -128,17 +131,22 @@ html[data-theme="dark"] {
   line-height: 1.35;
 }
 
-/* The station's last 60 seconds, under the reading (weather-page.ts renderSparkline). */
+/* The station's last 60 seconds, under the reading (weather-page.ts renderSparkline). Its
+   room is kept while the page loads, since the station's reading is the usual one. It
+   scrolls left as the seconds go by, the oldest fading out at the left edge. */
 .weather-spark {
   max-width: 260px;
+  height: 36px;
   margin-top: 14px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%);
+  mask-image: linear-gradient(90deg, transparent, #000 14%);
 }
 
 .weather-spark svg {
   display: block;
   width: 100%;
   height: 36px;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .weather-spark path {
@@ -196,36 +204,104 @@ html[data-theme="dark"] {
   color: var(--text-soft);
 }
 
+/* A word cloud (weather-almanac.ts renderCloud): each new app's name, bigger for more
+   records (--w, 0 to 1), on one baseline per line like a tag cloud, each a link to Aturi. */
 .weather-new__list {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px 4px;
   margin: 0;
-  padding: 0;
+  padding: 14px 10px;
+  border-radius: 16px;
+  background: var(--paper);
   list-style: none;
 }
 
-.weather-new__app {
+.weather-new__list:empty {
+  display: none;
+}
+
+.weather-new__link {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: calc(15px + var(--w, 0) * 13px);
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background-color var(--dur) var(--ease-out);
+}
+
+.weather-new__link:hover {
+  background: var(--butter);
+}
+
+.weather-new__link:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* The card over a name: when, how many, which collections, and where it goes. */
+.weather-new__tip {
+  position: absolute;
+  z-index: 5;
   display: grid;
   gap: 2px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--paper);
-}
-
-.weather-new__domain {
-  overflow-wrap: anywhere;
-}
-
-.weather-new__when {
+  max-width: min(320px, calc(100% - 24px));
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
   font-size: 13px;
-  color: var(--muted);
+  pointer-events: none;
 }
 
-.weather-new__collections {
+.weather-new__tip-cols {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--muted);
+}
+
+.weather-new__tip-go {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-new__tip:not([hidden]) {
+    animation: weather-new-tip 0.16s var(--ease-out);
+  }
+
+  /* a name that arrives while the page is open pops in */
+  .weather-new__app.is-new .weather-new__link {
+    animation: weather-new-in var(--dur-spring) var(--ease-spring) both;
+  }
+}
+
+@keyframes weather-new-tip {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes weather-new-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@media (forced-colors: active) {
+  .weather-new__tip {
+    border: 1px solid CanvasText;
+  }
 }
 
 .weather-today[data-state="loading"] .weather-today__facts,
@@ -452,10 +528,14 @@ html[data-theme="dark"] {
 
 /* ---------- bluesky and everyone else ---------- */
 
+/* Always two balanced lines, whatever the number, so the bar under it never jumps. */
 .weather-mix__ratio {
+  max-width: 30ch;
+  min-height: 2lh;
   font-size: 22px;
   font-weight: 700;
   line-height: 1.3;
+  text-wrap: balance;
 }
 
 .weather-mix__bar {
@@ -580,11 +660,15 @@ html[data-theme="dark"] {
   gap: 16px;
 }
 
-/* Refetching keeps the frame: the old charts stay, dimmed, until the new ones arrive. */
+/* Refetching keeps the frame: the old charts stay, dimmed, until the new ones arrive
+   (a range change; the quiet refresh every few minutes doesn't dim them). */
+.weather-trends__charts {
+  transition: opacity var(--dur) var(--ease-out);
+}
+
 .weather-trends[data-state="loading"] .weather-trends__charts,
 .weather-trends[data-state="refreshing"] .weather-trends__charts {
   opacity: 0.5;
-  transition: opacity var(--dur) var(--ease-out);
 }
 
 .weather-chart-card {
@@ -781,7 +865,7 @@ html[data-theme="dark"] {
   height: 100%;
   border-radius: 4px;
   background: var(--weather-else);
-  transition: width var(--dur-spring) var(--ease-out);
+  transition: width 0.8s var(--ease-out);
 }
 
 .weather-bars--bsky .weather-bars__fill {
@@ -794,6 +878,13 @@ html[data-theme="dark"] {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--muted);
+}
+
+/* The live list changes every few seconds: one line each, so it keeps its height as apps come and go. */
+.weather-apps .weather-bars__sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -909,179 +1000,7 @@ html[data-theme="dark"] {
   }
 }
 
-/* ---------- weather alerts (weather-alerts.ts) ---------- */
-
-/* Bottom left on wider screens (Poe has the bottom right); on phones they drop in from
-   the top like a notification, clear of Poe and the nudge bubble. */
-.weather-alerts {
-  position: fixed;
-  z-index: 55;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  width: min(390px, calc(100vw - 32px));
-  pointer-events: none;
-}
-
-.weather-alert {
-  position: relative;
-  display: grid;
-  gap: 4px;
-  padding: 14px 52px 12px 60px;
-  border-radius: 22px;
-  background: var(--soil);
-  color: var(--on-soil);
-  box-shadow: var(--shadow-pop);
-  pointer-events: auto;
-}
-
-.weather-alert p {
-  margin: 0;
-}
-
-.weather-alert__icon {
-  position: absolute;
-  left: 16px;
-  top: 16px;
-  width: 30px;
-  height: 30px;
-  overflow: visible;
-}
-
-.weather-alert__cloud {
-  fill: var(--on-soil);
-}
-
-.weather-alert__mark {
-  fill: none;
-  stroke: var(--sun);
-  stroke-width: 7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.weather-alert__eyebrow {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--on-soil-soft);
-}
-
-.weather-alert__title {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.weather-alert__sub {
-  font-size: 13px;
-  color: var(--on-soil-soft);
-  overflow-wrap: anywhere;
-}
-
-.weather-alert__hush {
-  justify-self: start;
-  min-height: 32px;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--on-soil-soft);
-  font: inherit;
-  font-size: 13px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-.weather-alert__close {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--on-soil);
-  cursor: pointer;
-}
-
-.weather-alert__close:hover {
-  background: var(--soil-line);
-}
-
-.weather-alert__close svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
-
-.weather-alert :focus-visible {
-  outline: 3px solid var(--focus-on-dark);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .weather-alert {
-    animation: weather-alert-in var(--dur-spring) var(--ease-spring) both;
-  }
-
-  .weather-alert.is-leaving {
-    animation: weather-alert-out 0.26s var(--ease-out) forwards;
-  }
-}
-
-@keyframes weather-alert-in {
-  from {
-    opacity: 0;
-    transform: translateY(24px) scale(0.96);
-  }
-}
-
-@keyframes weather-alert-out {
-  to {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-}
-
-@media (max-width: 640px) {
-  .weather-alerts {
-    top: max(12px, env(safe-area-inset-top, 0px));
-    right: 16px;
-    bottom: auto;
-    width: auto;
-  }
-
-  @keyframes weather-alert-in {
-    from {
-      opacity: 0;
-      transform: translateY(-24px) scale(0.96);
-    }
-  }
-
-  @keyframes weather-alert-out {
-    to {
-      opacity: 0;
-      transform: translateY(-12px) scale(0.98);
-    }
-  }
-}
-
-@media (forced-colors: active) {
-  .weather-alert {
-    border: 2px solid CanvasText;
-  }
-}
-
-/* The hush toggle in "how it's measured". */
+/* The hush toggle in "how i measure it". */
 .weather-how__alerts {
   min-height: 40px;
   padding: 6px 16px;

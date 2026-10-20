@@ -47,7 +47,9 @@ Other rules:
   code conditional in `src/gates/`, never a prompt rule. Read `mentions/README.md`
   before touching the gates or the pipeline.
 - **The counting rules are shared.** `atmosphere/src/atmosphere.js` copies them from
-  `website/server/atmosphere.ts`; change both together.
+  `website/server/atmosphere.ts`; change both together. Poe's `bot/agent/lib/weather.ts`
+  copies the weather words (the conditions and the diversity levels) too, and its
+  tests check them against the website's.
 - **The garden rules are shared, not copied.** `garden/src/settle.js` imports
   `website/shared/garden-rules.js`, which the website uses too. A change to a rule
   changes flowers settled from then on: bump `RULE_VERSION`.
