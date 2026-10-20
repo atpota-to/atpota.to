@@ -1653,3 +1653,115 @@ html[data-theme="dark"] {
     display: none;
   }
 }
+
+/* ---------- the weather sun (src/assets/weather-sun.svg, inlined with @svg) ---------- */
+
+/* Drawn like the mascot: a pale disc in a deeper ring (Poe's flesh in its skin), chunky
+   round-capped rays, a shine where Poe's eyes catch the light. By night it's the home
+   tile's moon. weather.ts turns the rays faster when the network is busy. */
+:root {
+  --weather-sun: #FFD978;
+  --weather-sun-ring: #F2AE3A;
+  --weather-sun-shine: rgba(255, 253, 247, 0.85);
+  --weather-moon: #FFE7A3;
+}
+
+html[data-theme="dark"] {
+  --weather-sun: #E0A93A;
+  --weather-sun-ring: #C08A2C;
+  --weather-sun-shine: rgba(255, 253, 247, 0.5);
+}
+
+.weather-sun {
+  overflow: visible;
+}
+
+.weather-sun__rays path {
+  fill: none;
+  stroke: var(--weather-sun-ring);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.weather-sun__rays .weather-sun__short {
+  stroke-width: 6;
+}
+
+.weather-sun__rays {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+.weather-sun__disc {
+  fill: var(--weather-sun);
+  stroke: var(--weather-sun-ring);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.weather-sun__shine {
+  fill: none;
+  stroke: var(--weather-sun-shine);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.weather-sun__glint {
+  fill: var(--weather-sun-shine);
+}
+
+.weather-sun__night {
+  display: none;
+}
+
+.weather-sun__moon,
+.weather-sun__star {
+  fill: var(--weather-moon);
+}
+
+html[data-theme="dark"] .weather-sun__day {
+  display: none;
+}
+
+html[data-theme="dark"] .weather-sun__night {
+  display: inline;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-sun__rays {
+    animation: weather-sun-turn 10s linear infinite;
+  }
+
+  html[data-theme="dark"] .weather-sun__star {
+    animation: weather-sun-twinkle 3.2s ease-in-out infinite alternate;
+  }
+
+  html[data-theme="dark"] .weather-sun__star + .weather-sun__star {
+    animation-delay: -1.6s;
+  }
+}
+
+@keyframes weather-sun-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes weather-sun-twinkle {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (forced-colors: active) {
+  .weather-sun__rays path,
+  .weather-sun__disc {
+    stroke: CanvasText;
+  }
+
+  .weather-sun__disc,
+  .weather-sun__moon,
+  .weather-sun__star {
+    fill: Canvas;
+  }
+}

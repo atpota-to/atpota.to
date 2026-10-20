@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The weather sun (home tile and /weather), drawn like the mascot: a soft, slightly
+     wobbly disc in a deeper ring, chunky rounded rays, and a shine where Poe has its
+     eye highlights. No face, so it can be whatever the weather is. By night (dark
+     theme) it's the home tile's moon instead. Colours are components.css tokens;
+     weather.ts turns [data-weather-rays] faster when the network is busy. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g class="weather-sun__day">
+    <g class="weather-sun__rays" data-weather-rays>
+      <path d="M50 6 V15 M50 85 V94 M6 50 H15 M85 50 H94"/>
+      <path class="weather-sun__short" d="M21.7 21.7 L25.3 25.3 M74.7 74.7 L78.3 78.3 M78.3 21.7 L74.7 25.3 M21.7 78.3 L25.3 74.7"/>
+    </g>
+    <path class="weather-sun__disc" d="M51 26.5 C64.5 27 74 37 73.5 50.5 C73 64 63.5 73.5 49.5 73.5 C36 73 26.5 63.5 26.5 49.5 C27 36 37.5 26 51 26.5 Z"/>
+    <path class="weather-sun__shine" d="M36 47 C37 41 41 37 46.5 35.5"/>
+    <circle class="weather-sun__glint" cx="35.5" cy="53" r="2.2"/>
+  </g>
+  <g class="weather-sun__night">
+    <path class="weather-sun__moon" d="M48.1 29.1 A23 23 0 1 0 72.1 58.4 A19 19 0 0 1 48.1 29.1 Z"/>
+    <path class="weather-sun__star" d="M80 14 L82 20 L88 22 L82 24 L80 30 L78 24 L72 22 L78 20 Z"/>
+    <circle class="weather-sun__star" cx="88" cy="42" r="2.5"/>
+    <circle class="weather-sun__star" cx="68" cy="10" r="1.8"/>
+  </g>
+</svg>

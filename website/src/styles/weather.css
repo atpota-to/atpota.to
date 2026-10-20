@@ -101,28 +101,9 @@ html[data-theme="dark"] {
   height: 120px;
 }
 
-.weather-hero__rays {
-  fill: var(--sun-deep);
-  transform-box: fill-box;
-  transform-origin: center;
-}
 
-@media (prefers-reduced-motion: no-preference) {
-  /* weather.ts speeds this up or slows it down with how busy the network is */
-  .weather-hero__rays {
-    animation: weather-rays 10s linear infinite;
-  }
-}
 
-@keyframes weather-rays {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
-.weather-hero__disc {
-  fill: var(--sun);
-}
 
 
 .weather-hero__reading {
