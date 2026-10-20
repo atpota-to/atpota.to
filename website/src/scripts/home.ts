@@ -18,10 +18,13 @@
  * the list or the fallback line). Once the list shows, its "5 minutes ago"
  * dates keep themselves current.
  *
- * Also here: the "say hi" tile's copy button, and the hero Poe (pet.ts).
+ * Also here: the "say hi" tile's copy button, the hero Poe (pet.ts), atmospheric
+ * conditions (weather.ts) and the flower patch (garden.ts, loaded when it comes near the
+ * screen, or straight away when the reader is back from signing in to plant).
  */
 
 import { initPet } from './pet';
+import { initWeather } from './weather';
 
 export const FEED_ENDPOINT = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed';
 export const PLC_DIRECTORY = 'https://plc.directory';
@@ -506,12 +509,24 @@ function whenNear(el: Element, run: () => void): void {
   observer.observe(el);
 }
 
-export function initLatest(root: ParentNode = document, fetchImpl: typeof fetch = fetch): void {
+/** What the feed says while it loads; one is picked per page load. */
+export const LOADING_LINES: readonly string[] = [
+  'digging up the latest…',
+  'peeling back the soil…',
+  'asking the other potatoes…',
+  'fishing in the firehose…',
+  'checking under the leaves…',
+  'mashing the timeline…',
+];
+
+export function initLatest(root: ParentNode = document, fetchImpl: typeof fetch = fetch, random: () => number = Math.random): void {
   const tile = root.querySelector<HTMLElement>('[data-latest]');
   if (!tile || tile.dataset.latestBound === 'true') return;
   tile.dataset.latestBound = 'true';
   // aria-busy is only set from JS: without JS the fallback line is the content.
   tile.querySelector('[data-latest-post]')?.setAttribute('aria-busy', 'true');
+  const loading = tile.querySelector<HTMLElement>('[data-latest-loading]');
+  if (loading) loading.textContent = LOADING_LINES[Math.floor(random() * LOADING_LINES.length)] ?? LOADING_LINES[0]!;
   const cached = readCache();
   if (cached) {
     renderItems(tile, cached);
@@ -567,8 +582,25 @@ export function initCopyEmail(root: ParentNode = document): void {
   });
 }
 
+/** The flower patch's script, once the tile is close (it brings the sign-in code with it). */
+export function initGardenWhenNear(root: ParentNode = document): void {
+  const tile = root.querySelector<HTMLElement>('[data-garden]');
+  if (!tile) return;
+  const run = () => void import('./garden').then((m) => m.initGarden()).catch(() => undefined);
+  let pending = false;
+  try {
+    pending = (window.sessionStorage.getItem('blog:pending') ?? '').includes('"plant"');
+  } catch {
+    // storage blocked: nothing can be pending
+  }
+  if (pending) run();
+  else whenNear(tile, run);
+}
+
 export function init(): void {
   initLatest();
   initCopyEmail();
   initPet();
+  initWeather();
+  initGardenWhenNear();
 }

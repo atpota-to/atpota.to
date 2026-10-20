@@ -60,8 +60,13 @@ describe('client metadata', () => {
     expect(META.application_type).toBe('web');
     expect(META.dpop_bound_access_tokens).toBe(true);
     expect(META.scope).toBe(SCOPE);
-    // only what the blog writes: subscriptions and recommends, and creating or deleting comments
-    expect(String(META.scope).split(' ').sort()).toEqual(['atproto', 'include:site.standard.authSocial', 'repo:pub.leaflet.comment?action=create&action=delete']);
+    // only what the site writes: subscriptions and recommends, and creating or deleting comments and flowers
+    expect(String(META.scope).split(' ').sort()).toEqual([
+      'atproto',
+      'include:site.standard.authSocial',
+      'repo:pub.leaflet.comment?action=create&action=delete',
+      'repo:to.atpota.garden.sprout?action=create&action=delete',
+    ]);
   });
 
   it('vercel.json serves it as JSON and keeps it out of the rewrites', () => {
@@ -185,7 +190,8 @@ describe('state', () => {
   it('only returns to paths under /blog', () => {
     expect(safeReturnTo('/blog')).toBe('/blog');
     expect(safeReturnTo('/blog/3myasnk4bzk22')).toBe('/blog/3myasnk4bzk22');
-    for (const bad of ['//evil.com', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/', '/blog/a?x=1', '/blog/a#b', 7]) {
+    expect(safeReturnTo('/')).toBe('/');
+    for (const bad of ['//evil.com', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
       expect(safeReturnTo(bad), String(bad)).toBeNull();
     }
   });
@@ -215,8 +221,8 @@ describe('state', () => {
 /* ---------- the page ---------- */
 
 const SHELL_DIALOG = (() => {
-  const shell = read('../shells/blog.html');
-  return shell.slice(shell.indexOf('<dialog'), shell.indexOf('</dialog>') + '</dialog>'.length);
+  const partial = read('../src/partials/signin.html');
+  return partial.slice(partial.indexOf('<dialog'), partial.indexOf('</dialog>') + '</dialog>'.length);
 })();
 
 function postPage(opts: { email?: boolean } = {}): string {

@@ -608,6 +608,264 @@ a.tile.tile--soil:hover {
   }
 }
 
+/* ---------- sign-in dialog (src/partials/signin.html, src/blog/signin.ts) ---------- */
+
+html:has(.blog-signin[open]) {
+  overflow: hidden;
+}
+
+.blog-signin {
+  width: min(420px, calc(100% - 32px));
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 28px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-pop);
+}
+
+.blog-signin::backdrop {
+  background: rgba(61, 47, 27, 0.45);
+  background: var(--scrim, rgba(61, 47, 27, 0.45));
+}
+
+.blog-signin__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 24px 24px;
+}
+
+.blog-signin__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.blog-signin__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.blog-signin__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.blog-signin__close:hover {
+  background: var(--line);
+}
+
+.blog-signin__close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.blog-signin__step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.blog-signin__lede {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+/* "is this you?": the account the handle led to */
+.blog-signin__who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+}
+
+.blog-signin__avatar {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--line);
+}
+
+.blog-signin__names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.blog-signin__name {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.blog-signin__handle {
+  color: var(--muted);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+/* The host is the point of this button: it may wrap, never truncate. */
+.blog-signin__go {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.blog-signin__where {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.blog-signin__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.blog-signin__back {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.blog-signin__label {
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+.blog-signin__input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+}
+
+.blog-signin__input:focus-visible {
+  border-color: var(--focus);
+}
+
+.blog-signin__input[aria-invalid="true"] {
+  border-color: var(--ink);
+}
+
+.blog-signin__error {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.blog-signin__fine {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .blog-signin {
+    margin: auto 0 0;
+    width: 100%;
+    border-radius: 28px 28px 0 0;
+  }
+
+  .blog-signin__panel {
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+}
+
+@media print {
+  .blog-signin {
+    display: none !important;
+  }
+}
+
+/* ---------- celebrations (src/scripts/burst.ts) ---------- */
+
+.burst {
+  position: fixed;
+  z-index: calc(var(--z-poe) - 1);
+  width: 14px;
+  height: 9px;
+  margin: -5px 0 0 -7px;
+  border-radius: 50% 0;
+  pointer-events: none;
+  animation: burst 0.9s cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+}
+
+.burst--leaves {
+  background: var(--vine);
+}
+
+.burst--leaves[data-shade="1"] {
+  background: var(--leaf);
+}
+
+.burst--leaves[data-shade="2"] {
+  background: var(--flesh);
+}
+
+.burst--hearts {
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50% 50% 0 50%;
+  background: var(--blush);
+}
+
+@keyframes burst {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(0.6);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+  }
+}
+
 /* ---------- footer ---------- */
 
 .site-footer {

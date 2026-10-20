@@ -179,7 +179,7 @@ async function readComment(doFetch: Fetch, ref: LinkRef, document: string): Prom
 }
 
 /** Runs `fn` over `items`, `limit` at a time, keeping the order. */
-async function mapPool<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapPool<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   const worker = async () => {

@@ -73,7 +73,22 @@
             <span class="home-sun__star" style="--x: 9%; --y: 52%; --d: 1.5s"></span>
             <span class="home-sun__star" style="--x: 88%; --y: 46%; --d: 0.9s"></span>
           </div>
+          <div class="home-sun__day" aria-hidden="true">
+            <span class="home-sun__drift" style="--y: 16%; --dur: 70s; --at: -12s; --rest: 18%"><span class="home-sun__cloud"></span></span>
+            <span class="home-sun__drift" style="--y: 34%; --dur: 95s; --at: -60s; --rest: 72%; --size: 0.7"><span class="home-sun__cloud"></span></span>
+            <span class="home-sun__drift" style="--y: 8%; --dur: 120s; --at: -95s; --rest: 52%; --size: 0.55"><span class="home-sun__cloud"></span></span>
+          </div>
           <div class="home-sun__mound" aria-hidden="true"></div>
+          <div class="home-sun__fireflies" aria-hidden="true">
+            <span style="--x: 14%; --y: 58%; --dx: 26px; --dy: -18px; --dur: 3.2s; --d: 0s"></span>
+            <span style="--x: 24%; --y: 40%; --dx: -20px; --dy: 22px; --dur: 4.1s; --d: 1.1s"></span>
+            <span style="--x: 33%; --y: 70%; --dx: 18px; --dy: -26px; --dur: 3.6s; --d: 0.4s"></span>
+            <span style="--x: 62%; --y: 30%; --dx: -24px; --dy: 16px; --dur: 4.6s; --d: 2s"></span>
+            <span style="--x: 72%; --y: 62%; --dx: 22px; --dy: -14px; --dur: 3.8s; --d: 0.8s"></span>
+            <span style="--x: 82%; --y: 44%; --dx: -16px; --dy: -22px; --dur: 4.3s; --d: 1.6s"></span>
+            <span style="--x: 90%; --y: 72%; --dx: -22px; --dy: -12px; --dur: 3.4s; --d: 2.4s"></span>
+            <span style="--x: 46%; --y: 18%; --dx: 20px; --dy: 18px; --dur: 5s; --d: 1.3s"></span>
+          </div>
           <img class="home-sun__sprout home-sun__sprout--1" src="/src/assets/sprout.svg" alt="" width="70" height="65">
           <img class="home-sun__sprout home-sun__sprout--2" src="/src/assets/sprout.svg" alt="" width="46" height="43">
           <img class="home-sun__sprout home-sun__sprout--3" src="/src/assets/sprout.svg" alt="" width="58" height="54">
@@ -181,6 +196,49 @@
           <p class="visually-hidden" role="status" data-copy-status></p>
         </section>
 
+        <section class="tile home-weather" aria-labelledby="home-weather-title" data-weather data-state="loading">
+          <h2 class="eyebrow home-weather__title" id="home-weather-title">atmospheric conditions</h2>
+          <div class="home-weather__now">
+            <svg class="home-weather__sun" aria-hidden="true" focusable="false" viewBox="0 0 100 100">
+              <g class="home-weather__rays"><path d="M50 2 L55 20 L45 20 Z"/><path d="M50 98 L45 80 L55 80 Z"/><path d="M2 50 L20 45 L20 55 Z"/><path d="M98 50 L80 55 L80 45 Z"/><path d="M16 16 L30 26 L26 30 Z"/><path d="M84 84 L70 74 L74 70 Z"/><path d="M84 16 L74 30 L70 26 Z"/><path d="M16 84 L26 70 L30 74 Z"/></g>
+              <circle class="home-weather__disc" cx="50" cy="50" r="24"/>
+              <path class="home-weather__face" d="M41 47 q2 -3 4 0 M55 47 q2 -3 4 0 M45 56 q5 4 10 0"/>
+            </svg>
+            <div class="home-weather__reading">
+              <p class="home-weather__big"><span data-weather-posts>&ndash;</span> <span class="home-weather__unit">posts a second</span></p>
+              <p class="home-weather__cond" data-weather-cond>checking the sky…</p>
+            </div>
+          </div>
+          <dl class="home-weather__row">
+            <div><dt>likes</dt><dd data-weather-likes>&ndash;</dd></div>
+            <div><dt>reposts</dt><dd data-weather-reposts>&ndash;</dd></div>
+            <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
+          </dl>
+          <p class="home-weather__note">all per second, from a few seconds of bluesky's firehose, counted once a minute.</p>
+        </section>
+
+        <section class="tile home-patch" aria-labelledby="home-patch-title" data-garden data-state="loading">
+          <div class="home-patch__head">
+            <h2 class="eyebrow home-patch__title" id="home-patch-title">the flower patch</h2>
+            <p class="home-patch__count" data-garden-count></p>
+          </div>
+          <p class="home-patch__text">plant a flower with your bluesky account. it's saved in your own repo, and it grows here for everyone to see.</p>
+          <div class="home-patch__bed" aria-hidden="true" data-garden-bed></div>
+          <div class="home-patch__controls">
+            <div class="home-patch__kinds" role="radiogroup" aria-label="pick a flower" data-garden-kinds>
+              <button type="button" class="home-patch__kind home-flower--sunflower" role="radio" aria-checked="true" data-kind="sunflower"><span class="visually-hidden">sunflower</span></button>
+              <button type="button" class="home-patch__kind home-flower--rose" role="radio" aria-checked="false" data-kind="rose"><span class="visually-hidden">rose</span></button>
+              <button type="button" class="home-patch__kind home-flower--daisy" role="radio" aria-checked="false" data-kind="daisy"><span class="visually-hidden">daisy</span></button>
+              <button type="button" class="home-patch__kind home-flower--violet" role="radio" aria-checked="false" data-kind="violet"><span class="visually-hidden">violet</span></button>
+              <button type="button" class="home-patch__kind home-flower--poppy" role="radio" aria-checked="false" data-kind="poppy"><span class="visually-hidden">poppy</span></button>
+              <button type="button" class="home-patch__kind home-flower--tulip" role="radio" aria-checked="false" data-kind="tulip"><span class="visually-hidden">tulip</span></button>
+            </div>
+            <button type="button" class="btn btn--primary btn--sm home-patch__plant" data-garden-plant>plant a sunflower</button>
+            <button type="button" class="home-patch__dig" data-garden-dig hidden>dig mine up</button>
+          </div>
+          <p class="home-patch__status" role="status" data-garden-status></p>
+        </section>
+
         <section class="tile home-poe" aria-labelledby="home-poe-title">
           <img class="home-poe__potato" src="/src/assets/mascot/potato-happy.svg" alt="" width="160" height="130" loading="lazy">
           <h2 class="home-poe__title" id="home-poe-title">hi! i'm poe, the potato in the corner</h2>
@@ -199,7 +257,7 @@
           </div>
           <div class="home-post" data-latest-post>
             <div class="home-post__skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
-            <p class="visually-hidden home-post__loading">loading the latest posts</p>
+            <p class="home-post__loading" data-latest-loading>digging up the latest…</p>
             <p class="home-post__fallback" data-latest-fallback>new posts from atpotato, poe, anisota and aturi live on bluesky, and poe's weekly dispatch lives on <a href="/blog">the blog</a>.</p>
           </div>
           <ol class="home-feed" role="list" data-latest-list hidden></ol>
@@ -208,6 +266,8 @@
 
       </div>
     </main>
+
+    <!-- @partial signin -->
 
     <!-- @partial footer -->
 </body>

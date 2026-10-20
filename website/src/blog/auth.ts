@@ -10,8 +10,9 @@
  *                 CALLBACK_PATH. (Vite won't bundle a file from public/.)
  *   redirect_uri  https://atpota.to/blog. The sign-in comes back to the blog index, and
  *                 src/blog/ui.ts sends the reader on to the page they started from.
- *   scope         include:site.standard.authSocial (subscriptions and recommends) and
- *                 repo:pub.leaflet.comment, create and delete only
+ *   scope         include:site.standard.authSocial (subscriptions and recommends),
+ *                 repo:pub.leaflet.comment and repo:to.atpota.garden.sprout (the home
+ *                 page's flower patch), create and delete only
  *
  * Handles are resolved by atpota.to's own PDS, so a typed handle isn't sent to anyone else.
  * The library is loaded on demand: a reader who never signs in never downloads it.
@@ -30,8 +31,8 @@ import type { OAuthSession } from '@atproto/oauth-client-browser';
 export const SITE_ORIGIN = 'https://atpota.to';
 export const CLIENT_ID = `${SITE_ORIGIN}/oauth-client-metadata.json`;
 export const CALLBACK_PATH = '/blog';
-/** Subscriptions and recommends (standard.site's own permission set), and comments. */
-export const SCOPE = 'atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete';
+/** Subscriptions and recommends (standard.site's own permission set), comments, and flowers. */
+export const SCOPE = 'atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete';
 export const HANDLE_RESOLVER = 'https://pds.atpota.to';
 /** Where the library remembers the signed-in account (localStorage). */
 export const SESSION_KEY = '@@atproto/oauth-client-browser(sub)';

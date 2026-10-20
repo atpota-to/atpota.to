@@ -3,9 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_CODES } from '../src/poe/storage.js';
-import { POE_BLUESKY_URL, noteCopy, waitPhrase } from '../src/poe/copy.js';
+import { DIGGING_LINES, POE_BLUESKY_URL, noteCopy, waitPhrase } from '../src/poe/copy.js';
 import { mountPoe, unmountPoe } from '../src/poe/index.js';
-import { BLINK_MS, NAP_AFTER_MS, WAKE_MS, WAVE_MS, idleGap } from '../src/poe/idle.js';
+import { BLINK_MS, CHEER_MS, NAP_AFTER_MS, WAKE_MS, WAVE_MS, idleGap } from '../src/poe/idle.js';
 import { faceUrl } from '../src/poe/moods.js';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../src/scripts/mascot.js';
 import { PHONE_QUERY, type PoeWidget } from '../src/poe/ui.js';
@@ -357,7 +357,7 @@ describe('a turn', () => {
     expect($('.poe-send').getAttribute('aria-disabled')).toBe('true');
     expect($('.poe-chips').hidden).toBe(true);
     expect($('.poe-status').hidden).toBe(false);
-    expect($('.poe-status__text').textContent).toBe('digging…');
+    expect(DIGGING_LINES.map((line) => `${line}…`)).toContain($('.poe-status__text').textContent);
     expect($('.poe-panel__potato').getAttribute('src')).toBe(faceUrl('digging'));
 
     stream.push(sse([['ready', { conversation: 'new' }], ['status', { state: 'digging', label: 'resolving a handle' }]]));
@@ -1132,6 +1132,19 @@ describe('idle life', () => {
     vi.advanceTimersByTime(WAKE_MS);
     expect(potato.dataset.startled).toBeUndefined();
     expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+  });
+
+  it('hops happily when the page cheers, then settles', () => {
+    const { potato, img } = quietMount();
+    window.dispatchEvent(new CustomEvent('poe:cheer'));
+    expect(potato.dataset.cheering).toBe('true');
+    expect(img.getAttribute('src')).toBe(MASCOT_URLS.happy);
+    vi.advanceTimersByTime(CHEER_MS);
+    expect(potato.dataset.cheering).toBeUndefined();
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+    widget.open({ via: 'keyboard' });
+    window.dispatchEvent(new CustomEvent('poe:cheer'));
+    expect(potato.dataset.cheering).toBeUndefined();
   });
 
   it('keeps awake while the visitor keeps moving', () => {

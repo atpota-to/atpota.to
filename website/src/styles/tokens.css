@@ -65,6 +65,7 @@
   --focus-on-dark: var(--sun);
   --scrim: rgba(61, 47, 27, 0.45);
   --selection: #FFE29A;
+  --blush: #E9879A;
 
   /* shape and depth */
   --radius-tile: 32px;

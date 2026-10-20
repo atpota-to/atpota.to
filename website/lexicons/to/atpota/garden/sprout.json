@@ -1,0 +1,27 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.garden.sprout",
+  "description": "A flower planted in the flower patch on atpota.to. One per account; planting again replaces it.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["subject", "kind", "createdAt"],
+        "properties": {
+          "subject": {
+            "type": "string",
+            "format": "did",
+            "description": "The garden the flower grows in: atpotato's DID, did:plc:qntsxa2i4sb24noi45fx4np2."
+          },
+          "kind": {
+            "type": "string",
+            "knownValues": ["sunflower", "rose", "daisy", "violet", "poppy", "tulip"]
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

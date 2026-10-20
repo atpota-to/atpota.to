@@ -35,6 +35,16 @@ export const COPY = {
   answerAnnounce: 'poe says: ',
 } as const;
 
+/** What Poe says while it starts on a question, before any tool reports in (the widget adds "…"). */
+export const DIGGING_LINES: readonly string[] = [
+  COPY.digging,
+  'peeling that open',
+  'checking under the soil',
+  'asking the other potatoes',
+  'rummaging in the root cellar',
+  'mashing the firehose',
+];
+
 export const CHIPS_DEFAULT = ["what's a labeler?", 'can my domain be my handle?', 'what is an at:// link?'] as const;
 export const CHIPS_GUIDE = ['explain starter packs', "what's a custom feed?", COPY.summarize] as const;
 

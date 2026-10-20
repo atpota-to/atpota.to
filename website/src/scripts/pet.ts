@@ -6,6 +6,9 @@
  * - Pets: every click or tap squashes Poe and floats a heart up. A few pets in a
  *   row get a reaction (petReaction), shown as a face and a line in the tile's
  *   speech bubble. After PET_RESET_MS without a pet, everything settles back.
+ * - Remembers: pets add up across visits (localStorage PETS_KEY), and some totals get
+ *   a line of their own (milestoneLine). A reader who signed in on the blog is greeted
+ *   by handle in the bubble (src/scripts/reader.ts).
  *
  * Nothing moves under reduced motion; the faces and lines still change.
  * mascot.ts keeps swapping faces on hover; data-mascot-hold pauses that while a
@@ -13,8 +16,12 @@
  */
 
 import { MASCOT_URLS, restoreMascot, type MascotFace } from './mascot';
+import { readReader } from './reader';
 
 export const PET_RESET_MS = 4000;
+export const PETS_KEY = 'atpotato:pets';
+/** Longer handles don't fit the bubble; those readers get a plain "hi again". */
+const GREET_MAX_HANDLE = 24;
 const HEART_MS = 1100;
 
 export interface PetReaction {
@@ -24,13 +31,47 @@ export interface PetReaction {
   blush?: boolean;
 }
 
-/** What Poe does on the nth pet in a row (1-based). */
-export function petReaction(n: number): PetReaction {
+/** What Poe does on the nth pet in a row (1-based). Old friends (10+ pets on earlier visits) hear so. */
+export function petReaction(n: number, oldFriend = false): PetReaction {
   if (n === 3) return { face: 'wink', say: 'hehe' };
   if (n === 6) return { face: 'happy', say: 'stop it, you (⁄ ⁄•⁄ω⁄•⁄ ⁄)', blush: true };
   if (n === 8) return { face: 'happy', say: 'wheee', spin: true, blush: true };
-  if (n >= 10) return { face: 'kawaii', say: "ok ok, we're friends now", blush: true };
+  if (n >= 10) return { face: 'kawaii', say: oldFriend ? 'still best friends (◕‿◕)' : "ok ok, we're friends now", blush: true };
   return {};
+}
+
+/** A line for some all-time pet totals, or null. */
+export function milestoneLine(total: number): string | null {
+  if (total === 25) return "that's 25 pets all time (◕‿◕)";
+  if (total === 50) return "50 pets. we're basically family";
+  if (total === 100) return "100 pets! you're my favourite";
+  if (total === 250) return "250 pets. i'm telling the other potatoes";
+  if (total >= 500 && total % 500 === 0) return `${total} pets. legend.`;
+  return null;
+}
+
+/** The bubble's hint, with the reader's handle when it fits. */
+export function greeting(handle: string | null, touch: boolean): string | null {
+  if (!handle) return null;
+  const action = touch ? 'tap me' : 'hover me';
+  return handle.length <= GREET_MAX_HANDLE ? `hi @${handle}! ${action} (◕‿◕)` : `hi again! ${action} (◕‿◕)`;
+}
+
+function readPets(): number {
+  try {
+    const n = Number(window.localStorage.getItem(PETS_KEY));
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function savePets(total: number): void {
+  try {
+    window.localStorage.setItem(PETS_KEY, String(total));
+  } catch {
+    // storage blocked: the count lasts for this page only
+  }
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -67,6 +108,14 @@ export function initPet(root: ParentNode = document): void {
   img.dataset.petBound = 'true';
   const bubble = tile.querySelector<HTMLElement>('[data-pet-say]');
 
+  // say hi by name
+  const handle = readReader();
+  for (const [selector, touch] of [['.only-hover', false], ['.only-touch', true]] as const) {
+    const hint = bubble?.parentElement?.querySelector<HTMLElement>(selector);
+    const text = greeting(handle, touch);
+    if (hint && text) hint.textContent = text;
+  }
+
   // lean toward the pointer
   tile.addEventListener('pointermove', (event) => {
     if (event.pointerType === 'touch' || reducedMotion()) return;
@@ -85,6 +134,8 @@ export function initPet(root: ParentNode = document): void {
 
   // pet
   let count = 0;
+  let total = readPets();
+  const oldFriend = total >= 10;
   let resetTimer: number | undefined;
 
   const say = (text: string | undefined) => {
@@ -124,11 +175,13 @@ export function initPet(root: ParentNode = document): void {
 
   img.addEventListener('click', () => {
     count += 1;
+    total += 1;
+    savePets(total);
     window.clearTimeout(resetTimer);
     resetTimer = window.setTimeout(settle, PET_RESET_MS);
     heart();
 
-    const reaction = petReaction(count);
+    const reaction = petReaction(count, oldFriend);
     if (!reducedMotion()) {
       if (reaction.spin) replay(img, 'is-spinning');
       else replay(img, 'is-squished');
@@ -138,6 +191,8 @@ export function initPet(root: ParentNode = document): void {
       img.src = MASCOT_URLS[reaction.face];
     }
     if (reaction.blush) img.classList.add('is-blushing');
-    if (reaction.say) say(reaction.say);
+    const milestone = milestoneLine(total);
+    if (milestone) say(milestone);
+    else if (reaction.say) say(reaction.say);
   });
 }
