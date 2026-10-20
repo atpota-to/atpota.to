@@ -7,17 +7,24 @@
  *                         "busier than usual for a tuesday afternoon" once the station has
  *                         heard a few of those, "for this time of day" after a day
  *   new in the atmosphere apps heard for the first time in the last 24 hours, after the
- *                         station's first week (until then it says it's warming up)
+ *                         station's first week (until then it says it's warming up), as a
+ *                         word cloud sized by records, each name a link to its lexicons in
+ *                         Aturi, with a card of details on hover
  *   when the sky is busiest
  *                         new records a second for every hour of the week, as a heat map;
  *                         it only names the busiest and quietest hours after a few weeks
  *
- * Checks again every minute while the tab is visible. App and collection names are other
- * people's text and only reach the DOM through textContent.
+ * Checks again every minute while the tab is visible; the numbers roll to each new answer
+ * (roll.ts). App and collection names are other people's text and only reach the DOM
+ * through textContent.
  */
+
+import { rollText } from './roll';
 
 export const ALMANAC_ENDPOINT = '/api/weather-almanac';
 export const ALMANAC_REFRESH_MS = 60_000;
+/** Aturi's page for a namespace's lexicons (aturi.to, src/app/explore/lexicons/group). */
+export const ATURI_LEXICONS = 'https://aturi.to/explore/lexicons/group/';
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
@@ -216,6 +223,12 @@ function setText(root: ParentNode, sel: string, text: string): void {
   if (el) el.textContent = text;
 }
 
+/** Like setText, rolling the numbers in it. */
+function roll(root: ParentNode, sel: string, text: string): void {
+  const el = $(root, sel);
+  if (el) rollText(el, text);
+}
+
 export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string): void {
   if (a.normal) {
     const usual = usualText(a.normal, nowMs, tz);
@@ -224,57 +237,149 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
   }
   const t = a.today;
   if (t) {
-    setText(tile, '[data-a-high]', t.high ? `${Math.round(t.high.perSecond)}` : '–');
+    roll(tile, '[data-a-high]', t.high ? `${Math.round(t.high.perSecond)}` : '–');
     setText(tile, '[data-a-high-at]', t.high ? `new records a second at ${clock(t.high.minute, tz)}` : 'no whole minute heard yet');
-    setText(tile, '[data-a-low]', t.low ? `${Math.round(t.low.perSecond)}` : '–');
+    roll(tile, '[data-a-low]', t.low ? `${Math.round(t.low.perSecond)}` : '–');
     setText(tile, '[data-a-low-at]', t.low ? `new records a second at ${clock(t.low.minute, tz)}` : '');
-    setText(tile, '[data-a-total]', bigNumber(t.creates));
+    roll(tile, '[data-a-total]', bigNumber(t.creates));
     const share = t.creates > 0 ? (t.elsewhere / t.creates) * 100 : 0;
-    setText(tile, '[data-a-total-note]', t.creates > 0 ? `new records, ${share < 1 ? share.toFixed(2) : share.toFixed(1)}% from other apps` : 'new records');
+    roll(tile, '[data-a-total-note]', t.creates > 0 ? `new records, ${share < 1 ? share.toFixed(2) : share.toFixed(1)}% from other apps` : 'new records');
   }
   tile.dataset.state = 'ready';
 }
 
 // ---------- new in the atmosphere ----------
 
+/** An app's lexicons in Aturi. Its namespace is its domain the other way round: mado.blue writes blue.mado.*. */
+export function aturiFor(domain: string): string {
+  return ATURI_LEXICONS + encodeURIComponent(domain.split('.').reverse().join('.'));
+}
+
+/** "first heard at 3:14 pm · 4 records". */
+function heardText(app: NewApp, tz?: string): string {
+  return `first heard at ${clock(app.firstSeen, tz)} · ${app.creates.toLocaleString('en-US')} record${app.creates === 1 ? '' : 's'}`;
+}
+
 export function renderNewApps(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string): void {
   const na = a.newApps;
   if (!na) return;
   const list = $(tile, '[data-a-new-list]');
+  const note = $(tile, '[data-a-new-note]');
+  const apps = na.warmingUp ? [] : na.apps;
   if (na.warmingUp) {
     const left = na.readyAt ? Math.max(0, Date.parse(na.readyAt) - nowMs) : WEEK;
     setText(tile, '[data-a-new-lede]', `the station is still getting to know the sky. after a week of listening it can tell a new app from a quiet one: ${roughly(left)} to go. so far today it's heard ${na.heard} apps outside bluesky.`);
     setText(tile, '[data-a-new-count]', '');
-    list?.replaceChildren();
-  } else if (na.apps.length === 0) {
+  } else if (apps.length === 0) {
     setText(tile, '[data-a-new-lede]', `nothing new in the last 24 hours: all ${na.heard} apps it heard, it had heard before. the sky's settled.`);
     setText(tile, '[data-a-new-count]', '');
-    list?.replaceChildren();
   } else {
-    setText(tile, '[data-a-new-lede]', `${na.apps.length === 1 ? 'one app' : `${na.apps.length} apps`} blew in for the first time in the last 24 hours.`);
-    setText(tile, '[data-a-new-count]', `${na.apps.length} new`);
-    list?.replaceChildren(
-      ...na.apps.map((app) => {
-        const li = document.createElement('li');
-        li.className = 'weather-new__app';
-        const domain = document.createElement('strong');
-        domain.className = 'weather-new__domain';
-        domain.textContent = app.domain;
-        const when = document.createElement('span');
-        when.className = 'weather-new__when';
-        when.textContent = `first heard at ${clock(app.firstSeen, tz)} · ${app.creates.toLocaleString('en-US')} record${app.creates === 1 ? '' : 's'}`;
-        li.append(domain, when);
-        if (app.collections.length) {
-          const sub = document.createElement('span');
-          sub.className = 'weather-new__collections';
-          sub.textContent = app.collections.join(', ');
-          li.append(sub);
-        }
-        return li;
-      }),
-    );
+    setText(tile, '[data-a-new-lede]', `${apps.length === 1 ? 'one app' : `${apps.length} apps`} blew in for the first time in the last 24 hours.`);
+    setText(tile, '[data-a-new-count]', `${apps.length} new`);
   }
+  if (note) note.hidden = apps.length === 0;
+  if (list) renderCloud(tile, list, apps, tz);
   tile.dataset.state = 'ready';
+}
+
+/**
+ * The new apps as a word cloud: each name sized by the records it's written (on a log
+ * scale, so one busy app doesn't make the rest specks) and a link to its lexicons in
+ * Aturi. It's only redrawn when the apps or their counts change, and a newcomer pops in.
+ */
+function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: string): void {
+  const drawn = apps.map((app) => `${app.domain} ${app.creates} ${app.firstSeen}`).join('\n');
+  if (list.dataset.drawn === drawn) return;
+  const before = list.dataset.drawn === undefined ? null : new Set([...list.querySelectorAll<HTMLElement>('[data-domain]')].map((el) => el.dataset.domain));
+  list.dataset.drawn = drawn;
+  const tip = $(tile, '[data-a-new-tip]');
+  if (tip) tip.hidden = true;
+  const most = Math.log(Math.max(1, ...apps.map((app) => app.creates)));
+  list.replaceChildren(
+    ...apps.map((app) => {
+      const li = document.createElement('li');
+      li.className = before && !before.has(app.domain) ? 'weather-new__app is-new' : 'weather-new__app';
+      li.style.setProperty('--w', (most > 0 ? Math.log(Math.max(1, app.creates)) / most : 0).toFixed(2));
+      const link = document.createElement('a');
+      link.className = 'weather-new__link';
+      link.href = aturiFor(app.domain);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.dataset.domain = app.domain;
+      link.dataset.heard = heardText(app, tz);
+      link.dataset.collections = app.collections.join(', ');
+      const name = document.createElement('span');
+      name.className = 'weather-new__domain';
+      name.textContent = app.domain;
+      // what the card shows, for screen readers
+      const said = document.createElement('span');
+      said.className = 'visually-hidden';
+      said.textContent = `, ${link.dataset.heard}${app.collections.length ? `: ${link.dataset.collections}` : ''}. opens aturi in a new tab`;
+      link.append(name, said);
+      li.append(link);
+      return li;
+    }),
+  );
+  if (tip && tile.dataset.newTip !== 'bound') {
+    tile.dataset.newTip = 'bound';
+    bindCloudTip(tile, list, tip);
+  }
+}
+
+/**
+ * The card over a name in the cloud: when it was first heard, how many records, which
+ * collections, and that it opens in Aturi. For a mouse or a keyboard; a tap just follows
+ * the link. It's decoration (the link says it all in words), kept inside the tile.
+ */
+function bindCloudTip(tile: HTMLElement, list: HTMLElement, tip: HTMLElement): void {
+  const show = (link: HTMLElement) => {
+    const heard = document.createElement('span');
+    heard.textContent = link.dataset.heard ?? '';
+    const parts: HTMLElement[] = [heard];
+    if (link.dataset.collections) {
+      const cols = document.createElement('span');
+      cols.className = 'weather-new__tip-cols';
+      cols.textContent = link.dataset.collections;
+      parts.push(cols);
+    }
+    const go = document.createElement('span');
+    go.className = 'weather-new__tip-go';
+    go.textContent = 'explore it in aturi ↗';
+    parts.push(go);
+    tip.replaceChildren(...parts);
+    tip.hidden = false;
+    const box = tile.getBoundingClientRect();
+    const at = link.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    const edge = 12;
+    const left = Math.min(Math.max(at.left - box.left + at.width / 2 - w / 2, edge), box.width - w - edge);
+    const above = at.top - box.top - h - 6;
+    tip.style.left = `${Math.max(edge, left)}px`;
+    tip.style.top = `${above >= edge ? above : at.bottom - box.top + 6}px`;
+  };
+  const hide = () => {
+    tip.hidden = true;
+  };
+  const linkOf = (t: EventTarget | null) => (t instanceof Element ? t.closest<HTMLElement>('.weather-new__link') : null);
+  list.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const link = linkOf(e.target);
+    if (link) show(link);
+    else hide();
+  });
+  list.addEventListener('pointerleave', hide);
+  list.addEventListener('focusin', (e) => {
+    const link = linkOf(e.target);
+    let keyboard = true;
+    try {
+      keyboard = !!link?.matches(':focus-visible');
+    } catch {
+      // no :focus-visible: show it
+    }
+    if (link && keyboard) show(link);
+  });
+  list.addEventListener('focusout', hide);
 }
 
 // ---------- when the sky is busiest ----------

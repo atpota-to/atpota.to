@@ -7,6 +7,9 @@
  * every kind of event and the accounts active, as counts. When the reading is the weather station's rolling 60 seconds it checks
  * again every 5 seconds (with a sparkline of those 60 seconds), otherwise once a minute,
  * always only while the tab is visible; a failed check keeps the last reading on screen.
+ * Numbers roll to each new reading (roll.ts), the bars grow, shrink and trade places
+ * rather than being drawn afresh, and the sparkline scrolls along, so nothing on the page
+ * jumps while it's live.
  *
  * Trends come from /api/weather-history (server/weather-history.ts): the station's
  * minute rows for the last hour, 24 hours, 7 days or 30 days, as three charts
@@ -32,6 +35,7 @@
 
 import { alertsFor, createAlertDesk, newAppAlert, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, type Almanac } from './weather-almanac';
+import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { renderChart, smoothPath, type ChartPoint } from './weather-chart';
 import { cloudCount, renderClouds } from './weather-sky';
 import {
@@ -150,6 +154,12 @@ function count(root: ParentNode, sel: string, value: number | undefined, format:
   if (el && value !== undefined) countTo(el, value, format);
 }
 
+/** Like setText, rolling the numbers in it. */
+function roll(root: ParentNode, sel: string, text: string): void {
+  const el = $(root, sel);
+  if (el) rollText(el, text);
+}
+
 export interface Bar {
   label: string;
   /** Smaller text under the label: an NSID, or an app's collections. */
@@ -162,49 +172,89 @@ export interface Bar {
   change?: { text: string; words: string; trend: 'up' | 'down' | 'steady' | 'new' };
 }
 
-/** A list of horizontal bars, each as long as its share of the busiest one, its value in words beside it. */
+/**
+ * A list of horizontal bars, each as long as its share of the busiest one, its value in
+ * words beside it. Rows are kept by label from one reading to the next: the bars grow and
+ * shrink, the values roll, and a row that changes place slides there.
+ */
 export function renderBars(list: HTMLElement, bars: Bar[], seconds: number | undefined): void {
   const max = Math.max(...bars.map((b) => b.perSecond), 0);
-  list.replaceChildren(
-    ...bars.map((b) => {
-      const li = document.createElement('li');
-      li.className = 'weather-bars__row';
-      if (seconds) li.title = `${b.count.toLocaleString('en-US')} in ${seconds} seconds`;
-      const label = document.createElement('span');
-      label.className = 'weather-bars__label';
-      label.textContent = b.label;
-      const value = document.createElement('span');
-      value.className = 'weather-bars__value';
-      value.textContent = b.value ?? formatRate(b.perSecond);
-      const track = document.createElement('span');
-      track.className = 'weather-bars__track';
-      track.setAttribute('aria-hidden', 'true');
-      const fill = document.createElement('span');
-      fill.className = 'weather-bars__fill';
-      fill.style.width = `${max > 0 ? Math.max(1.5, (b.perSecond / max) * 100) : 0}%`;
-      track.append(fill);
-      const change = document.createElement('span');
-      change.className = 'weather-bars__change';
-      if (b.change) {
-        change.dataset.trend = b.change.trend;
-        const shown = document.createElement('span');
-        shown.setAttribute('aria-hidden', 'true');
-        shown.textContent = b.change.text;
-        const said = document.createElement('span');
-        said.className = 'visually-hidden';
-        said.textContent = b.change.words;
-        change.append(shown, said);
-      }
-      li.append(label, change, value, track);
-      if (b.sub) {
-        const sub = document.createElement('span');
-        sub.className = 'weather-bars__sub';
-        sub.textContent = b.sub;
-        li.append(sub);
-      }
-      return li;
-    }),
-  );
+  const motion = motionOK();
+  const had = new Map<string, HTMLElement>();
+  for (const li of list.children) if (li instanceof HTMLElement && li.dataset.key !== undefined) had.set(li.dataset.key, li);
+  const tops = motion ? new Map([...had.values()].map((li) => [li, li.getBoundingClientRect().top])) : null;
+  const rows = bars.map((b) => {
+    const li = had.get(b.label);
+    had.delete(b.label); // a second bar with the same label gets its own row
+    return li ?? barRow(b.label);
+  });
+  // in order, moving as few rows as it can; anything left over has gone
+  rows.forEach((li, i) => {
+    if (list.children[i] !== li) list.insertBefore(li, list.children[i] ?? null);
+  });
+  while (list.children.length > rows.length) list.lastElementChild!.remove();
+  void list.offsetHeight; // a width for moved and new bars to grow from
+  rows.forEach((li, i) => fillBar(li, bars[i]!, max, seconds));
+  if (!tops) return;
+  for (const li of rows) {
+    const was = tops.get(li);
+    if (was === undefined) li.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: ROLL_MS / 2, easing: ROLL_EASE });
+    else {
+      const dy = was - li.getBoundingClientRect().top;
+      if (Math.abs(dy) > 0.5) li.animate?.([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: ROLL_MS, easing: ROLL_EASE });
+    }
+  }
+}
+
+function barRow(key: string): HTMLElement {
+  const li = document.createElement('li');
+  li.className = 'weather-bars__row';
+  li.dataset.key = key;
+  const part = (className: string) => {
+    const span = document.createElement('span');
+    span.className = className;
+    return span;
+  };
+  const track = part('weather-bars__track');
+  track.setAttribute('aria-hidden', 'true');
+  const fill = part('weather-bars__fill');
+  fill.style.width = '0%';
+  track.append(fill);
+  li.append(part('weather-bars__label'), part('weather-bars__change'), part('weather-bars__value'), track);
+  return li;
+}
+
+function fillBar(li: HTMLElement, b: Bar, max: number, seconds: number | undefined): void {
+  if (seconds) li.title = `${b.count.toLocaleString('en-US')} in ${seconds} seconds`;
+  else li.removeAttribute('title');
+  const label = $(li, '.weather-bars__label')!;
+  if (label.textContent !== b.label) label.textContent = b.label;
+  const change = $(li, '.weather-bars__change')!;
+  if (b.change) {
+    change.dataset.trend = b.change.trend;
+    const shown = document.createElement('span');
+    shown.setAttribute('aria-hidden', 'true');
+    shown.textContent = b.change.text;
+    const said = document.createElement('span');
+    said.className = 'visually-hidden';
+    said.textContent = b.change.words;
+    change.replaceChildren(shown, said);
+  } else {
+    delete change.dataset.trend;
+    change.replaceChildren();
+  }
+  rollText($(li, '.weather-bars__value')!, b.value ?? formatRate(b.perSecond));
+  $(li, '.weather-bars__fill')!.style.width = `${max > 0 ? Math.max(1.5, (b.perSecond / max) * 100) : 0}%`;
+  let sub = $(li, '.weather-bars__sub');
+  if (b.sub) {
+    if (!sub) {
+      sub = document.createElement('span');
+      sub.className = 'weather-bars__sub';
+      li.append(sub);
+    }
+    sub.textContent = b.sub;
+    sub.title = b.sub;
+  } else sub?.remove();
 }
 
 export function renderReport(report: HTMLElement, r: Reading, measure: Measure = 'records'): void {
@@ -218,9 +268,12 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
   const spark = $(report, '[data-r-spark]');
   if (spark) {
-    const records = (r.series ?? []).map((p) => p?.creates ?? null);
+    const series = r.series ?? [];
+    const records = series.map((p) => p?.creates ?? null);
     spark.hidden = !live || records.filter((p) => p !== null).length < 2;
-    if (!spark.hidden) renderSparkline(spark, records);
+    // the second the window ends on, so the next one knows how far to scroll
+    const last = series.findLastIndex((p) => p !== null);
+    if (!spark.hidden) renderSparkline(spark, records, last >= 0 ? series[last]!.t + (series.length - 1 - last) : undefined);
   }
 
   // diversity
@@ -230,24 +283,24 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
     setText(report, '[data-r-level-text]', LEVEL_TEXT[r.diversity.level]);
     const marker = $(report, '[data-r-marker]');
     if (marker) marker.style.left = `${(Math.min(r.diversity.index, SCALE_MAX) / SCALE_MAX) * 100}%`;
-    setText(report, '[data-r-collections]', r.diversity.collections.toLocaleString('en-US'));
+    roll(report, '[data-r-collections]', r.diversity.collections.toLocaleString('en-US'));
   }
   const byAccounts = $(report, '[data-r-acct-index]');
   if (byAccounts) {
     byAccounts.hidden = !acct || acct.active <= 0;
     if (acct && acct.active > 0)
-      byAccounts.textContent = `by accounts: ${formatIndex(acct.index)}% of the ${formatCount(acct.active)} accounts active just now wrote somewhere other than bluesky.`;
+      rollText(byAccounts, `by accounts: ${formatIndex(acct.index)}% of the ${formatCount(acct.active)} accounts active just now wrote somewhere other than bluesky.`);
   }
 
   // bluesky and everyone else
   if (r.records) {
-    setText(report, '[data-r-ratio]', ratioText(r.records));
+    roll(report, '[data-r-ratio]', ratioText(r.records));
     renderRatio($(report, '[data-r-bar-bsky]'), $(report, '[data-r-bar-else]'), r.records);
     count(report, '[data-r-bsky]', r.records.bluesky);
     count(report, '[data-r-else]', r.records.elsewhere);
     count(report, '[data-r-total]', r.records.perSecond);
-    setText(report, '[data-r-bsky-share]', formatShare(r.records.bluesky, r.records.perSecond));
-    setText(report, '[data-r-else-share]', formatShare(r.records.elsewhere, r.records.perSecond));
+    roll(report, '[data-r-bsky-share]', formatShare(r.records.bluesky, r.records.perSecond));
+    roll(report, '[data-r-else-share]', formatShare(r.records.elsewhere, r.records.perSecond));
   }
 
   // elsewhere, by records or by accounts
@@ -267,7 +320,7 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   const empty = $(report, '[data-r-apps-empty]');
   if (empty) empty.hidden = shown > 0;
   const n = r.diversity?.apps ?? apps.length;
-  setText(report, '[data-r-apps-count]', n === 0 ? '' : `${n} app${n === 1 ? '' : 's'} heard${n > shown ? `, top ${shown}` : ''}`);
+  roll(report, '[data-r-apps-count]', n === 0 ? '' : `${n} app${n === 1 ? '' : 's'} heard${n > shown ? `, top ${shown}` : ''}`);
 
   // bluesky
   const bskyList = $(report, '[data-r-bsky-list]');
@@ -292,9 +345,11 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
 /**
  * A bare line of the last 60 seconds: decorative (aria-hidden), the reading says it in
  * words. It spans its own lowest to highest second, so a minute that only wobbles around
- * 450 still shows its shape.
+ * 450 still shows its shape. `end` is the second the window ends on: when the next
+ * reading ends a few seconds later, the line scrolls left by that much instead of being
+ * redrawn in place, the old line fading as it goes.
  */
-export function renderSparkline(host: HTMLElement, values: Array<number | null>): void {
+export function renderSparkline(host: HTMLElement, values: Array<number | null>, end?: number): void {
   const w = 240;
   const h = 36;
   const heard = values.filter((v): v is number => v !== null);
@@ -309,15 +364,35 @@ export function renderSparkline(host: HTMLElement, values: Array<number | null>)
     else runs[runs.length - 1]!.push([i * step, span > 0 ? h - 3 - ((v - min) / span) * (h - 6) : h / 2]);
   });
   const d = runs.filter((r) => r.length).map(smoothPath).join('');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  svg.setAttribute('preserveAspectRatio', 'none');
-  svg.setAttribute('focusable', 'false');
+  let svg = host.querySelector('svg');
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('focusable', 'false');
+    host.replaceChildren(svg);
+  }
+  const before = svg.querySelector('path:not(.is-leaving)');
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', d);
   path.setAttribute('vector-effect', 'non-scaling-stroke');
   svg.append(path);
-  host.replaceChildren(svg);
+  const shift = end !== undefined && host.dataset.end ? end - Number(host.dataset.end) : 0;
+  if (end !== undefined) host.dataset.end = String(end);
+  if (!before) return;
+  if (!(shift > 0 && shift < values.length) || !motionOK() || typeof path.animate !== 'function') {
+    before.remove();
+    return;
+  }
+  const dx = shift * step;
+  before.classList.add('is-leaving');
+  path.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: ROLL_MS, easing: ROLL_EASE });
+  before
+    .animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-dx}px)`, opacity: 0 }], { duration: ROLL_MS, easing: ROLL_EASE, fill: 'forwards' })
+    .finished.then(
+      () => before.remove(),
+      () => before.remove(),
+    );
 }
 
 // ---------- trends ----------
@@ -657,7 +732,8 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
 /**
  * The range buttons, the first load, and a refresh while the tab is visible (every minute
  * for the last hour, else every 5). Switching records and accounts redraws what's loaded:
- * one answer has both.
+ * one answer has both. A refresh is quiet: the charts don't dim while it's out, and if it
+ * fails the charts already drawn stay.
  */
 export function initTrends(section: HTMLElement, fetchImpl: typeof fetch = fetch, measure?: MeasureToggle): void {
   const buttons = [...section.querySelectorAll<HTMLButtonElement>('[data-range]')];
@@ -667,11 +743,13 @@ export function initTrends(section: HTMLElement, fetchImpl: typeof fetch = fetch
   measure?.onChange((m) => {
     if (shown) renderTrends(section, shown, Date.now(), m);
   });
-  const load = async () => {
+  const load = async (quietly = false) => {
     const mine = ++asked;
-    section.dataset.state = section.dataset.state === 'ready' ? 'refreshing' : 'loading';
+    const ready = section.dataset.state === 'ready';
+    if (!(quietly && ready)) section.dataset.state = ready ? 'refreshing' : 'loading';
     const history = await fetchHistory(range, fetchImpl);
     if (mine !== asked) return; // a newer range took over
+    if (!history && quietly && ready && shown?.range === range) return;
     shown = history;
     if (history) renderTrends(section, history, Date.now(), measure?.get());
     else {
@@ -696,7 +774,7 @@ export function initTrends(section: HTMLElement, fetchImpl: typeof fetch = fetch
   const tick = () =>
     window.setTimeout(
       () => {
-        if (document.visibilityState !== 'hidden') void load();
+        if (document.visibilityState !== 'hidden') void load(true);
         tick();
       },
       range === 'hour' ? 60_000 : 300_000,
