@@ -8,6 +8,8 @@
  *   <img data-mascot="kawaii" src="/src/assets/mascot/potato-kawaii.svg" alt="...">
  *   optional: data-mascot-faces="wow wink"   (restrict the pool)
  *   optional: data-mascot-dark="sleepy"      (rest face while the dark theme is on)
+ *   set by code: data-mascot-rest="wow"      (rest face for now, over both of the above;
+ *                                             setMascotRest(), e.g. the home page's scene)
  *
  * While the image carries data-mascot-hold (set by the home page's petting, home.ts)
  * hover and tap leave its face alone; restoreMascot() puts the rest face back.
@@ -70,10 +72,18 @@ export function preloadFaces(): void {
 }
 
 const restorers = new WeakMap<HTMLImageElement, () => void>();
+const refreshers = new WeakMap<HTMLImageElement, () => void>();
 
 /** Drops data-mascot-hold and shows the rest face again. */
 export function restoreMascot(img: HTMLImageElement): void {
   restorers.get(img)?.();
+}
+
+/** Rests on `face` from now on (undefined: the usual rest face). A swap or a hold in progress finishes first. */
+export function setMascotRest(img: HTMLImageElement, face: MascotFace | undefined): void {
+  if (face) img.dataset.mascotRest = face;
+  else delete img.dataset.mascotRest;
+  refreshers.get(img)?.();
 }
 
 export function bindMascot(img: HTMLImageElement): void {
@@ -84,7 +94,12 @@ export function bindMascot(img: HTMLImageElement): void {
   const dayFace = isFace(img.dataset.mascot) ? img.dataset.mascot : undefined;
   const darkFace = isFace(img.dataset.mascotDark) ? img.dataset.mascotDark : undefined;
   const night = () => darkFace !== undefined && getTheme() === 'dark';
-  const restSrc = () => (night() ? MASCOT_URLS[darkFace!] : daySrc);
+  const override = () => (isFace(img.dataset.mascotRest) ? img.dataset.mascotRest : undefined);
+  const restFace = () => override() ?? (night() ? darkFace : dayFace);
+  const restSrc = () => {
+    const face = override() ?? (night() ? darkFace : undefined);
+    return face ? MASCOT_URLS[face] : daySrc;
+  };
   const poolAttr = (img.dataset.mascotFaces ?? '').split(/\s+/).filter(isFace);
   const pool = poolAttr.length > 0 ? poolAttr : SWAP_FACES;
   let current: MascotFace | undefined;
@@ -94,7 +109,7 @@ export function bindMascot(img: HTMLImageElement): void {
   const swap = () => {
     window.clearTimeout(tapTimer);
     if (held()) return;
-    current = pickFace(night() ? darkFace : dayFace, current, pool);
+    current = pickFace(restFace(), current, pool);
     img.src = MASCOT_URLS[current];
   };
   const restore = () => {
@@ -108,6 +123,10 @@ export function bindMascot(img: HTMLImageElement): void {
     delete img.dataset.mascotHold;
     restore();
   });
+  refreshers.set(img, () => {
+    if (current === undefined) restore();
+  });
+  if (override()) restore();
   if (darkFace) {
     restore();
     window.addEventListener('theme:change', () => {

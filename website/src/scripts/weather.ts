@@ -14,6 +14,9 @@
  * the index climbs (weather-sky.ts).
  *
  * States live on the tile as data-state="loading" | "ready" | "error".
+ *
+ * The hero tile's scene (scene.ts) reads the same weather on load; readAtmosphere() lets the
+ * two share one request when they ask within SHARE_MS of each other.
  */
 
 import { rollText } from './roll';
@@ -138,6 +141,22 @@ export async function fetchReading(fetchImpl: typeof fetch = fetch): Promise<Rea
   }
 }
 
+/** Two readers asking this close together get the same reading. */
+export const SHARE_MS = 10_000;
+let shared: { at: number; reading: Promise<Reading | null> } | null = null;
+
+/** fetchReading(), shared with anyone else who asked in the last SHARE_MS. */
+export function readAtmosphere(fetchImpl: typeof fetch = fetch, now: number = Date.now()): Promise<Reading | null> {
+  if (shared && now - shared.at < SHARE_MS) return shared.reading;
+  shared = { at: now, reading: fetchReading(fetchImpl) };
+  return shared.reading;
+}
+
+/** Forgets the shared reading (tests). */
+export function resetSharedReading(): void {
+  shared = null;
+}
+
 /** The index as people read it: two decimals under 1, one under 10, whole after that. */
 export function formatIndex(index: number): string {
   return index < 1 ? index.toFixed(2) : index < 10 ? index.toFixed(1) : String(Math.round(index));
@@ -227,7 +246,7 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
   let started = false;
   let every = REFRESH_MS;
   const load = async () => {
-    const reading = await fetchReading(fetchImpl);
+    const reading = await readAtmosphere(fetchImpl);
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
