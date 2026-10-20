@@ -517,6 +517,11 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   --home-icon-bg: var(--butter);
 }
 
+.home-project--turtlemeat {
+  background: var(--card);
+  --home-icon-bg: var(--leaf-tint);
+}
+
 .home-project__top {
   display: flex;
   align-items: flex-start;
@@ -594,6 +599,20 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   border-color: transparent;
 }
 
+/* Four projects fill a row, so the "more" tile runs the full width as a strip beneath them. */
+.home-grid > .home-more {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 20px;
+  min-height: 0;
+}
+
+.home-more__sprout {
+  grid-row: span 2;
+}
+
 .home-more__outline {
   position: absolute;
   inset: -1px;
@@ -648,13 +667,14 @@ html[data-theme="dark"] .home-sun__sprout--3 {
 }
 
 .home-more__title {
-  margin: auto 0 6px;
-  padding-top: 20px;
+  margin: 0 0 4px;
+  align-self: end;
   font-size: 26px;
   line-height: 1.1;
 }
 
 .home-more__desc {
+  align-self: start;
   font-size: 16px;
   line-height: 1.45;
   color: var(--text-soft);
@@ -1506,7 +1526,6 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
 
   .home-more__title {
     margin-bottom: 4px;
-    padding-top: 14px;
     font-size: 19px;
     line-height: 1.15;
   }
