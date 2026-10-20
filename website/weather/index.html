@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>the atmosphere weather report · atpotato</title>
+    <meta name="title" content="the atmosphere weather report · atpotato">
+    <meta name="description" content="the atmosphere weather report: how busy bluesky is right now, how much of the network isn&#39;t bluesky at all (the diversity index), and which other apps are writing records, read live from the firehose once a minute.">
+    <link rel="canonical" href="https://atpota.to/weather">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="atpotato">
+    <meta property="og:url" content="https://atpota.to/weather">
+    <meta property="og:title" content="the atmosphere weather report · atpotato">
+    <meta property="og:description" content="the atmosphere weather report: how busy bluesky is right now, how much of the network isn&#39;t bluesky at all (the diversity index), and which other apps are writing records, read live from the firehose once a minute.">
+    <meta property="og:image" content="https://atpota.to/og/home.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="atpotato: making the atmosphere a little more fun. poe, a smiling potato with an @ on its tummy, waves from a dirt mound under a yellow sunburst.">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+        <link rel="stylesheet" href="/src/styles/weather.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="weather" data-poe-nudge="psst. ask me what a lexicon is (◕‿◕)">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="weather-page" tabindex="-1">
+        <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
+        <div class="weather" data-weather-report data-state="loading">
+            <header class="tile weather-hero" aria-labelledby="weather-title">
+                <div class="weather-hero__words">
+                    <p class="eyebrow weather-hero__eyebrow">live from the firehose</p>
+                    <h1 class="weather-hero__title" id="weather-title">the atmosphere weather report</h1>
+                    <p class="weather-hero__lede">how the whole network is doing right now: how busy bluesky is, how much of the sky belongs to other apps, and who they are.</p>
+                </div>
+                <div class="weather-hero__now">
+                <svg class="weather-hero__sun" aria-hidden="true" focusable="false" viewBox="0 0 100 100">
+                    <g class="weather-hero__rays" data-weather-rays><path d="M50 2 L55 20 L45 20 Z"/><path d="M50 98 L45 80 L55 80 Z"/><path d="M2 50 L20 45 L20 55 Z"/><path d="M98 50 L80 55 L80 45 Z"/><path d="M16 16 L30 26 L26 30 Z"/><path d="M84 84 L70 74 L74 70 Z"/><path d="M84 16 L74 30 L70 26 Z"/><path d="M16 84 L26 70 L30 74 Z"/></g>
+                    <circle class="weather-hero__disc" cx="50" cy="50" r="24"/>
+                    <path class="weather-hero__face" d="M41 47 q2 -3 4 0 M55 47 q2 -3 4 0 M45 56 q5 4 10 0"/>
+                </svg>
+                    <div class="weather-hero__reading">
+                        <p class="weather-hero__big"><span data-r-posts>&ndash;</span> <span class="weather-hero__unit">posts a second</span></p>
+                        <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
+                        <p class="weather-hero__when" data-r-when></p>
+                    </div>
+                </div>
+                <p class="visually-hidden" role="status" data-r-status></p>
+            </header>
+
+            <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
+                <h2 class="eyebrow" id="weather-diversity-title">diversity index</h2>
+                <div class="weather-diversity__now">
+                    <p class="weather-diversity__index" data-r-index>&ndash;</p>
+                    <div>
+                        <p class="weather-diversity__level" data-r-level></p>
+                        <p class="weather-diversity__blurb" data-r-level-text></p>
+                    </div>
+                </div>
+                <div class="weather-scale" aria-hidden="true">
+                    <div class="weather-scale__bands"><span></span><span></span><span></span><span></span><span></span><i class="weather-scale__marker" data-r-marker></i></div>
+                    <div class="weather-scale__names"><span>low</span><span>moderate</span><span>high</span><span>very high</span><span>extreme</span></div>
+                </div>
+                <p class="weather-diversity__about">the share of new records, in percent, written with lexicons that aren&#39;t bluesky&#39;s (anything outside <code>app.bsky.*</code> and <code>chat.bsky.*</code>). like the uv index, 0&ndash;2 is low and 11+ is extreme.</p>
+            </section>
+
+            <section class="tile weather-tile weather-mix" aria-labelledby="weather-mix-title">
+                <h2 class="eyebrow" id="weather-mix-title">bluesky and everyone else</h2>
+                <p class="weather-mix__ratio" data-r-ratio>&ndash;</p>
+                <div class="weather-ratio weather-mix__bar" aria-hidden="true">
+                    <span class="weather-ratio__bsky" data-r-bar-bsky></span><span class="weather-ratio__else" data-r-bar-else></span>
+                </div>
+                <dl class="weather-mix__legend">
+                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>bluesky</dt><dd><span data-r-bsky>&ndash;</span> a second <span class="weather-mix__share" data-r-bsky-share></span></dd></div>
+                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>elsewhere</dt><dd><span data-r-else>&ndash;</span> a second <span class="weather-mix__share" data-r-else-share></span></dd></div>
+                </dl>
+                <p class="weather-mix__total"><span data-r-total>&ndash;</span> new records a second in all, across <span data-r-collections>&ndash;</span> collections.</p>
+            </section>
+
+            <section class="tile weather-tile weather-apps" aria-labelledby="weather-apps-title">
+                <div class="weather-tile__head">
+                    <h2 class="eyebrow" id="weather-apps-title">elsewhere in the atmosphere</h2>
+                    <p class="weather-tile__aside" data-r-apps-count></p>
+                </div>
+                <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
+                <ol class="weather-bars" role="list" data-r-apps></ol>
+                <p class="weather-tile__note">apps are named after their lexicons: <code>sh.tangled.*</code> is tangled.sh. busiest first, records a second.</p>
+            </section>
+
+            <section class="tile weather-tile weather-bsky" aria-labelledby="weather-bsky-title">
+                <h2 class="eyebrow" id="weather-bsky-title">bluesky</h2>
+                <ol class="weather-bars weather-bars--bsky" role="list" data-r-bsky-list></ol>
+                <p class="weather-tile__note">bluesky&#39;s busiest kinds of record, a second.</p>
+            </section>
+
+            <section class="tile weather-tile weather-wire" aria-labelledby="weather-wire-title">
+                <h2 class="eyebrow" id="weather-wire-title">everything on the wire</h2>
+                <dl class="weather-stats weather-stats--wire">
+                    <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd></div>
+                    <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd></div>
+                    <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd></div>
+                    <div><dt>identity changes</dt><dd data-r-event="identity">&ndash;</dd></div>
+                    <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd></div>
+                </dl>
+                <p class="weather-tile__note">a second. identity changes are mostly new handles; account changes are accounts being switched on, off or moved.</p>
+            </section>
+
+            <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
+                <h2 class="eyebrow" id="weather-how-title">how it&#39;s measured</h2>
+                <p>once a minute, atpota.to listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a> for a few seconds and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky, just a short one: a quiet app can miss a reading, and one busy bot can tip the index for a minute.</p>
+                <p>this page checks again every minute while it&#39;s open. <a href="/">back home</a>.</p>
+            </section>
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>

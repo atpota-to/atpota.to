@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api/atmosphere.js';
 import {
+  addEvent,
+  appDomain,
   CACHE_OK,
-  COLLECTIONS,
   conditionFor,
+  diversityLevel,
+  emptyTally,
+  eventOf,
+  isBluesky,
+  isNsid,
+  MAX_COLLECTIONS,
+  summarize,
   createAtmosphereHandlers,
   JETSTREAMS,
   jetstreamUrl,
@@ -54,9 +62,76 @@ afterEach(() => {
 });
 
 describe('reading the firehose', () => {
-  it('asks Jetstream for exactly the four collections', () => {
+  it('asks Jetstream for the whole firehose', () => {
     const url = new URL(jetstreamUrl(JETSTREAMS[0]));
-    expect(url.searchParams.getAll('wantedCollections').sort()).toEqual(Object.values(COLLECTIONS).sort());
+    expect(url.searchParams.getAll('wantedCollections')).toEqual([]);
+  });
+
+  it('sorts every message into new records (by collection), edits, deletions, identity and account events', () => {
+    expect(eventOf(commit('sh.tangled.repo'))).toEqual({ kind: 'create', collection: 'sh.tangled.repo' });
+    expect(eventOf(commit('app.bsky.feed.post', 'update'))).toEqual({ kind: 'update' });
+    expect(eventOf(commit('app.bsky.feed.post', 'delete'))).toEqual({ kind: 'delete' });
+    expect(eventOf(JSON.stringify({ kind: 'identity' }))).toEqual({ kind: 'identity' });
+    expect(eventOf(JSON.stringify({ kind: 'account' }))).toEqual({ kind: 'account' });
+    // a collection name that isn't an NSID is not repeated anywhere
+    expect(eventOf(commit('<img src=x onerror=alert(1)>'))).toBeNull();
+    expect(eventOf(commit('nodots'))).toBeNull();
+    expect(eventOf('nope')).toBeNull();
+  });
+
+  it('tells bluesky from everyone else, and names apps by domain', () => {
+    expect(isBluesky('app.bsky.feed.like')).toBe(true);
+    expect(isBluesky('chat.bsky.actor.declaration')).toBe(true);
+    expect(isBluesky('app.bskyish.thing')).toBe(false);
+    expect(appDomain('sh.tangled.repo.pull')).toBe('tangled.sh');
+    expect(appDomain('fyi.unravel.frontpage.post')).toBe('unravel.fyi');
+    expect(isNsid('com.whtwnd.blog.entry')).toBe(true);
+    expect(isNsid('a.b')).toBe(false);
+  });
+
+  it('reads the diversity index like the UV index', () => {
+    expect(diversityLevel(0)).toBe('low');
+    expect(diversityLevel(2.99)).toBe('low');
+    expect(diversityLevel(3)).toBe('moderate');
+    expect(diversityLevel(6)).toBe('high');
+    expect(diversityLevel(8)).toBe('very high');
+    expect(diversityLevel(11)).toBe('extreme');
+  });
+
+  it('sums a sample up: the split, the index, the busiest apps and collections', () => {
+    const tally = emptyTally();
+    const add = (collection: string, n: number) => {
+      for (let i = 0; i < n; i++) addEvent(tally, { kind: 'create', collection });
+    };
+    add('app.bsky.feed.like', 150);
+    add('app.bsky.feed.post', 40);
+    add('sh.tangled.repo', 4);
+    add('sh.tangled.feed.star', 6);
+    add('com.whtwnd.blog.entry', 2);
+    addEvent(tally, { kind: 'delete' });
+    addEvent(tally, { kind: 'identity' });
+    const r = summarize(tally, 2, '2026-10-20T00:00:00.000Z');
+    expect(r.records).toEqual({ perSecond: 101, bluesky: 95, elsewhere: 6 });
+    expect(r.diversity).toEqual({ index: 5.94, level: 'moderate', apps: 2, collections: 5 });
+    expect(r.apps).toEqual([
+      { domain: 'tangled.sh', count: 10, perSecond: 5, collections: ['sh.tangled.feed.star', 'sh.tangled.repo'] },
+      { domain: 'whtwnd.com', count: 2, perSecond: 1, collections: ['com.whtwnd.blog.entry'] },
+    ]);
+    expect(r.bluesky.map((b) => b.nsid)).toEqual(['app.bsky.feed.like', 'app.bsky.feed.post']);
+    expect(r.perSecond).toEqual({ posts: 20, likes: 75, reposts: 0, follows: 0 });
+    expect(r.events).toEqual({ creates: 101, updates: 0, deletes: 0.5, identity: 0.5, account: 0 });
+  });
+
+  it('keeps counting, without names, past MAX_COLLECTIONS collections', () => {
+    const tally = emptyTally();
+    for (let i = 0; i <= MAX_COLLECTIONS; i++) addEvent(tally, { kind: 'create', collection: `com.spam${i}.thing` });
+    expect(tally.creates.size).toBe(MAX_COLLECTIONS);
+    expect(tally.unnamed).toBe(1);
+    expect(summarize(tally, 1, '').records.elsewhere).toBe(MAX_COLLECTIONS + 1);
+  });
+
+  it('an empty sample has an index of 0', () => {
+    expect(summarize(emptyTally(), 1, '').diversity).toEqual({ index: 0, level: 'low', apps: 0, collections: 0 });
   });
 
   it('counts only new records in the collections it watches', () => {

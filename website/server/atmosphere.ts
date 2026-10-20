@@ -1,14 +1,16 @@
 /**
- * /api/atmosphere: the home page's "atmospheric conditions", a weather report for the
- * network. It listens to Bluesky's firehose through Jetstream for a few seconds, counts
- * new posts, likes, reposts and follows, and answers with rates per second.
+ * /api/atmosphere: the "atmospheric conditions" on the home page and the full weather
+ * report at /weather. It listens to the whole firehose through Jetstream for a few
+ * seconds and answers with rates per second: Bluesky's posts, likes, reposts and follows,
+ * how many new records came from outside Bluesky (the diversity index), which apps wrote
+ * them, and how many edits, deletions, identity and account events went by.
  *
- * Sampling happens here, not in the browser: the firehose for these four collections is
- * over 100 KB a second, which no visitor should have to download for a weather report.
- * One sample serves everyone for a minute (CDN cache), and a function instance reuses its
- * last sample for SAMPLE_TTL_MS.
+ * Sampling happens here, not in the browser: the whole firehose is over 250 KB a second,
+ * which no visitor should have to download for a weather report. One sample serves
+ * everyone for a minute (CDN cache), and a function instance reuses its last sample for
+ * SAMPLE_TTL_MS.
  *
- *   GET /api/atmosphere  ->  { measuredAt, seconds, perSecond: { posts, likes, reposts, follows }, condition }
+ *   GET /api/atmosphere  ->  Reading (below)
  *
  * If Jetstream can't be reached, or stays silent, the answer is 503 and the tile says so.
  */
@@ -26,8 +28,11 @@ export const COLLECTIONS = {
 
 export type Metric = keyof typeof COLLECTIONS;
 
+/** Collections under these count as Bluesky; everything else is "elsewhere". */
+export const BLUESKY_PREFIXES = ['app.bsky.', 'chat.bsky.'] as const;
+
 /** How long to count for, once connected. */
-export const SAMPLE_MS = 3000;
+export const SAMPLE_MS = 5000;
 export const CONNECT_TIMEOUT_MS = 4000;
 export const SAMPLE_TTL_MS = 30_000;
 export const CACHE_OK = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600';
@@ -42,13 +47,63 @@ export const CONDITIONS = [
 
 export type Condition = 'calm' | (typeof CONDITIONS)[number][0];
 
+/**
+ * The diversity index is the share of new records, in percent, written outside Bluesky's
+ * lexicons. Like the UV index, it comes with a level; each starts at the given index.
+ */
+export const DIVERSITY_LEVELS = [
+  ['extreme', 11],
+  ['very high', 8],
+  ['high', 6],
+  ['moderate', 3],
+] as const;
+
+export type DiversityLevel = 'low' | (typeof DIVERSITY_LEVELS)[number][0];
+
+/** How many apps and Bluesky collections the reading names. */
+export const TOP_APPS = 10;
+export const TOP_BLUESKY = 8;
+/** Collections tracked per sample; past this, new names are not counted on their own. */
+export const MAX_COLLECTIONS = 2000;
+
+export interface Rate {
+  /** Records a second, one decimal. */
+  perSecond: number;
+  /** Records counted in the sample. */
+  count: number;
+}
+
+export interface App extends Rate {
+  /** The app's namespace as a domain: "sh.tangled.*" is "tangled.sh". */
+  domain: string;
+  /** Its busiest collections, busiest first (at most three). */
+  collections: string[];
+}
+
 export interface Reading {
   measuredAt: string;
   /** Seconds actually counted. */
   seconds: number;
-  /** New records a second, one decimal. */
+  /** New Bluesky records a second, one decimal. */
   perSecond: Record<Metric, number>;
   condition: Condition;
+  /** New records a second, in any collection. */
+  records: { perSecond: number; bluesky: number; elsewhere: number };
+  diversity: {
+    /** Percent of new records written outside Bluesky, two decimals (it is often under one). */
+    index: number;
+    level: DiversityLevel;
+    /** Apps (namespaces) outside Bluesky that wrote anything. */
+    apps: number;
+    /** Distinct collections that got a new record. */
+    collections: number;
+  };
+  /** The busiest apps outside Bluesky. */
+  apps: App[];
+  /** Bluesky's busiest collections. */
+  bluesky: Array<Rate & { nsid: string }>;
+  /** Everything that went by, a second. */
+  events: { creates: number; updates: number; deletes: number; identity: number; account: number };
 }
 
 /** The parts of a WebSocket the sampler uses (the global WebSocket in Node 22 and browsers). */
@@ -67,16 +122,41 @@ export function conditionFor(postsPerSecond: number): Condition {
   return 'calm';
 }
 
+export function diversityLevel(index: number): DiversityLevel {
+  for (const [name, from] of DIVERSITY_LEVELS) if (index >= from) return name;
+  return 'low';
+}
+
+/** The whole firehose: no wantedCollections. */
 export function jetstreamUrl(base: string): string {
-  const params = new URLSearchParams();
-  for (const nsid of Object.values(COLLECTIONS)) params.append('wantedCollections', nsid);
-  return `${base}?${params}`;
+  return base;
 }
 
 const METRIC_FOR: Record<string, Metric> = Object.fromEntries(Object.entries(COLLECTIONS).map(([metric, nsid]) => [nsid, metric as Metric]));
 
-/** The metric a Jetstream message counts toward: a new record in one of COLLECTIONS. */
-export function metricOf(data: unknown): Metric | null {
+/** A collection name worth repeating to visitors (the relay validates these, but they are still someone else's text). */
+const NSID_RE = /^[a-z][a-z0-9-]{0,62}(?:\.[a-z0-9][a-z0-9-]{0,62}){1,}\.[a-z][a-z0-9]{0,62}$/i;
+
+export function isNsid(value: string): boolean {
+  return value.length <= 253 && NSID_RE.test(value);
+}
+
+export function isBluesky(nsid: string): boolean {
+  return BLUESKY_PREFIXES.some((p) => nsid.startsWith(p));
+}
+
+/** An NSID's app, as a domain: its first two segments, reversed ("fyi.unravel.frontpage.post" -> "unravel.fyi"). */
+export function appDomain(nsid: string): string {
+  const [tld, name] = nsid.toLowerCase().split('.');
+  return `${name}.${tld}`;
+}
+
+export type Event =
+  | { kind: 'create'; collection: string }
+  | { kind: 'update' | 'delete' | 'identity' | 'account' };
+
+/** What a Jetstream message is, or null for anything unreadable. */
+export function eventOf(data: unknown): Event | null {
   if (typeof data !== 'string') return null;
   let m: { kind?: unknown; commit?: { operation?: unknown; collection?: unknown } };
   try {
@@ -84,8 +164,102 @@ export function metricOf(data: unknown): Metric | null {
   } catch {
     return null;
   }
-  if (m?.kind !== 'commit' || m.commit?.operation !== 'create' || typeof m.commit.collection !== 'string') return null;
-  return METRIC_FOR[m.commit.collection] ?? null;
+  if (m?.kind === 'identity' || m?.kind === 'account') return { kind: m.kind };
+  if (m?.kind !== 'commit') return null;
+  const op = m.commit?.operation;
+  if (op === 'update' || op === 'delete') return { kind: op };
+  if (op !== 'create' || typeof m.commit?.collection !== 'string' || !isNsid(m.commit.collection)) return null;
+  return { kind: 'create', collection: m.commit.collection };
+}
+
+/** The metric a Jetstream message counts toward: a new record in one of COLLECTIONS. */
+export function metricOf(data: unknown): Metric | null {
+  const e = eventOf(data);
+  return e?.kind === 'create' ? (METRIC_FOR[e.collection] ?? null) : null;
+}
+
+export interface Tally {
+  creates: Map<string, number>;
+  /** New records in collections past MAX_COLLECTIONS (counted, but not by name). */
+  unnamed: number;
+  updates: number;
+  deletes: number;
+  identity: number;
+  account: number;
+}
+
+export function emptyTally(): Tally {
+  return { creates: new Map(), unnamed: 0, updates: 0, deletes: 0, identity: 0, account: 0 };
+}
+
+export function addEvent(tally: Tally, event: Event): void {
+  if (event.kind !== 'create') {
+    tally[event.kind === 'update' ? 'updates' : event.kind === 'delete' ? 'deletes' : event.kind] += 1;
+    return;
+  }
+  const n = tally.creates.get(event.collection);
+  if (n !== undefined) tally.creates.set(event.collection, n + 1);
+  else if (tally.creates.size < MAX_COLLECTIONS) tally.creates.set(event.collection, 1);
+  else tally.unnamed += 1;
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** A tally over `seconds`, as a Reading. */
+export function summarize(tally: Tally, seconds: number, measuredAt: string): Reading {
+  const rate = (count: number) => round1(count / seconds);
+  let bluesky = 0;
+  let elsewhere = tally.unnamed;
+  const apps = new Map<string, { count: number; collections: Array<[string, number]> }>();
+  const bsky: Array<[string, number]> = [];
+  for (const [nsid, count] of tally.creates) {
+    if (isBluesky(nsid)) {
+      bluesky += count;
+      bsky.push([nsid, count]);
+      continue;
+    }
+    elsewhere += count;
+    const domain = appDomain(nsid);
+    const app = apps.get(domain) ?? { count: 0, collections: [] };
+    app.count += count;
+    app.collections.push([nsid, count]);
+    apps.set(domain, app);
+  }
+  const total = bluesky + elsewhere;
+  const index = total ? Math.round((elsewhere / total) * 10_000) / 100 : 0;
+  const busiest = <T extends { count: number }>(a: T, b: T) => b.count - a.count;
+  const perSecond = Object.fromEntries(Object.entries(COLLECTIONS).map(([metric, nsid]) => [metric, rate(tally.creates.get(nsid) ?? 0)])) as Record<Metric, number>;
+  return {
+    measuredAt,
+    seconds: round1(seconds),
+    perSecond,
+    condition: conditionFor(perSecond.posts),
+    records: { perSecond: rate(total), bluesky: rate(bluesky), elsewhere: rate(elsewhere) },
+    diversity: { index, level: diversityLevel(index), apps: apps.size, collections: tally.creates.size },
+    apps: [...apps]
+      .map(([domain, a]) => ({
+        domain,
+        count: a.count,
+        perSecond: rate(a.count),
+        collections: a.collections
+          .sort((x, y) => y[1] - x[1])
+          .slice(0, 3)
+          .map(([nsid]) => nsid),
+      }))
+      .sort(busiest)
+      .slice(0, TOP_APPS),
+    bluesky: bsky
+      .map(([nsid, count]) => ({ nsid, count, perSecond: rate(count) }))
+      .sort(busiest)
+      .slice(0, TOP_BLUESKY),
+    events: {
+      creates: rate(total),
+      updates: rate(tally.updates),
+      deletes: rate(tally.deletes),
+      identity: rate(tally.identity),
+      account: rate(tally.account),
+    },
+  };
 }
 
 /**
@@ -94,7 +268,7 @@ export function metricOf(data: unknown): Metric | null {
  */
 export function sample(open: OpenSocket, url: string, now: () => number, sampleMs = SAMPLE_MS, connectMs = CONNECT_TIMEOUT_MS): Promise<Reading> {
   return new Promise((resolve, reject) => {
-    const counts: Record<Metric, number> = { posts: 0, likes: 0, reposts: 0, follows: 0 };
+    const tally = emptyTally();
     let started = 0;
     let opened = false;
     let seen = 0;
@@ -113,8 +287,7 @@ export function sample(open: OpenSocket, url: string, now: () => number, sampleM
       if (error) return reject(error);
       if (seen === 0) return reject(new Error('jetstream was silent'));
       const seconds = Math.max(0.5, (now() - started) / 1000);
-      const perSecond = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.round((v / seconds) * 10) / 10])) as Record<Metric, number>;
-      resolve({ measuredAt: new Date(now()).toISOString(), seconds: Math.round(seconds * 10) / 10, perSecond, condition: conditionFor(perSecond.posts) });
+      resolve(summarize(tally, seconds, new Date(now()).toISOString()));
     };
     try {
       socket = open(url);
@@ -131,8 +304,8 @@ export function sample(open: OpenSocket, url: string, now: () => number, sampleM
     socket.onmessage = (event) => {
       if (done || !opened) return;
       seen += 1;
-      const metric = metricOf(event.data);
-      if (metric) counts[metric] += 1;
+      const e = eventOf(event.data);
+      if (e) addEvent(tally, e);
     };
     socket.onerror = () => finish(new Error('jetstream error'));
     socket.onclose = () => finish(opened ? null : new Error('jetstream closed'));

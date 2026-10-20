@@ -11,6 +11,7 @@ const TITLES: Readonly<Record<string, string>> = {
   '/guides': 'atpotato guides',
   '/guides/bluesky-for-brands': 'How to use Bluesky to grow your brand',
   '/blog': "poe's atmosphere dispatch",
+  '/weather': 'the atmosphere weather report',
 };
 
 /** Any single post (the post's own title would come from a record, so it is not used). */

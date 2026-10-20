@@ -1266,10 +1266,12 @@ html:not(.js) .home-weather {
   display: none;
 }
 
+/* The whole tile is a link to the full report (/weather). */
 .home-weather {
   gap: 14px;
   background: var(--sky);
   color: var(--home-sky-text);
+  text-decoration: none;
 }
 
 .home-weather__title {
@@ -1371,8 +1373,56 @@ html:not(.js) .home-weather {
   font-variant-numeric: tabular-nums;
 }
 
-.home-weather__note {
+.home-weather__mix {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--home-weather-cell);
+}
+
+.home-weather__mix[hidden] {
+  display: none;
+}
+
+.home-weather__mix-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.home-weather__mix-label {
+  font-size: 13px;
+  color: var(--home-sky-mono);
+}
+
+.home-weather__index {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-weather__level {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.home-weather__mix-text {
+  font-size: 14px;
+}
+
+.home-weather__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
   margin-top: auto;
+}
+
+.home-weather__note {
+  flex: 1 1 220px;
   font-size: 13px;
   color: var(--home-sky-mono);
 }
