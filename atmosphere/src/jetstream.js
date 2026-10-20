@@ -12,6 +12,7 @@
 // what it already counted. A failed attempt (one that never delivered a message) moves on
 // to the next URL; a connection that worked and then dropped retries the same one.
 
+import { accountOf } from './accounts.js';
 import { eventOfMessage } from './atmosphere.js';
 
 export const DEFAULT_URLS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-east.bsky.network/subscribe'];
@@ -107,7 +108,7 @@ export function createJetstream({
         station.counts.unparseable++;
         return;
       }
-      station.ingest(m?.time_us, eventOfMessage(m));
+      station.ingest(m?.time_us, eventOfMessage(m), accountOf(m));
     };
 
     sock.onerror = (e) => fail('error', e?.message ?? e?.error?.message);

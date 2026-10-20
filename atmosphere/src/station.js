@@ -11,7 +11,11 @@
 // Replays. When a connection drops, the next one resumes a little before the last
 // time_us seen, and every replayed event at or before that time_us is dropped, so the
 // overlap is never counted twice. Out-of-order events inside one connection are kept.
+//
+// Accounts. Each second also keeps who committed (accounts.js), by the same coverage and
+// replay rules, so a window or a minute can say how many different accounts were active.
 
+import { addAccount, emptyAccounts, sketchAccounts, summarizeAccounts } from './accounts.js';
 import { addEvent, COLLECTIONS, emptyTally, mergeTally, splitOf, summarize } from './atmosphere.js';
 
 export const RETAIN_SECONDS = 3600;
@@ -28,7 +32,7 @@ const iso = (second) => new Date(second * 1000).toISOString();
 export class Station {
   constructor({ now = () => Date.now() } = {}) {
     this.now = now;
-    /** second -> { tally, covered } */
+    /** second -> { tally, covered, accounts } (accounts: null until someone commits) */
     this.buckets = new Map();
     /** The open connection's coverage, or null when disconnected. */
     this.session = null;
@@ -55,17 +59,18 @@ export class Station {
   bucket(second) {
     let b = this.buckets.get(second);
     if (!b) {
-      b = { tally: emptyTally(), covered: false };
+      b = { tally: emptyTally(), covered: false, accounts: null };
       this.buckets.set(second, b);
     }
     return b;
   }
 
   /**
-   * One Jetstream message: its time_us, and what it counts as. A message that counts as
-   * nothing (null) still moves coverage on: the stream was flowing.
+   * One Jetstream message: its time_us, what it counts as, and whose it is (accountOf,
+   * or null). A message that counts as nothing (null) still moves coverage on: the stream
+   * was flowing.
    */
-  ingest(timeUs, event) {
+  ingest(timeUs, event, account = null) {
     const s = this.session;
     if (!s) return;
     this.counts.messages++;
@@ -89,10 +94,13 @@ export class Station {
       this.counts.tooOld++;
       return;
     }
+    if (!event && !account) return;
+    const b = this.bucket(second);
     if (event) {
-      addEvent(this.bucket(second).tally, event);
+      addEvent(b.tally, event);
       this.counts.counted++;
     }
+    if (account) addAccount((b.accounts ??= emptyAccounts()), account);
   }
 
   /** Marks every second this connection has now seen from start to end. */
@@ -140,18 +148,29 @@ export class Station {
     return { from, to, tally, seconds, series };
   }
 
+  /** Who committed in the covered seconds in [from, to), as sketches (accounts.js). */
+  accounts(from, to) {
+    const seconds = [];
+    for (let second = from; second < to; second++) {
+      const b = this.buckets.get(second);
+      if (b?.covered && b.accounts) seconds.push(b.accounts);
+    }
+    return sketchAccounts(seconds);
+  }
+
   /** The rolling reading for GET /v1/now, or null when too little of the window was covered. */
   reading(nowMs = this.now()) {
     const w = this.window(nowMs);
     if (w.seconds < MIN_COVERED) return null;
     const reading = summarize(w.tally, w.seconds, iso(w.to));
+    reading.accounts = summarizeAccounts(this.accounts(w.from, w.to), w.tally);
     reading.window = { from: iso(w.from), to: iso(w.to) };
     reading.series = w.series;
     return reading;
   }
 
-  /** One minute (its start, in epoch seconds), summed. */
+  /** One minute (its start, in epoch seconds), summed, with its accounts as sketches. */
   minute(minuteSec) {
-    return this.sum(minuteSec, minuteSec + 60);
+    return { ...this.sum(minuteSec, minuteSec + 60), accounts: this.accounts(minuteSec, minuteSec + 60) };
   }
 }
