@@ -5,6 +5,7 @@ import { applyRewrites, compileRewrite, readApiRewrites } from '../build/api-mid
 import { blobUrl, isPublicHost, TtlCache } from '../server/blog/atproto.js';
 import {
   bodyImageCids,
+  EMPTY_EMBEDS,
   embeddableUrl,
   embedTargets,
   formatDate,
@@ -19,10 +20,11 @@ import {
 import { ATPOTATO_DID, DEFAULT_PUBLICATION_URI, DEFAULT_PUBLICATION_URL, POE_DID, readBlogConfig } from '../server/blog/config.js';
 import { atomFeed } from '../server/blog/feed.js';
 import { aturiUrl, jsonForScript, safeColor, safeHref } from '../server/blog/html.js';
-import { readingMinutes, siteInfo } from '../server/blog/pages.js';
+import { postBody, readingMinutes, siteInfo } from '../server/blog/pages.js';
 import { findDocument, normalizePath, toDocument, type BlogDocument } from '../server/blog/records.js';
 import { FootnoteList, renderRichText } from '../server/blog/richtext.js';
 import { fillShell, parseShell } from '../server/blog/shell.js';
+import { emailAction, emailFormHtml } from '../server/blog/subscribe.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const ID = { did: POE_DID, pds: 'https://pds.test', handle: 'poe.atpota.to' };
@@ -342,8 +344,10 @@ describe('config', () => {
       publicationUri: DEFAULT_PUBLICATION_URI,
       publicationUrl: DEFAULT_PUBLICATION_URL,
       commentsEnabled: true,
+      emailEnabled: true,
       hiddenComments: new Set(),
     });
+    expect(readBlogConfig({ BLOG_EMAIL_DISABLED: '1' }).emailEnabled).toBe(false);
   });
 
   it('credits poe as the author and names the repo owner separately', () => {
@@ -463,5 +467,51 @@ describe('dev rewrites mirror vercel.json', () => {
     expect(route('/.well-known/site.standard.publication/blog')).toEqual({ view: 'well-known' });
     expect(route('/shells/blog')).toBeNull();
     expect(route('/guides/bluesky-for-brands')).toBeNull();
+  });
+});
+
+describe('email subscribe form', () => {
+  // The `action` value in the dispatch's "Embeddable Subscribe Form" snippet on Leaflet.
+  const SNIPPET_ACTION =
+    '%7B%22action%22%3A%22subscribe%22%2C%22publication%22%3A%22at%3A%2F%2Fdid%3Aplc%3Aqntsxa2i4sb24noi45fx4np2%2Fsite.standard.publication%2F3myar4h4pls2n%22%2C%22source%22%3A%7B%22placement%22%3A%22embed%22%7D%7D';
+  const PUBLICATION = { uri: DEFAULT_PUBLICATION_URI, cid: 'p', rkey: '3myar4h4pls2n', name: 'Dispatch', description: null, url: 'https://poe.leaflet.pub', iconUrl: null };
+
+  it("is Leaflet's embeddable form for the dispatch, coming back to atpota.to", async () => {
+    expect(emailAction(DEFAULT_PUBLICATION_URI)).toBe(SNIPPET_ACTION);
+    const { JSDOM } = await import('jsdom');
+    const d = new JSDOM(`<body>${emailFormHtml({ publication: DEFAULT_PUBLICATION_URI, redirect: 'https://atpota.to/blog' }, 'subscribe')}</body>`).window;
+    const form = d.document.querySelector('form')!;
+    expect(form.getAttribute('action')).toBe('https://leaflet.pub/api/auth/email-login');
+    expect(form.getAttribute('method')).toBe('get');
+    expect(form.id).toBe('subscribe');
+    expect(form.querySelector<HTMLInputElement>('input[name="action"]')!.value).toBe(SNIPPET_ACTION);
+    expect(form.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog?subscribed=email#subscribe');
+    const email = form.querySelector<HTMLInputElement>('input[name="email"]')!;
+    expect(email.type).toBe('email');
+    expect(email.required).toBe(true);
+    expect(email.closest('label')!.textContent).toBe('your email');
+    // What the browser sends: the same fields as Leaflet's snippet.
+    expect([...new d.FormData(form).keys()]).toEqual(['action', 'redirect', 'email']);
+  });
+
+  it('turns signup blocks into the email form and bluesky button on a post, and links elsewhere', () => {
+    const c = ctx({ signup: { publication: DEFAULT_PUBLICATION_URI, redirect: 'https://atpota.to/blog/3doc' } });
+    const first = renderBlock(B('signup'), null, c);
+    expect(first).toContain('id="signup"');
+    expect(first).toContain('value="https://atpota.to/blog/3doc?subscribed=email#signup"');
+    expect(first).toContain('<button type="button" class="btn btn--primary btn--sm" data-blog-subscribe aria-pressed="false" hidden>');
+    expect(renderBlock(B('signup'), null, c)).toContain('id="signup-2"');
+    const plain = renderBlock(B('signup'), null, ctx());
+    expect(plain).not.toContain('<form');
+    expect(plain).toContain('href="https://bsky.app/profile/poe.atpota.to"');
+  });
+
+  it('keeps forms out of the feed', () => {
+    const site = siteInfo(PUBLICATION, 'https://poe.leaflet.pub', 'atpota.to', true);
+    const doc = toDocument({ uri: `at://${ATPOTATO_DID}/site.standard.document/3doc`, cid: 'c', value: { title: 'T', publishedAt: '2026-10-01T00:00:00Z' } }, ID)!;
+    const input = { site, doc, pages: [{ id: null, kind: 'linear' as const, blocks: [{ block: B('signup'), alignment: null }] }], text: '', embeds: EMPTY_EMBEDS, did: ID.did, pds: ID.pds, others: [], headingShift: 1 };
+    expect(postBody(input)).not.toContain('<form');
+    expect(postBody({ ...input, signupReturn: 'https://atpota.to/blog/3doc' })).toContain('<form class="blog-email" id="signup"');
+    expect(postBody({ ...input, site: siteInfo(PUBLICATION, 'https://poe.leaflet.pub', 'atpota.to', false), signupReturn: 'https://atpota.to/blog/3doc' })).not.toContain('<form');
   });
 });

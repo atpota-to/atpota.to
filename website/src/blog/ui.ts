@@ -4,10 +4,15 @@
  * <body data-page="blog"> pages.
  *
  * The server renders the pieces (server/blog/pages.ts): subscribe and recommend buttons
- * (hidden), account lines, and the comments section with an empty compose slot. This
- * module reveals and wires them, builds the compose form and per-comment buttons, and
- * adds the reader's own new comments to the page. DOM is built with createElement and
- * textContent only; nothing from the network becomes HTML here.
+ * (hidden), Leaflet's email subscribe forms, account lines, and the comments section with
+ * an empty compose slot. This module reveals and wires them, builds the compose form and
+ * per-comment buttons, and adds the reader's own new comments to the page. DOM is built
+ * with createElement and textContent only; nothing from the network becomes HTML here.
+ *
+ * The email forms post straight to Leaflet and work without this module. For a reader
+ * signed in with Bluesky who hasn't subscribed there yet, each gets an "also subscribe
+ * with bluesky" box (ticked): submitting writes the subscription record first, then sends
+ * the form on to Leaflet, so one submit does both.
  *
  * Sign-in leaves the page (auth.ts). Before it does, the action that prompted it is saved
  * (state.ts); when the reader is back on that page, signed in, the action finishes.
@@ -51,10 +56,13 @@ export const APPVIEW = 'https://public.api.bsky.app';
 /** Matches MAX_COMMENT_DEPTH in server/blog/pages.ts. */
 export const MAX_DEPTH = 4;
 export const NOTICE_KEY = 'blog:notice';
+/** Leaflet sends a reader back with ?subscribed=email; matches server/blog/subscribe.ts. */
+export const EMAIL_RETURN = { param: 'subscribed', value: 'email' } as const;
 
 export const COPY = {
-  subscribe: 'subscribe',
-  subscribed: 'subscribed',
+  /** Matches SUBSCRIBE_COPY.bluesky, the label the server renders. */
+  subscribe: 'subscribe with bluesky',
+  subscribed: 'subscribed on bluesky',
   recommend: 'recommend',
   recommended: 'recommended',
   signedInAs: 'signed in as',
@@ -85,8 +93,14 @@ export const COPY = {
     recommend: 'sign in with your bluesky account to recommend this post.',
     comment: 'sign in with your bluesky account to comment.',
   } satisfies Record<IntentKind, string>,
+  email: {
+    also: (handle: string | null) => (handle ? `also subscribe with bluesky as @${handle}` : 'also subscribe with bluesky'),
+    failed: "couldn't save the bluesky subscription. try again, or untick the box to subscribe by email only.",
+  },
   notices: {
     subscribed: 'subscribed! readers like leaflet will show you new issues.',
+    subscribedAddEmail: 'subscribed on bluesky! to get it in your inbox too, add your email above.',
+    emailSubscribed: "you're subscribed by email. see you in your inbox!",
     unsubscribed: 'unsubscribed.',
     signedOut: 'signed out.',
     cancelled: "sign-in was cancelled, so nothing changed.",
@@ -205,6 +219,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   const publication = root?.getAttribute('data-blog-publication') ?? null;
   const documentUri = root?.getAttribute('data-blog-document') ?? null;
   const subscribeButtons = publication ? [...doc.querySelectorAll<HTMLButtonElement>('button[data-blog-subscribe]')] : [];
+  const emailForms = publication ? [...doc.querySelectorAll<HTMLFormElement>('form[data-blog-email]')] : [];
   const recommendButton = documentUri ? doc.querySelector<HTMLButtonElement>('button[data-blog-recommend]') : null;
   const accountLines = [...doc.querySelectorAll<HTMLElement>('[data-blog-account]')];
   const talk = documentUri ? doc.querySelector<HTMLElement>('[data-blog-comments]') : null;
@@ -296,6 +311,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
       label.textContent = on ? COPY.subscribed : COPY.subscribe;
       setBusy(button, starting || busySubscribe || Boolean(session && subscriptions === null));
     }
+    renderEmailExtras();
   }
 
   function renderRecommend(): void {
@@ -370,7 +386,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     const on = subscriptions.length === 0;
     try {
       subscriptions = await ensure(SUBSCRIPTION, 'publication', publication, on, () => subscriptionRecord(publication, new Date(now())));
-      notify(on ? COPY.notices.subscribed : COPY.notices.unsubscribed);
+      notify(on ? (emailForms.length ? COPY.notices.subscribedAddEmail : COPY.notices.subscribed) : COPY.notices.unsubscribed);
     } catch (error) {
       failed(error);
     } finally {
@@ -395,6 +411,72 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
       busyRecommend = false;
       renderRecommend();
     }
+  }
+
+  /* ---------- email subscribe forms ---------- */
+
+  interface EmailExtras {
+    form: HTMLFormElement;
+    send: HTMLButtonElement | null;
+    also: HTMLLabelElement;
+    box: HTMLInputElement;
+    alsoText: HTMLSpanElement;
+    error: HTMLElement;
+  }
+
+  const emailExtras: EmailExtras[] = emailForms.map((form) => {
+    const box = el(doc, 'input', { type: 'checkbox', class: 'blog-email__box' });
+    box.checked = true;
+    const alsoText = el(doc, 'span', {});
+    const also = el(doc, 'label', { class: 'blog-email__also', hidden: '' });
+    also.append(box, alsoText);
+    const error = el(doc, 'p', { class: 'blog-email__error', role: 'alert', hidden: '' });
+    const row = form.querySelector('.blog-email__row');
+    if (row) row.after(also, error);
+    else form.append(also, error);
+    const x: EmailExtras = { form, send: form.querySelector<HTMLButtonElement>('button[type="submit"]'), also, box, alsoText, error };
+    form.addEventListener('submit', (event) => void sendEmail(x, event));
+    return x;
+  });
+
+  /** The "also subscribe with bluesky" box shows only while it would add something. */
+  function renderEmailExtras(): void {
+    const offer = Boolean(session && me && subscriptions && !subscriptions.length);
+    for (const x of emailExtras) {
+      x.also.hidden = !offer;
+      if (offer && me) x.alsoText.textContent = COPY.email.also(me.handle.startsWith('did:') ? null : me.handle);
+    }
+  }
+
+  /**
+   * Lets the form go to Leaflet as is, unless the box is ticked: then the Bluesky
+   * subscription is saved first. If that fails, the reader stays here to retry or untick.
+   */
+  async function sendEmail(x: EmailExtras, event: Event): Promise<void> {
+    if (x.send && isBusy(x.send)) {
+      event.preventDefault();
+      return;
+    }
+    if (x.also.hidden || !x.box.checked || !session || !publication || !subscriptions || subscriptions.length || busySubscribe) return;
+    event.preventDefault();
+    x.error.hidden = true;
+    busySubscribe = true;
+    if (x.send) setBusy(x.send, true);
+    renderSubscribe();
+    try {
+      subscriptions = await ensure(SUBSCRIPTION, 'publication', publication, true, () => subscriptionRecord(publication, new Date(now())));
+    } catch (error) {
+      x.error.textContent = isAuthError(error) ? COPY.notices.expired : COPY.email.failed;
+      x.error.hidden = false;
+      if (x.send) setBusy(x.send, false);
+      if (isAuthError(error)) signedOut();
+      return;
+    } finally {
+      busySubscribe = false;
+      renderSubscribe();
+    }
+    // submit() skips the submit event (and validation, which already passed to get here).
+    x.form.submit();
   }
 
   /* ---------- sign-in dialog ---------- */
@@ -503,7 +585,9 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   goButton?.addEventListener('click', () => void leave());
   // Back from the sign-in page through the browser's back/forward cache: the button works again.
   win.addEventListener?.('pageshow', (event) => {
-    if ((event as PageTransitionEvent).persisted && goButton) setBusy(goButton, false);
+    if (!(event as PageTransitionEvent).persisted) return;
+    if (goButton) setBusy(goButton, false);
+    for (const x of emailExtras) if (x.send) setBusy(x.send, false);
   });
 
   function renderConfirm(ready: Prepared, profile: Me | null): void {
@@ -855,6 +939,16 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   for (const button of subscribeButtons) button.addEventListener('click', () => void toggleSubscribe());
   recommendButton?.addEventListener('click', () => void toggleRecommend());
   applyLocal();
+
+  // Back from Leaflet with the email confirmed. The marker comes off the address so a
+  // reload or a shared link doesn't say it again.
+  const search = new URLSearchParams(win.location.search ?? '');
+  if (search.get(EMAIL_RETURN.param) === EMAIL_RETURN.value) {
+    search.delete(EMAIL_RETURN.param);
+    const rest = search.toString();
+    win.history?.replaceState?.(win.history.state, '', `${win.location.pathname}${rest ? `?${rest}` : ''}${win.location.hash ?? ''}`);
+    notify(COPY.notices.emailSubscribed);
+  }
 
   const leftover = store.get(NOTICE_KEY);
   if (leftover) {

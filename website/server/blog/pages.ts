@@ -23,6 +23,7 @@ import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
+import { blueskySubscribeHtml, emailFormHtml, type EmailSignup } from './subscribe.js';
 
 export const WORDS_PER_MINUTE = 200;
 export const FEED_PATH = `${BLOG_PATH}/feed.xml`;
@@ -47,6 +48,8 @@ export interface SiteInfo {
   handle: string;
   /** Handle of the repo the records live in, which can be another account's. */
   owner: string;
+  /** Offer Leaflet's email subscribe form (false with BLOG_EMAIL_DISABLED or no publication). */
+  emailSignup: boolean;
 }
 
 export interface Page {
@@ -54,7 +57,7 @@ export interface Page {
   main: string;
 }
 
-export function siteInfo(publication: Publication | null, url: string, owner: string | null): SiteInfo {
+export function siteInfo(publication: Publication | null, url: string, owner: string | null, emailSignup = false): SiteInfo {
   return {
     name: publication?.name ?? BLOG_COPY.name,
     tagline: publication?.description ?? BLOG_COPY.tagline,
@@ -62,6 +65,7 @@ export function siteInfo(publication: Publication | null, url: string, owner: st
     publication,
     handle: POE_HANDLE,
     owner: owner ?? POE_HANDLE,
+    emailSignup: emailSignup && Boolean(publication),
   };
 }
 
@@ -169,7 +173,18 @@ const HEART =
  */
 function subscribeButton(site: SiteInfo, size = ''): string {
   if (!site.publication) return '';
-  return `<button type="button" class="btn btn--primary${size}" data-blog-subscribe aria-pressed="false" hidden><span data-blog-subscribe-label>subscribe</span></button>`;
+  return blueskySubscribeHtml(`btn btn--primary${size}`);
+}
+
+/** Leaflet's email form, sending the reader back to `returnTo` (an atpota.to URL) once confirmed. */
+function emailSignup(site: SiteInfo, returnTo: string): EmailSignup | null {
+  return site.publication && site.emailSignup ? { publication: site.publication.uri, redirect: returnTo } : null;
+}
+
+/** The page's own form (index hero, end of a post), at #subscribe; signup blocks get their own ids. */
+function emailForm(site: SiteInfo, returnTo: string): string {
+  const signup = emailSignup(site, returnTo);
+  return signup ? emailFormHtml(signup, 'subscribe') : '';
 }
 
 /** Signed-in state ("signed in as @alice · sign out"), filled in by src/blog/. */
@@ -217,6 +232,7 @@ export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets:
     `<p class="chip blog-hero__chip">newsletter</p>` +
     `<h1 class="blog-hero__title" id="blog-title">${escapeHtml(site.name)}</h1>` +
     `<p class="blog-hero__lede">${escapeHtml(site.tagline)}</p>` +
+    emailForm(site, `${SITE_ORIGIN}${BLOG_PATH}`) +
     `<div class="blog-hero__actions">${subscribeButton(site)}${followActions(site)}</div>` +
     ACCOUNT_LINE +
     `</div>` +
@@ -274,7 +290,13 @@ export interface PostInput {
 }
 
 /** The post body alone (blocks + footnotes), shared with the feed. */
-export function postBody(input: Omit<PostInput, 'site' | 'newer' | 'older' | 'assets' | 'discussion'> & { site: SiteInfo }): string {
+export function postBody(
+  input: Omit<PostInput, 'site' | 'newer' | 'older' | 'assets' | 'discussion'> & {
+    site: SiteInfo;
+    /** Where signup blocks' email form returns to; left out (the feed), they show plain links. */
+    signupReturn?: string;
+  },
+): string {
   const footnotes = new FootnoteList();
   const ctx: BlockContext = {
     did: input.did,
@@ -287,6 +309,7 @@ export function postBody(input: Omit<PostInput, 'site' | 'newer' | 'older' | 'as
     headingIds: new Set(),
     otherPosts: input.others.map((d) => ({ href: docHref(d), title: d.title, date: d.publishedAt })),
     links: { profile: profileUrl(input.site.handle), feed: FEED_PATH },
+    signup: input.signupReturn ? emailSignup(input.site, input.signupReturn) : null,
   };
   let body = input.pages.length ? renderPages(input.pages, ctx) : '';
   if (!body.trim()) body = renderPlainText(input.doc.textContent ?? '');
@@ -309,7 +332,10 @@ export function postPage(input: PostInput): Page {
   const { site, doc } = input;
   const minutes = readingMinutes(input.text || doc.textContent || '');
   const description = doc.description ?? clip(input.text || doc.textContent || site.tagline, 200);
-  const body = postBody(input);
+  // Absolute, for Leaflet's redirect after the email is confirmed; docHref stays relative.
+  const here = `${SITE_ORIGIN}${docHref(doc)}`;
+  const body = postBody({ ...input, signupReturn: here });
+  const endForm = emailForm(site, here);
   const record = aturiUrl(doc.uri);
   // Leaflet uses coverImage as the thumbnail and usually repeats it in the body; show it
   // on the page only when no image block already carries the same blob.
@@ -351,7 +377,8 @@ export function postPage(input: PostInput): Page {
     `<aside class="post-end" aria-label="after the post">` +
     `<div class="tile post-end__card" data-mascot-trigger>` +
     potato(input.assets, 'wink', 'post-end__potato', 150, 122, true) +
-    `<p class="post-end__title">${reply ? 'thoughts? talk about it on bluesky.' : 'want the next one?'}</p>` +
+    `<p class="post-end__title">${reply && !endForm ? 'thoughts? talk about it on bluesky.' : 'want the next one?'}</p>` +
+    endForm +
     `<div class="post-end__actions">` +
     subscribeButton(site, ' btn--sm') +
     recommendButton(discussion) +
