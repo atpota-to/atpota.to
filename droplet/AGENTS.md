@@ -31,8 +31,8 @@ the droplet, so say which ones a change needs:
 - **A Supabase schema change:** apply the migration first, and keep the SQL in the
   folder.
 - **A new service:** apply its migration, make its data folder and write its `.env`
-  before it merges (for the garden: `garden/supabase/garden_index.sql` as migration
-  `garden_index`, then `/root/atpotato-garden/.env` with the same `SUPABASE_URL` and
+  before it merges (for the garden: `garden/supabase/garden_index.sql`, applied as
+  migration `garden_index`, then `/root/atpotato-garden/.env` with the same `SUPABASE_URL` and
   `SUPABASE_SERVICE_ROLE_KEY` as the weather station; see `garden/README.md`). Until
   the `.env` exists, its deploy is skipped and the run stays green. The garden needs no
   nginx block: the website reads Supabase.

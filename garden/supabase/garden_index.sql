@@ -1,6 +1,5 @@
--- The garden index. Not applied yet: apply it to the Supabase project "atpota.to"
--- (zdzjtziydmwkxbzlkwxv) as migration `garden_index` before atpotato-garden first starts
--- (droplet/AGENTS.md: the deploy ships code only).
+-- The garden index. Applied 2026-10-20 to the Supabase project "atpota.to"
+-- (zdzjtziydmwkxbzlkwxv) as migration `garden_index`.
 --
 -- Every to.atpota.garden.* record on the network, kept by atpotato-garden on the droplet
 -- (garden/), so the website reads one database instead of asking Constellation which
@@ -76,9 +75,6 @@ comment on table public.garden_status is 'atpotato-garden''s heartbeat: the webs
 alter table public.garden_records enable row level security;
 alter table public.garden_growth enable row level security;
 alter table public.garden_status enable row level security;
-drop policy if exists "anyone can read" on public.garden_records;
-drop policy if exists "anyone can read" on public.garden_growth;
-drop policy if exists "anyone can read" on public.garden_status;
 create policy "anyone can read" on public.garden_records for select using (true);
 create policy "anyone can read" on public.garden_growth for select using (true);
 create policy "anyone can read" on public.garden_status for select using (true);

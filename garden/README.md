@@ -83,8 +83,9 @@ The deploy ships code only. Until `/root/atpotato-garden/.env` exists, a deploy 
 `garden` just says it isn't set up yet and succeeds, so merging first is safe. To set it
 up:
 
-1. Apply [`supabase/garden_index.sql`](supabase/garden_index.sql) to the Supabase project
-   **atpota.to** (`zdzjtziydmwkxbzlkwxv`) as migration `garden_index`.
+1. The schema: [`supabase/garden_index.sql`](supabase/garden_index.sql), applied to the
+   Supabase project **atpota.to** (`zdzjtziydmwkxbzlkwxv`) as migration `garden_index` on
+   2026-10-20. A change to it goes in as a new migration.
 2. On the droplet:
    ```bash
    mkdir -p /root/atpotato-garden && chmod 700 /root/atpotato-garden
