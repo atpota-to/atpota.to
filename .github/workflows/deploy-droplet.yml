@@ -1,0 +1,90 @@
+name: Deploy droplet
+
+# Deploys the droplet's two services (mentions/ = Poe, atmosphere/ = the weather
+# station) when a push to main touches them, by asking the droplet to run
+# droplet/deploy.sh. For each service, the droplet:
+#  - fetches the commit from GitHub itself
+#  - does nothing if that service's folder didn't change
+#  - runs its tests
+#  - for Poe, waits until no reply is in flight
+#  - restarts it, checks health, and rolls back on its own if unhealthy
+#
+# The DROPLET_DEPLOY_KEY secret can do nothing else. On the droplet it is pinned to
+# droplet/ci-deploy.sh, which only accepts "<service> [commit on main]".
+#
+# "Run workflow" (Actions tab) redeploys by hand. Give it an older commit on main to
+# roll back.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mentions/**'
+      - 'atmosphere/**'
+      - 'droplet/**'
+      - '.github/workflows/deploy-droplet.yml'
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Which service
+        type: choice
+        options: [both, atmosphere, mentions]
+        default: both
+      commit:
+        description: Full commit SHA on main (blank = latest main). An older one rolls back.
+        required: false
+        default: ''
+
+# One deploy at a time, never cancelled halfway. Each run asks for both services, and
+# the droplet skips whichever is already current, so a run that GitHub drops from
+# the queue loses nothing.
+concurrency:
+  group: droplet-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy
+        env:
+          KEY: ${{ secrets.DROPLET_DEPLOY_KEY }}
+          EVENT: ${{ github.event_name }}
+          INPUT_SERVICE: ${{ inputs.service }}
+          INPUT_COMMIT: ${{ inputs.commit }}
+          PUSHED: ${{ github.sha }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::The DROPLET_DEPLOY_KEY secret isn't set, so nothing was deployed."
+            exit 0
+          fi
+          if [ "$EVENT" = workflow_dispatch ]; then
+            commit="$INPUT_COMMIT"
+            case "$INPUT_SERVICE" in both) services="atmosphere mentions" ;; *) services="$INPUT_SERVICE" ;; esac
+          else
+            commit="$PUSHED"
+            services="atmosphere mentions"
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # The droplet's host key, pinned: never deploy to anything else.
+          echo "hook.atpota.to ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAtZe9/XzO1UEI7e+QcU3XLtEvA7BlXM+4SVcYsYw8UH" > ~/.ssh/known_hosts
+          status=0
+          for s in $services; do
+            echo "::group::$s"
+            if ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                   -o ServerAliveInterval=30 -o ConnectTimeout=20 root@hook.atpota.to "$s $commit"; then
+              echo "::endgroup::"
+            else
+              code=$?
+              echo "::endgroup::"
+              echo "::error::$s did not deploy (exit $code); see the log above."
+              status=1
+            fi
+          done
+          exit $status

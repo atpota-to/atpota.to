@@ -3,8 +3,11 @@ import * as api from '../api/atmosphere.js';
 import {
   addEvent,
   appDomain,
+  CACHE_LIVE,
   CACHE_OK,
   conditionFor,
+  fromStation,
+  STATION_URL,
   diversityLevel,
   emptyTally,
   eventOf,
@@ -222,5 +225,111 @@ describe('/api/atmosphere', () => {
     const res = await api.POST(new Request('https://atpota.to/api/atmosphere', { method: 'POST' }));
     expect(res.status).toBe(405);
     expect(res.headers.get('allow')).toBe('GET, HEAD');
+  });
+});
+
+// The weather station's rolling 60 seconds (atmosphere/SPEC.md), as the station sends it.
+const STATION = {
+  measuredAt: '2026-10-20T16:18:00.000Z',
+  seconds: 60,
+  perSecond: { posts: 51, likes: 308, reposts: 52.2, follows: 24.1 },
+  condition: 'stormy',
+  records: { perSecond: 444, bluesky: 436, elsewhere: 8 },
+  diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 },
+  apps: [{ domain: 'tangled.sh', perSecond: 4, count: 240, collections: ['sh.tangled.repo'] }],
+  bluesky: [{ nsid: 'app.bsky.feed.like', perSecond: 308, count: 18480 }],
+  events: { creates: 444, updates: 3.6, deletes: 13.5, identity: 0.5, account: 0.2 },
+  window: { from: '2026-10-20T16:17:00.000Z', to: '2026-10-20T16:18:00.000Z' },
+  series: [{ t: 1792512960, creates: 451, bluesky: 449, elsewhere: 2, posts: 48 }, null],
+};
+
+describe('reading the weather station', () => {
+  it('takes a station reading, rebuilt from the fields it knows', () => {
+    const r = fromStation({ ...STATION, extra: 'ignored' })!;
+    expect(r.source).toBe('station');
+    expect(r.seconds).toBe(60);
+    expect(r.condition).toBe('stormy');
+    expect(r.series).toEqual(STATION.series);
+    expect(r.window).toEqual(STATION.window);
+    expect('extra' in r).toBe(false);
+  });
+
+  it('works out the words itself, and drops names that do not check out', () => {
+    const r = fromStation({
+      ...STATION,
+      condition: 'hail',
+      diversity: { ...STATION.diversity, index: 9, level: 'nonsense' },
+      apps: [{ domain: '<b>x</b>', perSecond: 1, count: 1, collections: [] }, { domain: 'ok.app', perSecond: 1, count: 1, collections: ['<i>', 'app.ok.thing'] }],
+      bluesky: [{ nsid: 'sh.tangled.repo', perSecond: 1, count: 1 }],
+    })!;
+    expect(r.condition).toBe('stormy');
+    expect(r.diversity.level).toBe('very high');
+    expect(r.apps).toEqual([{ domain: 'ok.app', perSecond: 1, count: 1, collections: ['app.ok.thing'] }]);
+    expect(r.bluesky).toEqual([]);
+  });
+
+  it('refuses a reading missing its numbers', () => {
+    expect(fromStation(null)).toBeNull();
+    expect(fromStation({ ...STATION, seconds: 0 })).toBeNull();
+    expect(fromStation({ ...STATION, records: { perSecond: -1, bluesky: 0, elsewhere: 0 } })).toBeNull();
+    expect(fromStation({ ...STATION, apps: 'nope' })).toBeNull();
+  });
+
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  it('asks the station with the secret, and caches its answer for 5 seconds at the CDN', async () => {
+    const calls: Array<{ url: string; secret: string | null }> = [];
+    const fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, secret: new Headers(init?.headers).get('x-atpotato-weather-secret') });
+      return json(STATION);
+    }) as typeof globalThis.fetch;
+    const net = opener([]);
+    const h = createAtmosphereHandlers({ open: net.open, fetch, env: () => ({ ATMOSPHERE_STATION_SECRET: 's3cret' }), log: () => undefined });
+    const res = await h.GET(new Request('https://atpota.to/api/atmosphere'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(CACHE_LIVE);
+    expect(((await res.json()) as { source: string }).source).toBe('station');
+    expect(calls).toEqual([{ url: STATION_URL, secret: 's3cret' }]);
+    expect(net.urls).toEqual([]); // no sampling of our own
+    await h.GET(new Request('https://atpota.to/api/atmosphere'));
+    expect(calls).toHaveLength(1); // reused for a moment
+  });
+
+  it('samples by itself when the station is down, and leaves the station alone for a while', async () => {
+    vi.useFakeTimers();
+    let t = 0;
+    let asked = 0;
+    const fetch = (async () => {
+      asked += 1;
+      return json({ error: 'unavailable' }, 503);
+    }) as typeof globalThis.fetch;
+    const net = opener([{ messages: [commit('app.bsky.feed.post')] }, { messages: [commit('app.bsky.feed.post')] }]);
+    const h = createAtmosphereHandlers({ open: net.open, fetch, now: () => t, sampleMs: 1000, env: () => ({ ATMOSPHERE_STATION_SECRET: 's' }), log: () => undefined });
+    const first = h.GET(new Request('https://atpota.to/api/atmosphere'));
+    await vi.advanceTimersByTimeAsync(1100);
+    const res = await first;
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(CACHE_OK);
+    expect(((await res.json()) as { source: string }).source).toBe('sample');
+    t = 10_000;
+    const again = h.GET(new Request('https://atpota.to/api/atmosphere'));
+    await vi.advanceTimersByTimeAsync(1100);
+    await again;
+    expect(asked).toBe(1);
+  });
+
+  it('without a secret, never calls the station', async () => {
+    vi.useFakeTimers();
+    let asked = 0;
+    const fetch = (async () => {
+      asked += 1;
+      return json(STATION);
+    }) as typeof globalThis.fetch;
+    const net = opener([{ messages: [commit('app.bsky.feed.post')] }]);
+    const h = createAtmosphereHandlers({ open: net.open, fetch, now: () => 0, sampleMs: 1000, env: () => ({}), log: () => undefined });
+    const pending = h.GET(new Request('https://atpota.to/api/atmosphere'));
+    await vi.advanceTimersByTimeAsync(1100);
+    expect((await pending).status).toBe(200);
+    expect(asked).toBe(0);
   });
 });
