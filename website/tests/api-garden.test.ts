@@ -19,11 +19,12 @@ import {
   MIN_COLS,
   MIN_ROWS,
   NAME_MAX,
-  newestPerAccount,
+  onePerAccount,
   NOTE_MAX,
   OWN_PATCH_RKEY,
   parsePatchUri,
   PATCH_NSID,
+  PLANTING,
   resolvePlots,
   SEASONS,
   SPROUT_DAYS,
@@ -70,10 +71,14 @@ describe('patch records', () => {
       opensAt: '2026-09-01T00:00:00.000Z',
       closesAt: '2026-12-01T00:00:00.000Z',
       createdAt: '2026-08-01T00:00:00.000Z',
+      planting: 'one',
     });
     expect(toPatch(patchEntry('x', autumn, `at://${did(1)}/${PATCH_NSID}/x`))).toBeNull();
-    // an unknown season is just no season
+    // an unknown season is just no season, and unknown planting is one each
     expect(toPatch(patchEntry('x', { ...autumn, season: 'monsoon' }))?.season).toBeNull();
+    expect(toPatch(patchEntry('x', { ...autumn, planting: 'many' }))?.planting).toBe('many');
+    expect(toPatch(patchEntry('x', { ...autumn, planting: 'move' }))?.planting).toBe('move');
+    expect(toPatch(patchEntry('x', { ...autumn, planting: 'loads' }))?.planting).toBe('one');
     expect(toPatch(patchEntry('x', { ...autumn, createdAt: undefined }))).toBeNull();
     expect(toPatch(patchEntry('x', { ...autumn, opensAt: 'soon' }))).toBeNull();
     expect(toPatch(patchEntry('x', { ...autumn, cols: MAX_COLS + 1 }))).toBeNull();
@@ -100,6 +105,7 @@ describe('patch records', () => {
       opensAt: null,
       closesAt: null,
       createdAt: '2026-09-15T00:00:00.000Z',
+      planting: 'one',
     });
     expect(isOpen(p, NOW)).toBe(true);
     expect(isOpen(p, Date.parse('2026-09-14T00:00:00Z'))).toBe(false);
@@ -135,6 +141,8 @@ describe('patch records', () => {
     expect([patch.defs.main.record.properties.rows.minimum, patch.defs.main.record.properties.rows.maximum]).toEqual([MIN_ROWS, MAX_ROWS]);
     expect(patch.defs.main.record.properties.name.maxGraphemes).toBe(NAME_MAX);
     expect(patch.defs.main.record.properties.note.maxGraphemes).toBe(NOTE_MAX);
+    expect(patch.defs.main.record.properties.planting.knownValues).toEqual([...PLANTING]);
+    expect(patch.defs.main.record.properties.planting.description).toContain(`Without it, "${PLANTING[0]}"`);
     expect(patch.defs.main.record.required).toEqual(['name', 'cols', 'rows', 'createdAt']);
 
     const sprouted = lexicon('sprout');
@@ -204,10 +212,11 @@ describe('sprout records', () => {
     ]);
   });
 
-  it('keeps one flower per account across the open patches: the newest', () => {
+  it('keeps one flower per account across the open patches: its first (one each), or its newest (moving)', () => {
     const s = (d: string, rkey: string, plantedAt: string) => ({ did: d, rkey, uri: `at://${d}/${SPROUT_NSID}/${rkey}`, cid: CID, kind: 'rose' as const, plot: 0, plantedAt });
-    const keep = newestPerAccount([s(did(1), 'a', '2026-10-01T00:00:00Z'), s(did(1), 'b', '2026-10-05T00:00:00Z'), s(did(2), 'c', '2026-10-02T00:00:00Z')]);
-    expect([...keep].sort()).toEqual([`at://${did(1)}/${SPROUT_NSID}/b`, `at://${did(2)}/${SPROUT_NSID}/c`]);
+    const all = [s(did(1), 'b', '2026-10-05T00:00:00Z'), s(did(1), 'a', '2026-10-01T00:00:00Z'), s(did(2), 'c', '2026-10-02T00:00:00Z')];
+    expect([...onePerAccount(all, 'first')].sort()).toEqual([`at://${did(1)}/${SPROUT_NSID}/a`, `at://${did(2)}/${SPROUT_NSID}/c`]);
+    expect([...onePerAccount(all, 'newest')].sort()).toEqual([`at://${did(1)}/${SPROUT_NSID}/b`, `at://${did(2)}/${SPROUT_NSID}/c`]);
   });
 });
 
@@ -283,6 +292,7 @@ describe('growing and tending', () => {
     expect([...client.SEASONS]).toEqual([...SEASONS]);
     expect([...client.TEND_ACTIONS]).toEqual([...TEND_ACTIONS]);
     expect([client.MAX_COLS, client.MAX_ROWS, client.MAX_PLOTS]).toEqual([MAX_COLS, MAX_ROWS, MAX_PLOTS]);
+    expect([...client.PLANTING]).toEqual([...PLANTING]);
     expect([flowers.SPROUT_DAYS, flowers.GROW_DAYS]).toEqual([SPROUT_DAYS, GROW_DAYS]);
     for (const age of [0, 1, 2, 3, 6.9, 7, 30]) {
       for (const open of [true, false]) expect(flowers.stageFor(planted, at + age * DAY, open)).toBe(stageFor(planted, at + age * DAY, open));
@@ -306,7 +316,7 @@ describe('growing and tending', () => {
 
   it('your own garden’s record: limited by graphemes, inside the lexicon’s sizes, and the server reads it back', () => {
     const now = new Date(NOW);
-    const record = client.gardenRecord({ name: '  🌷 my\n garden  ', note: `${'🌱'.repeat(NOTE_MAX + 3)}`, cols: 100, rows: 1 }, now);
+    const record = client.gardenRecord({ name: '  🌷 my\n garden  ', note: `${'🌱'.repeat(NOTE_MAX + 3)}`, cols: 100, rows: 1, planting: 'one' }, now);
     expect(record).toEqual({ $type: PATCH_NSID, name: '🌷 my garden', note: '🌱'.repeat(NOTE_MAX), cols: MAX_COLS, rows: MIN_ROWS, createdAt: now.toISOString() });
     expect(client.gardenRecord({ name: '', note: '   ', cols: 8, rows: 6, createdAt: '2026-09-01T00:00:00.000Z', closesAt: null }, now)).toEqual({
       $type: PATCH_NSID,
@@ -316,20 +326,27 @@ describe('growing and tending', () => {
       createdAt: '2026-09-01T00:00:00.000Z',
     });
     expect(client.gardenRecord({ name: 'x'.repeat(50), cols: 6, rows: 4, closesAt: '2026-11-01T00:00:00.000Z' }, now)).toMatchObject({ name: 'x'.repeat(NAME_MAX), closesAt: '2026-11-01T00:00:00.000Z' });
+    // one each is the default, so it's left out; many (or moving) is written
+    const many = client.gardenRecord({ name: 'open house', cols: 6, rows: 4, planting: 'many' }, now);
+    expect(many).toMatchObject({ planting: 'many' });
+    expect(toPatch(patchEntry(OWN_PATCH_RKEY, many, patchUri(OWN_PATCH_RKEY, did(1))), did(1))?.planting).toBe('many');
     const uri = patchUri(OWN_PATCH_RKEY, did(1));
     expect(toPatch(patchEntry(OWN_PATCH_RKEY, record, uri), did(1))).toMatchObject({ name: '🌷 my garden', cols: MAX_COLS, rows: MIN_ROWS, note: '🌱'.repeat(NOTE_MAX) });
   });
 });
 
-/** Three patches (one closed, two open) and a winter one to come, with flowers and tending. */
+/**
+ * Three patches (one closed, two open, both moving flowers) and a winter one to come, with
+ * flowers and tending.
+ */
 function gardenNet(): Net {
   const poppy = `at://${did(2)}/${SPROUT_NSID}/p2`;
   const poppyAt = Date.parse('2026-10-14T00:00:00Z');
   return {
     patches: {
       '2026-summer': patchRecord('summer 2026', '2026-06-01T00:00:00Z', '2026-09-01T00:00:00Z', 4, 2, 'summer'),
-      '2026-autumn': patchRecord('autumn 2026', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2),
-      '2026-autumn-2': patchRecord('autumn 2026 (2)', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2),
+      '2026-autumn': { ...patchRecord('autumn 2026', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2), planting: 'move' },
+      '2026-autumn-2': { ...patchRecord('autumn 2026 (2)', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2), planting: 'move' },
       '2026-winter': patchRecord('winter 2026', '2026-12-01T00:00:00Z', '2027-03-01T00:00:00Z', 4, 2, 'winter'),
       broken: { name: 'no size' },
     },
@@ -338,7 +355,7 @@ function gardenNet(): Net {
       [`${did(1)}/${SPROUT_NSID}/r1`]: sprout('2026-summer', 'rose', '2026-07-01T00:00:00Z', 0),
       [`${did(2)}/${SPROUT_NSID}/d2`]: sprout('2026-summer', 'daisy', '2026-07-05T00:00:00Z', 0),
       [`${did(1)}/${SPROUT_NSID}/t1`]: sprout('2026-summer', 'tulip', '2026-07-10T00:00:00Z', 1),
-      // autumn: did(1)'s older flower gives way to its newer one in autumn-2
+      // autumn: did(1)'s older flower gives way to its newer one in autumn-2 (it moved)
       [`${did(1)}/${SPROUT_NSID}/v1`]: sprout('2026-autumn', 'violet', '2026-10-01T00:00:00Z', 3),
       [`${did(7)}/${SPROUT_NSID}/u7`]: sprout('2026-autumn', 'tulip', '2026-09-02T00:00:00Z', 7),
       [`${did(2)}/${SPROUT_NSID}/p2`]: sprout('2026-autumn', 'poppy', '2026-10-14T00:00:00Z', 5),
@@ -410,6 +427,7 @@ describe('/api/garden', () => {
       opensAt: '2026-09-01T00:00:00.000Z',
       closesAt: '2026-12-01T00:00:00.000Z',
       createdAt: '2026-08-01T00:00:00.000Z',
+      planting: 'move',
       open: true,
     });
     expect(body.patches).toEqual([
@@ -442,6 +460,29 @@ describe('/api/garden', () => {
 
     const second = await (await h.GET(new Request('https://atpota.to/api/garden?patch=2026-autumn-2'))).json();
     expect(second.flowers.map((f: { rkey: string }) => f.rkey)).toEqual(['n1']);
+  });
+
+  it('one each by default: an account’s first flower stays put, and a later one anywhere in the garden doesn’t show', async () => {
+    const net = gardenNet();
+    for (const rkey of ['2026-autumn', '2026-autumn-2']) delete net.patches[rkey]!.planting;
+    const h = createGardenHandlers({ fetch: fakeFetch(net), now: () => NOW, log: () => undefined });
+    const body = await (await h.GET(new Request('https://atpota.to/api/garden?patch=2026-autumn'))).json();
+    expect(body.patch.planting).toBe('one');
+    // did(1)'s violet, planted first, keeps its plot; its later daisy in autumn-2 isn't shown
+    expect(body.flowers.map((f: { rkey: string; plot: number }) => [f.rkey, f.plot])).toEqual([
+      ['u7', 7],
+      ['v1', 3],
+      ['p2', 5],
+      ['s3', 6],
+    ]);
+    const second = await (await h.GET(new Request('https://atpota.to/api/garden?patch=2026-autumn-2'))).json();
+    expect(second.flowers).toEqual([]);
+    expect(second.patches.map((p: { rkey: string; planted: number }) => [p.rkey, p.planted])).toEqual([
+      ['2026-summer', 3],
+      ['2026-autumn', 4],
+      ['2026-autumn-2', 0],
+      ['2026-winter', 0],
+    ]);
   });
 
   it('a full patch sends you to the next open one with room', async () => {
@@ -556,6 +597,7 @@ describe('anyone’s garden', () => {
       opensAt: null,
       closesAt: null,
       createdAt: '2026-09-15T00:00:00.000Z',
+      planting: 'one',
       open: true,
     });
     expect(body.patches).toEqual([{ rkey: 'self', name: 'one’s garden', season: null, open: true, planted: 2, plots: 24, opensAt: null, closesAt: null }]);
@@ -566,6 +608,25 @@ describe('anyone’s garden', () => {
     expect((await get(h, `owner=${did(1)}`)).body).toEqual(body);
     // atpotato's garden doesn't mind who did(1) blocks
     expect((await get(h, 'owner=atpota.to')).body.flowers.map((f: { rkey: string }) => f.rkey)).toEqual(['u7', 'p2', 's3']);
+  });
+
+  it('a garden that takes many keeps every flower each visitor plants; one each keeps their first', async () => {
+    const net = peopleNet();
+    net.records[`${did(2)}/${SPROUT_NSID}/g2b`] = sprout('self', 'daisy', '2026-10-17T00:00:00Z', 4, did(1));
+    const plots = (body: { flowers: Array<{ rkey: string; plot: number }> }) => body.flowers.map((f) => [f.rkey, f.plot]);
+    expect(plots((await get(handlers(net), 'owner=one.test')).body)).toEqual([
+      ['g2', 4],
+      ['g7', 5],
+    ]);
+    net.gardens![did(1)]!.self = ownGarden('one’s garden', 6, 4, { planting: 'many' });
+    const { body } = await get(handlers(net), 'owner=one.test');
+    expect(body.patch.planting).toBe('many');
+    expect(plots(body)).toEqual([
+      ['g2', 4],
+      ['g7', 5],
+      ['g2b', 6],
+    ]);
+    expect(body.patches[0].planted).toBe(3);
   });
 
   it('someone’s garden is their record at "self", read from Slingshot; other patch records aren’t gardens', async () => {
@@ -633,7 +694,7 @@ describe('anyone’s garden', () => {
     const browserFetch = (async (input: RequestInfo | URL) => h.GET(new Request(new URL(String(input), 'https://atpota.to')))) as typeof fetch;
     const view = await client.fetchGarden(browserFetch, { owner: 'one.test' });
     expect(view?.owner).toEqual({ did: did(1), handle: 'one.test', displayName: 'One', avatar: 'https://cdn.bsky.app/one.jpg' });
-    expect(view?.patch).toMatchObject({ rkey: 'self', note: 'plant something cheerful', season: null, opensAt: null, closesAt: null, open: true });
+    expect(view?.patch).toMatchObject({ rkey: 'self', note: 'plant something cheerful', season: null, opensAt: null, closesAt: null, planting: 'one', open: true });
     expect(view?.flowers.map((f) => f.rkey)).toEqual(['g2', 'g7']);
     expect(await client.fetchGarden(browserFetch, { owner: 'six.test', rkey: 'old' })).toBeNull();
     expect((await client.fetchGarden(browserFetch, '2026-summer'))?.patch?.rkey).toBe('2026-summer');
