@@ -58,29 +58,74 @@
   color: var(--text-soft);
 }
 
-.blog-hero__actions,
 .post-end__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.blog-hero__actions .btn {
-  --btn-h: 50px;
-  padding: 0 22px;
-  font-size: 16px;
+.post-end__actions:not(:has(> :not([hidden]))) {
+  display: none;
 }
 
-.blog-hero__actions .btn--icon {
-  padding: 0;
+.blog-alt + .post-end__actions {
+  margin-top: 18px;
 }
 
-/* The round rss button (feedButtonHtml): a tap copies the link, and this says so. */
-.blog-feed {
+/* "or subscribe with bluesky, follow poe, rss" under the email forms (altLinksHtml). */
+.blog-alt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.post__body .blog-alt {
+  margin: 0 !important;
+}
+
+.blog-alt .blog-alt__link {
   position: relative;
-  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+  text-underline-offset: 0.25em;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
+.blog-alt .blog-alt__link:hover {
+  text-decoration-color: currentColor;
+}
+
+.blog-alt__or {
+  margin-right: -8px;
+}
+
+.blog-alt__link svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.blog-alt__link[hidden] {
+  display: none !important;
+}
+
+/* The rss link (feedLinkHtml): a tap copies the address, and this says so. */
 .blog-feed__bubble {
   position: absolute;
   right: 0;
@@ -272,17 +317,14 @@
     font-size: 17px;
   }
 
-  /* Subscribe gets its own row; follow shares the next with the rss button. */
-  .blog-hero__actions .btn {
-    flex: 1 1 100%;
+  .blog-alt {
+    column-gap: 14px;
+    font-size: 14px;
   }
 
-  .blog-hero__actions .btn--outline {
-    flex: 1 1 0;
-  }
-
-  .blog-hero__actions .blog-feed {
-    flex: none;
+  /* Room for all three on one line. */
+  .blog-alt__link:not(.blog-feed) svg {
+    display: none;
   }
 
   .blog-hero__potato {
@@ -1156,8 +1198,8 @@ html[data-theme="dark"] .post__body h2::after {
    in signup blocks. Scoped twice where post body prose rules would win. */
 .blog-email {
   --email-h: 50px;
-  max-width: 34rem;
-  margin: 0 0 14px;
+  max-width: 30rem;
+  margin: 0 0 12px;
   scroll-margin-top: 24px;
 }
 
@@ -1232,20 +1274,10 @@ html[data-theme="dark"] .post__body h2::after {
 }
 
 .blog-email .blog-email__fine {
-  margin: 8px 0 0;
+  margin: 6px 0 0 18px;
   color: var(--text-soft);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.45;
-}
-
-@media (max-width: 640px) {
-  .blog-email__row {
-    flex-direction: column;
-  }
-
-  .blog-email .btn {
-    width: 100%;
-  }
 }
 
 .blog-account {

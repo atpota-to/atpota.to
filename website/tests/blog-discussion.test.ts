@@ -402,7 +402,7 @@ describe('/api/blog with reader actions', () => {
     expect(hero.id).toBe('subscribe');
     expect(hero.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog?subscribed=email#subscribe');
     expect(JSON.parse(decodeURIComponent(hero.querySelector<HTMLInputElement>('input[name="action"]')!.value))).toEqual({ action: 'subscribe', publication: PUB, source: { placement: 'embed' } });
-    expect(index.querySelector('.blog-hero__actions [data-blog-subscribe-label]')!.textContent).toBe('subscribe with bluesky');
+    expect(index.querySelector('.blog-hero .blog-alt [data-blog-subscribe-label]')!.textContent).toBe('subscribe with bluesky');
 
     const post = await page(h(), 'view=post&path=3doc');
     expect(post.querySelector<HTMLInputElement>('.post-end form[data-blog-email] input[name="redirect"]')!.value).toBe('https://atpota.to/blog/3doc?subscribed=email#subscribe');
@@ -417,7 +417,7 @@ describe('/api/blog with reader actions', () => {
   it('puts a subscribe button and an account line on the index', async () => {
     const d = await page(h(), 'view=index');
     expect(d.querySelector('.blog')!.getAttribute('data-blog-publication')).toBe(PUB);
-    expect(d.querySelector('.blog-hero__actions button[data-blog-subscribe]')).not.toBeNull();
+    expect(d.querySelector('.blog-hero .blog-alt button[data-blog-subscribe]')).not.toBeNull();
     expect(d.querySelector('.blog-hero [data-blog-account]')!.hasAttribute('hidden')).toBe(true);
   });
 });

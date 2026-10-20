@@ -23,7 +23,7 @@ import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
-import { blueskySubscribeHtml, emailFormHtml, feedButtonHtml, type EmailSignup } from './subscribe.js';
+import { altLinksHtml, blueskySubscribeHtml, emailFormHtml, feedLinkHtml, type EmailSignup } from './subscribe.js';
 
 export const WORDS_PER_MINUTE = 200;
 export const FEED_PATH = `${BLOG_PATH}/feed.xml`;
@@ -170,9 +170,9 @@ const HEART =
  * Reader actions that need a Bluesky sign-in (src/blog/). They stay hidden until that
  * code runs, so a page without JavaScript never shows a button that does nothing.
  */
-function subscribeButton(site: SiteInfo, size = ''): string {
+function subscribeButton(site: SiteInfo): string {
   if (!site.publication) return '';
-  return blueskySubscribeHtml(`btn btn--primary${size}`);
+  return blueskySubscribeHtml('blog-alt__link');
 }
 
 /** Leaflet's email form, sending the reader back to `returnTo` (an atpota.to URL) once confirmed. */
@@ -189,12 +189,13 @@ function emailForm(site: SiteInfo, returnTo: string): string {
 /** Signed-in state ("signed in as @alice · sign out"), filled in by src/blog/. */
 const ACCOUNT_LINE = '<p class="blog-account" data-blog-account aria-live="polite" hidden></p>';
 
-function followActions(site: SiteInfo, size = ''): string {
-  // Subscribing is the main action; following is the quieter alternative beside it.
-  return (
-    `<a class="btn btn--outline${size}" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} on bluesky ${ARROW}</a>` +
-    feedButtonHtml(FEED_PATH, FEED_URL, size)
-  );
+/** Under the email form: subscribe with bluesky, follow, rss. */
+function altLinks(site: SiteInfo, afterForm: boolean): string {
+  return altLinksHtml([
+    subscribeButton(site),
+    `<a class="blog-alt__link" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))} ${ARROW}</a>`,
+    feedLinkHtml(FEED_PATH, FEED_URL),
+  ], afterForm);
 }
 
 function tagList(tags: readonly string[], className: string): string {
@@ -224,6 +225,7 @@ export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets:
       `<h2 class="blog-empty__title" id="blog-empty-title">${escapeHtml(BLOG_COPY.emptyTitle)}</h2>` +
       `<p class="blog-empty__text">${escapeHtml(BLOG_COPY.emptyText)}</p></section>`;
 
+  const heroForm = emailForm(site, `${SITE_ORIGIN}${BLOG_PATH}`);
   const main =
     `<div class="blog"${pub ? ` data-blog-publication="${escapeAttr(pub.uri)}"` : ''}>` +
     `<section class="tile blog-hero" aria-labelledby="blog-title" data-mascot-trigger>` +
@@ -231,8 +233,8 @@ export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets:
     `<p class="chip blog-hero__chip">newsletter</p>` +
     `<h1 class="blog-hero__title" id="blog-title">${escapeHtml(site.name)}</h1>` +
     `<p class="blog-hero__lede">${escapeHtml(site.tagline)}</p>` +
-    emailForm(site, `${SITE_ORIGIN}${BLOG_PATH}`) +
-    `<div class="blog-hero__actions">${subscribeButton(site)}${followActions(site)}</div>` +
+    heroForm +
+    altLinks(site, !!heroForm) +
     ACCOUNT_LINE +
     `</div>` +
     potato(assets, 'happy', 'blog-hero__potato', 260, 212, true) +
@@ -378,12 +380,10 @@ export function postPage(input: PostInput): Page {
     potato(input.assets, 'wink', 'post-end__potato', 150, 122, true) +
     `<p class="post-end__title">${reply && !endForm ? 'thoughts? talk about it on bluesky.' : 'want the next one?'}</p>` +
     endForm +
+    altLinks(site, !!endForm) +
     `<div class="post-end__actions">` +
-    subscribeButton(site, ' btn--sm') +
-    feedButtonHtml(FEED_PATH, FEED_URL, ' btn--sm') +
     recommendButton(discussion) +
     (reply ? `<a class="btn btn--outline btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
-    `<a class="btn btn--outline btn--sm" href="${escapeAttr(profileUrl(site.handle))}">follow ${escapeHtml(bylineName(site.handle))}</a>` +
     `</div>` +
     ACCOUNT_LINE +
     `</div>` +
