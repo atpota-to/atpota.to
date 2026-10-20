@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as api from '../api/garden.js';
-import { resetDiscussionCaches } from '../server/blog/discussion.js';
+import { CONSTELLATION, resetDiscussionCaches, SLINGSHOT } from '../server/blog/discussion.js';
 import {
+  CACHE_INDEX,
   CACHE_OK,
   careFrom,
   createGardenHandlers,
@@ -11,6 +12,7 @@ import {
   FLOWER_KINDS,
   GARDEN_SUBJECT,
   GROW_DAYS,
+  isFresh,
   isOpen,
   isThirsty,
   MAX_COLS,
@@ -26,21 +28,25 @@ import {
   PATCH_NSID,
   PLANTING,
   resolvePlots,
+  reveal,
   SEASONS,
+  sourceFrom,
   SPROUT_DAYS,
   SPROUT_NSID,
   stageFor,
   TEND_ACTIONS,
   TEND_NSID,
   tidTime,
+  toGrowth,
   toOwner,
   toPatch,
   toSprout,
+  type Growth,
   type PatchSummary,
 } from '../server/garden.js';
 import * as flowers from '../src/scripts/flowers.js';
 import * as client from '../src/scripts/garden.js';
-import { CID, DAY, did, fakeFetch, gardenRecord as ownGarden, patchCid, patchRecord, patchUri, sprout, tendOf, tid, type Net } from './garden-net.js';
+import { CID, DAY, did, fakeFetch, gardenRecord as ownGarden, patchCid, patchRecord, patchUri, sprout, tendOf, tid, type IndexState, type Net } from './garden-net.js';
 
 // /api/garden against a scripted network (tests/garden-net.ts): a PDS lists each owner's
 // patches (atpotato's seasonal ones, and other people's own gardens), Constellation the
@@ -151,7 +157,7 @@ describe('patch records', () => {
     expect(sprouted.defs.main.record.properties.patch.ref).toBe('com.atproto.repo.strongRef');
     expect(sprouted.defs.main.record.properties.patch.description).toContain(GARDEN_SUBJECT);
     expect(sprouted.defs.main.record.properties.patch.description).toContain('garden owner');
-    expect(sprouted.defs.main.record.properties.kind.knownValues).toEqual([...FLOWER_KINDS]);
+    expect(sprouted.defs.main.record.properties.kind.knownValues).toEqual([...FLOWER_KINDS, 'seed']);
     expect(sprouted.defs.main.record.properties.plot.maximum).toBe(MAX_PLOTS - 1);
 
     const tended = lexicon('tend');
@@ -396,6 +402,8 @@ const flower = (d: string, rkey: string, handle: string, kind: string, plot: num
   cid: CID,
   handle,
   kind,
+  family: 'flower',
+  weather: null,
   plot,
   plantedAt,
   care: 0,
@@ -507,7 +515,7 @@ describe('/api/garden', () => {
     const empty = createGardenHandlers({ fetch: fakeFetch({ patches: {}, records: {}, profiles: [] }), now: () => NOW, log: () => undefined });
     const res = await empty.GET(new Request('https://atpota.to/api/garden'));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ owner: ATPOTATO, patch: null, patches: [], flowers: [], total: 0 });
+    expect(await res.json()).toEqual({ owner: ATPOTATO, patch: null, patches: [], flowers: [], total: 0, seeds: false });
   });
 
   it('says 503 when the patches or the index are down', async () => {
@@ -571,6 +579,170 @@ function peopleNet(): Net {
   net.profiles.push({ did: did(6), handle: 'six.test', avatar: 'http://insecure.test/six.jpg' });
   return net;
 }
+
+describe('seeds and what the garden settled', () => {
+  const growth = (extra: Partial<Growth> = {}): Growth => ({
+    plantedAt: '2026-10-10T00:00:00.000Z',
+    species: 'storm-lily',
+    plantWind: 4,
+    plantMix: 1,
+    grown: false,
+    growWind: null,
+    growMix: null,
+    growApps: [],
+    ...extra,
+  });
+
+  it('a seed is a seed until it blooms: a sprout shows nothing of it, a bud its family, the bloom what it grew into', () => {
+    expect(toSprout({ cid: CID, value: sprout('2026-autumn', 'seed', '2026-10-10T00:00:00Z') }, did(1), 's1', NOW)).toMatchObject({ kind: 'seed' });
+    const settled = growth({ grown: true, growWind: 3, growMix: 2, growApps: ['leaflet.pub'] });
+    expect(reveal('seed', settled, 'sprout')).toEqual({ kind: 'seed', family: null, weather: { planted: { wind: 4, mix: 1 }, grew: null } });
+    expect(reveal('seed', settled, 'bud')).toEqual({ kind: 'seed', family: 'flower', weather: { planted: { wind: 4, mix: 1 }, grew: null } });
+    expect(reveal('seed', settled, 'bloom')).toEqual({ kind: 'storm-lily', family: 'flower', weather: { planted: { wind: 4, mix: 1 }, grew: { wind: 3, mix: 2, apps: ['leaflet.pub'] } } });
+    // a cactus buds as a succulent; a bloom whose week isn't settled yet has no week
+    expect(reveal('seed', growth({ species: 'cactus' }), 'bud').family).toBe('succulent');
+    expect(reveal('seed', growth({ species: 'cactus' }), 'bloom')).toEqual({ kind: 'cactus', family: 'succulent', weather: { planted: { wind: 4, mix: 1 }, grew: null } });
+    // nothing settled, or something the browser can't draw: still a seed
+    expect(reveal('seed', null, 'bloom')).toEqual({ kind: 'seed', family: null, weather: null });
+    expect(reveal('seed', undefined, 'bud')).toEqual({ kind: 'seed', family: null, weather: null });
+    expect(reveal('seed', growth({ species: 'triffid' }), 'bloom')).toMatchObject({ kind: 'seed', family: null });
+    // no weather recorded either time
+    expect(reveal('seed', growth({ plantWind: null, plantMix: null, grown: true }), 'bloom').weather).toEqual({ planted: null, grew: null });
+    // a picked kind is what it is from the start, and remembers its weather all the same
+    expect(reveal('poppy', settled, 'sprout')).toEqual({ kind: 'poppy', family: 'flower', weather: { planted: { wind: 4, mix: 1 }, grew: null } });
+    expect(reveal('poppy', settled, 'bloom').weather?.grew).toEqual({ wind: 3, mix: 2, apps: ['leaflet.pub'] });
+  });
+
+  it('checks what the index says was settled', () => {
+    const row = { plantedAt: '2026-10-10T00:00:00+00:00', species: 'lotus', plantWind: 0, plantMix: 1, grown: true, growWind: 2, growMix: 4, growApps: ['leaflet.pub', 'Not A Domain', 7, 'tangled.org'] };
+    expect(toGrowth(row)).toEqual({ ...row, plantedAt: '2026-10-10T00:00:00.000Z', growApps: ['leaflet.pub', 'tangled.org'] });
+    expect(toGrowth({ ...row, plantWind: 5, growMix: -1, grown: 'yes' })).toMatchObject({ plantWind: null, growMix: null, grown: false });
+    expect(toGrowth({ ...row, plantedAt: 'whenever' })).toBeNull();
+    expect(toGrowth({ ...row, species: 'x'.repeat(65) })).toBeNull();
+    expect(toGrowth(null)).toBeNull();
+  });
+
+  it('reads from the index only when told to, and only while its heartbeat is fresh and it has finished a backfill', () => {
+    expect(sourceFrom({})).toBe('constellation');
+    expect(sourceFrom({ GARDEN_SOURCE: ' Index ' })).toBe('index');
+    expect(sourceFrom({ GARDEN_SOURCE: 'shadow' })).toBe('shadow');
+    expect(sourceFrom({ GARDEN_SOURCE: 'everything' })).toBe('constellation');
+    const iso = (ms: number) => new Date(ms).toISOString();
+    expect(isFresh({ heartbeat_at: iso(NOW - 60_000), backfilled_at: iso(NOW - DAY) }, NOW)).toBe(true);
+    expect(isFresh({ heartbeat_at: iso(NOW - 6 * 60_000), backfilled_at: iso(NOW - DAY) }, NOW)).toBe(false);
+    expect(isFresh({ heartbeat_at: iso(NOW - 60_000), backfilled_at: null }, NOW)).toBe(false);
+    expect(isFresh({ heartbeat_at: iso(NOW + 10 * 60_000), backfilled_at: iso(NOW - DAY) }, NOW)).toBe(false);
+    expect(isFresh(null, NOW)).toBe(false);
+  });
+});
+
+describe('/api/garden from the garden index', () => {
+  const fresh = (extra: Partial<IndexState> = {}): IndexState => ({ heartbeatAt: new Date(NOW - 60_000).toISOString(), backfilledAt: '2026-10-20T00:00:00.000Z', ...extra });
+  const handlersFor = (net: Net, source: string, log: (f: { event: string }) => void = () => undefined) =>
+    createGardenHandlers({ fetch: fakeFetch(net), now: () => NOW, log, env: { GARDEN_SOURCE: source } });
+  // Records from Constellation's links and Slingshot's records (Slingshot still resolves identities).
+  const fromNetwork = (net: Net) => (net.calls ?? []).some((c) => c.startsWith(CONSTELLATION) || (c.startsWith(SLINGSHOT) && c.endsWith('getRecord')));
+  const poppyAt = Date.parse('2026-10-14T00:00:00Z');
+  const autumn = [
+    flower(did(7), 'u7', 'seven.test', 'tulip', 7, '2026-09-02T00:00:00.000Z', { thirsty: true }),
+    flower(did(2), 'p2', 'two.test', 'poppy', 5, '2026-10-14T00:00:00.000Z', { care: 0.86, helpers: 3, lastTended: new Date(poppyAt + 3 * DAY).toISOString() }),
+    flower(did(3), 's3', 'three.test', 'sunflower', 6, '2026-10-18T00:00:00.000Z'),
+  ];
+
+  it('reads patches, sprouts and tending from the index, and shows the same garden as the network does', async () => {
+    const net = { ...gardenNet(), index: fresh(), calls: [] as string[] };
+    const res = await handlersFor(net, 'index').GET(new Request('https://atpota.to/api/garden'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(CACHE_INDEX);
+    const body = await res.json();
+    expect(body.patch).toMatchObject({ rkey: '2026-autumn', open: true });
+    expect(body.patches.map((p: PatchSummary) => [p.rkey, p.planted])).toEqual([
+      ['2026-summer', 3],
+      ['2026-autumn', 3],
+      ['2026-autumn-2', 1],
+      ['2026-winter', 0],
+    ]);
+    expect(body.flowers).toEqual(autumn);
+    expect(body.seeds).toBe(true);
+    expect(fromNetwork(net)).toBe(false);
+  });
+
+  it('grows seeds as the index settled them, and shows each only as far as it has grown', async () => {
+    const net: Net = {
+      patches: { open: { ...patchRecord('autumn 2026', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2), planting: 'many' } },
+      records: {
+        [`${did(1)}/${SPROUT_NSID}/a1`]: sprout('open', 'seed', '2026-10-19T12:00:00Z', 0),
+        [`${did(2)}/${SPROUT_NSID}/b2`]: sprout('open', 'seed', '2026-10-17T00:00:00Z', 1),
+        [`${did(3)}/${SPROUT_NSID}/c3`]: sprout('open', 'seed', '2026-10-12T00:00:00Z', 2),
+        [`${did(7)}/${SPROUT_NSID}/d7`]: sprout('open', 'seed', '2026-10-12T00:00:00Z', 3),
+      },
+      profiles: [
+        { did: did(1), handle: 'one.test' },
+        { did: did(2), handle: 'two.test' },
+        { did: did(3), handle: 'three.test' },
+        { did: did(7), handle: 'seven.test' },
+      ],
+      index: fresh({
+        growth: {
+          [`at://${did(1)}/${SPROUT_NSID}/a1`]: { plantedAt: '2026-10-19T12:00:00Z', species: 'lotus', plantWind: 0, plantMix: 1, grown: false, growWind: null, growMix: null, growApps: [] },
+          [`at://${did(2)}/${SPROUT_NSID}/b2`]: { plantedAt: '2026-10-17T00:00:00Z', species: 'toadstool', plantWind: 2, plantMix: 1, grown: false, growWind: null, growMix: null, growApps: [] },
+          [`at://${did(3)}/${SPROUT_NSID}/c3`]: { plantedAt: '2026-10-12T00:00:00Z', species: 'prism-aster', plantWind: 2, plantMix: 4, grown: true, growWind: 1, growMix: 3, growApps: ['leaflet.pub', 'tangled.org', 'frontpage.fyi'] },
+        },
+      }),
+    };
+    const body = await (await handlersFor(net, 'index').GET(new Request('https://atpota.to/api/garden'))).json();
+    const by = Object.fromEntries(body.flowers.map((f: { rkey: string }) => [f.rkey, f]));
+    expect(by.a1).toMatchObject({ kind: 'seed', family: null, weather: { planted: { wind: 0, mix: 1 }, grew: null } });
+    expect(by.b2).toMatchObject({ kind: 'seed', family: 'fungus' });
+    expect(by.c3).toMatchObject({ kind: 'prism-aster', family: 'flower', weather: { planted: { wind: 2, mix: 4 }, grew: { wind: 1, mix: 3, apps: ['leaflet.pub', 'tangled.org', 'frontpage.fyi'] } } });
+    // in bloom, but nothing settled yet: still a seed
+    expect(by.d7).toMatchObject({ kind: 'seed', family: null, weather: null });
+  });
+
+  it('reads from the network when the heartbeat is old, the backfill unfinished, or the index down', async () => {
+    for (const index of [fresh({ heartbeatAt: new Date(NOW - 10 * 60_000).toISOString() }), fresh({ backfilledAt: null }), fresh({ down: true })]) {
+      resetDiscussionCaches();
+      const net = { ...gardenNet(), index, calls: [] as string[] };
+      const body = await (await handlersFor(net, 'index').GET(new Request('https://atpota.to/api/garden'))).json();
+      expect(body.flowers).toEqual(autumn);
+      expect(fromNetwork(net)).toBe(true);
+    }
+  });
+
+  it('in shadow, serves the network’s garden and logs where the index differs', async () => {
+    const logs: Array<{ event: string; [k: string]: unknown }> = [];
+    const missing = `at://${did(3)}/${SPROUT_NSID}/s3`;
+    const net = { ...gardenNet(), index: fresh({ missing: [missing] }), calls: [] as string[] };
+    const res = await handlersFor(net, 'shadow', (f) => logs.push(f)).GET(new Request('https://atpota.to/api/garden'));
+    expect(res.headers.get('cache-control')).toBe(CACHE_OK);
+    const body = await res.json();
+    expect(body.flowers).toEqual(autumn);
+    expect(body.seeds).toBe(false);
+    expect(fromNetwork(net)).toBe(true);
+    expect(logs.find((l) => l.event === 'garden_shadow_diff' && l.patch === patchUri('2026-autumn'))).toMatchObject({ missing: [missing], extra: [] });
+    expect(logs.some((l) => l.event === 'garden_shadow' && l.patch === patchUri('2026-summer'))).toBe(true);
+  });
+
+  it('what’s settled shows from the network too, and a garden without the index just has none', async () => {
+    const poppy = `at://${did(2)}/${SPROUT_NSID}/p2`;
+    const net = { ...gardenNet(), index: fresh({ growth: { [poppy]: { plantedAt: '2026-10-14T00:00:00Z', species: 'poppy', plantWind: 3, plantMix: 0, grown: false, growWind: null, growMix: null, growApps: [] } } }) };
+    const body = await (await handlersFor(net, 'constellation').GET(new Request('https://atpota.to/api/garden'))).json();
+    expect(body.flowers.find((f: { rkey: string }) => f.rkey === 'p2').weather).toEqual({ planted: { wind: 3, mix: 0 }, grew: null });
+    resetDiscussionCaches();
+    const down = await (await handlersFor({ ...gardenNet(), index: fresh({ down: true }) }, 'constellation').GET(new Request('https://atpota.to/api/garden'))).json();
+    expect(down.flowers).toEqual(autumn);
+  });
+
+  it('tending by accounts atpotato blocks doesn’t count towards care, from the index or the network', async () => {
+    for (const source of ['index', 'constellation']) {
+      resetDiscussionCaches();
+      // did(6) and did(7) helped with the poppy; blocked, only did(3) and did(9) count
+      const net = { ...gardenNet(), index: fresh(), blocks: [did(5), did(6), did(7)] };
+      const body = await (await handlersFor(net, source).GET(new Request('https://atpota.to/api/garden'))).json();
+      expect(body.flowers.find((f: { rkey: string }) => f.rkey === 'p2')).toMatchObject({ care: 0.71, helpers: 2 });
+    }
+  });
+});
 
 describe('anyone’s garden', () => {
   const handlers = (net = peopleNet()) => createGardenHandlers({ fetch: fakeFetch(net), now: () => NOW, log: () => undefined });
@@ -677,7 +849,7 @@ describe('anyone’s garden', () => {
     const h = handlers();
     expect(await get(h, 'owner=seven.test')).toEqual({
       status: 200,
-      body: { owner: { did: did(7), handle: 'seven.test', displayName: null, avatar: null }, patch: null, patches: [], flowers: [], total: 0 },
+      body: { owner: { did: did(7), handle: 'seven.test', displayName: null, avatar: null }, patch: null, patches: [], flowers: [], total: 0, seeds: false },
     });
     for (const q of ['owner=nobody.test', 'owner=not%20a%20handle', 'owner=bob', `owner=${did(5)}`, `owner=${did(4)}`, 'owner=one.test&patch=nope', 'owner=seven.test&patch=self']) {
       expect((await get(h, q)).status, q).toBe(404);

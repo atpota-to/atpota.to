@@ -1,8 +1,9 @@
-# Working on the droplet services (`mentions/`, `atmosphere/`)
+# Working on the droplet services (`mentions/`, `atmosphere/`, `garden/`)
 
-**Merging to `main` deploys.** A push to `main` that changes code in `mentions/` or
-`atmosphere/` restarts that service on the droplet within a couple of minutes,
-through `.github/workflows/deploy-droplet.yml` and `droplet/deploy.sh`.
+**Merging to `main` deploys.** A push to `main` that changes code in `mentions/`,
+`atmosphere/` or `garden/` (or `website/shared/`, which the garden runs) restarts that
+service on the droplet within a couple of minutes, through
+`.github/workflows/deploy-droplet.yml` and `droplet/deploy.sh`.
 `mentions/` is Poe's live Bluesky reply bot at stage 4, so it posts in public. Work
 on a branch and merge by PR. Changes to only `.md` or `.sql` files don't restart
 anything.
@@ -13,6 +14,7 @@ fails. Run them first anyway; they need no network and no secrets:
 ```bash
 cd mentions && npm test      # Node >= 22.5 (node:sqlite)
 cd atmosphere && npm test    # Node >= 22.4
+cd garden && npm test        # Node >= 22.4
 ```
 
 **The deploy ships code only.** Anything the new code depends on has to be in place
@@ -21,12 +23,19 @@ rolls back, or worse, the code fails quietly later. The operator does these step
 the droplet, so say which ones a change needs:
 
 - **A new env var:** add it to `/root/atpotato-mentions/.env` (or
-  `/root/atpotato-weather/.env`), and to `.env.template` / `.env.example` here.
+  `/root/atpotato-weather/.env`, `/root/atpotato-garden/.env`), and to
+  `.env.template` / `.env.example` here.
 - **A new HTTP endpoint** that the agent or the website calls: add its own
   `location =` block in `/etc/nginx/sites-available/hook.atpota.to`. nginx 404s
   every path it doesn't list.
 - **A Supabase schema change:** apply the migration first, and keep the SQL in the
   folder.
+- **A new service:** apply its migration, make its data folder and write its `.env`
+  before it merges (for the garden: `garden/supabase/garden_index.sql` as migration
+  `garden_index`, then `/root/atpotato-garden/.env` with the same `SUPABASE_URL` and
+  `SUPABASE_SERVICE_ROLE_KEY` as the weather station; see `garden/README.md`). Until
+  the `.env` exists, its deploy is skipped and the run stays green. The garden needs no
+  nginx block: the website reads Supabase.
 - **A gates threshold:** edit `gates.json` on the droplet; it reloads on its own.
   The defaults are `GATE_DEFAULTS` in `mentions/src/config.js`.
 
@@ -39,6 +48,9 @@ Other rules:
   before touching the gates or the pipeline.
 - **The counting rules are shared.** `atmosphere/src/atmosphere.js` copies them from
   `website/server/atmosphere.ts`; change both together.
+- **The garden rules are shared, not copied.** `garden/src/settle.js` imports
+  `website/shared/garden-rules.js`, which the website uses too. A change to a rule
+  changes flowers settled from then on: bump `RULE_VERSION`.
 - **To see what deployed:** check the run in the Actions tab, or
   `/root/atpota-live/logs/deploys.log` on the droplet. `droplet/README.md` has the
   whole layout, rollbacks, and the deploy key.

@@ -382,6 +382,14 @@ html[data-theme="dark"] {
   display: none;
 }
 
+/* What weather it was planted in and grew in, and what that did to it. */
+.home-card__weather {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
 .home-card__note {
   margin: 0;
   padding: 8px 12px;

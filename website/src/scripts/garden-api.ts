@@ -6,6 +6,7 @@
  *                            key OWN_PATCH_RKEY), { name, note?, season?, cols, rows,
  *                            opensAt?, closesAt?, planting?, createdAt }
  *   to.atpota.garden.sprout  a flower, in the planter's repo: { patch: { uri, cid }, kind, plot, createdAt }
+ *                            (kind "seed": the garden decides what grows, and shows it at bloom)
  *   to.atpota.garden.tend    tending a flower, in the tender's repo: { subject: { uri, cid }, action, createdAt }
  *
  * Constants here must match server/garden.ts (tests/api-garden.test.ts checks them).
@@ -14,7 +15,10 @@
 
 import type { Session } from '../blog/auth';
 import { createRecord, parseRecordUri, putRecord, type RecordRef } from '../blog/repo';
-import { FLOWER_KINDS, flowerSeed, variantFor, type FlowerKind, type Variant } from './flowers';
+import { FAMILIES, familyOf, isSpecies, SEED, type Family } from '../../shared/garden-rules.js';
+import { FLOWER_KINDS, flowerSeed, seedVariant, variantFor, type FlowerKind, type Variant } from './flowers';
+
+export { SEED };
 
 export const PATCH_NSID = 'to.atpota.garden.patch';
 export const SPROUT_NSID = 'to.atpota.garden.sprout';
@@ -84,13 +88,34 @@ export interface PatchSummary {
   closesAt: string | null;
 }
 
+/** How windy and how mixed, each 0 to 4 (shared/garden-rules.js WIND and MIX). */
+export interface Weather {
+  wind: number;
+  mix: number;
+}
+
+export interface FlowerWeather {
+  /** The minute it was planted; null when the weather station has no reading for it. */
+  planted: Weather | null;
+  /** The week it grew in, once it has bloomed, and the busiest apps outside Bluesky that week. */
+  grew: (Weather & { apps: string[] }) | null;
+}
+
+/** A kind the garden picks (and a seed's, before anyone knows): the kinds people pick, and 'seed'. */
+export type PickedKind = (typeof FLOWER_KINDS)[number];
+
 export interface Flower {
   did: string;
   rkey: string;
   uri: string;
   cid: string;
   handle: string;
-  kind: FlowerKind;
+  /** What it is, or 'seed' until a seed blooms. */
+  kind: FlowerKind | typeof SEED;
+  /** A seed's family once it buds (a picked kind's from the start); null before. */
+  family: Family | null;
+  /** The weather it was planted in and grew in, when the garden has it. */
+  weather: FlowerWeather | null;
   plot: number;
   plantedAt: string;
   /** 0 to 1: how well it was tended while it grew. */
@@ -108,6 +133,8 @@ export interface GardenView {
   patch: Patch | null;
   patches: PatchSummary[];
   flowers: Flower[];
+  /** Planting gives out seeds (the garden decides what grows), rather than letting you pick. */
+  seeds: boolean;
 }
 
 export interface FlowerPatch {
@@ -161,8 +188,14 @@ export interface GardenerView {
   poe: { pets: number; notes: number };
 }
 
-export function isFlowerKind(value: unknown): value is FlowerKind {
+/** A kind people pick themselves. */
+export function isFlowerKind(value: unknown): value is PickedKind {
   return typeof value === 'string' && (FLOWER_KINDS as readonly string[]).includes(value);
+}
+
+/** What a flower can show as: any kind, or a seed. */
+export function isKind(value: unknown): value is FlowerKind | typeof SEED {
+  return value === SEED || isSpecies(value);
 }
 
 export function isTendAction(value: unknown): value is TendAction {
@@ -183,7 +216,7 @@ export function patchUri(rkey: string, owner: string = GARDEN_SUBJECT): string {
   return `at://${owner}/${PATCH_NSID}/${rkey}`;
 }
 
-export function sproutRecord(patch: RecordRef, kind: FlowerKind, plot: number, now: Date): Record<string, unknown> {
+export function sproutRecord(patch: RecordRef, kind: PickedKind | typeof SEED, plot: number, now: Date): Record<string, unknown> {
   return { $type: SPROUT_NSID, patch: { uri: patch.uri, cid: patch.cid }, kind, plot, createdAt: now.toISOString() };
 }
 
@@ -196,9 +229,10 @@ export function tend(session: Session, flower: RecordRef, action: TendAction, no
   return createRecord(session, TEND_NSID, tendRecord(flower.uri, flower.cid, action, now));
 }
 
-/** A flower's look: from its DID and record key, fuller with care. */
-export function flowerVariant(flower: Pick<Flower, 'did' | 'rkey' | 'kind' | 'care'>): Variant {
-  return variantFor(flower.kind, flowerSeed(flower.did, flower.rkey), flower.care);
+/** A flower's look: from its DID and record key, fuller with care, shaped by the week it grew in. A seed's is only its leaves. */
+export function flowerVariant(flower: Pick<Flower, 'did' | 'rkey' | 'kind' | 'care'> & { weather?: FlowerWeather | null }): Variant {
+  const seed = flowerSeed(flower.did, flower.rkey);
+  return flower.kind === SEED ? seedVariant(seed) : variantFor(flower.kind, seed, flower.care, flower.weather?.grew ?? null);
 }
 
 const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter('en', { granularity: 'grapheme' }) : null;
@@ -317,6 +351,30 @@ function toSummary(v: unknown): PatchSummary | null {
   return { rkey: p.rkey, name: p.name, season: isSeason(p.season) ? p.season : null, open: p.open, planted: p.planted, plots: p.plots, opensAt, closesAt };
 }
 
+const isLevel = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 4;
+
+function toWeatherLevels(v: unknown): Weather | null {
+  const w = v as Weather | null;
+  return w && isLevel(w.wind) && isLevel(w.mix) ? { wind: w.wind, mix: w.mix } : null;
+}
+
+/** A flower's weather from an answer, checked; null for anything else (or an answer from before it was sent). */
+export function toFlowerWeather(v: unknown): FlowerWeather | null {
+  const w = v as { planted?: unknown; grew?: { apps?: unknown } | null } | null;
+  if (!w || typeof w !== 'object') return null;
+  const grew = toWeatherLevels(w.grew);
+  const apps = Array.isArray(w.grew?.apps) ? w.grew.apps.filter((a): a is string => typeof a === 'string' && /^[a-z0-9-]{1,63}\.[a-z0-9-]{1,63}$/.test(a)).slice(0, 7) : [];
+  return { planted: toWeatherLevels(w.planted), grew: grew ? { ...grew, apps } : null };
+}
+
+/** A flower from an answer, checked, with family and weather filled in for an answer from before they were sent. */
+function toFlower(v: unknown): Flower | null {
+  if (!isFlower(v)) return null;
+  const f = v as Flower & { family?: unknown; weather?: unknown };
+  const family = (FAMILIES as readonly unknown[]).includes(f.family) ? (f.family as Family) : f.kind === SEED ? null : familyOf(f.kind);
+  return { ...f, family, weather: toFlowerWeather(f.weather) };
+}
+
 function isFlower(v: unknown): v is Flower {
   const f = v as Flower;
   return (
@@ -326,7 +384,7 @@ function isFlower(v: unknown): v is Flower {
     parseRecordUri(f.uri)?.did === f.did &&
     typeof f.cid === 'string' &&
     typeof f.handle === 'string' &&
-    isFlowerKind(f.kind) &&
+    isKind(f.kind) &&
     isPlot(f.plot) &&
     isDate(f.plantedAt) &&
     typeof f.care === 'number' &&
@@ -399,7 +457,7 @@ export async function fetchGarden(fetchImpl: typeof fetch = fetch, opts: string 
     const query = params.toString();
     const res = await fetchImpl(query ? `${GARDEN_ENDPOINT}?${query}` : GARDEN_ENDPOINT, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { owner?: unknown; patch?: unknown; patches?: unknown; flowers?: unknown };
+    const body = (await res.json()) as { owner?: unknown; patch?: unknown; patches?: unknown; flowers?: unknown; seeds?: unknown };
     if (!Array.isArray(body?.flowers) || !Array.isArray(body.patches)) return null;
     const who = body.owner === undefined ? null : toOwner(body.owner);
     if (body.owner !== undefined && !who) return null;
@@ -411,7 +469,8 @@ export async function fetchGarden(fetchImpl: typeof fetch = fetch, opts: string 
       owner: who,
       patch,
       patches: body.patches.map(toSummary).filter((p): p is PatchSummary => p !== null),
-      flowers: patch ? body.flowers.filter((f): f is Flower => isFlower(f) && f.plot < plots) : [],
+      flowers: patch ? body.flowers.map(toFlower).filter((f): f is Flower => f !== null && f.plot < plots) : [],
+      seeds: body.seeds === true,
     };
   } catch {
     return null;
@@ -436,8 +495,9 @@ export async function fetchGardener(actor: string, fetchImpl: typeof fetch = fet
     for (const f of body.flowers) {
       const g = f as Record<string, unknown>;
       const patch = toFlowerPatch(g?.patch);
-      if (!isFlower(g) || !patch || !Array.isArray(g.tends) || g.plot >= patch.cols * patch.rows) continue;
-      flowers.push({ ...(g as unknown as Flower), patch, tends: g.tends.filter(isTend) });
+      const flower = toFlower(g);
+      if (!flower || !patch || !Array.isArray(g.tends) || flower.plot >= patch.cols * patch.rows) continue;
+      flowers.push({ ...flower, patch, tends: g.tends.filter(isTend) });
     }
     const owner = toOwner(body);
     return {

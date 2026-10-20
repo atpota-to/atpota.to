@@ -1,0 +1,16 @@
+{
+  "name": "atpotato-garden",
+  "version": "1.0.0",
+  "description": "atpotato garden index: keeps every to.atpota.garden.* record on the network in Supabase (from Jetstream, reconciled against each repo every few hours) and settles what each flower grew into with website/shared/garden-rules.js. Holds no atproto credential; its only secret is a Supabase service key.",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.4"
+  },
+  "scripts": {
+    "start": "/opt/node22/bin/node --env-file=.env src/index.js",
+    "test": "PATH=/opt/node22/bin:$PATH node --test --test-reporter=spec test/*.test.js",
+    "backfill": "/opt/node22/bin/node --env-file=.env src/backfill-once.js"
+  },
+  "dependencies": {}
+}

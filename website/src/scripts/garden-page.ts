@@ -9,7 +9,9 @@
  *                            plant a flower (the "garden" level)
  *   /garden/dame.is/flowers  every flower they've planted, in any garden: the one that needs
  *                            them most up close, all of them with quick tending, and their
- *                            numbers, connections and field guide (the "flowers" level)
+ *                            numbers, connections and field guide (the "flowers" level): every
+ *                            kind there is, the ones they've grown drawn in, the rest dark,
+ *                            with where each comes from
  *
  * A garden is a to.atpota.garden.patch record in its keeper's own repo (record key "self");
  * signed in on your own page you can set one up or change it, including whether visitors
@@ -33,12 +35,14 @@ import { el, isBusy, loadMe, mountSignIn, setBusy, type Me } from '../blog/signi
 import { clearPending, localStoreFor, readPending, safeReturnTo, savePending, sessionStoreFor } from '../blog/state';
 import type { KeyValueStore } from '../poe/storage';
 import { burst, cheer } from './burst';
-import { bloomsAt, DAY_MS, drawFlower, FLOWER_KINDS, GROW_DAYS, rarityOdds, sampleVariant, stageFor, type FlowerKind, type Stage, type Variant } from './flowers';
+import { speciesOf } from '../../shared/garden-rules.js';
+import { bloomsAt, DAY_MS, drawFlower, drawSeed, GROW_DAYS, KIND_INFO, kindName, KINDS, rarityOdds, sampleVariant, stageFor, type FlowerKind, type Stage, type Variant } from './flowers';
 import {
   actorOf,
   COPY as PATCH_COPY,
   dayOf,
   describeBloom,
+  drawPlanted,
   fetchGardener,
   flowerVariant,
   GARDEN_SIZES,
@@ -49,15 +53,20 @@ import {
   markWatered,
   MEMORY_NSID,
   NAME_MAX,
+  nameOf,
   NOTE_MAX,
   OWN_PATCH_RKEY,
   PLANTING,
   POE_DID,
   saveGarden,
+  SEED,
   tend,
   TEND_KEY,
   thirstyDays,
   wateredToday,
+  weatherLines,
+  weatherLooks,
+  type Flower,
   type GardenController,
   type GardenerFlower,
   type GardenerView,
@@ -128,7 +137,7 @@ export const COPY = {
   // the flower up close
   place: (patch: { name: string; owner: { did: string } }) => (patch.owner.did === GARDEN_SUBJECT ? `the ${patch.name} patch` : patch.name),
   featuredEyebrow: (place: string, plot: number) => `${place} · plot ${plot}`,
-  growing: (whose: string, kind: FlowerKind, stage: Stage) => `${whose} ${kind}, ${stage === 'sprout' ? 'just planted' : 'budding'}`,
+  growing: (whose: string, kind: string, stage: Stage) => `${whose} ${kind}, ${stage === 'sprout' ? 'just planted' : 'budding'}`,
   growingLede: (day: number, weekday: string) =>
     `day ${day} of ${GROW_DAYS}. it blooms on ${weekday}, and the better it's looked after this week, the better it'll grow.`,
   visitingLede: (day: number, weekday: string) => `day ${day} of ${GROW_DAYS}. it blooms on ${weekday}. a little water from you counts towards its care.`,
@@ -137,10 +146,12 @@ export const COPY = {
   takeALook: 'take a look',
   bloomLede: (since: string, care: number) => `in bloom since ${since}. cared for ${care} of ${GROW_DAYS} days.`,
   pressedLede: (place: string, care: number) => `pressed when ${place} closed. cared for ${care} of ${GROW_DAYS} days.`,
-  thirsty: (whose: string, kind: FlowerKind) => `${whose} ${kind} looks thirsty`,
+  thirsty: (whose: string, kind: string) => `${whose} ${kind} looks thirsty`,
   thirstyLede: (days: number) => `nobody's watered it for ${days} ${days === 1 ? 'day' : 'days'}. a drink will perk it right up.`,
   ribbon: { double: 'a second ring!', twoTone: 'two-tone!', ladybug: 'a ladybug moved in!', plain: 'in full bloom!' },
-  bloomed: (kind: FlowerKind, bloom: string) => `your ${kind} bloomed: ${bloom}.`,
+  bloomed: (kind: string, bloom: string) => `your ${kind} bloomed: ${bloom}.`,
+  opening: `day ${GROW_DAYS}. it's opening…`,
+  openingLede: "it's about to show what it grew into. come back in a few minutes.",
   visit: 'visit its garden',
   care: (n: number) => `care so far: ${n} of ${GROW_DAYS}`,
   odds: { twoTone: 'two-tone', double: 'second ring', ladybug: 'ladybug' },
@@ -151,7 +162,7 @@ export const COPY = {
   } satisfies Record<TendAction, string>,
   visitorWatered: 'watered! thanks for helping it along.',
   tendLede: 'sign in with your bluesky or atmosphere account to look after flowers. each one is a small record in your own repo.',
-  tendLabel: (action: TendAction, whose: string, kind: FlowerKind) => `${{ water: 'water', sun: 'give sun to', talk: 'talk to' }[action]} ${whose} ${kind}`,
+  tendLabel: (action: TendAction, whose: string, kind: string) => `${{ water: 'water', sun: 'give sun to', talk: 'talk to' }[action]} ${whose} ${kind}`,
   day: (n: number, how: string) => `day ${n}: ${how}`,
   dayHow: { tended: 'looked after', today: 'today', missed: 'not looked after', ahead: 'still to come' },
   bloomDay: 'bloom',
@@ -194,9 +205,9 @@ export const COPY = {
     none: 'no connections yet. plant somewhere, or water someone else\'s flower.',
   },
   guideCount: (found: number, total: number) => `${found} of ${total} found`,
-  looks: ['plain', 'two-tone', 'double', 'ladybug'] as const,
-  guideCell: (kind: FlowerKind, look: string, state: 'found' | 'missing' | 'impossible') =>
-    `${kind}, ${look}: ${state === 'found' ? 'found' : state === 'missing' ? 'not found yet' : "doesn't grow"}`,
+  notFound: 'not found yet',
+  guideFound: (kind: string, looks: string[]) => `${kind}, found${looks.length ? `: ${looks.join(', ')}` : ''}`,
+  guideMissing: (origin: string) => `not found yet. ${origin}`,
   today: 'today',
   yesterday: 'yesterday',
 } as const;
@@ -272,7 +283,7 @@ export interface Numbers {
   helpers: number;
 }
 
-/** What someone's flowers add up to (rare finds count bloomed flowers with any rare look). */
+/** What someone's flowers add up to (rare finds count blooms with a rare look, or of a rare kind). */
 export function numbersFor(person: Pick<GardenerView, 'did' | 'flowers'>, now: number): Numbers {
   const n: Numbers = { planted: person.flowers.length, growing: 0, bloom: 0, pressed: 0, rare: 0, care: 0, gardens: 0, helpers: 0 };
   const gardens = new Set<string>();
@@ -282,9 +293,10 @@ export function numbersFor(person: Pick<GardenerView, 'did' | 'flowers'>, now: n
     if (!f.patch.open) n.pressed++;
     else if (stage === 'bloom') n.bloom++;
     else n.growing++;
-    if (stage === 'bloom') {
+    if (stage === 'bloom' && f.kind !== SEED) {
       const v = flowerVariant(f);
-      if (v.twoTone || v.double || v.ladybug) n.rare++;
+      const rarity = speciesOf(f.kind)?.rarity;
+      if (v.twoTone || v.double || v.ladybug || v.fourLeaf || rarity === 'rare' || rarity === 'weather') n.rare++;
     }
     n.care += Math.round(f.care * GROW_DAYS);
     gardens.add(f.patch.owner.did);
@@ -614,14 +626,14 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   const none = q('[data-none]');
 
   /** People who planted in this person's garden (not them), newest first. */
-  function visitorList(): Array<{ did: string; handle: string; kind: FlowerKind }> {
+  function visitorList(): Array<{ did: string; handle: string; kind: string }> {
     if (!gardenView || !person) return [];
     const seen = new Set<string>();
-    const out: Array<{ did: string; handle: string; kind: FlowerKind }> = [];
+    const out: Array<{ did: string; handle: string; kind: string }> = [];
     for (const f of [...gardenView.flowers].reverse()) {
       if (f.did === person.did || seen.has(f.did)) continue;
       seen.add(f.did);
-      out.push({ did: f.did, handle: f.handle, kind: f.kind });
+      out.push({ did: f.did, handle: f.handle, kind: nameOf(f) });
     }
     return out;
   }
@@ -872,7 +884,9 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       return li;
     });
     const end = el(doc, 'li', { class: `garden-week__bloom${stage === 'bloom' ? ' is-done' : ''}`, 'aria-label': COPY.day(GROW_DAYS + 1, COPY.bloomDay) });
-    const small = drawFlower(doc, f.kind, 'bloom', stage === 'bloom' ? flowerVariant(f) : sampleVariant(f.kind));
+    // What it'll be, faintly, before it blooms; a seed's is its bud, since nobody knows.
+    const small =
+      stage === 'bloom' ? drawPlanted(doc, f, 'bloom') : f.kind === SEED ? drawSeed(doc, 'bud', flowerVariant(f), f.family) : drawFlower(doc, f.kind, 'bloom', sampleVariant(f.kind));
     if (stage !== 'bloom') small.classList.add('home-flower--ghost');
     end.append(small, el(doc, 'span', {}, COPY.bloomDay));
     fWeek.replaceChildren(...days, end);
@@ -880,13 +894,20 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   }
 
   function oddsLine(f: GardenerFlower): string {
+    const parts = [COPY.care(Math.round(f.care * GROW_DAYS))];
+    // A seed's odds depend on what it is, which nobody knows yet.
+    if (f.kind === SEED) return parts[0]!;
     const odds = rarityOdds(f.kind, f.care);
     const pct = (p: number) => `${p < 0.1 ? (p * 100).toFixed(1).replace(/\.0$/, '') : Math.round(p * 100)}%`;
-    const parts = [COPY.care(Math.round(f.care * GROW_DAYS))];
     if (odds.twoTone !== null) parts.push(`${COPY.odds.twoTone} ${pct(odds.twoTone)}`);
     if (odds.double !== null) parts.push(`${COPY.odds.double} ${pct(odds.double)}`);
     parts.push(`${COPY.odds.ladybug} ${pct(odds.ladybug)}`);
     return parts.join(' · ');
+  }
+
+  /** "a two-tone daisy", or "a seed" for one the garden hasn't named. */
+  function bloomTitle(f: Flower, v: Variant): string {
+    return f.kind === SEED ? 'a seed' : describeBloom(f.kind, v);
   }
 
   function ribbonFor(v: Variant): string {
@@ -902,11 +923,16 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     const stage = stageFor(f.plantedAt, now(), open);
     const v = flowerVariant(f);
     const place = COPY.place(f.patch);
-    const waiting = owner && open && stage === 'bloom' && !seenBloom(local, f.uri);
+    const name = nameOf(f);
+    // A seed in bloom that the garden hasn't named yet is still opening: nothing to reveal.
+    const opening = stage === 'bloom' && f.kind === SEED;
+    const waiting = owner && open && stage === 'bloom' && !opening && !seenBloom(local, f.uri);
+    const weather = [...weatherLines(f.weather, stage), ...(stage === 'bloom' && f.kind !== SEED ? weatherLooks(f.kind, v) : [])];
+    const withWeather = (lede: string) => (weather.length ? `${lede} ${weather.join(', ')}.` : lede);
     setText(fEyebrow, COPY.featuredEyebrow(place, f.plot + 1));
     fBed?.classList.toggle('is-revealing', revealing);
     fBed?.classList.toggle('is-pressed', !open);
-    fBed?.replaceChildren(drawFlower(doc, f.kind, waiting ? 'bud' : stage, v));
+    fBed?.replaceChildren(drawPlanted(doc, f, waiting ? 'bud' : stage));
     if (revealing) fBed?.append(el(doc, 'span', { class: 'garden-hero__ribbon' }, ribbonFor(v)));
     fActions?.replaceChildren();
     if (fCare) fCare.hidden = true;
@@ -918,23 +944,26 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       fActions?.append(el(doc, 'button', { type: 'button', class: 'btn btn--primary', 'data-reveal': '' }, COPY.takeALook));
       return;
     }
-    if (!open) {
-      setText(fTitle, describeBloom(f.kind, v));
-      setText(fLede, COPY.pressedLede(place, Math.round(f.care * GROW_DAYS)));
+    if (open && opening) {
+      setText(fTitle, COPY.opening);
+      setText(fLede, COPY.openingLede);
+    } else if (!open) {
+      setText(fTitle, bloomTitle(f, v));
+      setText(fLede, withWeather(COPY.pressedLede(place, Math.round(f.care * GROW_DAYS))));
     } else if (stage !== 'bloom') {
-      setText(fTitle, COPY.growing(owner ? 'a' : whose(), f.kind, stage));
+      setText(fTitle, COPY.growing(owner ? 'a' : whose(), name, stage));
       const when = weekday(bloomsAt(f.plantedAt));
-      setText(fLede, owner ? COPY.growingLede(dayOf(f.plantedAt, now()), when) : COPY.visitingLede(dayOf(f.plantedAt, now()), when));
+      setText(fLede, withWeather(owner ? COPY.growingLede(dayOf(f.plantedAt, now()), when) : COPY.visitingLede(dayOf(f.plantedAt, now()), when)));
       if (owner && fCare) {
         fCare.textContent = oddsLine(f);
         fCare.hidden = false;
       }
     } else if (f.thirsty) {
-      setText(fTitle, COPY.thirsty(whose(), f.kind));
+      setText(fTitle, COPY.thirsty(whose(), name));
       setText(fLede, COPY.thirstyLede(thirstyDays(f, now())));
     } else {
-      setText(fTitle, describeBloom(f.kind, v));
-      setText(fLede, COPY.bloomLede(shortDay(bloomsAt(f.plantedAt)), Math.round(f.care * GROW_DAYS)));
+      setText(fTitle, bloomTitle(f, v));
+      setText(fLede, withWeather(COPY.bloomLede(shortDay(bloomsAt(f.plantedAt)), Math.round(f.care * GROW_DAYS))));
     }
     renderWeek(f, open ? stage : 'bloom');
     if (fTend && open) {
@@ -970,8 +999,9 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     revealing = true;
     renderFeatured();
     renderList();
+    renderGuide();
     const v = flowerVariant(f);
-    setText(fStatus, COPY.bloomed(f.kind, describeBloom(f.kind, v)));
+    setText(fStatus, COPY.bloomed(nameOf(f), bloomTitle(f, v)));
     burst(fBed ?? target, 'petals', win, v.colourway.slice(0, 3));
     cheer(win);
     fTitle?.focus();
@@ -1004,19 +1034,15 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     const stage = stageFor(f.plantedAt, now(), open);
     const v = flowerVariant(f);
     const place = COPY.place(f.patch);
-    const waiting = owner && open && stage === 'bloom' && !seenBloom(local, f.uri);
+    const waiting = owner && open && stage === 'bloom' && f.kind !== SEED && !seenBloom(local, f.uri);
     const li = el(doc, 'li', { class: 'garden-flower', 'data-flower': f.uri });
     li.classList.toggle('is-featured', f === featured);
     li.classList.toggle('is-pressed', !open);
     li.classList.toggle('is-thirsty', open && f.thirsty);
     const bed = el(doc, 'span', { class: 'garden-flower__bed', 'aria-hidden': 'true' });
-    bed.append(drawFlower(doc, f.kind, waiting ? 'bud' : stage, v));
+    bed.append(drawPlanted(doc, f, waiting ? 'bud' : stage));
     const words = el(doc, 'span', { class: 'garden-flower__words' });
-    const name = waiting
-      ? COPY.somethingBlooming
-      : stage === 'bloom'
-        ? describeBloom(f.kind, v)
-        : COPY.growing(owner ? 'a' : whose(), f.kind, stage);
+    const name = waiting || (stage === 'bloom' && open && f.kind === SEED) ? COPY.somethingBlooming : stage === 'bloom' ? bloomTitle(f, v) : COPY.growing(owner ? 'a' : whose(), nameOf(f), stage);
     const nameButton = el(doc, 'button', { type: 'button', class: 'garden-flower__name' }, name);
     nameButton.addEventListener('click', () => feature(f));
     const meta = !open ? COPY.meta.pressed(place) : stage !== 'bloom' ? COPY.meta.growing(place, dayOf(f.plantedAt, now())) : f.thirsty ? COPY.meta.thirsty(place) : COPY.meta.bloom(place);
@@ -1026,7 +1052,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       const tools = el(doc, 'span', { class: 'garden-flower__tend' });
       const done = tendedToday(f);
       for (const action of owner ? (['water', 'sun', 'talk'] as const) : (['water'] as const)) {
-        const b = el(doc, 'button', { type: 'button', class: `garden-flower__tool is-${action}`, 'aria-label': COPY.tendLabel(action, whose(), f.kind) });
+        const b = el(doc, 'button', { type: 'button', class: `garden-flower__tool is-${action}`, 'aria-label': COPY.tendLabel(action, whose(), nameOf(f)) });
         b.append(icon(doc, action));
         b.disabled = done;
         b.addEventListener('click', async () => {
@@ -1159,42 +1185,44 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     peopleCard.hidden = false;
   }
 
+  /**
+   * The field guide: every kind there is. One they've grown in bloom is drawn as the first
+   * of theirs that bloomed, with the rare looks they've found on it; the rest stay dark,
+   * with where each comes from, so they know what to look out for.
+   */
   function renderGuide(): void {
-    const table = guideCard?.querySelector<HTMLTableElement>('[data-guide-table]');
-    if (!guideCard || !table || !person) return;
-    const found = new Map<string, GardenerFlower>();
-    for (const f of person.flowers) {
-      if (stageFor(f.plantedAt, now(), f.patch.open) !== 'bloom') continue;
+    const grid = guideCard?.querySelector<HTMLElement>('[data-guide-grid]');
+    if (!guideCard || !grid || !person) return;
+    const found = new Map<FlowerKind, { flower: GardenerFlower; looks: Set<string> }>();
+    for (const f of [...person.flowers].reverse()) {
+      if (f.kind === SEED || stageFor(f.plantedAt, now(), f.patch.open) !== 'bloom') continue;
+      // A bloom its owner hasn't taken a look at yet isn't found yet: no spoilers.
+      if (owner && f.patch.open && !seenBloom(local, f.uri)) continue;
       const v = flowerVariant(f);
-      const looks = ['plain', v.twoTone ? 'two-tone' : '', v.double ? 'double' : '', v.ladybug ? 'ladybug' : ''].filter(Boolean);
-      for (const look of looks) if (!found.has(`${f.kind}/${look}`)) found.set(`${f.kind}/${look}`, f);
+      const had = found.get(f.kind) ?? { flower: f, looks: new Set<string>() };
+      for (const [on, look] of [
+        [v.twoTone, 'two-tone'],
+        [v.double, f.kind === 'toadstool' ? 'fairy ring' : f.kind === 'cactus' ? 'flowering twice' : 'second ring'],
+        [v.fourLeaf, 'four-leaf'],
+        [v.ladybug, 'ladybug'],
+      ] as const)
+        if (on) had.looks.add(look);
+      found.set(f.kind, had);
     }
-    let total = 0;
-    const head = el(doc, 'tr');
-    head.append(el(doc, 'th', { scope: 'col', class: 'visually-hidden' }, 'kind'), ...COPY.looks.map((l) => el(doc, 'th', { scope: 'col' }, l)));
-    const thead = el(doc, 'thead');
-    thead.append(head);
-    const tbody = el(doc, 'tbody');
-    for (const kind of FLOWER_KINDS) {
-      const tr = el(doc, 'tr');
-      tr.append(el(doc, 'th', { scope: 'row' }, kind));
-      for (const look of COPY.looks) {
-        const possible = !(look === 'two-tone' && kind === 'rose') && !(look === 'double' && !['sunflower', 'daisy', 'poppy'].includes(kind));
-        if (possible) total++;
-        const got = found.get(`${kind}/${look}`);
-        const td = el(doc, 'td');
-        const cell = el(doc, 'span', { class: `garden-guide__cell is-${got ? 'found' : possible ? 'missing' : 'impossible'}`, role: 'img', 'aria-label': COPY.guideCell(kind, look, got ? 'found' : possible ? 'missing' : 'impossible') });
-        if (got) {
-          const v = flowerVariant(got);
-          cell.append(drawFlower(doc, kind, 'bloom', { ...v, twoTone: look === 'two-tone', double: look === 'double', ladybug: look === 'ladybug' }));
-        } else cell.textContent = possible ? '?' : '·';
-        td.append(cell);
-        tr.append(td);
-      }
-      tbody.append(tr);
-    }
-    table.replaceChildren(thead, tbody);
-    setText(guideCard.querySelector<HTMLElement>('[data-guide-count]'), COPY.guideCount(found.size, total));
+    grid.replaceChildren(
+      ...KINDS.map((kind) => {
+        const got = found.get(kind);
+        const info = KIND_INFO[kind];
+        const looks = got ? [...got.looks] : [];
+        const li = el(doc, 'li', { class: `garden-guide__kind ${got ? 'is-found' : 'is-missing'}` });
+        const cell = el(doc, 'span', { class: `garden-guide__cell ${got ? 'is-found' : 'is-missing'}`, role: 'img', 'aria-label': got ? COPY.guideFound(info.name, looks) : COPY.guideMissing(info.origin) });
+        cell.append(got ? drawPlanted(doc, got.flower, 'bloom') : drawFlower(doc, kind, 'bloom', sampleVariant(kind)));
+        li.append(cell, el(doc, 'span', { class: 'garden-guide__name', 'aria-hidden': 'true' }, got ? kindName(kind) : COPY.notFound));
+        li.append(el(doc, 'span', { class: 'garden-guide__note', 'aria-hidden': 'true' }, got ? looks.join(', ') : info.origin));
+        return li;
+      }),
+    );
+    setText(guideCard.querySelector<HTMLElement>('[data-guide-count]'), COPY.guideCount(found.size, KINDS.length));
     guideCard.hidden = false;
   }
 

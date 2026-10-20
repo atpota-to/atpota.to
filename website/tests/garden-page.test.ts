@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Auth, Prepared, Session } from '../src/blog/auth.js';
 import { PENDING_KEY } from '../src/blog/state.js';
 import { createStore } from '../src/poe/storage.js';
-import { DAY_MS, GROW_DAYS } from '../src/scripts/flowers.js';
+import { DAY_MS, GROW_DAYS, KIND_INFO, KINDS } from '../src/scripts/flowers.js';
 import {
   actorOf,
   careFrom,
@@ -55,6 +55,8 @@ function flowerOf(did: string, opts: { daysOld?: number; rkey?: string; patch?: 
     cid: `bafy${rkey}`,
     handle,
     kind: (opts.kind ?? 'violet') as never,
+    family: opts.kind === 'seed' ? null : 'flower',
+    weather: null,
     plot: opts.plot ?? 31,
     plantedAt: new Date(planted).toISOString(),
     care: opts.care ?? 0.71,
@@ -398,8 +400,13 @@ describe('the garden page', () => {
     expect(groups[COPY.people.visitors(true)]).toEqual(['@mo.example', '@bo.example']);
     expect(groups[COPY.people.helpers(true)]).toEqual(['@mo.example', '@bo.example']);
     expect(groups[COPY.people.helped(true)]).toEqual(['@bo.example']);
-    expect(text('[data-guide-count]')).toMatch(/^\d+ of 20 found$/);
-    expect(document.querySelectorAll('.garden-guide__cell.is-found').length).toBeGreaterThanOrEqual(2);
+    // every kind there is: the pressed daisy found (the tulip has bloomed, but you haven't
+    // taken a look yet), the rest dark with where they come from
+    expect(text('[data-guide-count]')).toBe(`1 of ${KINDS.length} found`);
+    expect([...document.querySelectorAll('.garden-guide__kind.is-found .garden-guide__name')].map((n) => n.textContent)).toEqual(['daisy']);
+    const storm = [...document.querySelectorAll('.garden-guide__kind')][KINDS.indexOf('storm-lily')]!;
+    expect(storm.querySelector('.garden-guide__note')!.textContent).toBe(KIND_INFO['storm-lily'].origin);
+    expect(storm.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe(COPY.guideMissing(KIND_INFO['storm-lily'].origin));
   });
 
   it('picking another flower brings it up close', async () => {
@@ -425,6 +432,29 @@ describe('the garden page', () => {
     expect(text('[data-featured-status]')).toBe(COPY.bloomed('violet', describeBloom('violet', v)));
     expect(seenBloom(createStore(() => window.localStorage), bloomed.uri)).toBe(true);
     expect(text('.garden-flower__name')).toBe(describeBloom('violet', v));
+  });
+
+  it('a seed stays a seed until the garden says what it grew into; then it waits for you to take a look', async () => {
+    const budding = { ...flowerOf(ME, { rkey: '3kseed1', kind: 'seed', daysOld: 3 }), family: 'leafy' as const };
+    const opening = { ...flowerOf(ME, { rkey: '3kseed2', kind: 'seed', daysOld: 7.5, plot: 2 }), tends: [] };
+    await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [opening, budding], garden: true } } }).run();
+    // the one in bloom isn't known yet: no reveal, just "it's opening"
+    expect(text('[data-featured-title]')).toBe(COPY.opening);
+    expect(document.querySelector('[data-reveal]')).toBeNull();
+    const names = [...document.querySelectorAll('.garden-flower__name')].map((n) => n.textContent);
+    expect(names).toEqual([COPY.somethingBlooming, COPY.growing('a', 'seed', 'bud')]);
+    // nothing about a seed counts in the field guide or as a rare find until it's known
+    expect(text('[data-guide-count]')).toBe(`0 of ${KINDS.length} found`);
+
+    // once the garden has settled it, it's a bloom like any other, waiting to be seen
+    const known = { ...opening, kind: 'lotus' as const, family: 'flower' as const, weather: { planted: { wind: 0, mix: 1 }, grew: { wind: 1, mix: 1, apps: [] } } };
+    await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [known], garden: true } } }).run();
+    expect(text('[data-featured-title]')).toBe(COPY.waiting);
+    expect(text('[data-guide-count]')).toBe(`0 of ${KINDS.length} found`);
+    $('[data-reveal]').click();
+    expect(text('[data-featured-title]')).toBe(describeBloom('lotus', flowerVariant(known)));
+    expect(text('[data-featured-lede]')).toContain('planted in a calm minute, grew in a light week under a usual sky.');
+    expect(text('[data-guide-count]')).toBe(`1 of ${KINDS.length} found`);
   });
 
   it("setting up your garden writes a patch record in your repo, then it's ready to plant in", async () => {

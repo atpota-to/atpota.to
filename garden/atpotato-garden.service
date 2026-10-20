@@ -1,0 +1,40 @@
+[Unit]
+Description=atpotato garden index (to.atpota.garden.* records and settled flowers, to Supabase)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+
+# Code from the deploy checkout (garden/ in atpota-to/atpota.to, installed by
+# droplet/deploy.sh, with website/shared/ beside it for the garden rules); secrets and
+# state from the data folder, which is also the working directory, so state.json
+# lands there.
+WorkingDirectory=/root/atpotato-garden
+ExecStart=/opt/node22/bin/node /root/atpota-live/garden/src/index.js
+EnvironmentFile=/root/atpotato-garden/.env
+# Node 22 explicitly: the default `node` on this droplet is 18.
+
+# Everything it writes is idempotent, and on start it resumes Jetstream from the cursor
+# in state.json, so a restart (or a kill -9) loses nothing; a reconcile covers anything
+# a cursor can't.
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=atpotato-garden
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=80
+
+# A tiny stream: Jetstream filtered to to.atpota.garden.*, a few events an hour. The
+# reconcile pages through each garden repo a hundred records at a time. Its own
+# process and connection, so nothing here can touch Poe or the weather station.
+MemoryHigh=96M
+MemoryMax=128M
+CPUQuota=25%
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
