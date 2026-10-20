@@ -337,7 +337,7 @@ describe('the flower patch', () => {
     run: () => Promise<unknown>;
   }
 
-  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: typeof autumn | null; summerFlowers?: unknown[] } = {}): Rig {
+  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: (typeof autumn & { planting?: string }) | null; summerFlowers?: unknown[] } = {}): Rig {
     document.body.innerHTML = section('home-patch garden-patch', GARDEN_PAGE) + DIALOG;
     const calls: Rig['calls'] = [];
     const went: Prepared[] = [];
@@ -509,8 +509,8 @@ describe('the flower patch', () => {
     expect(document.querySelectorAll('[data-plot][tabindex="0"]')).toHaveLength(1);
   });
 
-  it('signed in: plants in your repo, pointing at the patch, and moves your open flower but not your pressed ones', async () => {
-    const r = rig({ signedIn: true });
+  it('signed in: plants in your repo, pointing at the patch; where flowers move, it moves your open flower but not your pressed ones', async () => {
+    const r = rig({ signedIn: true, patch: { ...autumn, planting: 'move' } });
     await r.run();
     r.owned.set(`at://${ME}/${SPROUT_NSID}/3old`, autumn.uri);
     r.owned.set(`at://${ME}/${SPROUT_NSID}/3pressed`, summer.uri);
@@ -540,6 +540,79 @@ describe('the flower patch', () => {
     expect([...r.owned.keys()]).toEqual([`at://${ME}/${SPROUT_NSID}/3pressed`]);
     expect(document.querySelector('.is-yours')).toBeNull();
     expect(plot(7).classList.contains('home-plot--empty')).toBe(true);
+    expect(statusText()).toBe(COPY.dug);
+  });
+
+  it('one each (the default): once yours is in, the picker gives way to looking after it', async () => {
+    const r = rig({ signedIn: true });
+    await r.run();
+    // a flower pressed in a closed patch doesn't count
+    r.owned.set(`at://${ME}/${SPROUT_NSID}/3pressed`, summer.uri);
+    document.querySelector<HTMLButtonElement>('[data-kind="violet"]')!.click();
+    plot(7).click();
+    plantButton().click();
+    await flush();
+    expect(r.calls.map((c) => c.path.split('.').pop())).toEqual(['createRecord']);
+    expect(statusText()).toBe(COPY.planted('violet'));
+    expect(plot(7).classList.contains('is-yours')).toBe(true);
+    // no picker and no button now, just a way to look after it (or dig it up)
+    expect(document.querySelector<HTMLElement>('[data-garden-kinds]')!.hidden).toBe(true);
+    expect(plantButton().hidden).toBe(true);
+    const mine = document.querySelector<HTMLElement>('[data-garden-mine]')!;
+    expect([mine.hidden, mine.getAttribute('href')]).toEqual([false, '/garden/me.test/flowers']);
+    expect(document.querySelector<HTMLElement>('[data-garden-dig]')!.hidden).toBe(false);
+    // an empty plot can't be picked
+    plot(9).click();
+    expect(document.querySelector('.is-picked')).toBeNull();
+
+    // next visit, yours is already there: it says so
+    await rig({ flowers: [friendRose, { ...friendRose, did: ME, rkey: '3new1', uri: `at://${ME}/${SPROUT_NSID}/3new1`, handle: 'me.test', kind: 'violet', plot: 7 }] }).run();
+    expect(plantButton().hidden).toBe(true);
+    expect(statusText()).toBe(COPY.oneEach);
+  });
+
+  it('one each: a flower you already have in the garden, even one the patch doesn’t show yet, stops a second', async () => {
+    const r = rig({ signedIn: true });
+    await r.run();
+    // in your repo, not yet in the answer (or in another of the garden's open patches)
+    r.owned.set(`at://${ME}/${SPROUT_NSID}/3other`, autumn.uri);
+    plot(7).click();
+    plantButton().click();
+    await flush();
+    expect(r.calls.some((c) => c.path.endsWith('createRecord'))).toBe(false);
+    expect(statusText()).toBe(COPY.plantedElsewhere);
+    expect(plantButton().hidden).toBe(true);
+    expect(document.querySelector('[data-garden-mine]')!.getAttribute('href')).toBe('/garden/me.test/flowers');
+    expect([...r.owned.keys()]).toEqual([`at://${ME}/${SPROUT_NSID}/3other`]);
+  });
+
+  it('many each: planting again adds another, and each one’s card digs up just that one', async () => {
+    const r = rig({ signedIn: true, patch: { ...autumn, planting: 'many' } });
+    await r.run();
+    plot(7).click();
+    plantButton().click();
+    await flush();
+    expect(statusText()).toBe(COPY.planted('sunflower'));
+    // still open for another, and no "dig mine up" (that would take them all)
+    expect(plantButton().hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>('[data-garden-dig]')!.hidden).toBe(true);
+    plot(8).click();
+    plantButton().click();
+    await flush();
+    expect(r.calls.map((c) => c.path.split('.').pop())).toEqual(['createRecord', 'createRecord']);
+    expect(document.querySelectorAll('.is-yours')).toHaveLength(2);
+    expect(plot(8).classList.contains('is-new')).toBe(true);
+    expect(plot(7).classList.contains('is-new')).toBe(false);
+
+    plot(7).click();
+    expect(document.querySelector('[data-garden-card-dig]')!.textContent).toBe(COPY.digIt);
+    document.querySelector<HTMLButtonElement>('[data-garden-card-dig]')!.click();
+    await flush();
+    expect(r.calls.at(-1)!.body).toMatchObject({ rkey: '3new1' });
+    expect([...r.owned.keys()]).toEqual([`at://${ME}/${SPROUT_NSID}/3new2`]);
+    expect(plot(7).classList.contains('home-plot--empty')).toBe(true);
+    expect(plot(8).classList.contains('is-yours')).toBe(true);
+    expect(document.querySelector<HTMLElement>('[data-garden-card]')!.hidden).toBe(true);
     expect(statusText()).toBe(COPY.dug);
   });
 

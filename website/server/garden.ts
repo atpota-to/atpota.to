@@ -3,7 +3,7 @@
  * "self" by convention, written from their garden page). atpotato's are the community
  * patches on the home page, seasonal, written by scripts/open-patches.ts:
  *
- *   to.atpota.garden.patch   { name, note?, season?, cols, rows, opensAt?, closesAt?, createdAt }
+ *   to.atpota.garden.patch   { name, note?, season?, cols, rows, opensAt?, closesAt?, planting?, createdAt }
  *
  * Visitors sign in with Bluesky and plant a flower in an open patch. It's a record in their
  * own repo, pointing at the patch with a strong ref (src/scripts/garden-api.ts writes it):
@@ -17,9 +17,11 @@
  * A patch is cols × rows plots; `plot` is the cell, counted from the top left, row by row.
  * Two flowers that claim the same plot: the one planted first keeps it, the other moves to
  * the next free plot along (resolvePlots); one that doesn't fit is left out. A patch is open
- * from opensAt (or, without one, createdAt) until closesAt, if it has one. One flower per
- * account across a garden's open patches (its newest); a closed patch keeps every flower it
- * had, pressed, in full bloom.
+ * from opensAt (or, without one, createdAt) until closesAt, if it has one. How many flowers
+ * an account has across a garden's open patches is the patch's `planting` (onePerAccount):
+ * "one" (the default, and the community patches') keeps its first, so a flower stays where
+ * it was planted; "move" keeps its newest, so planting again moves it; "many" keeps them
+ * all. A closed patch keeps every flower it had, pressed, in full bloom.
  *
  * A flower grows for GROW_DAYS: a sprout, then a bud, then the bloom. Tending while it grows
  * makes a better bloom (careFrom): every day its owner tends it counts, and so does every
@@ -39,8 +41,8 @@
  *     owner    { did, handle, displayName, avatar }; atpotato by default
  *     patch    the one asked for; by default the first open patch with a free plot (see
  *              defaultPatch). { rkey, uri, cid, name, note, season, cols, rows, opensAt,
- *              closesAt, createdAt, open } (note, season and the dates may be null); null
- *              when the owner has no patches yet.
+ *              closesAt, createdAt, planting, open } (note, season and the dates may be
+ *              null); null when the owner has no patches yet.
  *     patches  every patch, oldest first: { rkey, name, season, open, planted, plots,
  *              opensAt, closesAt }
  *     flowers  the patch's flowers, oldest first: { did, rkey, uri, cid, handle, kind, plot,
@@ -73,6 +75,9 @@ export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
 export type Season = (typeof SEASONS)[number];
 export const TEND_ACTIONS = ['water', 'sun', 'talk'] as const;
 export type TendAction = (typeof TEND_ACTIONS)[number];
+/** How many flowers each account grows in a garden's open patches (the lexicon's planting); the first is the default. */
+export const PLANTING = ['one', 'move', 'many'] as const;
+export type Planting = (typeof PLANTING)[number];
 
 export const MIN_COLS = 4;
 export const MAX_COLS = 24;
@@ -139,6 +144,7 @@ export interface Patch {
   opensAt: string | null;
   closesAt: string | null;
   createdAt: string;
+  planting: Planting;
 }
 
 export interface PatchView extends Omit<Patch, 'owner'> {
@@ -199,6 +205,10 @@ export function isFlowerKind(value: unknown): value is FlowerKind {
 
 export function isTendAction(value: unknown): value is TendAction {
   return typeof value === 'string' && (TEND_ACTIONS as readonly string[]).includes(value);
+}
+
+export function isPlanting(value: unknown): value is Planting {
+  return typeof value === 'string' && (PLANTING as readonly string[]).includes(value);
 }
 
 function isInt(value: unknown, min: number, max: number): value is number {
@@ -279,6 +289,8 @@ export function toPatch(entry: RecordEntry, owner: string = GARDEN_SUBJECT): Pat
     opensAt: opens === null ? null : new Date(opens).toISOString(),
     closesAt: closes === null ? null : new Date(closes).toISOString(),
     createdAt: new Date(created).toISOString(),
+    // Anything it doesn't know (knownValues is open) is the default.
+    planting: isPlanting(v.planting) ? v.planting : PLANTING[0],
   };
 }
 
@@ -336,14 +348,14 @@ export function resolvePlots<T extends { plot: number | null }>(oldestFirst: rea
   return out;
 }
 
-/** The newest flower per account across the open patches, by URI. */
-export function newestPerAccount(sprouts: readonly Sprout[]): Set<string> {
-  const newest = new Map<string, Sprout>();
+/** One flower per account across the open patches, by URI: each account's first, or its newest. */
+export function onePerAccount(sprouts: readonly Sprout[], keep: 'first' | 'newest'): Set<string> {
+  const kept = new Map<string, Sprout>();
   for (const s of sprouts) {
-    const seen = newest.get(s.did);
-    if (!seen || byPlanting(seen, s) < 0) newest.set(s.did, s);
+    const seen = kept.get(s.did);
+    if (!seen || (keep === 'newest' ? byPlanting(seen, s) < 0 : byPlanting(s, seen) < 0)) kept.set(s.did, s);
   }
-  return new Set([...newest.values()].map((s) => s.uri));
+  return new Set([...kept.values()].map((s) => s.uri));
 }
 
 /** When a TID record key was made (ms since the epoch), or null for any other key. */
@@ -620,10 +632,11 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
   async function planted(patch: Patch, all: readonly Patch[]): Promise<Planted[]> {
     const at = now();
     let mine = await sprouts(patch);
-    if (isOpen(patch, at)) {
-      const open = all.filter((p) => isOpen(p, at));
+    if (isOpen(patch, at) && patch.planting !== 'many') {
+      // One each across the garden's open patches, leaving out any that take many.
+      const open = all.filter((p) => isOpen(p, at) && p.planting !== 'many');
       const everywhere = (await Promise.all(open.map((p) => (p.uri === patch.uri ? mine : sprouts(p).catch(() => []))))).flat();
-      const keep = newestPerAccount(everywhere);
+      const keep = onePerAccount(everywhere, patch.planting === 'move' ? 'newest' : 'first');
       mine = mine.filter((s) => keep.has(s.uri));
     }
     const { authors: found, blocked: blocks } = await authors(

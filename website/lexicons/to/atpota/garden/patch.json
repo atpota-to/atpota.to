@@ -17,6 +17,7 @@
           "rows": { "type": "integer", "minimum": 2, "maximum": 40, "description": "Plots down." },
           "opensAt": { "type": "string", "format": "datetime", "description": "Flowers can be planted from this time; without it, from createdAt." },
           "closesAt": { "type": "string", "format": "datetime", "description": "Planting ends at this time; the flowers stay, pressed, in full bloom. Without it, the garden stays open." },
+          "planting": { "type": "string", "knownValues": ["one", "move", "many"], "description": "How many flowers each account grows in the garden's open patches. \"one\": one each, staying in the plot it was planted in; planting again does nothing until it's dug up, and only an account's first flower shows. \"move\": one each, and planting again moves it (its newest flower shows). \"many\": as many as there are free plots. Without it, \"one\"." },
           "createdAt": { "type": "string", "format": "datetime" }
         }
       }

@@ -467,7 +467,8 @@ html[data-theme="dark"] {
   display: none;
 }
 
-.home-patch__dig {
+.home-patch__dig,
+.home-card__dig {
   padding: 0;
   border: 0;
   background: none;
@@ -476,6 +477,10 @@ html[data-theme="dark"] {
   font-size: 14px;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.home-card__dig {
+  min-height: 44px;
 }
 
 .home-patch__status {

@@ -1,7 +1,7 @@
 {
   "lexicon": 1,
   "id": "to.atpota.garden.sprout",
-  "description": "A flower planted in a garden on atpota.to: atpota.to's community patches, or anyone's own garden. One per account in a garden's open patches; planting there again replaces it. Flowers in patches that have closed stay, pressed.",
+  "description": "A flower planted in a garden on atpota.to: atpota.to's community patches, or anyone's own garden. How many each account can have in a garden's open patches is up to the garden (its patch's planting): by default one, which stays where it was first planted. Flowers in patches that have closed stay, pressed.",
   "defs": {
     "main": {
       "type": "record",

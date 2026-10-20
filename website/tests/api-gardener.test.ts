@@ -22,7 +22,8 @@ function net(): Net {
   return {
     patches: {
       '2026-summer': patchRecord('summer 2026', '2026-06-01T00:00:00Z', '2026-09-01T00:00:00Z', 4, 2, 'summer'),
-      '2026-autumn': patchRecord('autumn 2026', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2),
+      // a patch that moves flowers, so did(1)'s newest counts
+      '2026-autumn': { ...patchRecord('autumn 2026', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z', 4, 2), planting: 'move' },
     },
     gardens: {
       [did(1)]: { self: gardenRecord('one’s garden', 4, 2) },
@@ -151,6 +152,14 @@ describe('/api/gardener', () => {
         ],
       },
     });
+  });
+
+  it('in a garden of one each, their flower is the first they planted there, as the garden shows it', async () => {
+    const n = net();
+    delete n.patches['2026-autumn']!.planting;
+    const body = await (await handlers(n).GET(new Request(`https://atpota.to/api/gardener?actor=${did(1)}`))).json();
+    const autumn = body.flowers.filter((f: { patch: { rkey: string } }) => f.patch.rkey === '2026-autumn');
+    expect(autumn.map((f: { rkey: string; plot: number }) => [f.rkey, f.plot])).toEqual([['v1', 3]]);
   });
 
   it('a handle works as well as a DID, and so does the older ?did=', async () => {

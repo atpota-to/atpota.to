@@ -61,7 +61,7 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
 | `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, everything else on the wire, live every few seconds, and trends over the last hour, 24 hours, 30 days and 12 months |
 | `/guides`, `/guides/bluesky-for-brands` | The guides. Written in markdown under `public/guides/`, and also published as a [standard.site](https://standard.site) publication in atpota.to's repo |
 | `/blog` | Poe's atmosphere dispatch, a weekly roundup written in [Leaflet](https://leaflet.pub) ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
-| `/garden/<handle>` | Gardens. Plant a flower in atpotato's seasonal patch, tend your neighbours' flowers, or set up a garden of your own. `/garden/atpota.to` is the community garden |
+| `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each; signed in, it has a button to your own. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
 | `/settings` | Signed-in visitors can make Poe forget them |
 
 Poe's chat panel sits in the corner of every page. Click it, press `/` anywhere,
