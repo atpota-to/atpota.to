@@ -7,7 +7,15 @@ import { CACHE, createAlmanacHandlers, HEATMAP_MS, timeZone, toHeatmap, toNewApp
 const NOW = Date.parse('2026-11-03T17:00:00.000Z');
 const SUMS = { seconds: 3600, posts: 180_000, creates: 1_600_000, elsewhere: 6000 };
 const ANSWERS: Record<string, unknown> = {
-  atmosphere_today: { start: '2026-11-03T05:00:00+00:00', ...SUMS, high: { minute: '2026-11-03T15:14:00+00:00', perSecond: 72.4 }, low: { minute: '2026-11-03T09:02:00+00:00', perSecond: '31.0' } },
+  atmosphere_today: {
+    start: '2026-11-03T05:00:00+00:00',
+    ...SUMS,
+    // high / low are Bluesky posts (from before the switch); the report reads every record
+    high: { minute: '2026-11-03T15:14:00+00:00', perSecond: 72.4 },
+    low: { minute: '2026-11-03T09:02:00+00:00', perSecond: '31.0' },
+    recordsHigh: { minute: '2026-11-03T15:14:00+00:00', perSecond: 642.2 },
+    recordsLow: { minute: '2026-11-03T09:02:00+00:00', perSecond: '262.9' },
+  },
   atmosphere_normal: { historyStart: '2026-10-20T16:50:00+00:00', now: SUMS, days: { ...SUMS, windows: 6 }, weeks: { ...SUMS, windows: 2 } },
   atmosphere_new_apps: {
     historyStart: '2026-10-20T16:50:00+00:00',
@@ -50,8 +58,8 @@ describe('weather almanac', () => {
     expect(res.headers.get('cache-control')).toBe(CACHE);
     const body = (await res.json()) as Record<string, any>;
     expect(body.tz).toBe('America/New_York');
-    expect(body.today.high).toEqual({ minute: '2026-11-03T15:14:00.000Z', perSecond: 72.4 });
-    expect(body.today.low.perSecond).toBe(31);
+    expect(body.today.high).toEqual({ minute: '2026-11-03T15:14:00.000Z', perSecond: 642.2 });
+    expect(body.today.low.perSecond).toBe(262.9);
     expect(body.normal.weeks.windows).toBe(2);
     expect(body.newApps).toMatchObject({ warmingUp: false, heard: 90, readyAt: '2026-10-27T16:50:00.000Z' });
     expect(body.newApps.apps).toEqual([{ domain: 'mu.social', firstSeen: '2026-11-03T16:46:00.000Z', creates: 4, collections: ['social.mu.newsFeedPrefs'] }]);

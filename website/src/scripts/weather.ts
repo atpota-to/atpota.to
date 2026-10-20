@@ -23,16 +23,16 @@ export const REFRESH_MS = 60_000;
 /** How often the tile checks while readings come live from the weather station (a rolling 60 seconds). */
 export const LIVE_REFRESH_MS = 15_000;
 const COUNT_MS = 700;
-/** Posts a second that makes the rays turn at their CSS speed. */
-const RAYS_BASELINE = 25;
+/** New records a second (every app) that makes the rays turn at their CSS speed. */
+const RAYS_BASELINE = 450;
 
 export type Condition = 'calm' | 'light' | 'breezy' | 'gusty' | 'stormy';
 
 export const CONDITION_TEXT: Record<Condition, string> = {
   calm: 'calm. a quiet moment in the atmosphere',
-  light: 'a light breeze',
-  breezy: 'breezy',
-  gusty: 'gusty. lots of posting going on',
+  light: 'a light breeze. a quiet spell',
+  breezy: 'breezy. a usual day in the atmosphere',
+  gusty: 'gusty. lots going on out there',
   stormy: 'stormy. somebody said something',
 };
 
@@ -172,10 +172,18 @@ export function countTo(el: HTMLElement, to: number, format: (n: number) => stri
 }
 
 /** Turns the little sun's rays with how busy the network is. */
-export function spinRays(root: ParentNode, postsPerSecond: number): void {
+export function spinRays(root: ParentNode, recordsPerSecond: number): void {
   const rays = root.querySelector<SVGElement>('[data-weather-rays]');
   const spin = rays?.getAnimations?.()[0];
-  if (spin) spin.playbackRate = Math.max(0.3, Math.min(3, postsPerSecond / RAYS_BASELINE));
+  if (spin) spin.playbackRate = Math.max(0.3, Math.min(3, recordsPerSecond / RAYS_BASELINE));
+}
+
+/**
+ * The headline: every new record a second, in any app. A reading from before the
+ * whole-firehose sampler has no records, so it falls back to Bluesky's posts.
+ */
+export function recordsPerSecond(r: Reading): number {
+  return r.records?.perSecond ?? r.perSecond.posts;
 }
 
 export function renderReading(tile: HTMLElement, reading: Reading): void {
@@ -183,13 +191,14 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
     if (el) countTo(el, value);
   };
+  set('records', recordsPerSecond(reading));
   set('posts', reading.perSecond.posts);
   set('likes', reading.perSecond.likes);
   set('reposts', reading.perSecond.reposts);
   set('follows', reading.perSecond.follows);
   const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
   if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
-  spinRays(tile, reading.perSecond.posts);
+  spinRays(tile, recordsPerSecond(reading));
   const sky = tile.querySelector<HTMLElement>('[data-weather-sky]');
   if (sky && reading.diversity) renderClouds(sky, cloudCount(reading.diversity.index));
   const mix = tile.querySelector<HTMLElement>('[data-weather-mix]');

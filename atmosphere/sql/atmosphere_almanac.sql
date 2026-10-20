@@ -58,6 +58,8 @@ revoke all on function public.atmosphere_roll_up_day_apps(timestamptz) from publ
 -- ---------- today so far: the high, the low, the totals ----------
 -- "Today" starts at midnight in `tz` (an IANA name). Only minutes the station heard for
 -- 55 seconds or more count toward the high and low, so a partial minute can't be either.
+-- recordsHigh / recordsLow go by every new record a second (what the website shows);
+-- high / low by Bluesky posts a second, from before the report switched to records.
 
 create or replace function public.atmosphere_today(tz text)
 returns jsonb
@@ -69,7 +71,8 @@ as $$
   with b as (select (date_trunc('day', now() at time zone tz) at time zone tz) as start),
   m as (
     select x.minute, x.seconds_covered, x.posts, x.creates, x.elsewhere,
-           x.posts::float8 / x.seconds_covered as posts_ps
+           x.posts::float8 / x.seconds_covered as posts_ps,
+           x.creates::float8 / x.seconds_covered as creates_ps
     from public.atmosphere_minute x, b
     where x.minute >= b.start
   ),
@@ -81,7 +84,9 @@ as $$
     'creates', (select coalesce(sum(creates), 0) from m),
     'elsewhere', (select coalesce(sum(elsewhere), 0) from m),
     'high', (select jsonb_build_object('minute', minute, 'perSecond', round(posts_ps::numeric, 1)) from full_minutes order by posts_ps desc, minute limit 1),
-    'low', (select jsonb_build_object('minute', minute, 'perSecond', round(posts_ps::numeric, 1)) from full_minutes order by posts_ps asc, minute limit 1)
+    'low', (select jsonb_build_object('minute', minute, 'perSecond', round(posts_ps::numeric, 1)) from full_minutes order by posts_ps asc, minute limit 1),
+    'recordsHigh', (select jsonb_build_object('minute', minute, 'perSecond', round(creates_ps::numeric, 1)) from full_minutes order by creates_ps desc, minute limit 1),
+    'recordsLow', (select jsonb_build_object('minute', minute, 'perSecond', round(creates_ps::numeric, 1)) from full_minutes order by creates_ps asc, minute limit 1)
   );
 $$;
 

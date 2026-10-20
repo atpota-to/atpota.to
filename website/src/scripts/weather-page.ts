@@ -37,6 +37,7 @@ import {
   fetchReading,
   formatIndex,
   ratioText,
+  recordsPerSecond,
   renderRatio,
   spinRays,
   type Reading,
@@ -156,7 +157,7 @@ function timeOf(iso: string | undefined): string {
 
 export function renderReport(report: HTMLElement, r: Reading): void {
   // now
-  count(report, '[data-r-posts]', r.perSecond.posts, (n) => String(Math.round(n)));
+  count(report, '[data-r-records]', recordsPerSecond(r), (n) => String(Math.round(n)));
   setText(report, '[data-r-cond]', CONDITION_TEXT[r.condition]);
   const when = timeOf(r.measuredAt);
   const live = r.source === 'station';
@@ -165,14 +166,14 @@ export function renderReport(report: HTMLElement, r: Reading): void {
     '[data-r-when]',
     live ? `the last ${r.seconds ?? 60} seconds, live. updates every few seconds.` : when ? `read at ${when}${r.seconds ? `, from ${r.seconds} seconds of the firehose` : ''}. next reading in about a minute.` : '',
   );
-  spinRays(report, r.perSecond.posts);
+  spinRays(report, recordsPerSecond(r));
   const sky = $(report, '[data-weather-sky]');
   if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
   const spark = $(report, '[data-r-spark]');
   if (spark) {
-    const posts = (r.series ?? []).map((p) => p?.posts ?? null);
-    spark.hidden = !live || posts.filter((p) => p !== null).length < 2;
-    if (!spark.hidden) renderSparkline(spark, posts);
+    const records = (r.series ?? []).map((p) => p?.creates ?? null);
+    spark.hidden = !live || records.filter((p) => p !== null).length < 2;
+    if (!spark.hidden) renderSparkline(spark, records);
   }
 
   // diversity
@@ -222,17 +223,24 @@ export function renderReport(report: HTMLElement, r: Reading): void {
   report.dataset.state = 'ready';
 }
 
-/** A bare line of the last 60 seconds: decorative (aria-hidden), the reading says it in words. */
+/**
+ * A bare line of the last 60 seconds: decorative (aria-hidden), the reading says it in
+ * words. It spans its own lowest to highest second, so a minute that only wobbles around
+ * 450 still shows its shape.
+ */
 export function renderSparkline(host: HTMLElement, values: Array<number | null>): void {
   const w = 240;
   const h = 36;
-  const max = Math.max(1, ...values.filter((v): v is number => v !== null));
+  const heard = values.filter((v): v is number => v !== null);
+  const max = Math.max(...heard);
+  const min = Math.min(...heard);
+  const span = max - min;
   const step = values.length > 1 ? w / (values.length - 1) : w;
   // one smooth run per stretch of seconds the station heard
   const runs: Array<Array<[number, number]>> = [[]];
   values.forEach((v, i) => {
     if (v === null) runs.push([]);
-    else runs[runs.length - 1]!.push([i * step, h - 2 - (v / max) * (h - 4)]);
+    else runs[runs.length - 1]!.push([i * step, span > 0 ? h - 3 - ((v - min) / span) * (h - 6) : h / 2]);
   });
   const d = runs.filter((r) => r.length).map(smoothPath).join('');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -245,7 +253,7 @@ export function renderSparkline(host: HTMLElement, values: Array<number | null>)
   svg.append(path);
   const caption = document.createElement('span');
   caption.className = 'weather-spark__caption';
-  caption.textContent = 'posts a second, the last 60 seconds';
+  caption.textContent = 'new records a second, the last 60 seconds';
   host.replaceChildren(svg, caption);
 }
 

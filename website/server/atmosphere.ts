@@ -53,12 +53,16 @@ export const CACHE_LIVE = 'public, max-age=0, s-maxage=5, stale-while-revalidate
 /** At most this many seconds in a station reading's series. */
 export const MAX_SERIES = 120;
 
-/** Posts a second at which each condition starts; anything below "light" is calm. */
+/**
+ * New records a second (every app, not just Bluesky) at which each condition starts;
+ * anything below "light" is calm. A usual afternoon is about 450, so "breezy".
+ * The weather station (atmosphere/src/atmosphere.js) uses the same rule.
+ */
 export const CONDITIONS = [
-  ['stormy', 45],
-  ['gusty', 30],
-  ['breezy', 20],
-  ['light', 12],
+  ['stormy', 600],
+  ['gusty', 500],
+  ['breezy', 400],
+  ['light', 300],
 ] as const;
 
 export type Condition = 'calm' | (typeof CONDITIONS)[number][0];
@@ -148,8 +152,8 @@ export interface SocketLike {
 
 export type OpenSocket = (url: string) => SocketLike;
 
-export function conditionFor(postsPerSecond: number): Condition {
-  for (const [name, from] of CONDITIONS) if (postsPerSecond >= from) return name;
+export function conditionFor(recordsPerSecond: number): Condition {
+  for (const [name, from] of CONDITIONS) if (recordsPerSecond >= from) return name;
   return 'calm';
 }
 
@@ -264,7 +268,7 @@ export function summarize(tally: Tally, seconds: number, measuredAt: string): Re
     measuredAt,
     seconds: round1(seconds),
     perSecond,
-    condition: conditionFor(perSecond.posts),
+    condition: conditionFor(rate(total)),
     records: { perSecond: rate(total), bluesky: rate(bluesky), elsewhere: rate(elsewhere) },
     diversity: { index, level: diversityLevel(index), apps: apps.size, collections: tally.creates.size },
     apps: [...apps]
@@ -335,7 +339,7 @@ export function fromStation(body: unknown): Reading | null {
     measuredAt,
     seconds: body.seconds,
     perSecond,
-    condition: conditionFor(perSecond.posts),
+    condition: conditionFor(records.perSecond),
     records,
     diversity: { ...diversity, level: diversityLevel(diversity.index) },
     apps,

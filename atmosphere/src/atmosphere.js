@@ -19,12 +19,15 @@ export const COLLECTIONS = {
 /** Collections under these count as Bluesky; everything else is "elsewhere". */
 export const BLUESKY_PREFIXES = ['app.bsky.', 'chat.bsky.'];
 
-/** Posts a second at which each condition starts; anything below "light" is calm. */
+/**
+ * New records a second (every app, not just Bluesky) at which each condition starts;
+ * anything below "light" is calm. A usual afternoon is about 450, so "breezy".
+ */
 export const CONDITIONS = [
-  ['stormy', 45],
-  ['gusty', 30],
-  ['breezy', 20],
-  ['light', 12],
+  ['stormy', 600],
+  ['gusty', 500],
+  ['breezy', 400],
+  ['light', 300],
 ];
 
 /** Diversity index (percent of new records outside Bluesky) at which each level starts. */
@@ -41,8 +44,8 @@ export const TOP_BLUESKY = 8;
 /** Collections tracked per tally; past this, new names are counted in `unnamed`. */
 export const MAX_COLLECTIONS = 2000;
 
-export function conditionFor(postsPerSecond) {
-  for (const [name, from] of CONDITIONS) if (postsPerSecond >= from) return name;
+export function conditionFor(recordsPerSecond) {
+  for (const [name, from] of CONDITIONS) if (recordsPerSecond >= from) return name;
   return 'calm';
 }
 
@@ -151,7 +154,7 @@ export function summarize(tally, seconds, measuredAt) {
     measuredAt,
     seconds: round1(seconds),
     perSecond,
-    condition: conditionFor(perSecond.posts),
+    condition: conditionFor(rate(total)),
     records: { perSecond: rate(total), bluesky: rate(bluesky), elsewhere: rate(elsewhere) },
     diversity: { index, level: diversityLevel(index), apps: apps.size, collections: tally.creates.size },
     apps: [...apps]
