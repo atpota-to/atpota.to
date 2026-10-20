@@ -64,6 +64,8 @@
                         <p class="weather-hero__big"><span data-r-posts>&ndash;</span> <span class="weather-hero__unit">posts a second</span></p>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
                         <p class="weather-hero__when" data-r-when></p>
+                        <!-- posts a second over the station's 60 seconds; the number above says the same in words -->
+                        <div class="weather-spark" data-r-spark aria-hidden="true" hidden></div>
                     </div>
                 </div>
                 <p class="visually-hidden" role="status" data-r-status></p>
@@ -98,6 +100,39 @@
                 <p class="weather-mix__total"><span data-r-total>&ndash;</span> new records a second in all, across <span data-r-collections>&ndash;</span> collections.</p>
             </section>
 
+            <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
+                <div class="weather-tile__head">
+                    <h2 class="eyebrow" id="weather-trends-title">trends</h2>
+                    <div class="weather-range" role="group" aria-label="time range">
+                        <button type="button" class="weather-range__btn" data-range="hour" aria-pressed="false">last hour</button>
+                        <button type="button" class="weather-range__btn" data-range="day" aria-pressed="true">24 hours</button>
+                        <button type="button" class="weather-range__btn" data-range="month" aria-pressed="false">30 days</button>
+                        <button type="button" class="weather-range__btn" data-range="year" aria-pressed="false">12 months</button>
+                    </div>
+                </div>
+                <p class="weather-trends__summary" data-t-summary aria-live="polite">digging through the records…</p>
+                <div class="weather-trends__charts">
+                    <figure class="weather-chart-card">
+                        <figcaption class="weather-chart-card__title">new records a second</figcaption>
+                        <div class="weather-chart" data-t-chart="records"></div>
+                    </figure>
+                    <figure class="weather-chart-card">
+                        <figcaption class="weather-chart-card__title">diversity index</figcaption>
+                        <div class="weather-chart" data-t-chart="index"></div>
+                    </figure>
+                </div>
+                <details class="weather-trends__table">
+                    <summary>show as a table</summary>
+                    <div class="weather-trends__scroll">
+                        <table>
+                            <thead><tr><th scope="col">when</th><th scope="col">new records a second</th><th scope="col">posts a second</th><th scope="col">diversity index</th></tr></thead>
+                            <tbody data-t-rows></tbody>
+                        </table>
+                    </div>
+                </details>
+                <p class="weather-tile__note">from the weather station&#39;s minute-by-minute records. a gap in a line is time the station wasn&#39;t listening.</p>
+            </section>
+
             <section class="tile weather-tile weather-apps" aria-labelledby="weather-apps-title">
                 <div class="weather-tile__head">
                     <h2 class="eyebrow" id="weather-apps-title">elsewhere in the atmosphere</h2>
@@ -128,8 +163,8 @@
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="eyebrow" id="weather-how-title">how it&#39;s measured</h2>
-                <p>once a minute, atpota.to listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a> for a few seconds and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky, just a short one: a quiet app can miss a reading, and one busy bot can tip the index for a minute.</p>
-                <p>this page checks again every minute while it&#39;s open. <a href="/">back home</a>.</p>
+                <p>atpotato&#39;s weather station listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a>, all the time, and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky. the numbers up top are the last 60 seconds, and the station writes down every minute for the trends.</p>
+                <p>a quiet app can still miss a minute, and one busy bot can tip the index for a while. this page checks again every few seconds while it&#39;s open. <a href="/">back home</a>.</p>
             </section>
         </div>
     </main>
