@@ -133,16 +133,40 @@ Two honest caveats:
 - Handles are mutable and DIDs are not. Key on the DID, always. Store the handle
   as a fact that can go stale, never as the identity.
 
-## The website gets no memory yet
+## The website: memory for readers signed in with Bluesky
 
 An anonymous visitor has no principal, so the scope resolver returns `null` and
-the slot is off. That is the correct default and it costs almost nothing,
+the slot is off. That is still the default, and it costs almost nothing,
 because website sessions already persist across page navigation within a visit.
 
-To change it later you need an identity, which means sign-in with atproto OAuth.
-That is a real project and it brings the write-scope consent screen that `01`
-deliberately avoided. Worth doing only if visitors ask for continuity across
-visits, which they may not.
+Since 2026-10-20 a visitor who signs in with Bluesky on atpota.to (the blog's
+OAuth sign-in, which the Poe panel links to) gets the same notes Poe keeps for
+their DID on Bluesky, so the potato on the website and the potato in a thread
+know them as one person. The identity has to be as trustworthy as the
+droplet's, so it is the standard atproto inter-service auth, not anything the
+browser says:
+
+1. The OAuth scope includes `rpc:to.atpota.poe.chat?aud=*`. The browser asks
+   the reader's own PDS (`com.atproto.server.getServiceAuth`) for a token with
+   `aud=did:web:atpota.to` and `lxm=to.atpota.poe.chat`, good for half an hour,
+   and sends it as `Authorization: Bearer` with each message.
+2. The website proxy (`website/server/identity.ts`) checks the audience, the
+   method and the lifetime, then the signature against the `#atproto` key in
+   the issuer's DID document. The handle is whatever the Bluesky AppView reports
+   for that DID. Any failure leaves the chat anonymous.
+3. The proxy asserts the DID to the bot's website channel over its own secret.
+   The channel keeps the website authenticator, so every website limit still
+   holds, and gives each identity its own session address under the cookie, so
+   a sign-in or sign-out never continues a conversation holding someone else's
+   recalled notes.
+4. `memory/person.ts` maps the website caller onto the exact scope a Bluesky
+   turn resolves (`lib/person-scope.ts`; eve's `byPrincipal` would put the
+   authenticator in the key and hand them an empty document). Saves are
+   published to Poe's repo like any other.
+
+Readers who signed in before the `rpc:` permission existed have sessions
+without it; the panel asks them to sign in again. `POE_IDENTITY_DISABLED=1` on
+the website turns all of this off.
 
 ## Shared ecosystem memory: not as memory, not yet
 

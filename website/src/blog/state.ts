@@ -28,7 +28,8 @@ export const PENDING_TTL_MS = 15 * 60_000;
 export const LOCAL_TTL_MS = 10 * 60_000;
 const MAX_LOCAL = 20;
 
-export type IntentKind = 'subscribe' | 'recommend' | 'comment';
+/** "poe": signing in so Poe can remember the reader (from the Poe panel, or /blog#sign-in). */
+export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe';
 
 export interface Pending {
   kind: IntentKind;
@@ -83,7 +84,7 @@ export function savePending(store: KeyValueStore, pending: Pending): void {
 export function readPending(store: KeyValueStore, now: number): Pending | null {
   const v = readJson(store, PENDING_KEY) as Partial<Pending> | null;
   const returnTo = safeReturnTo(v?.returnTo);
-  if (!v || !returnTo || (v.kind !== 'subscribe' && v.kind !== 'recommend' && v.kind !== 'comment')) return null;
+  if (!v || !returnTo || (v.kind !== 'subscribe' && v.kind !== 'recommend' && v.kind !== 'comment' && v.kind !== 'poe')) return null;
   if (typeof v.at !== 'number' || now - v.at > PENDING_TTL_MS || v.at > now + 60_000) return null;
   return { kind: v.kind, returnTo, at: v.at };
 }

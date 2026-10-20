@@ -135,18 +135,18 @@ export interface Identity {
   handle: string | null;
 }
 
+/** Where a DID's document lives: plc.directory for did:plc, /.well-known/did.json for did:web. */
+export function didDocumentUrl(did: string): string {
+  if (!isDid(did)) throw new AtprotoError('bad_response', 'not a did');
+  if (did.startsWith('did:plc:')) return `${PLC_DIRECTORY}/${did}`;
+  const host = decodeURIComponent(did.slice('did:web:'.length)).split(':')[0]!;
+  if (!/^[a-zA-Z0-9.-]+$/.test(host) || !isPublicHost(host)) throw new AtprotoError('bad_response', 'bad did:web');
+  return `https://${host}/.well-known/did.json`;
+}
+
 /** did:plc via plc.directory, did:web via /.well-known/did.json. */
 export async function resolveDid(doFetch: Fetch, did: string): Promise<Identity> {
-  if (!isDid(did)) throw new AtprotoError('bad_response', 'not a did');
-  let url: string;
-  if (did.startsWith('did:plc:')) {
-    url = `${PLC_DIRECTORY}/${did}`;
-  } else {
-    const host = decodeURIComponent(did.slice('did:web:'.length)).split(':')[0]!;
-    if (!/^[a-zA-Z0-9.-]+$/.test(host) || !isPublicHost(host)) throw new AtprotoError('bad_response', 'bad did:web');
-    url = `https://${host}/.well-known/did.json`;
-  }
-  const doc = await fetchJson(doFetch, url);
+  const doc = await fetchJson(doFetch, didDocumentUrl(did));
   const pds = serviceEndpoint(doc);
   if (!pds) throw new AtprotoError('bad_response', 'no pds in did document');
   return { did, pds, handle: handleFrom(doc) };

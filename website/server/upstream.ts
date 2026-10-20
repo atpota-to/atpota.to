@@ -41,6 +41,8 @@ export interface UpstreamChat {
   path: string;
   title: string;
   selection?: string;
+  /** A visitor whose Bluesky sign-in server/identity.ts verified. */
+  visitor?: { did: string; handle: string | null };
 }
 
 export interface Timeouts {
@@ -50,6 +52,7 @@ export interface Timeouts {
 }
 
 export type BrowserEvent =
+  | { event: 'visitor'; data: { signedIn: boolean; handle: string | null } }
   | { event: 'status'; data: { state: 'digging'; label: string } }
   | { event: 'delta'; data: { text: string; block: number } }
   | { event: 'block'; data: { text: string | null; block: number } }
@@ -66,6 +69,8 @@ export interface TurnResult {
   error?: string;
   deltas: number;
   tools: number;
+  /** Set by the handler: how a sign-in token fared ("verified" or the reason it didn't). */
+  identity?: string;
 }
 
 export interface RelayOptions {
@@ -150,12 +155,14 @@ export function upstreamBody(chat: UpstreamChat): string {
     message: string;
     page: { path: string; title: string };
     selection?: string;
+    visitor?: { did: string; handle?: string };
   } = {
     conversationId: chat.conversationId,
     message: chat.message,
     page: { path: chat.path, title: chat.title },
   };
   if (chat.selection) body.selection = chat.selection;
+  if (chat.visitor) body.visitor = { did: chat.visitor.did, ...(chat.visitor.handle ? { handle: chat.visitor.handle } : {}) };
   return JSON.stringify(body);
 }
 

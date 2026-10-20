@@ -64,6 +64,10 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   search_bluesky_posts: 'searching posts',
   top_author_posts: 'finding top posts',
   top_mentioned_posts: 'finding the most mentioned posts',
+  read_dispatch: 'reading the dispatch',
+  // Memory slots (person__save_memory, life__save_memory, ...): a signed-in visitor sees these
+  save_memory: 'making a note',
+  remove_memory: 'crossing out a note',
   // eve built-ins that make sense to name
   web_search: 'searching the web',
   web_fetch: 'reading a web page',

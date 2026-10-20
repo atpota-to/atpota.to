@@ -11,6 +11,7 @@ import {
   loopbackClientId,
   PrepareError,
   SCOPE,
+  SESSION_EVENT,
   SESSION_KEY,
   SITE_ORIGIN,
   type Auth,
@@ -60,8 +61,8 @@ describe('client metadata', () => {
     expect(META.application_type).toBe('web');
     expect(META.dpop_bound_access_tokens).toBe(true);
     expect(META.scope).toBe(SCOPE);
-    // only what the blog writes: subscriptions and recommends, and creating or deleting comments
-    expect(String(META.scope).split(' ').sort()).toEqual(['atproto', 'include:site.standard.authSocial', 'repo:pub.leaflet.comment?action=create&action=delete']);
+    // only what the blog writes (subscriptions and recommends, creating or deleting comments), plus Poe's sign-in token
+    expect(String(META.scope).split(' ').sort()).toEqual(['atproto', 'include:site.standard.authSocial', 'repo:pub.leaflet.comment?action=create&action=delete', 'rpc:to.atpota.poe.chat?aud=*']);
   });
 
   it('vercel.json serves it as JSON and keeps it out of the rewrites', () => {
@@ -239,7 +240,7 @@ function postPage(opts: { email?: boolean } = {}): string {
   );
 }
 
-interface FakeWin {
+interface FakeWin extends EventTarget {
   location: { pathname: string; search: string; hash: string; replace: ReturnType<typeof vi.fn> };
   history: { state: unknown; replaceState: ReturnType<typeof vi.fn> };
   confirm: () => boolean;
@@ -333,11 +334,12 @@ function setup(
     }
     return new Response('unexpected', { status: 599 });
   }) as typeof fetch;
-  const win: FakeWin = {
+  // An EventTarget, for Poe's "poe:signin" and the session announcements.
+  const win: FakeWin = Object.assign(new EventTarget(), {
     location: { pathname: opts.path ?? '/blog/3doc', search: opts.search ?? '', hash: opts.hash ?? '', replace: vi.fn() },
     history: { state: null, replaceState: vi.fn() },
     confirm: () => true,
-  };
+  });
   const store = opts.store ?? memory();
   const local = memory();
   const mounted = mountBlog({ doc: document, win: win as unknown as Window, auth, fetchImpl, now: () => clock, sessionStore: store, localStore: local, confirm: () => win.confirm() });
@@ -654,6 +656,47 @@ describe('mountBlog', () => {
     expect($('[data-blog-account]').textContent).toBe(COPY.notices.signedOut);
     expect($('button[data-blog-subscribe]').getAttribute('aria-pressed')).toBe('false');
     expect(h.calls).toEqual([]);
+  });
+
+  it("opens the sign-in dialog for Poe's panel, from its event or from /blog#sign-in", async () => {
+    const h = setup({ start: null });
+    await h.mounted;
+    expect($<HTMLDialogElement>('dialog[data-blog-signin]').dataset.poeReady).toBe('');
+    h.win.dispatchEvent(new Event('poe:signin'));
+    expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
+    expect($('[data-blog-signin-lede]').textContent).toBe(COPY.lede.poe);
+
+    document.body.innerHTML = postPage();
+    const linked = setup({ start: null, path: '/blog', hash: '#sign-in' });
+    await linked.mounted;
+    expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
+    expect($('[data-blog-signin-lede]').textContent).toBe(COPY.lede.poe);
+    // The marker comes off the address, so a reload doesn't open it again.
+    expect(linked.win.history.replaceState).toHaveBeenCalledWith(null, '', '/blog');
+  });
+
+  it("back from a sign-in for Poe, opens Poe's panel once", async () => {
+    const store = memory();
+    store.set(PENDING_KEY, JSON.stringify({ kind: 'poe', returnTo: '/blog/3doc', at: NOW - 1000 }));
+    const h = setup({ store });
+    const opened = vi.fn();
+    h.win.addEventListener('poe:open', opened);
+    await h.mounted;
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(h.calls).toEqual([]);
+    expect(store.get(PENDING_KEY)).toBeNull();
+  });
+
+  it('tells the page when the reader signs in or out, so Poe follows', async () => {
+    const seen: Array<string | null> = [];
+    document.body.innerHTML = postPage();
+    const h = setup();
+    h.win.addEventListener(SESSION_EVENT, (e) => seen.push((e as CustomEvent<{ did: string | null }>).detail.did));
+    await h.mounted;
+    expect(seen).toEqual([ME]);
+    $('.blog-account__out').click();
+    await flush();
+    expect(seen).toEqual([ME, null]);
   });
 
   it('on hosts without sign-in, points comments at atpota.to and keeps the buttons hidden', async () => {
