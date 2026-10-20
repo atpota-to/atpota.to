@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK_GAP_MS, BLINK_MS, GLANCE_FACES, GLANCE_MS, MAX_WAVES, WAVE_MS, idleGap, nextBeat, startIdle, type IdleBeat } from '../src/poe/idle.js';
+import { BLINK_GAP_MS, BLINK_MS, GLANCE_FACES, GLANCE_MS, MAX_WAVES, NAP_AFTER_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from '../src/poe/idle.js';
 
 /** A seeded random (mulberry32), so a failure replays. */
 function seeded(seed: number): () => number {
@@ -65,5 +65,13 @@ describe('idle beats', () => {
 
   it('never waves when waving is off', () => {
     expect(run(400, false, seeded(3)).some(({ beat }) => beat.kind === 'wave')).toBe(false);
+  });
+});
+
+describe('nap', () => {
+  it('dozes off after a minute of no input, not before', () => {
+    expect(shouldNap(NAP_AFTER_MS - 1)).toBe(false);
+    expect(shouldNap(NAP_AFTER_MS)).toBe(true);
+    expect(NAP_AFTER_MS).toBe(60_000);
   });
 });

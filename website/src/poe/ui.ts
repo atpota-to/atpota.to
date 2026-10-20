@@ -11,7 +11,7 @@ import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../scripts/mascot'
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
 import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, contextLabel, noteCopy } from './copy';
 import { icon } from './icons';
-import { BLINK_GAP_MS, BLINK_MS, GLANCE_MS, WAVE_MS, idleGap, nextBeat, startIdle, type IdleBeat } from './idle';
+import { BLINK_GAP_MS, BLINK_MS, GLANCE_MS, WAKE_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from './idle';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
 import { renderAnswer, splitTrailingFace } from './render';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
@@ -126,6 +126,9 @@ export class PoeWidget {
   /** The face an idle beat is showing on the resting corner potato (idle.ts). */
   private idleSrc: string | null = null;
   private idlePlan = startIdle();
+  /** Last pointer, key, wheel, touch or scroll input, for the nap (idle.ts). */
+  private lastInputAt = Date.now();
+  private napping = false;
   private everOpened = false;
   private modal = false;
   private rendered = false;
@@ -153,6 +156,7 @@ export class PoeWidget {
   private announceTimer: number | undefined;
   private idleTimer: number | undefined;
   private idleFrameTimer: number | undefined;
+  private wakeTimer: number | undefined;
 
   private readonly cleanups: Array<() => void> = [];
   private phoneQuery: MediaQueryList | null = null;
@@ -190,7 +194,10 @@ export class PoeWidget {
     // The leaf arm on its own, behind the body; it shows only while Poe waves.
     const potatoArm = el(d, 'img', { class: 'poe-potato__arm', alt: '', width: '136', height: '111', draggable: 'false', decoding: 'async' });
     potatoArm.src = MASCOT_ARM_URL;
-    this.potato.append(potatoLabel, this.potatoImg, potatoArm);
+    // The z's that float up while Poe naps.
+    const zzz = el(d, 'span', { class: 'poe-potato__zzz', 'aria-hidden': 'true' });
+    for (let i = 0; i < 3; i++) zzz.appendChild(el(d, 'i', {}, 'z'));
+    this.potato.append(potatoLabel, this.potatoImg, potatoArm, zzz);
 
     // highlight-to-ask pill
     this.pill = el(d, 'button', { class: 'poe-pill', type: 'button' });
@@ -402,6 +409,10 @@ export class PoeWidget {
     for (const type of ['keydown', 'wheel', 'touchstart'] as const) {
       this.on(win, type, () => this.noteActivity(), { passive: true, capture: true });
     }
+    for (const type of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const) {
+      this.on(win, type, () => this.noteInput(), { passive: true, capture: true });
+    }
+    this.on(doc, 'visibilitychange', () => this.noteInput());
 
     this.scheduleNudge();
     this.scheduleIdle();
@@ -409,7 +420,7 @@ export class PoeWidget {
 
   destroy(): void {
     for (const fn of this.cleanups.splice(0)) fn();
-    for (const t of [this.moodTimer, this.nudgeTimer, this.nudgeHideTimer, this.hideTimer, this.pillTimer, this.announceTimer, this.idleTimer, this.idleFrameTimer]) {
+    for (const t of [this.moodTimer, this.nudgeTimer, this.nudgeHideTimer, this.hideTimer, this.pillTimer, this.announceTimer, this.idleTimer, this.idleFrameTimer, this.wakeTimer]) {
       if (t !== undefined) this.win.clearTimeout(t);
     }
     this.turnController?.abort();
@@ -652,8 +663,38 @@ export class PoeWidget {
     this.idleTimer = this.win.setTimeout(() => {
       // The next beat is booked before this one plays, so an interrupted beat never stops the loop.
       this.scheduleIdle();
-      if (this.canIdle()) this.playBeat(nextBeat(this.idlePlan, gap, !this.everOpened));
+      if (!this.canIdle() || this.napping || this.wakeTimer !== undefined) return;
+      if (shouldNap(Date.now() - this.lastInputAt)) this.nap();
+      else this.playBeat(nextBeat(this.idlePlan, gap, !this.everOpened));
     }, gap);
+  }
+
+  private nap(): void {
+    this.stopIdleBeat();
+    this.napping = true;
+    this.idleSrc = MASCOT_URLS.sleepy;
+    this.potato.dataset.napping = 'true';
+    this.updateMoods();
+  }
+
+  /** Any input: remember when, and wake Poe with a start if it was napping. */
+  private noteInput(): void {
+    this.lastInputAt = Date.now();
+    if (!this.napping) return;
+    this.stopIdleBeat();
+    if (this.reducedMotion() || this.doc.visibilityState === 'hidden') {
+      this.updateMoods();
+      return;
+    }
+    this.idleSrc = MASCOT_URLS.wow;
+    this.potato.dataset.startled = 'true';
+    this.updateMoods();
+    this.wakeTimer = this.win.setTimeout(() => {
+      this.wakeTimer = undefined;
+      this.idleSrc = null;
+      delete this.potato.dataset.startled;
+      this.updateMoods();
+    }, WAKE_MS);
   }
 
   private canIdle(): boolean {
@@ -685,11 +726,16 @@ export class PoeWidget {
     step(0);
   }
 
-  /** Back to the plain resting face; the caller updates the image. */
+  /** Back to the plain resting face; the caller updates the image. Also ends a nap or a wake-up. */
   private stopIdleBeat(): void {
     this.win.clearTimeout(this.idleFrameTimer);
+    this.win.clearTimeout(this.wakeTimer);
+    this.wakeTimer = undefined;
     this.idleSrc = null;
+    this.napping = false;
     delete this.potato.dataset.waving;
+    delete this.potato.dataset.napping;
+    delete this.potato.dataset.startled;
   }
 
   /* ---------------------------------------------------------- transcript */

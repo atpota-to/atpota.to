@@ -53,7 +53,7 @@
           <h1 class="home-hero__title" id="home-title">making the atmosphere a little more fun.</h1>
           <p class="home-hero__lede">atpotato is a small studio building apps and guides on the open network bluesky is built on. some are useful, some are silly, most are both.</p>
           <div class="home-hero__actions">
-            <a class="btn btn--primary" href="#projects">see what's growing
+            <a class="btn btn--primary home-hero__go" href="#projects">see what's growing
               <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </a>
             <a class="btn btn--outline" href="https://bsky.app/profile/atpota.to">follow on bluesky
@@ -63,12 +63,22 @@
         </section>
 
         <div class="tile home-sun" data-mascot-trigger>
+          <div class="home-sun__night" aria-hidden="true">
+            <span class="home-sun__moon"></span>
+            <span class="home-sun__star" style="--x: 12%; --y: 30%"></span>
+            <span class="home-sun__star" style="--x: 27%; --y: 13%; --d: 0.6s"></span>
+            <span class="home-sun__star" style="--x: 43%; --y: 25%; --d: 1.2s"></span>
+            <span class="home-sun__star" style="--x: 58%; --y: 9%; --d: 0.3s"></span>
+            <span class="home-sun__star" style="--x: 66%; --y: 33%; --d: 1.8s"></span>
+            <span class="home-sun__star" style="--x: 9%; --y: 52%; --d: 1.5s"></span>
+            <span class="home-sun__star" style="--x: 88%; --y: 46%; --d: 0.9s"></span>
+          </div>
           <div class="home-sun__mound" aria-hidden="true"></div>
           <img class="home-sun__sprout home-sun__sprout--1" src="/src/assets/sprout.svg" alt="" width="70" height="65">
           <img class="home-sun__sprout home-sun__sprout--2" src="/src/assets/sprout.svg" alt="" width="46" height="43">
           <img class="home-sun__sprout home-sun__sprout--3" src="/src/assets/sprout.svg" alt="" width="58" height="54">
-          <img class="home-sun__mascot" data-mascot="kawaii" data-mascot-faces="wow wink happy" src="/src/assets/mascot/potato-kawaii.svg" alt="poe, the atpotato mascot: a smiling potato with an @ on its tummy and leafy vine arms, standing on a dirt mound and waving" width="360" height="293" fetchpriority="high">
-          <p class="home-sun__bubble" aria-hidden="true"><span class="only-hover">psst, hover me (◕‿◕)</span><span class="only-touch">psst, tap me (◕‿◕)</span></p>
+          <img class="home-sun__mascot" data-mascot="kawaii" data-mascot-dark="sleepy" data-mascot-faces="wow wink happy" data-pet src="/src/assets/mascot/potato-kawaii.svg" alt="poe, the atpotato mascot: a smiling potato with an @ on its tummy and leafy vine arms, standing on a dirt mound and waving" width="360" height="293" fetchpriority="high">
+          <p class="home-sun__bubble" aria-hidden="true"><span class="only-hover">psst, hover me (◕‿◕)</span><span class="only-touch">psst, tap me (◕‿◕)</span><span class="home-sun__say" data-pet-say></span></p>
         </div>
 
         <div class="home-heading" id="projects">
@@ -119,6 +129,7 @@
         </a>
 
         <div class="tile tile--dashed home-more">
+          <svg class="home-more__outline" aria-hidden="true" focusable="false"><rect width="100%" height="100%" rx="31" ry="31"/></svg>
           <img class="home-more__sprout" src="/src/assets/sprout.svg" alt="" width="60" height="56" loading="lazy">
           <h3 class="home-more__title">more in the ground</h3>
           <p class="home-more__desc">new things sprout here first.<span class="home-long"> follow <a href="https://bsky.app/profile/atpota.to">@atpota.to</a> to catch them early.</span></p>
@@ -163,7 +174,10 @@
           <h2 class="eyebrow home-hi__title" id="home-hi-title">say hi</h2>
           <p class="home-hi__text"><span class="home-long">questions, collabs, cease-and-desist letters, or just a hello.</span><span class="home-short">questions, ideas, or just a hello.</span></p>
           <a class="home-hi__mail" href="mailto:contact@atpota.to" aria-label="contact@atpota.to"><span>contact@</span><span>atpota.to</span></a>
-          <img class="home-hi__potato" src="/src/assets/mascot/potato-wink.svg" alt="" width="150" height="122" loading="lazy">
+          <button type="button" class="home-hi__copy" data-copy-email="contact@atpota.to">copy address</button>
+          <p class="home-hi__bubble" aria-hidden="true" data-copy-bubble>copied! (◕‿◕)</p>
+          <p class="visually-hidden" role="status" data-copy-status></p>
+          <img class="home-hi__potato" data-copy-potato src="/src/assets/mascot/potato-wink.svg" alt="" width="150" height="122" loading="lazy">
         </section>
 
         <section class="tile home-poe" aria-labelledby="home-poe-title">

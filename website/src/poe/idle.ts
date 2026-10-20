@@ -8,6 +8,10 @@
  * under reduced motion, in a hidden tab, or while Poe is open, busy, hovered or
  * nudging.
  *
+ * After a minute with no input at all (no pointer, keys, wheel, touch or
+ * scrolling) Poe dozes off: eyes shut, slow breathing, a few floating z's. The
+ * next bit of input startles it awake for a moment (WAKE_MS on the wow face).
+ *
  * Planning only; ui.ts owns the timers and the DOM.
  */
 
@@ -22,6 +26,14 @@ export const GLANCE_MS = 1300;
 /** Matches the poe-wave animation in poe.css (checked in tests/poe-styles.test.ts). */
 export const WAVE_MS = 1600;
 export const MAX_WAVES = 3;
+export const NAP_AFTER_MS = 60_000;
+/** Matches the poe-startle animation in poe.css. */
+export const WAKE_MS = 900;
+
+/** Whether Poe should doze off, `quietFor` ms after the visitor's last input. */
+export function shouldNap(quietFor: number): boolean {
+  return quietFor >= NAP_AFTER_MS;
+}
 
 const GAP_MIN_MS = 3500;
 const GAP_SPREAD_MS = 4000;

@@ -7,7 +7,13 @@
  *
  *   <img data-mascot="kawaii" src="/src/assets/mascot/potato-kawaii.svg" alt="...">
  *   optional: data-mascot-faces="wow wink"   (restrict the pool)
+ *   optional: data-mascot-dark="sleepy"      (rest face while the dark theme is on)
+ *
+ * While the image carries data-mascot-hold (set by the home page's petting, home.ts)
+ * hover and tap leave its face alone; restoreMascot() puts the rest face back.
  */
+
+import { getTheme } from './theme';
 
 import arm from '../assets/mascot/potato-arm.svg';
 import blob from '../assets/mascot/potato-blob.svg';
@@ -63,27 +69,51 @@ export function preloadFaces(): void {
   else window.setTimeout(run, 200);
 }
 
+const restorers = new WeakMap<HTMLImageElement, () => void>();
+
+/** Drops data-mascot-hold and shows the rest face again. */
+export function restoreMascot(img: HTMLImageElement): void {
+  restorers.get(img)?.();
+}
+
 export function bindMascot(img: HTMLImageElement): void {
   if (img.dataset.mascotBound === 'true') return;
   img.dataset.mascotBound = 'true';
 
-  const restSrc = img.getAttribute('src') ?? '';
-  const restFace = isFace(img.dataset.mascot) ? img.dataset.mascot : undefined;
+  const daySrc = img.getAttribute('src') ?? '';
+  const dayFace = isFace(img.dataset.mascot) ? img.dataset.mascot : undefined;
+  const darkFace = isFace(img.dataset.mascotDark) ? img.dataset.mascotDark : undefined;
+  const night = () => darkFace !== undefined && getTheme() === 'dark';
+  const restSrc = () => (night() ? MASCOT_URLS[darkFace!] : daySrc);
   const poolAttr = (img.dataset.mascotFaces ?? '').split(/\s+/).filter(isFace);
   const pool = poolAttr.length > 0 ? poolAttr : SWAP_FACES;
   let current: MascotFace | undefined;
   let tapTimer: number | undefined;
 
+  const held = () => img.dataset.mascotHold !== undefined;
   const swap = () => {
     window.clearTimeout(tapTimer);
-    current = pickFace(restFace, current, pool);
+    if (held()) return;
+    current = pickFace(night() ? darkFace : dayFace, current, pool);
     img.src = MASCOT_URLS[current];
   };
   const restore = () => {
     window.clearTimeout(tapTimer);
+    if (held()) return;
     current = undefined;
-    if (img.getAttribute('src') !== restSrc) img.src = restSrc;
+    const rest = restSrc();
+    if (img.getAttribute('src') !== rest) img.src = rest;
   };
+  restorers.set(img, () => {
+    delete img.dataset.mascotHold;
+    restore();
+  });
+  if (darkFace) {
+    restore();
+    window.addEventListener('theme:change', () => {
+      if (current === undefined) restore();
+    });
+  }
 
   // Hover/tap listen on the nearest [data-mascot-trigger] (e.g. a whole tile) or the image.
   const hoverTarget: HTMLElement = img.closest<HTMLElement>('[data-mascot-trigger]') ?? img;

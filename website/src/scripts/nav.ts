@@ -6,6 +6,9 @@
  * about 880px side by side). While open: focus moves to the first
  * link, Tab is trapped inside the toggle + sheet, Esc or the scrim closes it and
  * focus returns to the toggle, choosing a link or "ask poe" closes it.
+ *
+ * On desktop, one hover pill slides between the nav links (components.css draws it
+ * as the list's ::before from --pill-x / --pill-w).
  */
 
 const MOBILE_QUERY = '(max-width: 880px)';
@@ -75,4 +78,50 @@ export function initNav(root: Document = document): void {
       if (!event.matches) setOpen(false, false);
     });
   }
+
+  const list = menu.querySelector<HTMLElement>('.site-nav__list');
+  if (list) initNavPill(list);
+}
+
+/** The sliding hover pill behind the desktop nav links. */
+export function initNavPill(list: HTMLElement): void {
+  const links = [...list.querySelectorAll<HTMLAnchorElement>('.site-nav__link')];
+
+  const moveTo = (link: HTMLAnchorElement) => {
+    // The current page already wears its own pill.
+    if (link.getAttribute('aria-current') === 'page') {
+      hide();
+      return;
+    }
+    const appearing = list.dataset.pill !== 'show';
+    if (appearing) list.dataset.pill = 'jump';
+    list.style.setProperty('--pill-x', `${link.offsetLeft}px`);
+    list.style.setProperty('--pill-w', `${link.offsetWidth}px`);
+    if (appearing) {
+      void list.offsetWidth;
+      list.dataset.pill = 'show';
+    }
+  };
+  const hide = () => {
+    delete list.dataset.pill;
+  };
+
+  for (const link of links) {
+    link.addEventListener('pointerenter', (event) => {
+      if (event.pointerType !== 'touch') moveTo(link);
+    });
+    link.addEventListener('focus', () => {
+      let keyboard = true;
+      try {
+        keyboard = link.matches(':focus-visible');
+      } catch {
+        // older engines without :focus-visible: treat every focus as keyboard focus
+      }
+      if (keyboard) moveTo(link);
+    });
+  }
+  list.addEventListener('pointerleave', hide);
+  list.addEventListener('focusout', (event) => {
+    if (!(event.relatedTarget instanceof Node && list.contains(event.relatedTarget))) hide();
+  });
 }

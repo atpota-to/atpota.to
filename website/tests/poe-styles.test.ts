@@ -85,13 +85,19 @@ describe('poe.css contracts', () => {
     expect(section).toMatch(/transition: none !important/);
     expect(section).toMatch(/transform: none !important/);
     expect(section).toMatch(/animation: none !important/);
-    for (const sel of ['.poe-potato:hover', '.poe-panel', '.poe-dots i', '.poe[data-busy] .poe-panel__potato', '.poe-potato__arm']) expect(section).toContain(sel);
+    for (const sel of ['.poe-potato:hover', '.poe-panel', '.poe-dots i', '.poe[data-busy] .poe-panel__potato', '.poe-potato__arm', '.poe-potato__img', '.poe-potato__zzz i']) expect(section).toContain(sel);
   });
 
   it('waves for as long as idle.ts holds the wave face', async () => {
     const { WAVE_MS } = await import('../src/poe/idle.js');
     const duration = /animation:\s*poe-wave\s+([\d.]+)s/.exec(poe)?.[1];
     expect(Number(duration) * 1000).toBe(WAVE_MS);
+  });
+
+  it('startles for as long as idle.ts holds the wow face', async () => {
+    const { WAKE_MS } = await import('../src/poe/idle.js');
+    const duration = /animation:\s*poe-startle\s+([\d.]+)s/.exec(poe)?.[1];
+    expect(Number(duration) * 1000).toBe(WAKE_MS);
   });
 
   it('stacks on the shared z-index token', () => {

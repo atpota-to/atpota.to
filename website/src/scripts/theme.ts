@@ -5,7 +5,8 @@
  * OS setting is not consulted, so dark only shows once a visitor picks it. This
  * module wires the footer toggle(s) ([data-theme-toggle], aria-pressed = dark is
  * on), keeps the theme-color meta in sync, and fires `window` event "theme:change"
- * with detail { theme }.
+ * with detail { theme }. Where the browser has view transitions (and motion is
+ * welcome), the new theme spreads out in a circle from the toggle (base.css).
  */
 
 export type Theme = 'light' | 'dark';
@@ -58,6 +59,42 @@ export function toggleTheme(): Theme {
   return next;
 }
 
+const REVEAL_MS = 650;
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => void) => { ready: Promise<void>; finished: Promise<void> };
+};
+
+/** The radius that covers the whole viewport from (x, y). */
+export function revealRadius(x: number, y: number, width: number, height: number): number {
+  return Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
+}
+
+/** toggleTheme(), drawn as a circle growing from (x, y) in viewport pixels. */
+export function toggleThemeFrom(x: number, y: number): void {
+  const doc = document as ViewTransitionDocument;
+  const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (typeof doc.startViewTransition !== 'function' || reduce) {
+    toggleTheme();
+    return;
+  }
+  const root = document.documentElement;
+  root.setAttribute('data-theme-switching', '');
+  const transition = doc.startViewTransition(() => {
+    toggleTheme();
+  });
+  const radius = revealRadius(x, y, window.innerWidth, window.innerHeight);
+  transition.ready
+    .then(() => {
+      root.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+        { duration: REVEAL_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', pseudoElement: '::view-transition-new(root)' },
+      );
+    })
+    .catch(() => undefined);
+  transition.finished.finally(() => root.removeAttribute('data-theme-switching')).catch(() => undefined);
+}
+
 let initialised = false;
 
 export function initTheme(): void {
@@ -72,6 +109,10 @@ export function initTheme(): void {
 
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target.closest('[data-theme-toggle]') : null;
-    if (target) toggleTheme();
+    if (!target) return;
+    // A keyboard press has no pointer position: grow from the toggle's knob instead.
+    const knob = (target.querySelector('.theme-toggle__knob') ?? target).getBoundingClientRect();
+    const fromPointer = event.detail > 0 && (event.clientX !== 0 || event.clientY !== 0);
+    toggleThemeFrom(fromPointer ? event.clientX : knob.left + knob.width / 2, fromPointer ? event.clientY : knob.top + knob.height / 2);
   });
 }

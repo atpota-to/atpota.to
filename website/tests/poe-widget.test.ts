@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_CODES } from '../src/poe/storage.js';
 import { POE_BLUESKY_URL, noteCopy, waitPhrase } from '../src/poe/copy.js';
 import { mountPoe, unmountPoe } from '../src/poe/index.js';
-import { BLINK_MS, WAVE_MS, idleGap } from '../src/poe/idle.js';
+import { BLINK_MS, NAP_AFTER_MS, WAKE_MS, WAVE_MS, idleGap } from '../src/poe/idle.js';
 import { faceUrl } from '../src/poe/moods.js';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../src/scripts/mascot.js';
 import { PHONE_QUERY, type PoeWidget } from '../src/poe/ui.js';
@@ -1109,6 +1109,38 @@ describe('idle life', () => {
     expect(new Set(result.faces)).toEqual(new Set([faceUrl('resting')]));
     expect(result.waved).toBe(false);
     hidden.mockRestore();
+  });
+
+  it('dozes off after a minute without input and wakes with a start', () => {
+    const { potato, img } = quietMount();
+    vi.advanceTimersByTime(NAP_AFTER_MS - GAP);
+    expect(potato.dataset.napping).toBeUndefined();
+    vi.advanceTimersByTime(GAP * 2);
+    expect(potato.dataset.napping).toBe('true');
+    expect(img.getAttribute('src')).toBe(MASCOT_URLS.sleepy);
+    expect(potato.querySelectorAll('.poe-potato__zzz i')).toHaveLength(3);
+
+    // Asleep, it skips its blinks and waves.
+    const seen = watch(potato, img);
+    vi.advanceTimersByTime(GAP * 3);
+    expect(new Set(seen().faces)).toEqual(new Set([MASCOT_URLS.sleepy]));
+
+    window.dispatchEvent(new Event('pointermove'));
+    expect(potato.dataset.napping).toBeUndefined();
+    expect(potato.dataset.startled).toBe('true');
+    expect(img.getAttribute('src')).toBe(MASCOT_URLS.wow);
+    vi.advanceTimersByTime(WAKE_MS);
+    expect(potato.dataset.startled).toBeUndefined();
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+  });
+
+  it('keeps awake while the visitor keeps moving', () => {
+    const { potato } = quietMount();
+    for (let t = 0; t < NAP_AFTER_MS * 3; t += 10_000) {
+      vi.advanceTimersByTime(10_000);
+      window.dispatchEvent(new Event('scroll'));
+    }
+    expect(potato.dataset.napping).toBeUndefined();
   });
 });
 
