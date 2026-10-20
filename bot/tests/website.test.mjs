@@ -41,6 +41,7 @@ globalThis.__websiteTestForget = async () => ({ hadNotes: true, published: true 
 const instructions = (await load("instructions/website", [
   ['from "eve/instructions"', `from "${stub(`export const defineDynamic = (definition) => definition;
     export const defineInstructions = (instructions) => instructions;`)}"`],
+  ['from "../lib/presence"', 'from "../lib/presence.js"'],
   ['from "../lib/website"', 'from "../lib/website.mjs"'],
 ])).default;
 const toolStub = ['from "eve/tools"', `from "${stub("export const defineTool = (tool) => tool;")}"`];
@@ -616,6 +617,9 @@ test("a signed-in visitor's rules name them, open their notes and keep every web
   assert.match(rules, /your person notes about them are the same notes/);
   assert.match(rules, /person__save_memory and person__remove_memory/);
   assert.match(rules, /published in your repo where anyone can read them/);
+  // Their record's address, so Poe can look it up instead of guessing a key.
+  assert.ok(rules.includes("`at://did:plc:6qw63oash3jfnpykvpbwnq5z/to.atpota.poe.memory/did:plc:abcdefghijklmnopqrstuvwx`"));
+  assert.equal(anonymous.includes("to.atpota.poe.memory"), false);
   assert.match(rules, /does not make them one of the people who run you/);
   // The limits are the anonymous visitor's, word for word.
   for (const line of [/never with ask_question/, /fetch web pages, search the web, or start helper agents/,

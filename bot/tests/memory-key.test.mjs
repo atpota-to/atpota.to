@@ -22,7 +22,8 @@ for (const [file, from, to] of [
 }
 const { memoryKey, personNotesKey, PERSON_SLOT } = await import(new URL("memory-key.js", out));
 const { personScope } = await import(new URL("person-scope.js", out));
-const { emptyNotes, forgetNotes, publishedFileMemory } = await import(new URL("published-memory.js", out));
+const { emptyNotes, forgetNotes, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
+  await import(new URL("published-memory.js", out));
 const { createMemoryLock } = await import("../node_modules/eve/dist/src/shared/memory-state.js");
 const { defaultNamespace } = await import("eve/memory");
 
@@ -108,6 +109,87 @@ test("forgetNotes wipes one person's notes, hands the empty version over, and le
       console.error = original;
     }
     assert.match(await recalled(DIDS[1]), /No memories are saved/);
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.DROPLET_CALLBACK_URL;
+    delete process.env.DROPLET_SHARED_SECRET;
+  }
+});
+
+test("a save that loses a Blob write race is retried instead of failing", async () => {
+  const { fileMemory, inMemory } = await import("eve/memory/file");
+  // Vercel Blob's answer to two conditional writes at once, verbatim from the
+  // production log of a remove and a save the model made in parallel.
+  const raced = new Error("Vercel Blob: The conditional request cannot succeed due to a conflicting operation against this resource.");
+  const backing = inMemory();
+  let failures = 1;
+  const backend = retryingConcurrentWrites({
+    read: (input) => backing.read(input),
+    async write(input) {
+      if (failures-- > 0) throw raced;
+      return backing.write(input);
+    },
+  });
+  const abortSignal = new AbortController().signal;
+  const tools = await fileMemory({ backend }).tools({ memory: { scope: { key: "k", namespace: "n", value: "v" }, slot: "person" },
+    abortSignal, turn: { id: "t", input: [], sequence: 0 } });
+  await tools.save_memory.execute({ text: "builds feeds" }, { abortSignal });
+  assert.match((await backing.read({ key: "k", signal: abortSignal })).content, /builds feeds/);
+
+  // Anything else still fails the write as it did.
+  const down = new Error("Vercel Blob: The blob service is currently not available. Please try again.");
+  const failing = retryingConcurrentWrites({ read: async () => null, write: async () => { throw down; } });
+  await assert.rejects(failing.write({ key: "k", content: "", expectedVersion: null, signal: abortSignal }), (err) => err === down);
+});
+
+// The note from 2026-10-20 that the droplet held back: 331 graphemes.
+const TOO_LONG = "dame.is (they/them) is a creative technologist whose bio lists them as maker of anisota.net, " +
+  "aturi.to, atpota.to, flushes.app and poe.atpota.to, among other Atmosphere projects; also works on bsky38, a " +
+  "Bluesky client. Asks about atproto internals (rkeys, TIDs) and cares about sign-in/OAuth UX. Fine with casual, " +
+  "lowercase answers.";
+
+test("the save guard refuses exactly the notes the droplet would hold back", async () => {
+  // The droplet's own rule: publishable() in mentions/src/memory.js, built
+  // from its richtext.js and its limit, read from the source because the
+  // module needs the droplet's environment to import.
+  const { detectLinks, graphemeLength } = await import("../../mentions/src/richtext.js");
+  const source = readFileSync(new URL("../../mentions/src/memory.js", import.meta.url), "utf8");
+  const max = Number(/const NOTE_MAX_GRAPHEMES = (\d+);/.exec(source)?.[1]);
+  assert.equal(max, 300);
+  assert.match(source, /detectLinks\(note\)\.length === 0 && graphemeLength\(note\) <= NOTE_MAX_GRAPHEMES/);
+  const dropletPublishes = (note) => detectLinks(note).length === 0 && graphemeLength(note) <= max;
+
+  const family = "👩‍👩‍👧‍👦"; // one grapheme, 11 UTF-16 code units
+  for (const note of [TOO_LONG, "x".repeat(300), "x".repeat(301), family.repeat(300), family.repeat(301),
+    "builds feeds at aturi.to and atpota.to", "reads https://atproto.com daily", "keeps a blog at http://x.y",
+    "writes about http:// schemes", `  spaced   out\n\n${"y".repeat(290)}  `]) {
+    const note1 = note.trim().replaceAll(/\s+/g, " ");
+    assert.equal(unpublishableNote(note) === null, dropletPublishes(note1), note.slice(0, 40));
+  }
+  assert.match(unpublishableNote(TOO_LONG), /^Not saved: this note is 331 characters, .* 300 or fewer/);
+  assert.match(unpublishableNote("reads https://atproto.com daily"), /^Not saved: a note with a link/);
+});
+
+test("a person note the repo would not publish is refused before it is saved or handed over", async () => {
+  const handed = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    handed.push(JSON.parse(init.body).content);
+    return new Response(null, { status: 202 });
+  };
+  process.env.DROPLET_CALLBACK_URL = "https://droplet.example";
+  process.env.DROPLET_SHARED_SECRET = "droplet-secret";
+  try {
+    const did = "did:plc:longnotelongnotelongnote";
+    const abortSignal = new AbortController().signal;
+    const tools = await publishedFileMemory().tools({ memory: { scope: { key: personNotesKey(did), namespace: "n",
+      value: personScope(did) }, slot: "person" }, abortSignal, turn: { id: "t", input: [], sequence: 0 } });
+    await assert.rejects(tools.save_memory.execute({ text: TOO_LONG }, { abortSignal }), /Not saved: this note is 331/);
+    assert.deepEqual(handed, [], "nothing written, so nothing handed to the droplet");
+    await tools.save_memory.execute({ text: "builds bsky38, a Bluesky client; likes atproto internals" }, { abortSignal });
+    assert.equal(handed.length, 1);
+    assert.match(handed[0], /0: builds bsky38/);
+    assert.equal(typeof tools.remove_memory.execute, "function");
   } finally {
     globalThis.fetch = realFetch;
     delete process.env.DROPLET_CALLBACK_URL;

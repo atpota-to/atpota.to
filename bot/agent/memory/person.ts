@@ -56,7 +56,8 @@ export default defineMemory({
   description:
     "Durable facts about this person that make future answers shorter: what " +
     "they build, how technical they are, their handle, and how they like to " +
-    "be talked to. Never anything about a third party.",
+    "be talked to. Never anything about a third party. Each note is " +
+    "published in your repo, so keep it to 300 characters with no links.",
 
   // fileMemory on the same Vercel Blob store as before, with each saved
   // version also handed to the droplet to publish. The Blob copy is what is

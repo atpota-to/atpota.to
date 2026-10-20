@@ -295,6 +295,22 @@ potato." People should know it remembers them before they find out by accident:
   vocabulary, not withhold the answer.
 - **Context crowding.** Recall runs before every turn and 4,000 characters of it
   competes with tool output. Watch the ratio once real documents exist.
+- **A rewrite that empties the notes on the way.** On 2026-10-20 the model
+  rewrote a note by removing the old one and saving the new one in parallel.
+  The two writes raced on one Blob document, and Blob's 409 for that ("a
+  conflicting operation") is not the ETag mismatch eve retries, so the save
+  failed outright; `lib/published-memory.ts` now reports it as a conflict. The
+  remove also landed first, so the droplet was handed an empty document and
+  deleted the public record. The instructions now say to change notes one call
+  at a time and to save the new version before removing the old one.
+- **A note too long to publish.** The same rewrite, once saved, was 331
+  graphemes. The droplet publishes only notes that would pass as a reply (no
+  links, 300 graphemes at most) and held it back, so the person had no record at
+  all while Poe told them their note was published. The person slot's save now
+  refuses such a note with the reason (`unpublishableNote` in
+  `lib/published-memory.ts`, held to the droplet's own rule by a test), so the
+  model rewrites it shorter. Notes saved before that can still be held back;
+  `npm run memory` on the droplet shows why.
 - **The incident.** At some point the potato will surface something about
   someone that surprises them, in public, in a thread. Have the response ready
   before it happens: delete it, say so plainly, do not argue.
