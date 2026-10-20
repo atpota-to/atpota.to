@@ -100,6 +100,12 @@ describe('poe.css contracts', () => {
     expect(Number(duration) * 1000).toBe(WAKE_MS);
   });
 
+  it('cheers for as long as idle.ts holds the happy face', async () => {
+    const { CHEER_MS } = await import('../src/poe/idle.js');
+    const duration = /animation:\s*poe-cheer\s+([\d.]+)s/.exec(poe)?.[1];
+    expect(Number(duration) * 1000).toBe(CHEER_MS);
+  });
+
   it('stacks on the shared z-index token', () => {
     expect(poe).toContain('z-index: var(--z-poe)');
     expect(poe).not.toMatch(/z-index:\s*\d{3,}/);

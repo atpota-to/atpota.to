@@ -1,0 +1,20 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.garden.tend",
+  "description": "Tending a flower in the flower patch on atpota.to, your own or a neighbour's. Tending while a flower grows makes a better bloom.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["subject", "action", "createdAt"],
+        "properties": {
+          "subject": { "type": "ref", "ref": "com.atproto.repo.strongRef", "description": "The flower (a to.atpota.garden.sprout record)." },
+          "action": { "type": "string", "knownValues": ["water", "sun", "talk"] },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

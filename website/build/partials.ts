@@ -34,6 +34,7 @@ const BODY_RE = /<body\b[^>]*>/i;
 export const NAV_FOR_PAGE: Record<string, string> = {
   home: 'home',
   blog: 'blog',
+  garden: 'garden',
 };
 
 function insideDir(dir: string, file: string): boolean {

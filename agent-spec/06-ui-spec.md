@@ -39,11 +39,13 @@ the panel open. It is charming and it costs nothing. Once the panel is open, the
 face is state, not decoration.
 
 Rules: instant swaps, no sound, ever. The only idle motion is the small set in
-`website/src/poe/idle.ts`: blinks, short glances, up to three arm waves per
-page view, and a nap after a minute with no input, none of them while the panel is open, a turn is running, or the tab
-is hidden. Respect `prefers-reduced-motion` on any transition, and turn the idle
-motion off under it. Give each state a real `alt` value, since the face carries
-meaning that a screen reader otherwise loses.
+`website/src/poe/idle.ts`: blinks, short glances, up to three arm waves per page
+view, and a nap after a minute with no input, none of them while the panel is
+open, a turn is running, or the tab is hidden. Respect `prefers-reduced-motion`
+on any transition, and turn the idle motion off under it. Give each state a real
+`alt` value, since the face carries meaning that a screen reader otherwise
+loses. Outside of idle, the potato hops happily when a reader subscribes,
+recommends or comments on the blog (the page sends `poe:cheer`).
 
 ## When it is allowed to speak first
 

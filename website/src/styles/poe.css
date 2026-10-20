@@ -140,6 +140,30 @@ html[data-theme="dark"] {
   animation: poe-startle 0.9s var(--ease-spring);
 }
 
+/* Cheering (a reader subscribed, recommended or commented): two happy hops (CHEER_MS). */
+.poe-potato[data-cheering] .poe-potato__img {
+  transform-origin: 50% 100%;
+  animation: poe-cheer 1.2s var(--ease-out);
+}
+
+@keyframes poe-cheer {
+  0%,
+  50%,
+  100% {
+    transform: none;
+  }
+
+  20%,
+  70% {
+    transform: translateY(-22px) scale(0.95, 1.06);
+  }
+
+  40%,
+  90% {
+    transform: scale(1.06, 0.94);
+  }
+}
+
 @keyframes poe-breathe {
   0%,
   100% {

@@ -3,7 +3,8 @@
  * (src/poe/storage.ts: private windows and blocked storage fall back to memory).
  *
  *   sessionStorage "blog:pending"           the action a reader started before signing in
- *                                           ({ kind, returnTo, at }), done once they're back
+ *                                           ({ kind, returnTo, at }), done once they're back;
+ *                                           "plant" is the home page's flower patch
  *   sessionStorage "blog:draft:<document>"  the comment being written, so the sign-in round
  *                                           trip doesn't lose it
  *   sessionStorage "blog:local:<document>"  the reader's own comments added or deleted in
@@ -29,7 +30,10 @@ export const LOCAL_TTL_MS = 10 * 60_000;
 const MAX_LOCAL = 20;
 
 /** "poe": signing in so Poe can remember the reader (from the Poe panel, or /blog#sign-in). */
-export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe';
+export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe' | 'plant' | 'tend';
+/** The intents the blog itself handles (planting and tending belong to the flower patch). */
+export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend'>;
+const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'poe', 'plant', 'tend']);
 
 export interface Pending {
   kind: IntentKind;
@@ -58,11 +62,14 @@ export function resetBlogStoresForTests(): void {
 }
 
 const RETURN_RE = /^\/blog(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*$/;
+/** /garden, someone's garden (/garden/dame.is, /garden/did:plc:…) and their flowers (…/flowers). */
+const GARDEN_RE = /^\/garden(?:\/[A-Za-z0-9._:%-]{1,253}(?:\/flowers)?)?\/?$/;
 
-/** A path under /blog to send the reader back to, or null (no open redirects, no "..") */
+/** The home page, a garden page, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
 export function safeReturnTo(path: unknown): string | null {
+  if (path === '/') return path;
   if (typeof path !== 'string' || path.length > 600) return null;
-  if (!RETURN_RE.test(path) || path.split('/').some((segment) => segment === '.' || segment === '..')) return null;
+  if (!(RETURN_RE.test(path) || GARDEN_RE.test(path)) || path.split('/').some((segment) => segment === '.' || segment === '..')) return null;
   return path;
 }
 
@@ -84,9 +91,9 @@ export function savePending(store: KeyValueStore, pending: Pending): void {
 export function readPending(store: KeyValueStore, now: number): Pending | null {
   const v = readJson(store, PENDING_KEY) as Partial<Pending> | null;
   const returnTo = safeReturnTo(v?.returnTo);
-  if (!v || !returnTo || (v.kind !== 'subscribe' && v.kind !== 'recommend' && v.kind !== 'comment' && v.kind !== 'poe')) return null;
+  if (!v || !returnTo || typeof v.kind !== 'string' || !INTENTS.has(v.kind)) return null;
   if (typeof v.at !== 'number' || now - v.at > PENDING_TTL_MS || v.at > now + 60_000) return null;
-  return { kind: v.kind, returnTo, at: v.at };
+  return { kind: v.kind as IntentKind, returnTo, at: v.at };
 }
 
 export function clearPending(store: KeyValueStore): void {

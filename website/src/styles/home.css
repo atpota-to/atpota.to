@@ -23,7 +23,9 @@
   --home-night-deep: #1E273D;
   --home-moon: #FFE7A3;
   --home-star: #FFF6D6;
-  --home-blush: #E9879A;
+  --home-cloud: rgba(255, 255, 255, 0.82);
+  --home-weather-cell: rgba(255, 255, 255, 0.6);
+  --home-firefly: #FFF3A6;
 }
 
 html[data-theme="dark"] {
@@ -39,6 +41,7 @@ html[data-theme="dark"] {
   --home-sheet-shot: #2A4752;
   --home-bubble: var(--card);
   --home-mound: #6E5634;
+  --home-weather-cell: rgba(255, 253, 247, 0.07);
 }
 
 /* ---------- motion shared across the page ---------- */
@@ -242,6 +245,128 @@ html[data-theme="dark"] .home-sun__night {
   }
 }
 
+/* Ambient life: clouds drift across by day, fireflies come out at night. Under
+   reduced motion the clouds rest where they are and the fireflies just glow. */
+.home-sun__day {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+html[data-theme="dark"] .home-sun__day {
+  display: none;
+}
+
+/* Each drift is as wide as the tile; its cloud sits just off the left edge, so moving
+   the drift by its own width plus the cloud's carries the cloud right across. */
+.home-sun__drift {
+  position: absolute;
+  left: 0;
+  top: var(--y);
+  width: 100%;
+  transform: translateX(calc(var(--rest) + 130px));
+}
+
+.home-sun__cloud {
+  position: absolute;
+  right: 100%;
+  top: 0;
+  width: 110px;
+  height: 32px;
+  border-radius: 32px;
+  background: var(--home-cloud);
+  transform: scale(var(--size, 1));
+  transform-origin: 100% 50%;
+}
+
+.home-sun__cloud::before,
+.home-sun__cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.home-sun__cloud::before {
+  left: 18px;
+  top: -22px;
+  width: 46px;
+  height: 46px;
+}
+
+.home-sun__cloud::after {
+  left: 54px;
+  top: -14px;
+  width: 34px;
+  height: 34px;
+}
+
+.home-sun__fireflies {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: none;
+  pointer-events: none;
+}
+
+html[data-theme="dark"] .home-sun__fireflies {
+  display: block;
+}
+
+.home-sun__fireflies span {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--home-firefly);
+  box-shadow: 0 0 10px 3px color-mix(in srgb, var(--home-firefly) 70%, transparent);
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-sun__drift {
+    animation: home-drift var(--dur) linear var(--at) infinite;
+  }
+
+  .home-sun__fireflies span {
+    animation: home-firefly var(--dur) ease-in-out var(--d) infinite alternate;
+  }
+}
+
+@keyframes home-drift {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(100% + 130px));
+  }
+}
+
+@keyframes home-firefly {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  35% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 0.25;
+  }
+
+  100% {
+    opacity: 0.9;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+
 .home-sun__sprout {
   transform-origin: 50% 100%;
   transition: transform var(--dur-spring) var(--ease-spring);
@@ -332,7 +457,7 @@ html[data-theme="dark"] .home-sun__sprout--3 {
 }
 
 .home-sun__mascot.is-blushing {
-  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--home-blush) 70%, transparent));
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--blush) 70%, transparent));
 }
 
 @keyframes home-squish {
@@ -376,7 +501,7 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   z-index: 5;
   width: 24px;
   height: 24px;
-  color: var(--home-blush);
+  color: var(--blush);
   pointer-events: none;
   animation: home-heart 1.1s ease-out forwards;
 }
@@ -1013,6 +1138,131 @@ html[data-theme="dark"] .home-find {
   transform: none;
 }
 
+/* ---------- atmospheric conditions (weather.ts, /api/atmosphere) ---------- */
+
+.home-weather,
+.home-patch {
+  grid-column: span 2;
+  --tile-pad: 26px;
+}
+
+/* Both need JavaScript to show anything; without it the row is left out. */
+html:not(.js) .home-weather,
+html:not(.js) .home-patch {
+  display: none;
+}
+
+.home-weather {
+  gap: 14px;
+  background: var(--sky);
+  color: var(--home-sky-text);
+}
+
+.home-weather__title {
+  color: var(--home-sky-mono);
+}
+
+.home-weather__now {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  /* with the note's auto margin, any spare height splits above the reading and the note */
+  margin-top: auto;
+}
+
+.home-weather__sun {
+  flex: none;
+  width: 92px;
+  height: 92px;
+}
+
+.home-weather__rays {
+  fill: var(--sun-deep);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* weather.ts speeds this up or slows it down with how busy the network is */
+  .home-weather__rays {
+    animation: home-rays 10s linear infinite;
+  }
+}
+
+@keyframes home-rays {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.home-weather__disc {
+  fill: var(--sun);
+}
+
+.home-weather__face {
+  fill: none;
+  stroke: var(--on-sun-soft);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.home-weather__reading {
+  min-width: 0;
+}
+
+.home-weather__big {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-weather__unit {
+  font-size: 17px;
+}
+
+.home-weather__cond {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.home-weather__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.home-weather__row div {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--home-weather-cell);
+}
+
+.home-weather__row dt {
+  font-size: 13px;
+  color: var(--home-sky-mono);
+}
+
+.home-weather__row dd {
+  margin: 2px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-weather__note {
+  margin-top: auto;
+  font-size: 13px;
+  color: var(--home-sky-mono);
+}
+
 /* ---------- poe intro ---------- */
 
 .home-poe {
@@ -1163,8 +1413,12 @@ html[data-theme="dark"] .home-find {
   }
 }
 
+/* A potato pun while the feed loads (home.ts picks one). */
 .home-post__loading {
   display: none;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 /* States: loading (JS only), ready, error. Without JS the fallback line shows. */

@@ -1,0 +1,33 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.garden.sprout",
+  "description": "A flower planted in a garden on atpota.to: atpota.to's community patches, or anyone's own garden. One per account in a garden's open patches; planting there again replaces it. Flowers in patches that have closed stay, pressed.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["patch", "kind", "plot", "createdAt"],
+        "properties": {
+          "patch": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The patch the flower grows in: a to.atpota.garden.patch record, in atpota.to's repo (did:plc:qntsxa2i4sb24noi45fx4np2) for the community patches, or in the garden owner's."
+          },
+          "kind": {
+            "type": "string",
+            "knownValues": ["sunflower", "rose", "daisy", "violet", "poppy", "tulip"]
+          },
+          "plot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 959,
+            "description": "The plot in its patch, counted from the top left, row by row. If an earlier flower already has it, this one moves to the next free plot."
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

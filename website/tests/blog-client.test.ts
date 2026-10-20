@@ -61,8 +61,16 @@ describe('client metadata', () => {
     expect(META.application_type).toBe('web');
     expect(META.dpop_bound_access_tokens).toBe(true);
     expect(META.scope).toBe(SCOPE);
-    // only what the blog writes (subscriptions and recommends, creating or deleting comments), plus Poe's sign-in token
-    expect(String(META.scope).split(' ').sort()).toEqual(['atproto', 'include:site.standard.authSocial', 'repo:pub.leaflet.comment?action=create&action=delete', 'rpc:to.atpota.poe.chat?aud=*']);
+    // only what the site writes: subscriptions and recommends, creating or deleting comments and flowers, tending, and your own garden, plus Poe's sign-in token
+    expect(String(META.scope).split(' ').sort()).toEqual([
+      'atproto',
+      'include:site.standard.authSocial',
+      'repo:pub.leaflet.comment?action=create&action=delete',
+      'repo:to.atpota.garden.patch?action=create&action=update&action=delete',
+      'repo:to.atpota.garden.sprout?action=create&action=delete',
+      'repo:to.atpota.garden.tend?action=create',
+      'rpc:to.atpota.poe.chat?aud=*',
+    ]);
   });
 
   it('vercel.json serves it as JSON and keeps it out of the rewrites', () => {
@@ -183,10 +191,15 @@ describe('records', () => {
 });
 
 describe('state', () => {
-  it('only returns to paths under /blog', () => {
+  it('only returns home, to the garden, or to paths under /blog', () => {
     expect(safeReturnTo('/blog')).toBe('/blog');
     expect(safeReturnTo('/blog/3myasnk4bzk22')).toBe('/blog/3myasnk4bzk22');
-    for (const bad of ['//evil.com', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/', '/blog/a?x=1', '/blog/a#b', 7]) {
+    expect(safeReturnTo('/')).toBe('/');
+    expect(safeReturnTo('/garden/')).toBe('/garden/');
+    expect(safeReturnTo('/garden')).toBe('/garden');
+    expect(safeReturnTo('/garden/dame.is')).toBe('/garden/dame.is');
+    expect(safeReturnTo('/garden/did:plc:qntsxa2i4sb24noi45fx4np2/flowers')).toBe('/garden/did:plc:qntsxa2i4sb24noi45fx4np2/flowers');
+    for (const bad of ['//evil.com', '/gardens', '/garden/a/b', '/garden/../blog', '/garden/x/flowers/y', '/garden?x=1', '/garden/a b', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
       expect(safeReturnTo(bad), String(bad)).toBeNull();
     }
   });
@@ -216,8 +229,8 @@ describe('state', () => {
 /* ---------- the page ---------- */
 
 const SHELL_DIALOG = (() => {
-  const shell = read('../shells/blog.html');
-  return shell.slice(shell.indexOf('<dialog'), shell.indexOf('</dialog>') + '</dialog>'.length);
+  const partial = read('../src/partials/signin.html');
+  return partial.slice(partial.indexOf('<dialog'), partial.indexOf('</dialog>') + '</dialog>'.length);
 })();
 
 function postPage(opts: { email?: boolean } = {}): string {

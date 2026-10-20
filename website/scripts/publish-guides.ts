@@ -48,7 +48,7 @@ export function sameRecord(a: Record<string, unknown>, b: Record<string, unknown
   return canonical(strip(a)) === canonical(strip(b));
 }
 
-async function xrpc<T>(doFetch: Fetch, url: string, init: RequestInit = {}): Promise<{ status: number; body: T }> {
+export async function xrpc<T>(doFetch: Fetch, url: string, init: RequestInit = {}): Promise<{ status: number; body: T }> {
   const res = await doFetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
   const text = await res.text();
   let body: unknown = null;
@@ -60,7 +60,7 @@ async function xrpc<T>(doFetch: Fetch, url: string, init: RequestInit = {}): Pro
   return { status: res.status, body: body as T };
 }
 
-async function pdsFor(doFetch: Fetch, did: string): Promise<string> {
+export async function pdsFor(doFetch: Fetch, did: string): Promise<string> {
   const { status, body } = await xrpc<{ service?: { id?: string; serviceEndpoint?: string }[] }>(doFetch, `${PLC}/${did}`);
   const endpoint = status === 200 ? body?.service?.find((s) => s.id?.endsWith('#atproto_pds'))?.serviceEndpoint : undefined;
   if (!endpoint) throw new Error(`could not find the PDS for ${did}`);

@@ -1,0 +1,25 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.garden.patch",
+  "description": "A garden on atpota.to: a grid of plots anyone can plant a flower in. atpota.to's community patches live in its own repo, one per season; anyone can keep their own garden in theirs, by convention at record key \"self\". Flowers point at it with a strong ref. It is open from opensAt (or createdAt, without one) until closesAt, if it has one.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["name", "cols", "rows", "createdAt"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 400, "maxGraphemes": 40, "description": "What the garden is called, like \"autumn 2026\" or \"dame's garden\"." },
+          "note": { "type": "string", "maxLength": 1400, "maxGraphemes": 140, "description": "A few words for visitors." },
+          "season": { "type": "string", "knownValues": ["spring", "summer", "autumn", "winter"], "description": "For a seasonal patch." },
+          "cols": { "type": "integer", "minimum": 4, "maximum": 24, "description": "Plots across." },
+          "rows": { "type": "integer", "minimum": 2, "maximum": 40, "description": "Plots down." },
+          "opensAt": { "type": "string", "format": "datetime", "description": "Flowers can be planted from this time; without it, from createdAt." },
+          "closesAt": { "type": "string", "format": "datetime", "description": "Planting ends at this time; the flowers stay, pressed, in full bloom. Without it, the garden stays open." },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

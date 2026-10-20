@@ -10,10 +10,10 @@
 import { sharedAuth } from '../blog/auth';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../scripts/mascot';
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
-import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, contextLabel, noteCopy } from './copy';
+import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, DIGGING_LINES, contextLabel, noteCopy } from './copy';
 import { icon } from './icons';
 import { PoeIdentity, readWho, saveWho, type Who } from './identity';
-import { BLINK_GAP_MS, BLINK_MS, GLANCE_MS, WAKE_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from './idle';
+import { BLINK_GAP_MS, BLINK_MS, CHEER_MS, GLANCE_MS, WAKE_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from './idle';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
 import { renderAnswer, splitTrailingFace } from './render';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
@@ -417,6 +417,7 @@ export class PoeWidget {
     this.on(win, 'scroll', () => this.onScroll(), { passive: true, capture: true });
     this.on(win, 'resize', () => this.hidePill(), { passive: true });
     this.on(win, 'poe:open', () => this.open({ opener: doc.activeElement, via: 'event' }));
+    this.on(win, 'poe:cheer', () => this.cheer());
     if (this.identity) {
       const off = this.identity.onChange(() => this.renderAccount());
       this.cleanups.push(off);
@@ -720,6 +721,21 @@ export class PoeWidget {
     }, gap);
   }
 
+  /** A happy hop on the resting corner potato, when the page celebrates something. */
+  private cheer(): void {
+    if (!this.canIdle()) return;
+    this.stopIdleBeat();
+    this.idleSrc = MASCOT_URLS.happy;
+    this.potato.dataset.cheering = 'true';
+    this.updateMoods();
+    this.wakeTimer = this.win.setTimeout(() => {
+      this.wakeTimer = undefined;
+      this.idleSrc = null;
+      delete this.potato.dataset.cheering;
+      this.updateMoods();
+    }, CHEER_MS);
+  }
+
   private nap(): void {
     this.stopIdleBeat();
     this.napping = true;
@@ -787,6 +803,7 @@ export class PoeWidget {
     delete this.potato.dataset.waving;
     delete this.potato.dataset.napping;
     delete this.potato.dataset.startled;
+    delete this.potato.dataset.cheering;
   }
 
   /* ---------------------------------------------------------- transcript */
@@ -961,7 +978,7 @@ export class PoeWidget {
     if (extra.quote) you.quote = extra.quote.slice(0, 300);
     this.pushEntry(you);
     if (extra.fromInput) this.input.value = '';
-    this.showStatus(COPY.digging);
+    this.showStatus(DIGGING_LINES[Math.floor(Math.random() * DIGGING_LINES.length)] ?? COPY.digging);
     this.setTurnMood('digging');
     this.scrollLog(true);
 

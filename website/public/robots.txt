@@ -1,0 +1,16 @@
+# hi, robot. welcome to the patch.
+#
+#        .-~~~-.
+#      .'  o o  '.
+#     (    \_/    )
+#      '.   @   .'
+#        '-...-'
+#
+# poe, the potato in the corner, says hello.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /secret-potato-stash
+
+# there is no secret potato stash. probably.

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { applyPartials } from '../build/partials.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ATPOTATO_DID, parseHiddenComments, POE_DID, readBlogConfig } from '../server/blog/config.js';
 import {
@@ -335,7 +336,11 @@ describe('rendering', () => {
 });
 
 describe('/api/blog with reader actions', () => {
-  const SHELL = readFileSync(fileURLToPath(new URL('../shells/blog.html', import.meta.url)), 'utf8');
+  // The shell as Vite builds it: partials (header, sign-in dialog, footer) filled in.
+  const SHELL = applyPartials(readFileSync(fileURLToPath(new URL('../shells/blog.html', import.meta.url)), 'utf8'), {
+    partialsDir: fileURLToPath(new URL('../src/partials', import.meta.url)),
+    assetsDir: fileURLToPath(new URL('../src/assets', import.meta.url)),
+  });
   const PDS = 'https://pds.atpota.to';
 
   function handlerFetch(net: Net): typeof fetch {

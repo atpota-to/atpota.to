@@ -29,6 +29,8 @@ export const MAX_WAVES = 3;
 export const NAP_AFTER_MS = 60_000;
 /** Matches the poe-startle animation in poe.css. */
 export const WAKE_MS = 900;
+/** A happy hop when the page celebrates ("poe:cheer", src/scripts/burst.ts); matches poe-cheer. */
+export const CHEER_MS = 1200;
 
 /** Whether Poe should doze off, `quietFor` ms after the visitor's last input. */
 export function shouldNap(quietFor: number): boolean {

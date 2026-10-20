@@ -1,0 +1,1016 @@
+/* Garden pages (garden/index.html, src/scripts/garden-page.ts): someone's garden, and every
+   flower they've planted. The patch itself (plots, tabs, a flower's card) is patch.css. */
+
+:root {
+  --garden-mound-ring: #8C7146;
+  --garden-paper: #FBF6E9;
+}
+
+html[data-theme="dark"] {
+  --garden-mound-ring: #5A4428;
+  --garden-paper: #2C251A;
+}
+
+.garden-page {
+  padding: 24px var(--gutter, 16px) 64px;
+}
+
+.garden-page:focus {
+  outline: none;
+}
+
+.garden {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* flowers.ts draws every flower as an svg.home-flower */
+.garden .home-flower {
+  width: 88%;
+  height: 88%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.garden .home-flower--ghost {
+  opacity: 0.5;
+}
+
+.garden [hidden] {
+  display: none !important;
+}
+
+/* ---------- the header: whose garden ---------- */
+
+.garden-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px 22px;
+}
+
+.garden-head__avatar {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--patch-mound);
+  box-shadow: 0 0 0 6px var(--card), 0 0 0 9px var(--garden-mound-ring);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.garden-head__avatar:empty {
+  background: var(--patch-mound) radial-gradient(circle, var(--patch-seed) 0 7px, transparent 8px);
+}
+
+.garden-head__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.garden-head__words {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.garden-head__title {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.garden-head__title:focus {
+  outline: none;
+}
+
+.garden-head__lede {
+  max-width: 40em;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.garden-stats,
+.garden-head__actions,
+.garden-head__status {
+  grid-column: 1 / -1;
+}
+
+.garden-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-stats__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+}
+
+.garden-stats__value {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.garden-stats__label {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.garden-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garden-head__actions:empty,
+.garden-head__status:empty {
+  display: none;
+}
+
+.garden-head__status {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+@media (max-width: 520px) {
+  .garden-head {
+    grid-template-columns: 1fr;
+  }
+
+  .garden-head__avatar {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* ---------- levels: garden | flowers ---------- */
+
+.garden-levels {
+  display: flex;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+}
+
+.garden-levels__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.garden-levels__link:hover {
+  background: var(--bg);
+}
+
+.garden-levels__link[aria-current="page"] {
+  background: var(--brown);
+  color: var(--on-brown);
+}
+
+.garden-levels__link:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.garden-level {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---------- the garden level ---------- */
+
+.garden-patch {
+  --tile-pad: 26px;
+}
+
+.garden-patch .home-patch__text:empty {
+  display: none;
+}
+
+/* The patch is as wide as its plots need at about 56px each (garden-page.ts sets
+   --garden-cols), never so narrow its controls crowd; who planted and the settings sit
+   beside it when there's room, under it when there isn't. */
+.garden-level[data-level="garden"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.garden-patch {
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  width: min(100%, calc(var(--garden-cols, 8) * 61px + 72px));
+  min-width: min(100%, 460px);
+}
+
+.garden-side {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.garden-side:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.garden-setup,
+.garden-none {
+  flex: 1 1 100%;
+}
+
+.garden-setup__title {
+  margin: 0;
+  font-size: 26px;
+}
+
+.garden-card__text {
+  max-width: 40em;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.garden-form {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+}
+
+.garden-form__field {
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.garden-form__field em,
+.garden-form__check em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.garden-form__field input,
+.garden-form__field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.garden-form__field textarea {
+  resize: vertical;
+}
+
+.garden-form__field input:focus-visible,
+.garden-form__field textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.garden-form__sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.garden-form__sizes legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.garden-form__size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 14px 6px 10px;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  font-size: 14px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.garden-form__size strong {
+  color: var(--text);
+}
+
+.garden-form__size:has(input:checked) {
+  border-color: var(--brown);
+  background: var(--bg);
+}
+
+.garden-form__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.garden-form__check input,
+.garden-form__size input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--brown);
+}
+
+.garden-form__save {
+  justify-self: start;
+}
+
+.garden-form__status {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.garden-form__status:empty {
+  display: none;
+}
+
+.garden-settings__summary {
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.garden-settings[open] .garden-settings__summary {
+  margin-bottom: 4px;
+}
+
+.garden-none__text {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-soft);
+}
+
+/* people: a face and a handle */
+.garden-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 14px 4px 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.garden-chip:hover {
+  background: var(--line);
+}
+
+.garden-chip__face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 800;
+  color: #3D2F1B;
+}
+
+.garden-chip__face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.garden-chip__name {
+  overflow-wrap: anywhere;
+}
+
+.garden-chip__extra {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ---------- the flowers level: one up close ---------- */
+
+.garden-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 32px 40px;
+}
+
+.garden-hero__bed {
+  position: relative;
+  display: grid;
+  flex: 0 1 320px;
+  place-items: center;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--patch-mound);
+  box-shadow: inset 0 0 0 14px var(--garden-mound-ring);
+}
+
+.garden-hero__bed .home-flower {
+  width: 74%;
+  height: 74%;
+}
+
+.garden-hero__bed.is-pressed {
+  background: var(--garden-paper);
+  box-shadow: inset 0 0 0 14px var(--patch-press-mound);
+}
+
+.garden-hero__bed.is-pressed .home-flower,
+.garden-flower.is-pressed .home-flower,
+.garden-how__bed--pressed .home-flower {
+  filter: sepia(0.45) saturate(0.7);
+}
+
+.garden-hero__ribbon {
+  position: absolute;
+  bottom: 4%;
+  left: 50%;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: var(--soil);
+  color: var(--sun);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .garden-hero__bed.is-revealing .home-flower {
+    animation: garden-unfurl 1.3s var(--ease-spring) both;
+  }
+
+  .garden-hero__bed.is-revealing .garden-hero__ribbon {
+    animation: garden-ribbon 600ms var(--ease-spring) 700ms both;
+  }
+}
+
+@keyframes garden-unfurl {
+  from {
+    transform: scale(0.35) rotate(-50deg);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes garden-ribbon {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) rotate(-3deg) scale(0.6);
+  }
+}
+
+.garden-hero__words {
+  display: flex;
+  flex: 1 1 380px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.garden-hero__title {
+  margin: 0;
+  font-size: clamp(28px, 4.5vw, 40px);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.garden-hero__title:focus {
+  outline: none;
+}
+
+.garden-hero__lede {
+  max-width: 34em;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+/* the first week, day by day */
+.garden-week {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-week__day {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.garden-week__day svg,
+.garden-tend__btn svg,
+.garden-flower__tool svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.garden-week__day.is-tended {
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+}
+
+.garden-week__day.is-today {
+  border: 2.5px solid var(--brown);
+  color: var(--text);
+}
+
+.garden-week__day.is-missed {
+  background: var(--bg);
+}
+
+.garden-week__day.is-ahead {
+  border: 2px dashed var(--dash);
+}
+
+.garden-week__bloom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 14px 0 6px;
+  border: 2px dashed var(--dash);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.garden-week__bloom.is-done {
+  border-style: solid;
+  border-color: var(--leaf-tint);
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+}
+
+.garden-week__bloom .home-flower {
+  width: 30px;
+  height: 30px;
+}
+
+/* tending */
+.garden-tend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garden-tend__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.garden-tend__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.garden-hero__care {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.garden-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garden-hero__actions:empty {
+  display: none;
+}
+
+.garden-hero__status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+/* ---------- the flowers level: all of them ---------- */
+
+.garden-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.garden-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.garden-card__note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.garden-card__note:empty {
+  display: none;
+}
+
+.garden-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.garden-filters__btn {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.garden-filters__btn[aria-pressed="true"] {
+  border-color: var(--brown);
+  background: var(--brown);
+  color: var(--on-brown);
+}
+
+.garden-flowers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-flower {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  background: var(--bg);
+}
+
+.garden-flower.is-featured {
+  border-color: var(--brown);
+}
+
+.garden-flower.is-pressed {
+  background: var(--garden-paper);
+}
+
+.garden-flower__bed {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: var(--patch-mound);
+}
+
+.garden-flower.is-pressed .garden-flower__bed {
+  background: var(--patch-press-mound);
+}
+
+.garden-flower.is-thirsty .garden-flower__bed .home-flower {
+  filter: saturate(0.55) brightness(0.92);
+}
+
+.garden-flower__words {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.garden-flower__name {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.garden-flower__name:hover {
+  text-decoration: underline;
+}
+
+.garden-flower__name:focus-visible,
+.garden-flower__tool:focus-visible,
+.garden-filters__btn:focus-visible,
+.garden-chip:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.garden-flower__meta {
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.garden-flower__care {
+  display: flex;
+  gap: 3px;
+  max-width: 140px;
+}
+
+.garden-flower__care span {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+}
+
+.garden-flower__care .is-on {
+  background: var(--vine);
+}
+
+.garden-flower__tend {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+
+.garden-flower__tool {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.garden-flower__tool.is-water {
+  background: var(--water-tint);
+  color: var(--on-water-tint);
+}
+
+.garden-flower__tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- numbers, connections, field guide ---------- */
+
+.garden-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.garden-row > * {
+  flex: 1 1 340px;
+}
+
+.garden-numbers__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.garden-numbers__item {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.garden-numbers__item dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.garden-numbers__item dd {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.garden-people__groups {
+  display: grid;
+  gap: 16px;
+}
+
+.garden-people__group {
+  display: grid;
+  gap: 8px;
+}
+
+.garden-people__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.garden-guide__count {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.garden-guide__wrap {
+  overflow-x: auto;
+}
+
+.garden-guide__table {
+  border-collapse: separate;
+  border-spacing: 6px;
+  font-size: 13px;
+}
+
+.garden-guide__table th {
+  font-weight: 700;
+  color: var(--muted);
+  text-align: left;
+}
+
+.garden-guide__table thead th {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 12px;
+  text-align: center;
+}
+
+.garden-guide__table tbody th {
+  padding-right: 6px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.garden-guide__cell {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.garden-guide__cell.is-found {
+  background: var(--patch-mound);
+}
+
+.garden-guide__cell.is-missing {
+  border: 2px dashed var(--line-strong);
+  color: var(--dash);
+}
+
+.garden-guide__cell.is-impossible {
+  color: var(--line-strong);
+}
+
+/* ---------- how it grows ---------- */
+
+.garden-how__steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-how__step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.garden-how__step strong {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.garden-how__bed {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: var(--patch-mound);
+}
+
+.garden-how__bed--pressed {
+  background: var(--patch-press-mound);
+}
