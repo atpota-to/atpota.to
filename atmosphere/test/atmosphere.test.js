@@ -52,12 +52,12 @@ test('reads the diversity index like the UV index', () => {
   assert.equal(diversityLevel(11), 'extreme');
 });
 
-test('names the weather from posts a second', () => {
-  assert.equal(conditionFor(5), 'calm');
-  assert.equal(conditionFor(12), 'light');
-  assert.equal(conditionFor(23), 'breezy');
-  assert.equal(conditionFor(30), 'gusty');
-  assert.equal(conditionFor(80), 'stormy');
+test('names the weather from new records a second (every app)', () => {
+  assert.equal(conditionFor(120), 'calm');
+  assert.equal(conditionFor(300), 'light');
+  assert.equal(conditionFor(458), 'breezy');
+  assert.equal(conditionFor(500), 'gusty');
+  assert.equal(conditionFor(800), 'stormy');
 });
 
 test('sums a sample up: the split, the index, the busiest apps and collections', () => {

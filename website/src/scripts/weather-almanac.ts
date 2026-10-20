@@ -2,14 +2,14 @@
  * The weather report's almanac (weather/index.html), from /api/weather-almanac
  * (server/weather-almanac.ts) in the reader's own time zone:
  *
- *   today so far          the high and low (the busiest and quietest whole minute, by posts
- *                         a second), the day's totals, and the last hour against usual:
+ *   today so far          the high and low (the busiest and quietest whole minute, by new
+ *                         records a second, every app), the day's totals, and the last hour against usual:
  *                         "busier than usual for a tuesday afternoon" once the station has
  *                         heard a few of those, "for this time of day" after a day
  *   new in the atmosphere apps heard for the first time in the last 24 hours, after the
  *                         station's first week (until then it says it's warming up)
  *   when the sky is busiest
- *                         posts a second for every hour of the week, as a heat map table;
+ *                         new records a second for every hour of the week, as a heat map;
  *                         it only names the busiest and quietest hours after a few weeks
  *
  * Checks again every minute while the tab is visible. App and collection names are other
@@ -187,8 +187,8 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
     };
   }
   const base = normal[basis];
-  const rate = now.posts / now.seconds;
-  const usual = base.posts / base.seconds;
+  const rate = now.creates / now.seconds;
+  const usual = base.creates / base.seconds;
   const ratio = usual > 0 ? rate / usual : 1;
   const how =
     ratio >= 1.25 ? 'much busier than usual' : ratio >= 1.08 ? 'busier than usual' : ratio <= 0.8 ? 'much quieter than usual' : ratio <= 0.93 ? 'quieter than usual' : 'about as busy as usual';
@@ -197,7 +197,7 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
   const when = basis === 'weeks' ? `for a ${weekday} ${daypart(hour % 24)}` : 'for this time of day';
   const over =
     basis === 'weeks' ? (base.windows === 1 ? `last ${weekday}` : `the last ${base.windows} ${weekday}s`) : base.windows === 1 ? 'yesterday' : `the last ${base.windows} days`;
-  let detail = `${Math.round(rate)} posts a second over the last hour; usually about ${Math.round(usual)} at this hour (${over}).`;
+  let detail = `${Math.round(rate)} new records a second over the last hour; usually about ${Math.round(usual)} at this hour (${over}).`;
   // Diversity against usual, when both sides have enough records from other apps to say.
   if (now.elsewhere >= 50 && base.elsewhere >= 50 && now.creates > 0 && base.creates > 0) {
     const mix = now.elsewhere / now.creates / (base.elsewhere / base.creates);
@@ -225,9 +225,9 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
   const t = a.today;
   if (t) {
     setText(tile, '[data-a-high]', t.high ? `${Math.round(t.high.perSecond)}` : '–');
-    setText(tile, '[data-a-high-at]', t.high ? `posts a second at ${clock(t.high.minute, tz)}` : 'no whole minute heard yet');
+    setText(tile, '[data-a-high-at]', t.high ? `new records a second at ${clock(t.high.minute, tz)}` : 'no whole minute heard yet');
     setText(tile, '[data-a-low]', t.low ? `${Math.round(t.low.perSecond)}` : '–');
-    setText(tile, '[data-a-low-at]', t.low ? `posts a second at ${clock(t.low.minute, tz)}` : '');
+    setText(tile, '[data-a-low-at]', t.low ? `new records a second at ${clock(t.low.minute, tz)}` : '');
     setText(tile, '[data-a-total]', bigNumber(t.creates));
     const share = t.creates > 0 ? (t.elsewhere / t.creates) * 100 : 0;
     setText(tile, '[data-a-total-note]', t.creates > 0 ? `new records, ${share < 1 ? share.toFixed(2) : share.toFixed(1)}% from other apps` : 'new records');
@@ -235,7 +235,7 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
     setText(
       tile,
       '[data-a-today-note]',
-      `the high and low are whole minutes, by posts a second. today started at midnight where you are${heardAll ? '' : `; the station has heard ${roughly(t.seconds * 1000)} of it`}.`,
+      `the high and low are whole minutes, by new records a second. today started at midnight where you are${heardAll ? '' : `; the station has heard ${roughly(t.seconds * 1000)} of it`}.`,
     );
   }
   tile.dataset.state = 'ready';
@@ -306,7 +306,7 @@ export interface HeatSummary {
 
 export function summarizeHeat(h: NonNullable<Almanac['heatmap']>): HeatSummary {
   const rates = new Map<string, number>();
-  for (const c of h.cells) if (c.seconds >= HEAT_MIN_SECONDS) rates.set(`${c.dow}:${c.hour}`, c.posts / c.seconds);
+  for (const c of h.cells) if (c.seconds >= HEAT_MIN_SECONDS) rates.set(`${c.dow}:${c.hour}`, c.creates / c.seconds);
   let busiest: HeatSummary['busiest'] = null;
   let quietest: HeatSummary['quietest'] = null;
   for (const [key, rate] of rates) {
@@ -371,7 +371,7 @@ export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
     for (let hour = 0; hour < 24; hour++) {
       const td = document.createElement('td');
       const rate = s.rate(dow, hour);
-      const words = rate === null ? 'not heard yet' : `${Math.round(rate)} posts a second`;
+      const words = rate === null ? 'not heard yet' : `${Math.round(rate)} new records a second`;
       td.className = `weather-heat__cell${rate === null ? ' weather-heat__cell--empty' : ` weather-heat__cell--${heatStep(rate, s.min, s.max)}`}${dow === nowDow && hour === nowHour ? ' weather-heat__cell--now' : ''}`;
       td.title = `${day}s at ${hourWords(hour)}: ${words}`;
       const v = document.createElement('span');
@@ -386,7 +386,7 @@ export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
   table.replaceChildren(...(caption ? [caption] : []), head, body);
 
   setText(tile, '[data-a-heat-min]', s.heard ? String(Math.round(s.min)) : '–');
-  setText(tile, '[data-a-heat-max]', s.heard ? `${Math.round(s.max)} posts a second` : '–');
+  setText(tile, '[data-a-heat-max]', s.heard ? `${Math.round(s.max)} new records a second` : '–');
   if (s.weeks >= HEAT_READY_WEEKS && s.busiest && s.quietest) {
     setText(
       tile,

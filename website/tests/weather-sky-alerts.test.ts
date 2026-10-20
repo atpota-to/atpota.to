@@ -86,7 +86,7 @@ describe('what makes a weather alert', () => {
     const calm = alertsFor(null, { ...READING, condition: 'breezy' }).watch;
     const { alerts } = alertsFor(calm, { ...READING, diversity: { index: 3.4, level: 'moderate', apps: 9, collections: 30 } });
     expect(alerts.map((a) => a.kind)).toEqual(['storm', 'mixed']);
-    expect(alerts[0]!.sub).toBe('40 posts a second. somebody said something.');
+    expect(alerts[0]!.sub).toBe('450 new records a second. somebody said something.');
     expect(alerts[1]!.title).toBe("the sky's getting mixed: moderate");
   });
 

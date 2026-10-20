@@ -149,12 +149,12 @@ describe('reading the firehose', () => {
     expect(metricOf(42)).toBeNull();
   });
 
-  it('names the weather from posts a second', () => {
-    expect(conditionFor(5)).toBe('calm');
-    expect(conditionFor(12)).toBe('light');
-    expect(conditionFor(23)).toBe('breezy');
-    expect(conditionFor(30)).toBe('gusty');
-    expect(conditionFor(80)).toBe('stormy');
+  it('names the weather from new records a second, every app', () => {
+    expect(conditionFor(120)).toBe('calm');
+    expect(conditionFor(300)).toBe('light');
+    expect(conditionFor(458)).toBe('breezy');
+    expect(conditionFor(500)).toBe('gusty');
+    expect(conditionFor(800)).toBe('stormy');
   });
 
   it('turns a few seconds of messages into rates per second', async () => {
@@ -248,7 +248,7 @@ describe('reading the weather station', () => {
     const r = fromStation({ ...STATION, extra: 'ignored' })!;
     expect(r.source).toBe('station');
     expect(r.seconds).toBe(60);
-    expect(r.condition).toBe('stormy');
+    expect(r.condition).toBe('breezy'); // 444 records a second
     expect(r.series).toEqual(STATION.series);
     expect(r.window).toEqual(STATION.window);
     expect('extra' in r).toBe(false);
@@ -258,6 +258,7 @@ describe('reading the weather station', () => {
     const r = fromStation({
       ...STATION,
       condition: 'hail',
+      records: { perSecond: 640, bluesky: 630, elsewhere: 10 },
       diversity: { ...STATION.diversity, index: 9, level: 'nonsense' },
       apps: [{ domain: '<b>x</b>', perSecond: 1, count: 1, collections: [] }, { domain: 'ok.app', perSecond: 1, count: 1, collections: ['<i>', 'app.ok.thing'] }],
       bluesky: [{ nsid: 'sh.tangled.repo', perSecond: 1, count: 1 }],

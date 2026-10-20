@@ -7,7 +7,7 @@
  *            hasn't seen yet ("delve.town just blew in")
  *   new      the station hears an app for the very first time (the almanac's
  *            "new in the atmosphere", once the station has warmed up)
- *   storm    posts a second climb into "stormy"
+ *   storm    new records a second climb into "stormy"
  *   mixed    the diversity index climbs a level
  *
  * The first reading of a visit only sets the scene; alerts come from what changes after
@@ -21,7 +21,7 @@
  */
 
 import { burst, cheer } from './burst';
-import { formatIndex, ratioText, type DiversityLevel, type Reading } from './weather';
+import { formatIndex, ratioText, recordsPerSecond, type DiversityLevel, type Reading } from './weather';
 
 export const ALERT_MS = 7000;
 export const GAP_MS = 15_000;
@@ -63,7 +63,7 @@ export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alert
   if (!prev) return { watch, alerts: [] };
   const alerts: WeatherAlert[] = [];
   if (r.condition === 'stormy' && prev.condition !== 'stormy') {
-    alerts.push({ kind: 'storm', eyebrow: 'storm warning', title: 'a storm just rolled in', sub: `${Math.round(r.perSecond.posts)} posts a second. somebody said something.` });
+    alerts.push({ kind: 'storm', eyebrow: 'storm warning', title: 'a storm just rolled in', sub: `${Math.round(recordsPerSecond(r))} new records a second. somebody said something.` });
   }
   const level = r.diversity?.level;
   if (level && prev.level && LEVELS.indexOf(level) > LEVELS.indexOf(prev.level) && r.records) {

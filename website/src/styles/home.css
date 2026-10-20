@@ -1381,7 +1381,7 @@ html:not(.js) .home-weather {
 
 .home-weather__row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 0;
 }
@@ -1395,6 +1395,12 @@ html:not(.js) .home-weather {
 .home-weather__row dt {
   font-size: 13px;
   color: var(--home-sky-mono);
+}
+
+@media (max-width: 420px) {
+  .home-weather__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .home-weather__row dd {

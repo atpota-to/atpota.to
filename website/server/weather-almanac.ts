@@ -6,7 +6,8 @@
  *   ->  { tz, today?, normal?, newApps?, heatmap? }
  *
  *   today    today so far, from midnight in `tz`: totals, and the busiest and quietest
- *            whole minute by posts a second (atmosphere_today)
+ *            whole minute by new records a second, every app (atmosphere_today's
+ *            recordsHigh / recordsLow)
  *   normal   the last hour against the same hour on the days before and on the same
  *            weekday in the weeks before (atmosphere_normal); the page words it
  *   newApps  apps outside Bluesky heard in the last 24 hours that the station had never
@@ -107,7 +108,7 @@ export function toToday(body: unknown): Today | null {
   const sums = counts(body, SUMS);
   const start = isRecord(body) ? iso(body.start) : null;
   if (!sums || !start || !isRecord(body)) return null;
-  return { start, ...sums, high: extreme(body.high), low: extreme(body.low) };
+  return { start, ...sums, high: extreme(body.recordsHigh), low: extreme(body.recordsLow) };
 }
 
 export function toNormal(body: unknown): Normal | null {

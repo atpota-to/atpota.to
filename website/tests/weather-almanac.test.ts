@@ -30,15 +30,15 @@ const S = (posts: number, seconds = 3600, creates = posts * 9, elsewhere = Math.
 
 const ALMANAC: Almanac = {
   tz: TZ,
-  today: { start: '2026-11-03T05:00:00.000Z', ...S(2_000_000, 46_800, 16_000_000, 52_000), high: { minute: '2026-11-03T20:14:00.000Z', perSecond: 72.4 }, low: { minute: '2026-11-03T09:02:00.000Z', perSecond: 31 } },
+  today: { start: '2026-11-03T05:00:00.000Z', ...S(2_000_000, 46_800, 16_000_000, 52_000), high: { minute: '2026-11-03T20:14:00.000Z', perSecond: 642.2 }, low: { minute: '2026-11-03T09:02:00.000Z', perSecond: 262.9 } },
   normal: { historyStart: '2026-10-20T16:50:00.000Z', now: S(187_200), days: { ...S(158_400 * 6, 3600 * 6), windows: 6 }, weeks: { ...S(158_400 * 2, 7200), windows: 2 } },
   newApps: { historyStart: '2026-10-20T16:50:00.000Z', readyAt: '2026-10-27T16:50:00.000Z', warmingUp: false, heard: 90, apps: [{ domain: 'mu.social', firstSeen: '2026-11-03T16:46:00.000Z', creates: 4, collections: ['social.mu.newsFeedPrefs'] }] },
   heatmap: {
     seconds: 4 * 7 * 86_400,
     cells: [
-      { dow: 2, hour: 13, seconds: 14_400, posts: 14_400 * 52, creates: 1 },
-      { dow: 7, hour: 5, seconds: 14_400, posts: 14_400 * 30, creates: 1 },
-      { dow: 3, hour: 3, seconds: 100, posts: 100 * 99, creates: 1 }, // too little heard to count
+      { dow: 2, hour: 13, seconds: 14_400, posts: 14_400 * 52, creates: 14_400 * 520 },
+      { dow: 7, hour: 5, seconds: 14_400, posts: 14_400 * 30, creates: 14_400 * 300 },
+      { dow: 3, hour: 3, seconds: 100, posts: 100 * 99, creates: 100 * 990 }, // too little heard to count
     ],
   },
 };
@@ -55,7 +55,7 @@ describe('compared to usual', () => {
   it('compares with the same weekday once it has heard one', () => {
     const u = usualText(ALMANAC.normal!, NOW, TZ);
     expect(u.headline).toBe('busier than usual for a tuesday afternoon');
-    expect(u.detail).toBe('52 posts a second over the last hour; usually about 44 at this hour (the last 2 tuesdays).');
+    expect(u.detail).toBe('468 new records a second over the last hour; usually about 396 at this hour (the last 2 tuesdays).');
   });
 
   it('falls back to the same hour on other days, and says when it will know more', () => {
@@ -78,9 +78,9 @@ describe('compared to usual', () => {
 describe('today so far', () => {
   it("shows the high, the low and the totals, in the reader's time", () => {
     renderToday(root.querySelector('[data-a-today]')!, ALMANAC, NOW, TZ);
-    expect(text('[data-a-high]')).toBe('72');
-    expect(text('[data-a-high-at]')).toBe('posts a second at 3:14 pm');
-    expect(text('[data-a-low-at]')).toBe('posts a second at 4:02 am');
+    expect(text('[data-a-high]')).toBe('642');
+    expect(text('[data-a-high-at]')).toBe('new records a second at 3:14 pm');
+    expect(text('[data-a-low-at]')).toBe('new records a second at 4:02 am');
     expect(text('[data-a-total]')).toBe('16.0 million');
     expect(text('[data-a-total-note]')).toBe('new records, 0.33% from other apps');
     expect(text('[data-a-usual]')).toBe('busier than usual for a tuesday afternoon');
@@ -125,7 +125,7 @@ describe('when the sky is busiest', () => {
     const tue1pm = rows[1]!.querySelectorAll('td')[13]!;
     expect(tue1pm.className).toContain('weather-heat__cell--5');
     expect(tue1pm.className).toContain('weather-heat__cell--now');
-    expect(tue1pm.title).toBe('tuesdays at 1 pm: 52 posts a second');
+    expect(tue1pm.title).toBe('tuesdays at 1 pm: 520 new records a second');
     expect(rows[2]!.querySelectorAll('td')[3]!.className).toContain('--empty');
     expect(text('[data-a-heat-lede]')).toBe('busiest on tuesdays around 1 pm, quietest on sundays around 5 am.');
     expect(root.querySelector('[data-a-heat-grid] caption')).not.toBeNull();
@@ -138,10 +138,10 @@ describe('when the sky is busiest', () => {
 
   it('steps rates between the quietest and busiest hours', () => {
     const s = summarizeHeat(ALMANAC.heatmap!);
-    expect([s.min, s.max, s.heard]).toEqual([30, 52, 2]);
-    expect(heatStep(30, 30, 52)).toBe(1);
-    expect(heatStep(52, 30, 52)).toBe(5);
-    expect(heatStep(41, 30, 52)).toBe(3);
+    expect([s.min, s.max, s.heard]).toEqual([300, 520, 2]);
+    expect(heatStep(300, 300, 520)).toBe(1);
+    expect(heatStep(520, 300, 520)).toBe(5);
+    expect(heatStep(410, 300, 520)).toBe(3);
     expect(heatStep(40, 40, 40)).toBe(3);
   });
 });

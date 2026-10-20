@@ -48,7 +48,7 @@ describe('the atmosphere weather report', () => {
   it('fills every tile from one reading', () => {
     renderReport(report, READING);
     expect(report.dataset.state).toBe('ready');
-    expect(text('[data-r-posts]')).toBe('51');
+    expect(text('[data-r-records]')).toBe('444'); // every new record, not just posts
     expect(text('[data-r-cond]')).toBe(CONDITION_TEXT.stormy);
     expect(text('[data-r-index]')).toBe('1.8');
     expect(text('[data-r-level]')).toBe('low');
