@@ -64,11 +64,14 @@
     background-color var(--dur-fast) ease,
     border-color var(--dur-fast) ease,
     color var(--dur-fast) ease,
-    transform var(--dur-fast) ease;
+    transform var(--dur-spring) var(--ease-spring);
 }
 
+/* Pressed: shrinks a little under the finger, then springs back on release. */
 .btn:active {
-  transform: translateY(1px);
+  transform: scale(0.96);
+  transition-duration: var(--dur-fast), var(--dur-fast), var(--dur-fast), 80ms;
+  transition-timing-function: ease, ease, ease, ease-out;
 }
 
 .btn svg {
@@ -374,6 +377,49 @@ a.tile.tile--soil:hover {
   color: var(--text);
 }
 
+/* Desktop with JS (nav.ts): one hover pill slides between the links instead of each
+   link lighting up on its own. nav.ts sets --pill-x / --pill-w and data-pill. */
+@media (min-width: 881px) {
+  html.js .site-nav__list {
+    position: relative;
+  }
+
+  html.js .site-nav__list::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: var(--pill-w, 0px);
+    border-radius: var(--radius-pill);
+    background: var(--bg);
+    opacity: 0;
+    transform: translateX(var(--pill-x, 0px));
+    transition:
+      opacity var(--dur-fast) ease,
+      transform var(--dur-spring) var(--ease-spring),
+      width var(--dur-spring) var(--ease-spring);
+    pointer-events: none;
+  }
+
+  html.js .site-nav__list[data-pill="show"]::before {
+    opacity: 1;
+  }
+
+  /* Appearing from nothing: jump straight to the link, then fade in. */
+  html.js .site-nav__list[data-pill="jump"]::before {
+    transition: none;
+  }
+
+  html.js .site-nav__list .site-nav__link {
+    position: relative;
+  }
+
+  html.js .site-nav__list .site-nav__link:not([aria-current="page"]):hover {
+    background: transparent;
+  }
+}
+
 .site-nav__link[aria-current="page"] {
   background: var(--brown);
   color: var(--on-brown);
@@ -515,6 +561,44 @@ a.tile.tile--soil:hover {
     padding: 0 18px;
     border-radius: 18px;
     font-size: 18px;
+  }
+
+  /* The links drop in one after another as the sheet opens. */
+  @media (prefers-reduced-motion: no-preference) {
+    html.js .site-nav__list li,
+    html.js .site-menu .ask-poe-btn {
+      opacity: 0;
+      transform: translateY(-10px);
+      transition:
+        opacity var(--dur) ease,
+        transform var(--dur-spring) var(--ease-spring);
+    }
+
+    html.js .site-header.is-menu-open .site-nav__list li,
+    html.js .site-header.is-menu-open .site-menu .ask-poe-btn {
+      opacity: 1;
+      transform: none;
+    }
+
+    html.js .site-header.is-menu-open .site-nav__list li:nth-child(2) {
+      transition-delay: 40ms;
+    }
+
+    html.js .site-header.is-menu-open .site-nav__list li:nth-child(3) {
+      transition-delay: 80ms;
+    }
+
+    html.js .site-header.is-menu-open .site-nav__list li:nth-child(4) {
+      transition-delay: 120ms;
+    }
+
+    html.js .site-header.is-menu-open .site-nav__list li:nth-child(5) {
+      transition-delay: 160ms;
+    }
+
+    html.js .site-header.is-menu-open .site-menu .ask-poe-btn {
+      transition-delay: 200ms;
+    }
   }
 
   html.js .site-menu .ask-poe-btn {
@@ -754,7 +838,7 @@ html[data-theme="dark"] .site-footer__sprout {
   border-radius: 50%;
   background: var(--on-footer);
   color: var(--footer);
-  transition: transform var(--dur) var(--ease-out);
+  transition: transform var(--dur-spring) var(--ease-spring);
 }
 
 .theme-toggle__knob svg {

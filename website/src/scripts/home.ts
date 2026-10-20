@@ -15,8 +15,13 @@
  * Fetched text only ever reaches the DOM through textContent; links are either
  * built from a validated record key or checked by safeItemUrl(). States live on
  * the tile as data-state="loading" | "ready" | "error" (CSS shows the skeleton,
- * the list or the fallback line).
+ * the list or the fallback line). Once the list shows, its "5 minutes ago"
+ * dates keep themselves current.
+ *
+ * Also here: the "say hi" tile's copy button, and the hero Poe (pet.ts).
  */
+
+import { initPet } from './pet';
 
 export const FEED_ENDPOINT = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed';
 export const PLC_DIRECTORY = 'https://plc.directory';
@@ -443,6 +448,23 @@ export function renderItems(tile: HTMLElement, items: readonly FeedItem[], now: 
   }
   tile.querySelector('[data-latest-post]')?.setAttribute('aria-busy', 'false');
   tile.dataset.state = 'ready';
+  startClock(tile);
+}
+
+const CLOCK_MS = 30_000;
+const clocks = new WeakSet<HTMLElement>();
+
+/** Re-reads every relative date in the tile every 30 seconds while the page is visible. */
+function startClock(tile: HTMLElement): void {
+  if (clocks.has(tile)) return;
+  clocks.add(tile);
+  window.setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    for (const time of tile.querySelectorAll<HTMLTimeElement>('time[datetime]')) {
+      const next = relativeTime(new Date(time.dateTime));
+      if (next && next !== time.textContent) time.textContent = next;
+    }
+  }, CLOCK_MS);
 }
 
 export function renderError(tile: HTMLElement): void {
@@ -498,6 +520,55 @@ export function initLatest(root: ParentNode = document, fetchImpl: typeof fetch 
   whenNear(tile, () => void loadLatest(tile, fetchImpl));
 }
 
+const COPIED_MS = 1800;
+
+/** "copy address" in the say hi tile: a little "copied!" bubble pops out beside it. */
+export function initCopyEmail(root: ParentNode = document): void {
+  const button = root.querySelector<HTMLButtonElement>('[data-copy-email]');
+  if (!button || button.dataset.copyBound === 'true') return;
+  button.dataset.copyBound = 'true';
+  const tile = button.closest<HTMLElement>('.tile') ?? document.body;
+  const bubble = tile.querySelector<HTMLElement>('[data-copy-bubble]');
+  const status = tile.querySelector<HTMLElement>('[data-copy-status]');
+  const mail = tile.querySelector<HTMLElement>('.home-hi__mail');
+  const address = button.dataset.copyEmail ?? '';
+  let hideTimer: number | undefined;
+
+  const show = (bubbleText: string, statusText: string) => {
+    if (bubble) {
+      bubble.textContent = bubbleText;
+      bubble.classList.add('is-showing');
+    }
+    if (status) status.textContent = statusText;
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      bubble?.classList.remove('is-showing');
+    }, COPIED_MS);
+  };
+
+  // Clipboard refused (older browsers, some in-app views): select it for a manual copy.
+  const selectInstead = () => {
+    const selection = window.getSelection();
+    if (mail && selection) {
+      const range = document.createRange();
+      range.selectNodeContents(mail);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    show('selected it for you', 'address selected, ready to copy');
+  };
+
+  button.addEventListener('click', () => {
+    try {
+      navigator.clipboard.writeText(address).then(() => show('copied! (◕‿◕)', 'address copied'), selectInstead);
+    } catch {
+      selectInstead();
+    }
+  });
+}
+
 export function init(): void {
   initLatest();
+  initCopyEmail();
+  initPet();
 }

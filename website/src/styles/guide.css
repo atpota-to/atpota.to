@@ -1459,3 +1459,23 @@ html.is-toc-open {
     break-inside: avoid;
   }
 }
+
+/* ---------- page transition from the guide cards ---------- */
+
+/* The guide hero picks up the card that was clicked: the home guide tile (home.css)
+   or this guide's card on /guides. Names must be unique on a page, so the /guides
+   card is matched by its link; a second guide needs its own line here. */
+.guide-hero__potato,
+.guides-card[href="/guides/bluesky-for-brands"] .guides-card__potato {
+  view-transition-name: guide-potato;
+}
+
+.guide__title,
+.guides-card[href="/guides/bluesky-for-brands"] .guides-card__title {
+  view-transition-name: guide-title;
+}
+
+.guide-hero__stack,
+.guides-card[href="/guides/bluesky-for-brands"] .guides-card__stack {
+  view-transition-name: guide-stack;
+}

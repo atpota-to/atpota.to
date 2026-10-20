@@ -1,7 +1,8 @@
 /*
  * 404 page (404.html), spec section 3.3: the sunburst patch from the home hero with
- * nothing growing in it, a knocked-out potato (hover/focus/tap swaps its face via
- * mascot.ts), "nothing growing here.", and two ways back.
+ * nothing growing in it, Poe digging for the missing page and flinging dirt about
+ * (hover/focus/tap swaps its face via mascot.ts), "nothing growing here.", and two
+ * ways back. Under reduced motion Poe just stands in the dirt.
  */
 
 .notfound {
@@ -70,16 +71,80 @@ html[data-theme="dark"] .notfound__sprout {
   bottom: 44px;
   width: 220px;
   height: auto;
-  margin-left: -136px;
-  transform: rotate(-24deg);
+  margin-left: -110px;
   transform-origin: 50% 90%;
-  transition: transform var(--dur) var(--ease-out);
 }
 
-/* Hovering the patch swaps the face (mascot.ts) and props the potato back up a little. */
-@media (hover: hover) and (pointer: fine) {
-  .notfound__scene:hover .notfound__potato {
-    transform: rotate(-10deg) translateY(-6px);
+/* Digging: Poe rocks over the hole while clumps of dirt fly out to both sides. */
+.notfound__dirt {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  display: none;
+}
+
+.notfound__dirt i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 40% 55% 45% 60%;
+  background: var(--brown);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .notfound__potato {
+    animation: notfound-dig 0.52s ease-in-out infinite;
+  }
+
+  .notfound__dirt {
+    display: block;
+  }
+
+  .notfound__dirt i {
+    animation: notfound-fling 1.8s cubic-bezier(0.3, 0.6, 0.5, 1) var(--d) infinite;
+  }
+
+  /* Hovering the patch swaps the face (mascot.ts) and Poe stops for a breather. */
+  @media (hover: hover) and (pointer: fine) {
+    .notfound__scene:hover .notfound__potato {
+      animation-play-state: paused;
+    }
+  }
+}
+
+@keyframes notfound-dig {
+  0%,
+  100% {
+    transform: rotate(-10deg) translateY(4px);
+  }
+
+  50% {
+    transform: rotate(8deg) translateY(-6px);
+  }
+}
+
+@keyframes notfound-fling {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+
+  25% {
+    transform: translate(calc(var(--dx) * 0.55), var(--peak)) rotate(140deg);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(var(--dx), 80px) rotate(300deg);
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), 80px) rotate(300deg);
   }
 }
 
@@ -126,7 +191,7 @@ html[data-theme="dark"] .notfound__sprout {
   .notfound__potato {
     bottom: 34px;
     width: 172px;
-    margin-left: -106px;
+    margin-left: -86px;
   }
 
   .notfound__sprout {

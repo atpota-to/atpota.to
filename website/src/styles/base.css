@@ -196,6 +196,34 @@ main[tabindex="-1"]:focus-visible {
   html {
     scroll-behavior: smooth;
   }
+
+  /* Page-to-page: the browser crossfades between same-site pages. Named elements
+     glide instead: the header and corner Poe stay put, and the guide card's potato,
+     title and paper stack fly into the guide page's hero (home.css, guide.css). */
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+.site-header {
+  view-transition-name: site-header;
+}
+
+::view-transition-group(*) {
+  animation-duration: 360ms;
+  animation-timing-function: var(--ease-out);
+}
+
+/* Theme switch (theme.ts): the new theme spreads out in a circle from the toggle,
+   drawn as one snapshot of the page, so nothing named animates on its own. */
+html[data-theme-switching] * {
+  view-transition-name: none !important;
+}
+
+html[data-theme-switching]::view-transition-old(root),
+html[data-theme-switching]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
 }
 
 @media (prefers-reduced-motion: reduce) {

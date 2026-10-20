@@ -1,7 +1,8 @@
 /**
  * Shared entry for every page (<script type="module" src="/src/scripts/main.ts">).
  *
- * 1. theme toggle wiring, header nav (phone menu sheet), mascot expression swapping
+ * 1. theme toggle wiring, header nav (phone menu sheet), mascot expression swapping,
+ *    the tab title that asks you to come back
  * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
  *    "blog" -> ./blog.ts (dynamic import; each page module exports `init()`, called once)
  * 3. mountPoe() from src/poe/index.ts (the corner widget, on every page)
@@ -12,6 +13,7 @@
 import { mountPoe } from '../poe/index';
 import { initMascots } from './mascot';
 import { initNav } from './nav';
+import { initTabTitle } from './tab';
 import { initTheme } from './theme';
 
 type PageModule = { init?: () => void | Promise<void> };
@@ -45,5 +47,6 @@ async function initPage(): Promise<void> {
 safely('theme', initTheme);
 safely('nav', () => initNav());
 safely('mascot', () => initMascots());
+safely('tab', () => initTabTitle());
 void initPage();
 safely('poe', mountPoe);

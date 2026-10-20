@@ -71,11 +71,12 @@ describe('guide page shell + build output', () => {
 
 describe('404 shell', () => {
   const doc = new DOMParser().parseFromString(read('../404.html'), 'text/html');
-  it('has the dead potato, the copy and root-absolute buttons', () => {
+  it('has poe digging, the copy and root-absolute buttons', () => {
     const main = doc.querySelector('main#main.notfound')!;
     expect(main.querySelector('h1')!.textContent).toBe('nothing growing here.');
-    const img = main.querySelector<HTMLImageElement>('img[data-mascot="dead"]')!;
-    expect(img.getAttribute('src')).toBe('/src/assets/mascot/potato-dead.svg');
+    const img = main.querySelector<HTMLImageElement>('img[data-mascot="wow"]')!;
+    expect(img.getAttribute('src')).toBe('/src/assets/mascot/potato-wow.svg');
+    expect(main.querySelectorAll('.notfound__dirt i').length).toBeGreaterThan(0);
     expect(img.getAttribute('alt')).toBeTruthy();
     expect([...main.querySelectorAll('.notfound__actions a')].map((a) => a.getAttribute('href'))).toEqual(['/', '/guides/bluesky-for-brands']);
     expect(doc.querySelector('meta[name="robots"]')!.getAttribute('content')).toBe('noindex');

@@ -62,6 +62,8 @@ html[data-theme="dark"] {
     transform var(--dur) var(--ease-out),
     opacity var(--dur) ease;
   -webkit-tap-highlight-color: transparent;
+  /* stays put while the page around it changes (base.css) */
+  view-transition-name: poe-potato;
 }
 
 .poe-potato__img {
@@ -90,6 +92,93 @@ html[data-theme="dark"] {
 .poe-potato[data-waving] .poe-potato__arm {
   opacity: 1;
   animation: poe-wave 1.6s ease-in-out;
+}
+
+/* Napping (idle.ts): slow breaths and a few z's drifting up from the corner. */
+.poe-potato[data-napping] .poe-potato__img {
+  transform-origin: 50% 100%;
+  animation: poe-breathe 3.2s ease-in-out infinite;
+}
+
+.poe-potato__zzz {
+  position: absolute;
+  left: 30px;
+  bottom: calc(100% - 34px);
+  width: 60px;
+  height: 70px;
+  pointer-events: none;
+}
+
+.poe-potato__zzz i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  color: var(--muted);
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 700;
+  opacity: 0;
+}
+
+.poe-potato[data-napping] .poe-potato__zzz i {
+  animation: poe-zzz 2.4s ease-in infinite;
+}
+
+.poe-potato[data-napping] .poe-potato__zzz i:nth-child(2) {
+  font-size: 20px;
+  animation-delay: 0.8s;
+}
+
+.poe-potato[data-napping] .poe-potato__zzz i:nth-child(3) {
+  font-size: 25px;
+  animation-delay: 1.6s;
+}
+
+/* Woken up: a little jump (WAKE_MS in idle.ts). */
+.poe-potato[data-startled] .poe-potato__img {
+  transform-origin: 50% 100%;
+  animation: poe-startle 0.9s var(--ease-spring);
+}
+
+@keyframes poe-breathe {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  50% {
+    transform: scale(1.03, 0.97);
+  }
+}
+
+@keyframes poe-zzz {
+  0% {
+    opacity: 0;
+    transform: none;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-30px, -56px) rotate(-12deg);
+  }
+}
+
+@keyframes poe-startle {
+  0% {
+    transform: none;
+  }
+
+  25% {
+    transform: translateY(-20px) scale(0.94, 1.08);
+  }
+
+  100% {
+    transform: none;
+  }
 }
 
 @keyframes poe-wave {
@@ -944,6 +1033,8 @@ html.poe-locked body {
   }
 
   .poe-potato__arm,
+  .poe-potato__img,
+  .poe-potato__zzz i,
   .poe-panel__potato,
   .poe[data-busy] .poe-panel__potato,
   .poe-dots i {
