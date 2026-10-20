@@ -163,7 +163,6 @@
           <h2 class="eyebrow home-hi__title" id="home-hi-title">say hi</h2>
           <p class="home-hi__text"><span class="home-long">questions, collabs, cease-and-desist letters, or just a hello.</span><span class="home-short">questions, ideas, or just a hello.</span></p>
           <a class="home-hi__mail" href="mailto:contact@atpota.to" aria-label="contact@atpota.to"><span>contact@</span><span>atpota.to</span></a>
-          <img class="home-hi__potato" src="/src/assets/mascot/potato-wink.svg" alt="" width="150" height="122" loading="lazy">
         </section>
 
         <section class="tile home-poe" aria-labelledby="home-poe-title">
@@ -179,20 +178,15 @@
 
         <section class="tile home-latest" aria-labelledby="home-latest-title" data-latest data-state="loading">
           <div class="home-latest__head">
-            <h2 class="eyebrow home-latest__title" id="home-latest-title">latest on bluesky</h2>
-            <a class="home-latest__handle" href="https://bsky.app/profile/atpota.to">@atpota.to</a>
+            <h2 class="eyebrow home-latest__title" id="home-latest-title">latest</h2>
+            <a class="home-latest__handle" href="/blog">the dispatch</a>
           </div>
-          <article class="home-post" data-latest-post>
-            <span class="home-post__avatar"><img src="/src/assets/mascot/potato-normal.svg" alt="" width="42" height="34" loading="lazy" data-latest-avatar></span>
-            <div class="home-post__body">
-              <p class="home-post__who"><strong>atpotato</strong> <span class="home-post__handle">@atpota.to</span></p>
-              <div class="home-post__skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
-              <p class="visually-hidden home-post__loading">loading the latest post</p>
-              <p class="home-post__text" dir="auto" data-latest-text hidden></p>
-              <p class="home-post__meta" data-latest-meta hidden><a class="home-post__link" href="https://bsky.app/profile/atpota.to" data-latest-link><span class="visually-hidden">open the post on bluesky, posted </span><time data-latest-time></time></a><span data-latest-embed-wrap hidden><span aria-hidden="true"> · </span><span data-latest-embed></span></span></p>
-              <p class="home-post__fallback" data-latest-fallback>the newest posts live on bluesky. follow along there to catch them first.</p>
-            </div>
-          </article>
+          <div class="home-post" data-latest-post>
+            <div class="home-post__skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+            <p class="visually-hidden home-post__loading">loading the latest posts</p>
+            <p class="home-post__fallback" data-latest-fallback>new posts from atpotato, poe, anisota and aturi live on bluesky, and poe's weekly dispatch lives on <a href="/blog">the blog</a>.</p>
+          </div>
+          <ol class="home-feed" role="list" data-latest-list hidden></ol>
           <a class="btn btn--soil btn--sm home-latest__follow" href="https://bsky.app/profile/atpota.to">follow on bluesky</a>
         </section>
 

@@ -595,15 +595,6 @@ html[data-theme="dark"] .home-find {
   text-decoration-thickness: 2px;
 }
 
-.home-hi__potato {
-  position: absolute;
-  right: -40px;
-  bottom: 34px;
-  width: 150px;
-  height: auto;
-  pointer-events: none;
-}
-
 /* ---------- poe intro ---------- */
 
 .home-poe {
@@ -664,7 +655,7 @@ html[data-theme="dark"] .home-find {
   border-color: var(--line-strong);
 }
 
-/* ---------- latest on bluesky ---------- */
+/* ---------- latest: one feed for every project ---------- */
 
 .home-latest {
   --tile-pad: 28px;
@@ -703,91 +694,18 @@ html[data-theme="dark"] .home-find {
   min-height: 46px;
 }
 
+/* Loading skeleton and the no-JS / error line; the list replaces it once the feed is in. */
 .home-post {
-  position: relative;
-  display: flex;
-  gap: 14px;
   padding: 18px;
   border-radius: 22px;
   background: var(--home-inset);
 }
 
-.home-post__avatar {
-  flex: 0 0 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: var(--flesh-tint);
-}
-
-.home-post__avatar img {
-  width: 42px;
-  height: auto;
-}
-
-.home-post__body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.home-post__who {
-  font-size: 16px;
-  line-height: 1.4;
-}
-
-.home-post__handle {
-  color: var(--muted);
-}
-
-.home-post__link {
-  border-radius: 4px;
-  color: inherit;
-  text-decoration: none;
-}
-
-/* The whole post card opens the post; the time link stretches over it. */
-.home-post__link::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 22px;
-}
-
-.home-post__link:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.home-post:has(.home-post__link:focus-visible) {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.home-post__link:focus-visible {
-  outline: none;
-}
-
-.home-post__text {
-  margin-top: 6px;
-  font-size: 16px;
-  line-height: 1.45;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-
-.home-post__meta {
-  margin-top: 6px;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--muted);
+.home-latest[data-state="ready"] .home-post {
+  display: none;
 }
 
 .home-post__fallback {
-  margin-top: 6px;
   font-size: 16px;
   line-height: 1.45;
   color: var(--muted);
@@ -797,7 +715,6 @@ html[data-theme="dark"] .home-find {
   display: none;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .home-post__skeleton span {
@@ -840,9 +757,111 @@ html.js .home-latest[data-state="loading"] .home-post__loading {
   display: block;
 }
 
-html.js .home-latest[data-state="loading"] .home-post__fallback,
-.home-latest[data-state="ready"] .home-post__fallback {
+html.js .home-latest[data-state="loading"] .home-post__fallback {
   display: none;
+}
+
+/* The feed: one row per post or dispatch issue, newest first. */
+.home-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-feed__item {
+  position: relative;
+  padding: 14px 18px;
+  border-radius: 20px;
+  background: var(--home-inset);
+}
+
+.home-feed__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* Who it's from: each source wears its project tile's colour. */
+.home-feed__source {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.home-feed__item--anisota .home-feed__source {
+  background: var(--sage);
+}
+
+.home-feed__item--aturi .home-feed__source {
+  background: var(--sky);
+}
+
+.home-feed__item--poe .home-feed__source {
+  background: var(--butter);
+}
+
+.home-feed__item--dispatch .home-feed__source {
+  background: var(--flesh-tint);
+}
+
+.home-feed__link {
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The whole row opens the post; the time link stretches over it. */
+.home-feed__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+}
+
+.home-feed__link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.home-feed__item:has(.home-feed__link:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.home-feed__link:focus-visible {
+  outline: none;
+}
+
+.home-feed__embed::before {
+  content: "· ";
+}
+
+.home-feed__title {
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.home-feed__text {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
 /* ---------- 2 columns (tablet, narrow desktop) ---------- */
@@ -1131,20 +1150,12 @@ html.js .home-latest[data-state="loading"] .home-post__fallback,
 
   .home-hi__text {
     margin-top: 6px;
-    max-width: 8em;
     font-size: 15px;
     line-height: 1.3;
   }
 
   .home-hi__mail {
     font-size: 17px;
-  }
-
-  .home-hi__potato {
-    top: 60px;
-    right: -34px;
-    bottom: auto;
-    width: 100px;
   }
 
   /* poe intro */
@@ -1208,35 +1219,33 @@ html.js .home-latest[data-state="loading"] .home-post__fallback,
   }
 
   .home-post {
-    gap: 12px;
     padding: 14px;
     border-radius: 18px;
   }
 
-  .home-post__link::after {
-    border-radius: 18px;
-  }
-
-  .home-post__avatar {
-    flex-basis: 40px;
-    width: 40px;
-    height: 40px;
-  }
-
-  .home-post__avatar img {
-    width: 36px;
-  }
-
-  .home-post__who,
-  .home-post__text,
   .home-post__fallback {
     font-size: 15px;
   }
 
-  .home-post__text,
-  .home-post__fallback,
-  .home-post__meta {
-    margin-top: 4px;
+  .home-feed {
+    gap: 8px;
+  }
+
+  .home-feed__item {
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+
+  .home-feed__link::after {
+    border-radius: 18px;
+  }
+
+  .home-feed__meta {
+    font-size: 13px;
+  }
+
+  .home-feed__title {
+    font-size: 16px;
   }
 
   /* H-Mobile has no follow button here; it comes back when the post can't load. */
