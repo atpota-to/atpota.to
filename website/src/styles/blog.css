@@ -133,6 +133,11 @@
   font-weight: 700;
 }
 
+/* On the sage card the leaf-tint pill would vanish; a white one stands out. */
+.blog-item--latest .blog-item__new {
+  background: var(--card);
+}
+
 .blog-item__title {
   margin: 0 0 8px;
   font-size: 26px;

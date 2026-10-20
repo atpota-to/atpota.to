@@ -129,7 +129,6 @@ describe('copy email', () => {
       <button type="button" data-copy-email="contact@atpota.to">copy address</button>
       <p data-copy-bubble>copied!</p>
       <p role="status" data-copy-status></p>
-      <img data-copy-potato alt="">
     </section>`;
 
   it('copies the address and says so', async () => {
@@ -142,7 +141,6 @@ describe('copy email', () => {
     expect(writeText).toHaveBeenCalledWith('contact@atpota.to');
     expect(document.querySelector('[data-copy-bubble]')!.classList.contains('is-showing')).toBe(true);
     expect(document.querySelector('[data-copy-status]')!.textContent).toBe('address copied');
-    expect(document.querySelector('[data-copy-potato]')!.classList.contains('is-hopping')).toBe(true);
   });
 
   it('selects the address when the clipboard says no', async () => {

@@ -89,10 +89,14 @@ html[data-theme="dark"] {
 
 .home-hero,
 .home-sun,
-.home-guide,
+.home-guide {
+  grid-column: span 2;
+}
+
+/* Poe's intro and the feed each take a full row, so neither stretches to the other's height. */
 .home-poe,
 .home-latest {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 /* Shared copy variants: the phone layout uses the shorter lines from H-Mobile. */
@@ -925,40 +929,15 @@ html[data-theme="dark"] .home-find {
   text-decoration-thickness: 2px;
 }
 
-.home-hi__potato {
-  position: absolute;
-  right: -40px;
-  bottom: 34px;
-  width: 150px;
-  height: auto;
-  pointer-events: none;
-  transform-origin: 50% 100%;
-}
-
-.home-hi__potato.is-hopping {
-  animation: home-hop 600ms var(--ease-out);
-}
-
-@keyframes home-hop {
-  30% {
-    transform: translateY(-18px) rotate(-4deg);
-  }
-
-  60% {
-    transform: translateY(0) scale(1.06, 0.95);
-  }
-
-  100% {
-    transform: none;
-  }
-}
-
-.home-hi__copy {
+.home-hi__actions {
   position: relative;
   z-index: 1;
   align-self: flex-start;
-  min-height: 36px;
   margin-top: 12px;
+}
+
+.home-hi__copy {
+  min-height: 36px;
   padding: 0 14px;
   border: 2px solid var(--on-sun);
   border-radius: var(--radius-pill);
@@ -983,13 +962,15 @@ html[data-theme="dark"] .home-find {
   transition-timing-function: ease, ease-out;
 }
 
+/* "copied!" pops out beside the button (above it on phones). */
 .home-hi__bubble {
   position: absolute;
-  right: 72px;
-  bottom: 150px;
+  left: calc(100% + 8px);
+  top: 50%;
   z-index: 2;
+  margin-top: -17px;
   padding: 8px 14px;
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 16px 16px 16px 4px;
   background: var(--home-bubble);
   color: var(--text-soft);
   font-size: 14px;
@@ -997,8 +978,8 @@ html[data-theme="dark"] .home-find {
   line-height: 1.3;
   white-space: nowrap;
   opacity: 0;
-  transform: translateY(8px) scale(0.8);
-  transform-origin: 100% 100%;
+  transform: translateX(-6px) scale(0.8);
+  transform-origin: 0 100%;
   pointer-events: none;
   transition:
     opacity var(--dur-fast) ease,
@@ -1016,7 +997,7 @@ html[data-theme="dark"] .home-find {
   --tile-pad: 30px;
   position: relative;
   overflow: hidden;
-  min-height: 280px;
+  min-height: 200px;
   justify-content: center;
   padding-left: 200px;
 }
@@ -1039,6 +1020,7 @@ html[data-theme="dark"] .home-find {
 }
 
 .home-poe__text {
+  max-width: 40em;
   margin: 0 0 18px;
   font-size: 16px;
   line-height: 1.5;
@@ -1070,7 +1052,7 @@ html[data-theme="dark"] .home-find {
   border-color: var(--line-strong);
 }
 
-/* ---------- latest on bluesky ---------- */
+/* ---------- latest: one feed for every project ---------- */
 
 .home-latest {
   --tile-pad: 28px;
@@ -1109,91 +1091,18 @@ html[data-theme="dark"] .home-find {
   min-height: 46px;
 }
 
+/* Loading skeleton and the no-JS / error line; the list replaces it once the feed is in. */
 .home-post {
-  position: relative;
-  display: flex;
-  gap: 14px;
   padding: 18px;
   border-radius: 22px;
   background: var(--home-inset);
 }
 
-.home-post__avatar {
-  flex: 0 0 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: var(--flesh-tint);
-}
-
-.home-post__avatar img {
-  width: 42px;
-  height: auto;
-}
-
-.home-post__body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.home-post__who {
-  font-size: 16px;
-  line-height: 1.4;
-}
-
-.home-post__handle {
-  color: var(--muted);
-}
-
-.home-post__link {
-  border-radius: 4px;
-  color: inherit;
-  text-decoration: none;
-}
-
-/* The whole post card opens the post; the time link stretches over it. */
-.home-post__link::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 22px;
-}
-
-.home-post__link:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.home-post:has(.home-post__link:focus-visible) {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.home-post__link:focus-visible {
-  outline: none;
-}
-
-.home-post__text {
-  margin-top: 6px;
-  font-size: 16px;
-  line-height: 1.45;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-
-.home-post__meta {
-  margin-top: 6px;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--muted);
+.home-latest[data-state="ready"] .home-post {
+  display: none;
 }
 
 .home-post__fallback {
-  margin-top: 6px;
   font-size: 16px;
   line-height: 1.45;
   color: var(--muted);
@@ -1203,7 +1112,6 @@ html[data-theme="dark"] .home-find {
   display: none;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .home-post__skeleton span {
@@ -1246,18 +1154,136 @@ html.js .home-latest[data-state="loading"] .home-post__loading {
   display: block;
 }
 
-html.js .home-latest[data-state="loading"] .home-post__fallback,
-.home-latest[data-state="ready"] .home-post__fallback {
+html.js .home-latest[data-state="loading"] .home-post__fallback {
   display: none;
 }
 
-/* The post fades up where the skeleton was, instead of popping in. */
-html.js .home-latest[data-state="ready"] :is(.home-post__text, .home-post__meta) {
+/* The feed: one card per post or dispatch issue, newest first, in three columns on desktop. */
+.home-feed {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-feed__item {
+  position: relative;
+  padding: 14px 18px;
+  border-radius: 20px;
+  background: var(--home-inset);
+}
+
+.home-feed__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* Who it's from: each source wears its project tile's colour. */
+.home-feed__source {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.home-feed__item--anisota .home-feed__source {
+  background: var(--sage);
+}
+
+.home-feed__item--aturi .home-feed__source {
+  background: var(--sky);
+}
+
+.home-feed__item--poe .home-feed__source {
+  background: var(--butter);
+}
+
+.home-feed__item--dispatch .home-feed__source {
+  background: var(--flesh-tint);
+}
+
+.home-feed__link {
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The whole row opens the post; the time link stretches over it. */
+.home-feed__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+}
+
+.home-feed__link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.home-feed__item:has(.home-feed__link:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.home-feed__link:focus-visible {
+  outline: none;
+}
+
+.home-feed__embed::before {
+  content: "· ";
+}
+
+.home-feed__title {
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.home-feed__text {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* The feed fades up item by item where the skeleton was, instead of popping in. */
+html.js .home-latest[data-state="ready"] .home-feed__item {
   animation: home-post-in 450ms var(--ease-out) both;
 }
 
-html.js .home-latest[data-state="ready"] .home-post__meta {
-  animation-delay: 80ms;
+html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(5) {
+  animation-delay: 240ms;
+}
+
+html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
+  animation-delay: 300ms;
 }
 
 @keyframes home-post-in {
@@ -1306,6 +1332,10 @@ html.js .home-latest[data-state="ready"] .home-post__meta {
 
 @media (max-width: 900px) {
   .home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-feed {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1558,7 +1588,6 @@ html.js .home-latest[data-state="ready"] .home-post__meta {
 
   .home-hi__text {
     margin-top: 6px;
-    max-width: 8em;
     font-size: 15px;
     line-height: 1.3;
   }
@@ -1567,22 +1596,19 @@ html.js .home-latest[data-state="ready"] .home-post__meta {
     font-size: 17px;
   }
 
-  .home-hi__potato {
-    top: 60px;
-    right: -34px;
-    bottom: auto;
-    width: 100px;
+  .home-hi__actions {
+    margin-top: 10px;
   }
 
   .home-hi__copy {
-    margin-top: 10px;
     font-size: 13px;
   }
 
   .home-hi__bubble {
-    top: 22px;
-    right: 14px;
-    bottom: auto;
+    left: 0;
+    top: auto;
+    bottom: calc(100% + 6px);
+    margin-top: 0;
     font-size: 13px;
   }
 
@@ -1660,35 +1686,34 @@ html.js .home-latest[data-state="ready"] .home-post__meta {
   }
 
   .home-post {
-    gap: 12px;
     padding: 14px;
     border-radius: 18px;
   }
 
-  .home-post__link::after {
-    border-radius: 18px;
-  }
-
-  .home-post__avatar {
-    flex-basis: 40px;
-    width: 40px;
-    height: 40px;
-  }
-
-  .home-post__avatar img {
-    width: 36px;
-  }
-
-  .home-post__who,
-  .home-post__text,
   .home-post__fallback {
     font-size: 15px;
   }
 
-  .home-post__text,
-  .home-post__fallback,
-  .home-post__meta {
-    margin-top: 4px;
+  .home-feed {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .home-feed__item {
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+
+  .home-feed__link::after {
+    border-radius: 18px;
+  }
+
+  .home-feed__meta {
+    font-size: 13px;
+  }
+
+  .home-feed__title {
+    font-size: 16px;
   }
 
   /* H-Mobile has no follow button here; it comes back when the post can't load. */

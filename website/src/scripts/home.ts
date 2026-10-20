@@ -2,24 +2,25 @@
  * Home page behaviour (spec 3.1). main.ts imports this module when
  * <body data-page="home"> and calls init() once.
  *
- * "latest on bluesky" tile: shows atpota.to's newest original post (replies,
- * reposts and other authors are skipped). It reads the account's own repo:
- * the DID document from plc.directory names the PDS, and one
- * com.atproto.repo.listRecords page of app.bsky.feed.post records (newest
- * first) holds the post, a few KB in all. Reposts live in another collection,
- * so they never get in the way. Only if that path fails does it fall back to
- * the public AppView's author feed, which needs a page of 100 (about 90 KB
- * gzipped) because atpota.to mostly reposts.
+ * "latest" tile: one feed for everything atpotato makes. /api/latest
+ * (server/latest.ts) merges the newest original posts from atpota.to, poe,
+ * anisota and aturi with the newest issues of poe's dispatch. If that endpoint
+ * fails (a static preview, an outage), the tile falls back to atpota.to's own
+ * newest post, read from its repo: the DID document from plc.directory names
+ * the PDS, and one com.atproto.repo.listRecords page of app.bsky.feed.post
+ * records holds it. Only if that path fails too does it try the public
+ * AppView's author feed, which needs a page of 100 (about 90 KB gzipped)
+ * because atpota.to mostly reposts.
  *
- * Fetched text only ever reaches the DOM through textContent; links are built
- * from a validated record key. States live on the tile as
- * data-state="loading" | "ready" | "error" (CSS shows the skeleton, the post or
- * the fallback line). Once a post shows, its "5 minutes ago" keeps itself current.
+ * Fetched text only ever reaches the DOM through textContent; links are either
+ * built from a validated record key or checked by safeItemUrl(). States live on
+ * the tile as data-state="loading" | "ready" | "error" (CSS shows the skeleton,
+ * the list or the fallback line). Once the list shows, its "5 minutes ago"
+ * dates keep themselves current.
  *
  * Also here: the "say hi" tile's copy button, and the hero Poe (pet.ts).
  */
 
-import { MASCOT_URLS } from './mascot';
 import { initPet } from './pet';
 
 export const FEED_ENDPOINT = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed';
@@ -36,7 +37,7 @@ export const MAX_PAGES = 2;
 export const FETCH_TIMEOUT_MS = 8000;
 export const MAX_POST_CHARS = 280;
 
-const CACHE_KEY = 'atpotato:latest-post';
+const CACHE_KEY = 'atpotato:latest-feed';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const RKEY_RE = /^[A-Za-z0-9._:~-]{1,512}$/;
 const POST_URI_RE = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/?#]+)$/;
@@ -300,102 +301,188 @@ export async function fetchLatestPost(fetchImpl: typeof fetch = fetch, timeoutMs
   return fetchLatestFromFeed(fetchImpl, timeoutMs);
 }
 
-function isLatestPost(value: unknown): value is LatestPost {
-  return (
-    isObject(value) &&
-    typeof value.text === 'string' &&
-    value.text.length <= MAX_POST_CHARS * 8 &&
-    typeof value.createdAt === 'string' &&
-    Number.isFinite(Date.parse(value.createdAt)) &&
-    typeof value.rkey === 'string' &&
-    RKEY_RE.test(value.rkey) &&
-    typeof value.embed === 'string' &&
-    value.embed.length <= 80
-  );
+export type SourceId = 'atpotato' | 'poe' | 'anisota' | 'aturi' | 'dispatch';
+
+/** One entry in the unified feed, as /api/latest sends it (server/latest.ts). */
+export interface FeedItem {
+  source: SourceId;
+  kind: 'post' | 'article';
+  text: string;
+  title: string | null;
+  embed: string;
+  createdAt: string;
+  url: string;
 }
 
-export function readCache(now = Date.now()): LatestPost | null {
+export const LATEST_ENDPOINT = '/api/latest';
+export const MAX_ITEMS = 6;
+
+/** The chip on each item: who posted it. */
+export const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
+  atpotato: '@atpota.to',
+  poe: '@poe.atpota.to',
+  anisota: '@anisota.net',
+  aturi: '@aturi.to',
+  dispatch: "poe's dispatch",
+};
+
+const BSKY_POST_RE = /^https:\/\/bsky\.app\/profile\/[a-z0-9.-]+\/post\/[A-Za-z0-9._:~%-]{1,512}$/;
+const BLOG_PATH_RE = /^\/blog\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{1,500}$/;
+
+/** Only links to a Bluesky post or a page under /blog; anything else from the API is dropped. */
+export function safeItemUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  return BSKY_POST_RE.test(url) || (BLOG_PATH_RE.test(url) && !url.includes('//')) ? url : null;
+}
+
+export function toFeedItem(value: unknown): FeedItem | null {
+  if (!isObject(value)) return null;
+  const source = str(value.source);
+  if (!source || !Object.hasOwn(SOURCE_LABELS, source)) return null;
+  const kind = value.kind === 'article' ? 'article' : value.kind === 'post' ? 'post' : null;
+  const url = safeItemUrl(value.url);
+  const createdAt = str(value.createdAt) ?? '';
+  if (!kind || !url || !Number.isFinite(Date.parse(createdAt))) return null;
+  const text = str(value.text) ?? '';
+  const title = str(value.title) ?? null;
+  const embed = str(value.embed) ?? '';
+  if (text.length > MAX_POST_CHARS * 2 || (title?.length ?? 0) > 300 || embed.length > 80) return null;
+  if (!text && !title && !embed) return null;
+  return { source: source as SourceId, kind, text, title, embed, createdAt, url };
+}
+
+/** The valid items of an /api/latest response, newest first, or null when there are none. */
+export function parseFeed(body: unknown): FeedItem[] | null {
+  if (!isObject(body) || !Array.isArray(body.items)) return null;
+  const items = body.items
+    .map(toFeedItem)
+    .filter((item): item is FeedItem => item !== null)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, MAX_ITEMS);
+  return items.length ? items : null;
+}
+
+/** atpota.to's own newest post, as a one-item feed (the fallback when /api/latest fails). */
+export function postToItem(post: LatestPost): FeedItem {
+  return { source: 'atpotato', kind: 'post', text: post.text, title: null, embed: post.embed, createdAt: post.createdAt, url: postUrl(post.rkey) };
+}
+
+export function fetchFeed(fetchImpl: typeof fetch = fetch, timeoutMs = FETCH_TIMEOUT_MS): Promise<FeedItem[] | null> {
+  return withTimeout(timeoutMs, async (signal) => {
+    const res = await fetchImpl(LATEST_ENDPOINT, { signal, headers: { accept: 'application/json' }, credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`latest ${res.status}`);
+    return parseFeed(await res.json());
+  });
+}
+
+/** The unified feed first; atpota.to's newest post alone when that fails. */
+export async function fetchLatestItems(fetchImpl: typeof fetch = fetch): Promise<FeedItem[] | null> {
+  try {
+    const items = await fetchFeed(fetchImpl);
+    if (items) return items;
+  } catch {
+    // fall through to atpota.to's own repo
+  }
+  const post = await fetchLatestPost(fetchImpl);
+  return post ? [postToItem(post)] : null;
+}
+
+export function readCache(now = Date.now()): FeedItem[] | null {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const data: unknown = JSON.parse(raw);
     if (!isObject(data) || typeof data.at !== 'number' || now - data.at > CACHE_TTL_MS || now < data.at) return null;
-    return isLatestPost(data.post) ? data.post : null;
+    return parseFeed({ items: data.items });
   } catch {
     return null;
   }
 }
 
-export function writeCache(post: LatestPost, now = Date.now()): void {
+export function writeCache(items: FeedItem[], now = Date.now()): void {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: now, post }));
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: now, items }));
   } catch {
     /* storage full or blocked: not important */
   }
 }
 
-/** Fill the tile with a post. textContent only; the link comes from postUrl(). */
-export function renderPost(tile: HTMLElement, post: LatestPost, now: Date = new Date()): void {
-  const text = tile.querySelector<HTMLElement>('[data-latest-text]');
-  const embed = tile.querySelector<HTMLElement>('[data-latest-embed]');
-  const embedWrap = tile.querySelector<HTMLElement>('[data-latest-embed-wrap]');
-  const meta = tile.querySelector<HTMLElement>('[data-latest-meta]');
-  const link = tile.querySelector<HTMLAnchorElement>('[data-latest-link]');
-  const time = tile.querySelector<HTMLTimeElement>('[data-latest-time]');
-  const article = tile.querySelector<HTMLElement>('[data-latest-post]');
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
 
-  if (text) {
-    text.textContent = post.text;
-    text.hidden = post.text === '';
+function renderItem(item: FeedItem, now: Date): HTMLLIElement {
+  const li = el('li', `home-feed__item home-feed__item--${item.source}`);
+  const meta = el('p', 'home-feed__meta');
+  meta.append(el('span', 'home-feed__source', SOURCE_LABELS[item.source]));
+  const link = el('a', 'home-feed__link');
+  link.href = item.url;
+  const date = new Date(item.createdAt);
+  const time = document.createElement('time');
+  time.dateTime = item.createdAt;
+  time.textContent = relativeTime(date, now) || date.toLocaleDateString('en', { dateStyle: 'medium' });
+  time.title = date.toLocaleString('en', { dateStyle: 'long', timeStyle: 'short' });
+  const where = item.kind === 'article' ? 'read it in the dispatch' : 'open the post on bluesky';
+  link.append(el('span', 'visually-hidden', `${where}, posted `), time);
+  meta.append(link);
+  if (item.embed) meta.append(el('span', 'home-feed__embed', item.embed));
+  li.append(meta);
+  if (item.title) li.append(el('p', 'home-feed__title', item.title));
+  if (item.text) {
+    const text = el('p', 'home-feed__text', item.text);
+    text.dir = 'auto';
+    li.append(text);
   }
-  if (embed) embed.textContent = post.embed;
-  if (embedWrap) embedWrap.hidden = post.embed === '';
-  if (link) link.href = postUrl(post.rkey);
-  if (time) {
-    const date = new Date(post.createdAt);
-    time.dateTime = post.createdAt;
-    time.textContent = relativeTime(date, now) || date.toLocaleDateString('en', { dateStyle: 'medium' });
-    time.title = date.toLocaleString('en', { dateStyle: 'long', timeStyle: 'short' });
+  return li;
+}
+
+/** Fill the tile with the feed. textContent only; links come from safeItemUrl(). */
+export function renderItems(tile: HTMLElement, items: readonly FeedItem[], now: Date = new Date()): void {
+  const list = tile.querySelector<HTMLElement>('[data-latest-list]');
+  if (list) {
+    list.replaceChildren(...items.map((item) => renderItem(item, now)));
+    list.hidden = false;
   }
-  if (meta) meta.hidden = false;
-  article?.setAttribute('aria-busy', 'false');
+  tile.querySelector('[data-latest-post]')?.setAttribute('aria-busy', 'false');
   tile.dataset.state = 'ready';
-  if (time) startClock(time);
+  startClock(tile);
 }
 
 const CLOCK_MS = 30_000;
-const clocks = new WeakSet<HTMLTimeElement>();
+const clocks = new WeakSet<HTMLElement>();
 
-/** Re-reads the relative date every 30 seconds while the page is visible. */
-function startClock(time: HTMLTimeElement): void {
-  if (clocks.has(time)) return;
-  clocks.add(time);
+/** Re-reads every relative date in the tile every 30 seconds while the page is visible. */
+function startClock(tile: HTMLElement): void {
+  if (clocks.has(tile)) return;
+  clocks.add(tile);
   window.setInterval(() => {
-    if (document.visibilityState === 'hidden' || !time.isConnected) return;
-    const date = new Date(time.dateTime);
-    const next = relativeTime(date);
-    if (next && next !== time.textContent) time.textContent = next;
+    if (document.visibilityState === 'hidden') return;
+    for (const time of tile.querySelectorAll<HTMLTimeElement>('time[datetime]')) {
+      const next = relativeTime(new Date(time.dateTime));
+      if (next && next !== time.textContent) time.textContent = next;
+    }
   }, CLOCK_MS);
 }
 
 export function renderError(tile: HTMLElement): void {
   const fallback = tile.querySelector<HTMLElement>('[data-latest-fallback]');
-  if (fallback) fallback.textContent = "couldn't dig up the latest post just now. it's waiting for you on bluesky.";
-  const avatar = tile.querySelector<HTMLImageElement>('[data-latest-avatar]');
-  if (avatar) avatar.src = MASCOT_URLS.sleepy;
+  if (fallback) fallback.textContent = "couldn't dig up the latest just now. it's all waiting for you on bluesky.";
   tile.querySelector('[data-latest-post]')?.setAttribute('aria-busy', 'false');
   tile.dataset.state = 'error';
 }
 
 export async function loadLatest(tile: HTMLElement, fetchImpl: typeof fetch = fetch): Promise<void> {
   try {
-    const post = await fetchLatestPost(fetchImpl);
-    if (!post) {
+    const items = await fetchLatestItems(fetchImpl);
+    if (!items) {
       renderError(tile);
       return;
     }
-    writeCache(post);
-    renderPost(tile, post);
+    writeCache(items);
+    renderItems(tile, items);
   } catch {
     renderError(tile);
   }
@@ -427,7 +514,7 @@ export function initLatest(root: ParentNode = document, fetchImpl: typeof fetch 
   tile.querySelector('[data-latest-post]')?.setAttribute('aria-busy', 'true');
   const cached = readCache();
   if (cached) {
-    renderPost(tile, cached);
+    renderItems(tile, cached);
     return;
   }
   whenNear(tile, () => void loadLatest(tile, fetchImpl));
@@ -435,7 +522,7 @@ export function initLatest(root: ParentNode = document, fetchImpl: typeof fetch 
 
 const COPIED_MS = 1800;
 
-/** "copy address" in the say hi tile: the wink potato hops and says so. */
+/** "copy address" in the say hi tile: a little "copied!" bubble pops out beside it. */
 export function initCopyEmail(root: ParentNode = document): void {
   const button = root.querySelector<HTMLButtonElement>('[data-copy-email]');
   if (!button || button.dataset.copyBound === 'true') return;
@@ -443,7 +530,6 @@ export function initCopyEmail(root: ParentNode = document): void {
   const tile = button.closest<HTMLElement>('.tile') ?? document.body;
   const bubble = tile.querySelector<HTMLElement>('[data-copy-bubble]');
   const status = tile.querySelector<HTMLElement>('[data-copy-status]');
-  const potato = tile.querySelector<HTMLElement>('[data-copy-potato]');
   const mail = tile.querySelector<HTMLElement>('.home-hi__mail');
   const address = button.dataset.copyEmail ?? '';
   let hideTimer: number | undefined;
@@ -454,15 +540,9 @@ export function initCopyEmail(root: ParentNode = document): void {
       bubble.classList.add('is-showing');
     }
     if (status) status.textContent = statusText;
-    if (potato) {
-      potato.classList.remove('is-hopping');
-      void potato.offsetWidth;
-      potato.classList.add('is-hopping');
-    }
     window.clearTimeout(hideTimer);
     hideTimer = window.setTimeout(() => {
       bubble?.classList.remove('is-showing');
-      potato?.classList.remove('is-hopping');
     }, COPIED_MS);
   };
 
