@@ -131,6 +131,48 @@ test('forget-me deletes the droplet copy and the public record', async () => {
   assert.deepEqual(api.calls.at(-1), ['delete', MEMORY_COLLECTION, did]);
 });
 
+test('emptied notes from "forget me" can never be overtaken by a publish already under way', async () => {
+  // The settings page on atpota.to wipes someone's notes in the agent, which
+  // hands the emptied version here. A publish of the older version may still
+  // be waiting on the network; it must not land after the delete.
+  const did = freshDid();
+  const api = fakeApi();
+  let release;
+  const slowResolves = () => new Promise((resolve) => { release = () => resolve(true); });
+  storeMemory(did, doc('builds a labeler'));
+  const older = publishMemory(did, { api, didResolves: slowResolves });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(storeMemory(did, EMPTY), { ok: true, needsPublish: true });
+  const forget = publishMemory(did, { api, didResolves: resolves });
+  release();
+  await Promise.all([older, forget]);
+
+  assert.deepEqual(api.calls.map(([kind]) => kind).at(-1), 'delete', 'the record ends deleted');
+  assert.ok(db.getMemoryDoc(did).published_at, 'and settled, for the empty version');
+  assert.deepEqual(JSON.parse(db.getMemoryDoc(did).notes), []);
+
+  // Asked again (every later turn re-sends it): nothing to do, no repo call.
+  const before = api.calls.length;
+  assert.deepEqual(storeMemory(did, EMPTY), { ok: true, needsPublish: false });
+  assert.equal(api.calls.length, before);
+});
+
+test('forget-me on Bluesky waits for a publish already under way, then deletes', async () => {
+  const did = freshDid();
+  const api = fakeApi();
+  let release;
+  const slowResolves = () => new Promise((resolve) => { release = () => resolve(true); });
+  storeMemory(did, doc('builds a labeler'));
+  const older = publishMemory(did, { api, didResolves: slowResolves });
+  await new Promise((resolve) => setImmediate(resolve));
+  const forget = forgetMemory(did, { api });
+  release();
+  await Promise.all([older, forget]);
+  assert.deepEqual(api.calls.map(([kind]) => kind), ['put', 'delete']);
+  assert.equal(db.getMemoryDoc(did), undefined);
+});
+
 test('a lesson is published as its own record, and taken down when retired', async () => {
   const api = fakeApi();
   const id = db.addLesson('say PDS after the first time', 'did:plc:admin', 'at://did:plc:admin/app.bsky.feed.post/3x');
