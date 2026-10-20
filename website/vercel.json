@@ -16,8 +16,8 @@
     { "source": "/blog", "destination": "/api/blog?view=index" },
     { "source": "/blog/feed.xml", "destination": "/api/blog?view=feed" },
     { "source": "/blog/:path*", "destination": "/api/blog?view=post&path=:path*" },
-    { "source": "/garden/:actor", "destination": "/garden/index.html" },
-    { "source": "/garden/:actor/flowers", "destination": "/garden/index.html" }
+    { "source": "/garden/:actor", "destination": "/garden" },
+    { "source": "/garden/:actor/flowers", "destination": "/garden" }
   ],
   "redirects": [
     {

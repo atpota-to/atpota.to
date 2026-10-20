@@ -34,7 +34,6 @@
     <link rel="stylesheet" href="/src/styles/base.css">
     <link rel="stylesheet" href="/src/styles/components.css">
     <link rel="stylesheet" href="/src/styles/home.css">
-    <link rel="stylesheet" href="/src/styles/patch.css">
 
     <!-- Vercel Web Analytics -->
     <script>
@@ -232,30 +231,17 @@
           <p class="home-weather__note">all per second, from a few seconds of bluesky's firehose, counted once a minute.</p>
         </section>
 
-        <section class="tile home-patch" aria-labelledby="home-patch-title" data-garden data-state="loading">
-          <div class="home-patch__head">
-            <h2 class="eyebrow home-patch__title" id="home-patch-title">the flower patch</h2>
-            <p class="home-patch__count" data-garden-count></p>
+        <a class="tile tile--link home-garden" href="/garden/atpota.to" data-garden-teaser>
+          <div class="home-garden__head">
+            <h2 class="eyebrow home-garden__title">the community garden</h2>
+            <span class="home-garden__season" data-teaser-season></span>
           </div>
-          <div class="home-patch__tabs" role="tablist" aria-label="seasons" data-garden-tabs hidden></div>
-          <p class="home-patch__text">plant a flower with your bluesky account and look after it for a week: the better it's tended, the better it grows. tap anyone's flower to water it, or <a href="/garden">grow a garden of your own</a>.</p>
-          <div class="home-plots" id="garden-plots" role="group" aria-label="the plots" data-garden-plots></div>
-          <div class="home-card" role="dialog" aria-labelledby="garden-card-title" tabindex="-1" data-garden-card hidden></div>
-          <div class="home-patch__controls">
-            <div class="home-patch__kinds" role="radiogroup" aria-label="pick a flower" data-garden-kinds>
-              <button type="button" class="home-patch__kind" role="radio" aria-checked="true" data-kind="sunflower"><span class="visually-hidden">sunflower</span></button>
-              <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="rose"><span class="visually-hidden">rose</span></button>
-              <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="daisy"><span class="visually-hidden">daisy</span></button>
-              <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="violet"><span class="visually-hidden">violet</span></button>
-              <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="poppy"><span class="visually-hidden">poppy</span></button>
-              <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="tulip"><span class="visually-hidden">tulip</span></button>
-            </div>
-            <button type="button" class="btn btn--primary btn--sm home-patch__plant" data-garden-plant>pick a plot</button>
-            <a class="home-patch__mine" href="/garden" data-garden-mine hidden>look after yours</a>
-            <button type="button" class="home-patch__dig" data-garden-dig hidden>dig mine up</button>
+          <div class="home-garden__row" aria-hidden="true" data-teaser-row></div>
+          <div class="home-garden__foot">
+            <span class="home-garden__count" data-teaser-count>plant a flower, watch it bloom</span>
+            <span class="btn btn--primary btn--sm home-garden__go">visit the garden</span>
           </div>
-          <p class="home-patch__status" role="status" data-garden-status></p>
-        </section>
+        </a>
 
         <section class="tile home-poe" aria-labelledby="home-poe-title">
           <img class="home-poe__potato" src="/src/assets/mascot/potato-happy.svg" alt="" width="160" height="130" loading="lazy">
@@ -285,7 +271,6 @@
       </div>
     </main>
 
-    <!-- @partial signin -->
 
     <!-- @partial footer -->
 </body>

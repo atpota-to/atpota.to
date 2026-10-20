@@ -1,6 +1,6 @@
 /* The flower patch: a grid of plots seen from above, with its season tabs, flower picker
-   and a flower's card. Shared by the home page's tile (atpotato's community garden) and
-   everyone's garden page (src/scripts/garden.ts builds it, flowers.ts draws the flowers). */
+   and a flower's card, on everyone's garden page, atpotato's community garden included
+   (src/scripts/garden.ts builds it, flowers.ts draws the flowers). */
 
 :root {
   --patch-mound: var(--skin);
