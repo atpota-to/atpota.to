@@ -89,6 +89,8 @@ export interface Bar {
   sub?: string;
   perSecond: number;
   count: number;
+  /** What to print beside the bar; default its rate a second. */
+  value?: string;
 }
 
 /** A list of horizontal bars, each as long as its share of the busiest one, its value in words beside it. */
@@ -104,7 +106,7 @@ export function renderBars(list: HTMLElement, bars: Bar[], seconds: number | und
       label.textContent = b.label;
       const value = document.createElement('span');
       value.className = 'weather-bars__value';
-      value.textContent = formatRate(b.perSecond);
+      value.textContent = b.value ?? formatRate(b.perSecond);
       const track = document.createElement('span');
       track.className = 'weather-bars__track';
       track.setAttribute('aria-hidden', 'true');
@@ -238,10 +240,19 @@ export interface HistoryPoint {
   posts: number;
 }
 
+export interface HistoryApp {
+  domain: string;
+  creates: number;
+  minutes: number;
+  collections: string[];
+}
+
 export interface History {
   range: Range;
   points: HistoryPoint[];
   total: HistoryPoint;
+  /** The busiest apps outside Bluesky over the range, when the server could get them. */
+  apps?: HistoryApp[];
 }
 
 export const RANGE_INFO: Record<Range, { spanMs: number; stepMs: number; words: string; time: Intl.DateTimeFormatOptions }> = {
@@ -259,13 +270,32 @@ function isPoint(p: unknown): p is HistoryPoint {
   return typeof r === 'object' && r !== null && typeof r.t === 'string' && Number.isFinite(Date.parse(r.t)) && n(r.seconds) && n(r.creates) && n(r.bluesky) && n(r.elsewhere) && n(r.posts);
 }
 
+const APP_NAME_RE = /^[a-z0-9][a-z0-9.-]{0,252}$/i;
+
+function isApp(a: unknown): a is HistoryApp {
+  const r = a as Record<string, unknown>;
+  const n = (x: unknown) => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+  return (
+    typeof r === 'object' &&
+    r !== null &&
+    typeof r.domain === 'string' &&
+    APP_NAME_RE.test(r.domain) &&
+    n(r.creates) &&
+    n(r.minutes) &&
+    Array.isArray(r.collections) &&
+    r.collections.every((c) => typeof c === 'string' && APP_NAME_RE.test(c))
+  );
+}
+
 export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch): Promise<History | null> {
   try {
     const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown };
+    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
-    return { range, points: body.points.filter(isPoint), total: body.total };
+    const history: History = { range, points: body.points.filter(isPoint), total: body.total };
+    if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
+    return history;
   } catch {
     return null;
   }
@@ -334,6 +364,20 @@ export function renderTrends(section: HTMLElement, h: History, now = Date.now())
           return tr;
         }),
     );
+  }
+  const wrap = $(section, '[data-t-apps-wrap]');
+  const list = $(section, '[data-t-apps]');
+  const apps = h.apps ?? [];
+  if (wrap && list) {
+    wrap.hidden = apps.length === 0 || h.total.seconds <= 0;
+    setText(section, '[data-t-apps-title]', `busiest apps elsewhere, ${info.words}: new records`);
+    if (!wrap.hidden) {
+      renderBars(
+        list,
+        apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.creates / h.total.seconds, count: a.creates, value: a.creates.toLocaleString('en-US') })),
+        h.total.seconds,
+      );
+    }
   }
   section.dataset.state = 'ready';
 }

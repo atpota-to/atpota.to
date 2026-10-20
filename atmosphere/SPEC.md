@@ -229,6 +229,10 @@ The diversity index for any range is `100.0 * sum(elsewhere) / nullif(sum(create
 and a rate is `sum(x) / sum(seconds_covered)`. Never average per-minute
 indexes: a quiet minute would count as much as a busy one.
 
+PostgREST's aggregate functions are off on this project, so per-app sums over a range
+come from one read-only function, `atmosphere_top_apps(since, max_apps)`, in
+[`sql/atmosphere_top_apps.sql`](sql/atmosphere_top_apps.sql) (applied).
+
 **Size.** `atmosphere_minute` is 1440 rows a day (about 0.5M a year, which is
 fine to keep forever). `atmosphere_minute_app` is the long tail: expect tens of
 apps a minute, so roughly 50k rows a day. Once there's real data, if that grows

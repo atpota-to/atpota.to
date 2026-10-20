@@ -8,7 +8,11 @@
  *                                ?range=day    the last 24 hours, a point an hour
  *                                ?range=month  the last 30 days, a point a day
  *                                ?range=year   the last 12 months, a point a month
- *   ->  { range, points: Point[], total: Point }
+ *   ->  { range, points: Point[], total: Point, apps?: App[] }
+ *
+ * apps are the busiest apps outside Bluesky over the range, from the read-only
+ * atmosphere_top_apps function (atmosphere/sql/atmosphere_top_apps.sql); if that call
+ * fails the trends still come back, just without them.
  *
  * Points are raw counts with the seconds they cover, never rates: a rate is
  * count / seconds and the diversity index is 100 * elsewhere / creates, worked out in the
@@ -25,6 +29,18 @@ export type CountKey = (typeof COUNTS)[number];
 
 export type Point = { t: string; seconds: number } & Record<CountKey, number>;
 
+export interface App {
+  domain: string;
+  creates: number;
+  /** Minutes it wrote anything in. */
+  minutes: number;
+  collections: string[];
+}
+
+export const TOP_APPS = 10;
+const DOMAIN_RE = /^[a-z0-9-]{1,63}\.[a-z0-9-]{1,63}$/;
+const NSID_RE = /^[a-z][a-z0-9-]{0,62}(?:\.[a-z0-9][a-z0-9-]{0,62}){1,}\.[a-z][a-z0-9]{0,62}$/i;
+
 export const RANGES = {
   hour: { table: 'atmosphere_minute', key: 'minute', spanMs: 60 * 60_000, cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
   day: { table: 'atmosphere_hour', key: 'hour', spanMs: 24 * 3600_000, cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
@@ -40,11 +56,28 @@ export function isRange(v: string | null): v is Range {
 
 /** The PostgREST query for a range ending at `now`. */
 export function queryUrl(base: string, range: Range, now: number): string {
-  const { table, key, spanMs } = RANGES[range];
-  const from = new Date(now - spanMs).toISOString();
+  const { table, key } = RANGES[range];
+  const from = rangeStart(range, now);
   const params = new URLSearchParams({ select: [key, 'seconds_covered', ...COUNTS].join(','), order: `${key}.asc`, limit: '1000' });
   params.set(key, `gte.${from}`);
   return `${base}/rest/v1/${table}?${params}`;
+}
+
+/** The start of a range ending at `now`. */
+export function rangeStart(range: Range, now: number): string {
+  return new Date(now - RANGES[range].spanMs).toISOString();
+}
+
+/** An atmosphere_top_apps row, or null if it doesn't check out (names are someone else's text). */
+export function toApp(row: unknown): App | null {
+  if (typeof row !== 'object' || row === null) return null;
+  const r = row as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === 'number' ? x : typeof x === 'string' && x.trim() !== '' ? Number(x) : NaN);
+  const creates = n(r.creates);
+  const minutes = n(r.minutes);
+  if (typeof r.domain !== 'string' || !DOMAIN_RE.test(r.domain) || !(creates >= 0) || !(minutes >= 0)) return null;
+  const collections = (Array.isArray(r.collections) ? r.collections : []).filter((c): c is string => typeof c === 'string' && c.length <= 253 && NSID_RE.test(c)).slice(0, 3);
+  return { domain: r.domain, creates, minutes, collections };
 }
 
 /** A row as a Point, or null if anything is off. Views sum to numeric, which may arrive as strings. */
@@ -107,10 +140,30 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const vars = env();
     const base = (vars.ATMOSPHERE_SUPABASE_URL?.trim() || SUPABASE_URL).replace(/\/+$/, '');
     const key = vars.ATMOSPHERE_SUPABASE_KEY?.trim() || SUPABASE_PUBLISHABLE_KEY;
+    const at = now();
+    const headers = { accept: 'application/json', apikey: key };
+    // The apps are extra: asked alongside, and left out if they don't come.
+    const apps = (async (): Promise<App[] | undefined> => {
+      try {
+        const res = await fetchImpl(`${base}/rest/v1/rpc/atmosphere_top_apps`, {
+          method: 'POST',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify({ since: rangeStart(range, at), max_apps: TOP_APPS }),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (!res.ok) throw new Error(`supabase answered ${res.status}`);
+        const body = (await res.json()) as unknown;
+        if (!Array.isArray(body)) throw new Error('supabase answered something other than rows');
+        return body.map(toApp).filter((a): a is App => a !== null).slice(0, TOP_APPS);
+      } catch (error) {
+        log({ event: 'history_apps_error', range, error: (error as Error)?.message ?? 'Error' });
+        return undefined;
+      }
+    })();
     let rows: unknown;
     try {
-      const res = await fetchImpl(queryUrl(base, range, now()), {
-        headers: { accept: 'application/json', apikey: key },
+      const res = await fetchImpl(queryUrl(base, range, at), {
+        headers,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`supabase answered ${res.status}`);
@@ -123,7 +176,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const { key: column, cache } = RANGES[range];
     const points = (rows as unknown[]).map((r) => toPoint(r, column)).filter((p): p is Point => p !== null);
     const shaped = range === 'year' ? byMonth(points) : points;
-    return answer(request, 200, { range, points: shaped, total: sumPoints(points, new Date(now()).toISOString()) }, cache);
+    return answer(request, 200, { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: await apps }, cache);
   }
 
   return {

@@ -528,6 +528,18 @@ html[data-theme="dark"] {
   }
 }
 
+.weather-trends__apps {
+  display: grid;
+  gap: 12px;
+}
+
+.weather-trends__apps-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .weather-trends__table summary {
   width: fit-content;
   font-weight: 600;

@@ -154,6 +154,19 @@ describe('trends', () => {
     expect(section.querySelector('[data-t-rows] tr td')!.textContent).toBe('440'); // newest first
   });
 
+  it('lists the busiest apps over the range, when there are any', () => {
+    const section = report.querySelector<HTMLElement>('[data-r-trends]')!;
+    const wrap = section.querySelector<HTMLElement>('[data-t-apps-wrap]')!;
+    renderTrends(section, HISTORY, NOW);
+    expect(wrap.hidden).toBe(true);
+    renderTrends(section, { ...HISTORY, apps: [{ domain: 'tangled.sh', creates: 300, minutes: 2, collections: ['sh.tangled.repo'] }] }, NOW);
+    expect(wrap.hidden).toBe(false);
+    expect(section.querySelector('[data-t-apps-title]')!.textContent).toBe('busiest apps elsewhere, the last hour: new records');
+    const row = section.querySelector('[data-t-apps] li')!;
+    expect(row.querySelector('.weather-bars__label')!.textContent).toBe('tangled.sh');
+    expect(row.querySelector('.weather-bars__value')!.textContent).toBe('300');
+  });
+
   it('reads points with the arrow keys', () => {
     const section = report.querySelector<HTMLElement>('[data-r-trends]')!;
     renderTrends(section, HISTORY, NOW);
@@ -173,6 +186,8 @@ describe('trends', () => {
     expect(await fetchHistory('day', answer(HISTORY))).toBeNull(); // not what was asked for
     expect((await fetchHistory('hour', answer({ ...HISTORY, points: [{ t: 'x' }, ...HISTORY.points] })))!.points).toHaveLength(3);
     expect(await fetchHistory('hour', answer({ error: 'unavailable' }, 503))).toBeNull();
+    const withApps = await fetchHistory('hour', answer({ ...HISTORY, apps: [{ domain: 'ok.app', creates: 1, minutes: 1, collections: [] }, { domain: '<x>', creates: 1, minutes: 1, collections: [] }] }));
+    expect(withApps!.apps).toEqual([{ domain: 'ok.app', creates: 1, minutes: 1, collections: [] }]);
   });
 
   it('chart helpers: round tops, and gaps where steps are missing', () => {
