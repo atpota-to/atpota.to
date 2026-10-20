@@ -54,10 +54,14 @@ html[data-theme="dark"] {
 
 .home-hero,
 .home-sun,
-.home-guide,
+.home-guide {
+  grid-column: span 2;
+}
+
+/* Poe's intro and the feed each take a full row, so neither stretches to the other's height. */
 .home-poe,
 .home-latest {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 /* Shared copy variants: the phone layout uses the shorter lines from H-Mobile. */
@@ -601,7 +605,7 @@ html[data-theme="dark"] .home-find {
   --tile-pad: 30px;
   position: relative;
   overflow: hidden;
-  min-height: 280px;
+  min-height: 200px;
   justify-content: center;
   padding-left: 200px;
 }
@@ -624,6 +628,7 @@ html[data-theme="dark"] .home-find {
 }
 
 .home-poe__text {
+  max-width: 40em;
   margin: 0 0 18px;
   font-size: 16px;
   line-height: 1.5;
@@ -761,11 +766,11 @@ html.js .home-latest[data-state="loading"] .home-post__fallback {
   display: none;
 }
 
-/* The feed: one row per post or dispatch issue, newest first. */
+/* The feed: one card per post or dispatch issue, newest first, in three columns on desktop. */
 .home-feed {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -898,6 +903,10 @@ html.js .home-latest[data-state="loading"] .home-post__fallback {
 
 @media (max-width: 900px) {
   .home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-feed {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1228,6 +1237,7 @@ html.js .home-latest[data-state="loading"] .home-post__fallback {
   }
 
   .home-feed {
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 
