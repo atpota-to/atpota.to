@@ -39,8 +39,8 @@ the panel open. It is charming and it costs nothing. Once the panel is open, the
 face is state, not decoration.
 
 Rules: instant swaps, no sound, ever. The only idle motion is the small set in
-`website/src/poe/idle.ts`: blinks, short glances, and up to three arm waves per
-page view, none of them while the panel is open, a turn is running, or the tab
+`website/src/poe/idle.ts`: blinks, short glances, up to three arm waves per
+page view, and a nap after a minute with no input, none of them while the panel is open, a turn is running, or the tab
 is hidden. Respect `prefers-reduced-motion` on any transition, and turn the idle
 motion off under it. Give each state a real `alt` value, since the face carries
 meaning that a screen reader otherwise loses.

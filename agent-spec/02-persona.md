@@ -67,15 +67,17 @@ Two rules:
 1. State changes are instant swaps. At rest the potato blinks every few
    seconds, now and then glances with different eyes, and waves its arm at
    most three times per page view (none once the visitor has opened it), so it
-   reads as something you can tap. Each of these is over within two seconds;
-   nothing bounces and nothing moves over content. Constant motion is what
+   reads as something you can tap. After a minute with no input at all it
+   dozes off (eyes shut, slow breathing, a few z's) and wakes with a little
+   start at the next input. Each beat is over within two seconds and the nap is
+   barely there; nothing moves over content. Constant motion is what
    made Clippy intolerable, so keep it this small.
 2. The state is derived from the run, not from sentiment analysis of the text.
    Wire it to eve's stream events (tool start, tool error, turn end) rather than
    guessing.
 
 Respect `prefers-reduced-motion` for any transition you add and turn the idle
-blinks and waves off under it. Give every image a real `alt` that describes the
+blinks, waves and nap off under it. Give every image a real `alt` that describes the
 state, since the state carries meaning.
 
 ## Copy bank
