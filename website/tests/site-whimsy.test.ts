@@ -29,7 +29,7 @@ import { MASCOT_URLS } from '../src/scripts/mascot.js';
 import { greeting, initPet, milestoneLine, PETS_KEY, petReaction } from '../src/scripts/pet.js';
 import { forgetReader, readReader, READER_KEY, rememberReader } from '../src/scripts/reader.js';
 import { initTagline, TAGLINES } from '../src/scripts/tagline.js';
-import { CONDITION_TEXT, ERROR_TEXT, fetchReading, renderReading, renderWeatherError } from '../src/scripts/weather.js';
+import { CONDITION_TEXT, ERROR_TEXT, fetchReading, formatIndex, ratioText, renderReading, renderWeatherError } from '../src/scripts/weather.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const INDEX = read('../index.html');
@@ -148,9 +148,42 @@ describe('celebrations', () => {
 
 describe('atmospheric conditions', () => {
   const READING = { perSecond: { posts: 31.4, likes: 170.2, reposts: 22, follows: 14.6 }, condition: 'gusty' as const };
+  // The tile is a link to /weather, so it isn't a <section>.
+  const tileHtml = () => {
+    const start = INDEX.indexOf('<a class="tile tile--link home-weather"');
+    return INDEX.slice(start, INDEX.indexOf('</a>\n', INDEX.indexOf('home-weather__go', start)) + '</a>'.length);
+  };
+
+  it('links to the full weather report', () => {
+    document.body.innerHTML = tileHtml();
+    expect(document.querySelector<HTMLAnchorElement>('[data-weather]')!.getAttribute('href')).toBe('/weather');
+  });
+
+  it('shows the diversity index once a reading has it', () => {
+    document.body.innerHTML = tileHtml();
+    const tile = document.querySelector<HTMLElement>('[data-weather]')!;
+    expect(tile.querySelector<HTMLElement>('[data-weather-mix]')!.hidden).toBe(true);
+    renderReading(tile, {
+      ...READING,
+      records: { perSecond: 400, bluesky: 398, elsewhere: 2 },
+      diversity: { index: 0.5, level: 'low', apps: 3, collections: 20 },
+    });
+    expect(tile.querySelector<HTMLElement>('[data-weather-mix]')!.hidden).toBe(false);
+    expect(tile.querySelector('[data-weather-index]')!.textContent).toBe('0.50');
+    expect(tile.querySelector('[data-weather-level]')!.textContent).toBe('low');
+    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from outside bluesky');
+  });
+
+  it('words the index and the split', () => {
+    expect(formatIndex(0.05)).toBe('0.05');
+    expect(formatIndex(2.44)).toBe('2.4');
+    expect(formatIndex(12.4)).toBe('12');
+    expect(ratioText({ perSecond: 400, bluesky: 400, elsewhere: 0 })).toBe('every new record just now was a bluesky one');
+    expect(ratioText({ perSecond: 10, bluesky: 2, elsewhere: 8 })).toBe('most new records came from outside bluesky');
+  });
 
   it('shows the reading and the weather', () => {
-    document.body.innerHTML = section('home-weather');
+    document.body.innerHTML = tileHtml();
     const tile = document.querySelector<HTMLElement>('[data-weather]')!;
     renderReading(tile, READING);
     expect(tile.dataset.state).toBe('ready');
@@ -164,7 +197,7 @@ describe('atmospheric conditions', () => {
   });
 
   it('says so when the sky is hard to read', () => {
-    document.body.innerHTML = section('home-weather');
+    document.body.innerHTML = tileHtml();
     const tile = document.querySelector<HTMLElement>('[data-weather]')!;
     renderWeatherError(tile);
     expect(tile.dataset.state).toBe('error');
@@ -177,6 +210,16 @@ describe('atmospheric conditions', () => {
     expect(await fetchReading(answer({ ...READING, condition: 'hail' }))).toBeNull();
     expect(await fetchReading(answer({ perSecond: { posts: -1 } }))).toBeNull();
     expect(await fetchReading(answer({ error: 'unavailable' }, 503))).toBeNull();
+    // the newer parts are checked one by one; a bad one is dropped, the rest kept
+    const full = await fetchReading(
+      answer({
+        ...READING,
+        diversity: { index: 1, level: 'sunny', apps: 1, collections: 1 },
+        apps: [{ domain: 'tangled.sh', perSecond: 1, count: 5, collections: ['sh.tangled.repo', '<b>no</b>'] }, { domain: '<script>', perSecond: 1, count: 1, collections: [] }],
+      }),
+    );
+    expect(full!.diversity).toBeUndefined();
+    expect(full!.apps).toEqual([{ domain: 'tangled.sh', perSecond: 1, count: 5, collections: ['sh.tangled.repo'] }]);
   });
 });
 

@@ -5,7 +5,8 @@
  *    the tab title that asks you to come back, the footer's changing tagline, and the
  *    header's account button (./account.ts, which also opens sign-in for Poe's panel)
  * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
- *    "blog" -> ./blog.ts, "garden" -> ./garden-page.ts, "settings" -> ./settings.ts (dynamic import; each page module
+ *    "blog" -> ./blog.ts, "garden" -> ./garden-page.ts, "settings" -> ./settings.ts,
+ *    "weather" -> ./weather-page.ts (dynamic import; each page module
  *    exports `init()`, called once)
  * 3. mountPoe() from src/poe/index.ts (the corner widget, on every page)
  *
@@ -27,6 +28,7 @@ const PAGE_MODULES: Record<string, () => Promise<PageModule>> = {
   guide: () => import('./guide'),
   blog: () => import('./blog'),
   garden: () => import('./garden-page'),
+  weather: () => import('./weather-page'),
   settings: () => import('./settings'),
 };
 

@@ -81,6 +81,11 @@ const PAIRS: Array<[string, string, number]> = [
   ['focus-on-dark', 'footer', UI],
   ['sun', 'footer', UI],
   ['text', 'selection', TEXT],
+  // the weather report's bars, on the sky tile and on cards
+  ...['sky', 'card', 'paper'].flatMap((bg): Array<[string, string, number]> => [
+    ['weather-bsky', bg, UI],
+    ['weather-else', bg, UI],
+  ]),
 ];
 
 describe.each([

@@ -1500,3 +1500,41 @@ html[data-theme="dark"] .site-footer__sprout {
     color: Canvas;
   }
 }
+
+/* ---------- the weather report's ratio bar (weather.ts renderRatio) ---------- */
+
+/* Bluesky's records and everyone else's, side by side; the numbers are always in words nearby. */
+.weather-ratio {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+}
+
+.weather-ratio > span {
+  flex: 1 1 0;
+  min-width: 4px;
+  border-radius: 4px;
+}
+
+.weather-ratio > span[hidden] {
+  display: none;
+}
+
+.weather-ratio__bsky {
+  background: var(--weather-bsky);
+}
+
+/* Diagonal stripes as well as a colour, so the two parts differ without colour too. */
+.weather-ratio__else {
+  background: repeating-linear-gradient(135deg, var(--weather-else) 0 4px, color-mix(in srgb, var(--weather-else) 70%, transparent) 4px 7px);
+}
+
+@media (forced-colors: active) {
+  .weather-ratio__bsky {
+    background: CanvasText;
+  }
+
+  .weather-ratio__else {
+    background: Highlight;
+  }
+}
