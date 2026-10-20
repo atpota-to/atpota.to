@@ -1,0 +1,24 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.garden.patch",
+  "description": "A patch in the flower patch on atpota.to: a grid of plots that is open to planting for one season. Lives in atpota.to's own repo; flowers point at it with a strong ref.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["name", "season", "cols", "rows", "opensAt", "closesAt", "createdAt"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 400, "maxGraphemes": 40, "description": "What the patch is called, like \"autumn 2026\"." },
+          "season": { "type": "string", "knownValues": ["spring", "summer", "autumn", "winter"] },
+          "cols": { "type": "integer", "minimum": 4, "maximum": 24, "description": "Plots across." },
+          "rows": { "type": "integer", "minimum": 2, "maximum": 40, "description": "Plots down." },
+          "opensAt": { "type": "string", "format": "datetime", "description": "Flowers can be planted from this time." },
+          "closesAt": { "type": "string", "format": "datetime", "description": "Planting ends at this time; the flowers stay, pressed, in full bloom." },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    }
+  }
+}

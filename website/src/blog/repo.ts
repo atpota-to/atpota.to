@@ -77,11 +77,15 @@ async function xrpcError(res: Response): Promise<RepoError> {
  * URIs of the reader's records in `collection` whose `field` equals `value`. Newest
  * records come first in listRecords, so a fresh one is found on the first page.
  */
-export async function findOwn(
+export function findOwn(session: Session, collection: string, field: string, value: string, fetchImpl: typeof fetch = fetch): Promise<string[]> {
+  return findOwnWhere(session, collection, (record) => record[field] === value, fetchImpl);
+}
+
+/** URIs of the reader's records in `collection` whose value passes `match`, newest first. */
+export async function findOwnWhere(
   session: Session,
   collection: string,
-  field: string,
-  value: string,
+  match: (value: Record<string, unknown>) => boolean,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string[]> {
   const found: string[] = [];
@@ -95,7 +99,7 @@ export async function findOwn(
     if (!Array.isArray(body?.records)) throw new RepoError(res.status, 'records missing');
     for (const r of body.records) {
       const rec = r as { uri?: unknown; value?: Record<string, unknown> };
-      if (typeof rec?.uri === 'string' && rec.value?.[field] === value && parseRecordUri(rec.uri)?.did === session.did) found.push(rec.uri);
+      if (typeof rec?.uri === 'string' && rec.value && typeof rec.value === 'object' && match(rec.value) && parseRecordUri(rec.uri)?.did === session.did) found.push(rec.uri);
     }
     cursor = typeof body.cursor === 'string' && body.cursor !== '' && body.records.length > 0 ? body.cursor : null;
     if (!cursor) break;

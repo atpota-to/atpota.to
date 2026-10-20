@@ -1,19 +1,19 @@
 {
   "lexicon": 1,
   "id": "to.atpota.garden.sprout",
-  "description": "A flower planted in the flower patch on atpota.to. One per account; planting again replaces it.",
+  "description": "A flower planted in the flower patch on atpota.to. One per account in the open patches; planting again replaces it. Flowers in patches that have closed stay, pressed.",
   "defs": {
     "main": {
       "type": "record",
       "key": "tid",
       "record": {
         "type": "object",
-        "required": ["subject", "kind", "plot", "createdAt"],
+        "required": ["patch", "kind", "plot", "createdAt"],
         "properties": {
-          "subject": {
-            "type": "string",
-            "format": "did",
-            "description": "The garden the flower grows in: atpotato's DID, did:plc:qntsxa2i4sb24noi45fx4np2."
+          "patch": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The patch the flower grows in: a to.atpota.garden.patch record in atpota.to's repo (did:plc:qntsxa2i4sb24noi45fx4np2)."
           },
           "kind": {
             "type": "string",
@@ -22,8 +22,8 @@
           "plot": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 479,
-            "description": "The plot in the patch's grid, 12 wide, counted from the top left. If an earlier flower already has it, this one moves to the next free plot."
+            "maximum": 959,
+            "description": "The plot in its patch, counted from the top left, row by row. If an earlier flower already has it, this one moves to the next free plot."
           },
           "createdAt": { "type": "string", "format": "datetime" }
         }

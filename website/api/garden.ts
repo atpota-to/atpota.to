@@ -1,6 +1,6 @@
 // Vercel Function (Node.js runtime, Web handlers): the home page's flower patch
-// (flowers visitors planted in their own repos; see server/garden.ts).
-//   GET / HEAD  -> { flowers: [...], total }
+// (the seasonal patches and the flowers visitors planted in their own repos; see server/garden.ts).
+//   GET / HEAD [?patch=<rkey>]  -> { patch, patches, flowers, total }
 //   anything else -> 405
 // Local imports end in ".js": Vercel runs the compiled files as native ESM.
 

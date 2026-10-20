@@ -1277,18 +1277,19 @@ html:not(.js) .home-patch {
 /* The grid of plots, seen from above (garden.ts builds the plots, flowers.ts the flowers). */
 .home-plots {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* --plot-cols and --plot-cols-narrow come from the patch (garden.ts). */
+  grid-template-columns: repeat(var(--plot-cols, 12), minmax(0, 1fr));
   gap: 5px;
   padding: 10px;
   border-radius: 18px;
   background: var(--home-plot-path);
 }
 
-/* Narrow: the same plots wrap six across (each row of twelve shows as two), so they stay big
-   enough to tap. garden.ts reads the column count for arrow keys. */
+/* Narrow: a wide patch wraps half as many across (each row shows as two), so the plots stay
+   big enough to tap. garden.ts reads the column count for arrow keys. */
 @container patch (max-width: 380px) {
   .home-plots {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--plot-cols-narrow, 6), minmax(0, 1fr));
     gap: 6px;
   }
 }
@@ -1351,6 +1352,11 @@ html:not(.js) .home-patch {
 
 .home-flower--ghost {
   opacity: 0.5;
+}
+
+/* A bloom nobody has tended for a few days droops a little. */
+.home-plot.is-thirsty .home-flower {
+  filter: saturate(0.55) brightness(0.92);
 }
 
 .home-plot__tag {

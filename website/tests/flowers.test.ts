@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { COLOURWAYS, drawFlower, FLOWER_KINDS, flowerSeed, hashSeed, sampleVariant, seeded, stageFor, variantFor, type FlowerKind } from '../src/scripts/flowers.js';
+import { bloomsAt, COLOURWAYS, drawFlower, FLOWER_KINDS, flowerSeed, hashSeed, sampleVariant, seeded, stageFor, variantFor, type FlowerKind } from '../src/scripts/flowers.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const seeds = Array.from({ length: 400 }, (_, i) => flowerSeed(`did:plc:${String(i).padStart(24, 'a')}`, `3k${i}`));
@@ -43,13 +43,45 @@ describe('generative flowers', () => {
     expect(daisies.filter((v) => v.ladybug).length).toBeLessThan(daisies.length / 10);
   });
 
-  it('grows from sprout to bud to bloom over its first days', () => {
+  it('grows from sprout to bud to bloom over its first week; a closed patch is all in bloom', () => {
     const planted = '2026-10-01T00:00:00Z';
     const at = Date.parse(planted);
     expect(stageFor(planted, at + 1000)).toBe('sprout');
-    expect(stageFor(planted, at + DAY + 1)).toBe('bud');
-    expect(stageFor(planted, at + 3 * DAY + 1)).toBe('bloom');
+    expect(stageFor(planted, at + 2 * DAY - 1)).toBe('sprout');
+    expect(stageFor(planted, at + 2 * DAY)).toBe('bud');
+    expect(stageFor(planted, at + 7 * DAY - 1)).toBe('bud');
+    expect(stageFor(planted, at + 7 * DAY)).toBe('bloom');
+    expect(bloomsAt(planted)).toBe(at + 7 * DAY);
     expect(stageFor('not a date', at)).toBe('sprout');
+    expect(stageFor(planted, at + 1000, false)).toBe('bloom');
+  });
+
+  it('care makes rarer blooms likelier, and never takes one away', () => {
+    const rarities = (care: number) =>
+      FLOWER_KINDS.flatMap((kind) =>
+        seeds.map((seed) => {
+          const v = variantFor(kind, seed, care);
+          return { twoTone: v.twoTone, double: v.double, ladybug: v.ladybug, petalLength: v.petalLength, scale: v.scale };
+        }),
+      );
+    const levels = [0, 0.14, 0.29, 0.43, 0.57, 0.71, 0.86, 1].map(rarities);
+    for (let l = 1; l < levels.length; l++) {
+      levels[l]!.forEach((v, i) => {
+        const before = levels[l - 1]![i]!;
+        for (const key of ['twoTone', 'double', 'ladybug'] as const) if (before[key]) expect(v[key]).toBe(true);
+        expect(v.petalLength).toBeGreaterThanOrEqual(before.petalLength);
+        expect(v.scale).toBeGreaterThanOrEqual(before.scale);
+      });
+    }
+    const count = (level: ReturnType<typeof rarities>, key: 'twoTone' | 'double' | 'ladybug') => level.filter((v) => v[key]).length;
+    for (const key of ['twoTone', 'double', 'ladybug'] as const) expect(count(levels.at(-1)!, key)).toBeGreaterThan(count(levels[0]!, key) * 1.5);
+    // only the rolls' bars move: colourway, petals and leaves stay put
+    const plain = variantFor('daisy', 42, 0);
+    const tended = variantFor('daisy', 42, 1);
+    expect([tended.colourway, tended.petals, tended.leaves, tended.rotation]).toEqual([plain.colourway, plain.petals, plain.leaves, plain.rotation]);
+    // nonsense care is no care
+    expect(variantFor('daisy', 42, Number.NaN)).toEqual(plain);
+    expect(variantFor('daisy', 42, 5)).toEqual(tended);
   });
 
   it('draws the petals it was dealt, as a quiet svg', () => {

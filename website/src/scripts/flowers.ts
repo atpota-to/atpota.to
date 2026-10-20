@@ -8,7 +8,12 @@
  * and then something rarer: two-tone petals, a second ring of petals, or a ladybug on a
  * leaf.
  *
- * Growth follows age: a sprout for the first day, a bud until the third, then the bloom.
+ * Care (0 to 1, how well it was tended while it grew; server/garden.ts counts it) makes the
+ * rarer things likelier and the bloom a little fuller. The seed's rolls stay the same and
+ * care only raises the bar each roll has to clear, so more care never takes anything away.
+ *
+ * Growth follows age: a sprout for SPROUT_DAYS, a bud until GROW_DAYS, then the bloom. A
+ * flower in a patch that has closed is always in bloom.
  *
  * Everything is built with createElementNS; nothing here touches innerHTML.
  */
@@ -116,8 +121,9 @@ const PETALS: Record<FlowerKind, (r: () => number) => number> = {
 
 const CAN_DOUBLE: ReadonlySet<FlowerKind> = new Set(['sunflower', 'daisy', 'poppy']);
 
-/** The look of one flower, from its seed (use flowerSeed). Same seed, same flower. */
-export function variantFor(kind: FlowerKind, seed: number): Variant {
+/** The look of one flower, from its seed (use flowerSeed) and care. Same seed and care, same flower. */
+export function variantFor(kind: FlowerKind, seed: number, care = 0): Variant {
+  const c = Number.isFinite(care) ? Math.min(1, Math.max(0, care)) : 0;
   const r = seeded(seed);
   const ways = COLOURWAYS[kind];
   const colourway = ways[Math.floor(r() * ways.length)] ?? ways[0]!;
@@ -129,18 +135,27 @@ export function variantFor(kind: FlowerKind, seed: number): Variant {
     angle: Math.round(first + (360 / leafCount) * i + between(-25, 25)),
     length: Number(between(0.8, 1.2).toFixed(2)),
   }));
+  // Every roll is made whatever the kind or care, so the rolls after it stay the same.
+  const petalLength = between(0.88, 1.12);
+  const petalWidth = between(0.82, 1.18);
+  const centerSize = between(0.85, 1.2);
+  const twoTone = r() < 0.1 + 0.2 * c;
+  const double = r() < 0.1 + 0.2 * c;
+  const ladybug = r() < 0.025 + 0.055 * c;
+  const rotation = Math.round(r() * 360);
+  const scale = between(0.86, 1);
   return {
     colourway,
     petals,
-    petalLength: Number(between(0.88, 1.12).toFixed(2)),
-    petalWidth: Number(between(0.82, 1.18).toFixed(2)),
-    centerSize: Number(between(0.85, 1.2).toFixed(2)),
-    twoTone: kind !== 'rose' && r() < 0.12,
-    double: CAN_DOUBLE.has(kind) && r() < 0.15,
-    ladybug: r() < 1 / 40,
+    petalLength: Number((petalLength * (1 + 0.08 * c)).toFixed(2)),
+    petalWidth: Number(petalWidth.toFixed(2)),
+    centerSize: Number(centerSize.toFixed(2)),
+    twoTone: kind !== 'rose' && twoTone,
+    double: CAN_DOUBLE.has(kind) && double,
+    ladybug,
     leaves,
-    rotation: Math.round(r() * 360),
-    scale: Number(between(0.86, 1).toFixed(2)),
+    rotation,
+    scale: Number(Math.min(1, scale + 0.08 * c).toFixed(2)),
   };
 }
 
@@ -148,14 +163,23 @@ export function flowerSeed(did: string, rkey: string): number {
   return hashSeed(`${did}/${rkey}`);
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+/** Match server/garden.ts. */
+export const SPROUT_DAYS = 2;
+export const GROW_DAYS = 7;
 
-/** A sprout for the first day, a bud until the third, then in bloom. */
-export function stageFor(plantedAt: string, now: number): Stage {
+/** A sprout, then a bud, then in bloom; every flower in a closed patch is in bloom. */
+export function stageFor(plantedAt: string, now: number, open = true): Stage {
+  if (!open) return 'bloom';
   const age = now - Date.parse(plantedAt);
-  if (!Number.isFinite(age) || age < DAY_MS) return 'sprout';
-  if (age < 3 * DAY_MS) return 'bud';
+  if (!Number.isFinite(age) || age < SPROUT_DAYS * DAY_MS) return 'sprout';
+  if (age < GROW_DAYS * DAY_MS) return 'bud';
   return 'bloom';
+}
+
+/** When a flower planted at `plantedAt` blooms (ms since the epoch). */
+export function bloomsAt(plantedAt: string): number {
+  return Date.parse(plantedAt) + GROW_DAYS * DAY_MS;
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
