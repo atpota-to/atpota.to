@@ -36,6 +36,7 @@ export default defineConfig({
         guide: r('./guides/bluesky-for-brands.html'),
         garden: r('./garden/index.html'),
         weather: r('./weather/index.html'),
+        settings: r('./settings/index.html'),
         // Filled per request by api/blog.ts (server/blog/shell.ts); not a page of its own.
         blog: r('./shells/blog.html'),
         notfound: r('./404.html'),

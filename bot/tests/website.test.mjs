@@ -28,7 +28,16 @@ const channel = (await load("channels/website", [
     export const defineChannel = (definition) => definition;`)}"`],
   ['from "../lib/bluesky"', 'from "../lib/bluesky.js"'],
   ['from "../lib/website"', 'from "../lib/website.mjs"'],
+  // The real forgetNotes needs eve's memory and a Blob store; this records the
+  // DIDs it is asked to forget and answers as the test scripts it.
+  ['from "../lib/published-memory"', `from "${stub(`export async function forgetNotes(did) {
+    globalThis.__websiteTestForgets.push(did);
+    return globalThis.__websiteTestForget(did);
+  }`)}"`],
 ])).default;
+const forgets = [];
+globalThis.__websiteTestForgets = forgets;
+globalThis.__websiteTestForget = async () => ({ hadNotes: true, published: true });
 const instructions = (await load("instructions/website", [
   ['from "eve/instructions"', `from "${stub(`export const defineDynamic = (definition) => definition;
     export const defineInstructions = (instructions) => instructions;`)}"`],
@@ -557,7 +566,7 @@ test("the channel queues messages, stays private and keeps its own identity", ()
   assert.equal(channel.audience(), "private");
   assert.equal(typeof channel.events["turn.failed"], "function");
   assert.equal(channel.cors, undefined);
-  assert.deepEqual(channel.routes.map((r) => `${r.method} ${r.path}`), ["POST /website/chat"]);
+  assert.deepEqual(channel.routes.map((r) => `${r.method} ${r.path}`), ["POST /website/chat", "POST /website/forget"]);
 });
 
 // ------------------------------------------------- instructions and gates
@@ -715,4 +724,62 @@ test("website callers cannot run eve's bash, read_file, write_file or web_fetch"
       assert.deepEqual(innerCalls.at(-1), { tool: file, input: inputs[file], ctx });
     }
   }
+});
+
+// ------------------------------------------------------------- forget me
+
+const forgetRoute = channel.routes.find((r) => r.method === "POST" && r.path === "/website/forget");
+function forget(body, secret = SECRET) {
+  const headers = { "content-type": "application/json" };
+  if (secret !== null) headers["x-atpotato-website-secret"] = secret;
+  return forgetRoute.handler(new Request("https://bot.example/website/forget", {
+    method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body),
+  }), {});
+}
+
+test("forget wipes the notes for the DID the proxy verified, and says what it found", async () => {
+  forgets.length = 0;
+  const did = "did:plc:abcdefghijklmnopqrstuvwx";
+  const res = await forget({ did });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await res.json(), { hadNotes: true, published: true });
+  assert.deepEqual(forgets, [did]);
+
+  globalThis.__websiteTestForget = async () => ({ hadNotes: false, published: false });
+  assert.deepEqual(await (await forget({ did: "did:web:someone.example" })).json(), { hadNotes: false, published: false });
+  globalThis.__websiteTestForget = async () => ({ hadNotes: true, published: true });
+});
+
+test("forget refuses a wrong or missing secret, and anything but a bare DID", async () => {
+  forgets.length = 0;
+  const did = "did:plc:abcdefghijklmnopqrstuvwx";
+  assert.equal((await forget({ did }, "wrong")).status, 401);
+  assert.equal((await forget({ did }, null)).status, 401);
+  for (const body of [{}, { did: "dame.is" }, { did: "did:plc:short" }, { did, conversationId }, "not json", [did]]) {
+    assert.equal((await forget(body)).status, 400, JSON.stringify(body));
+  }
+  assert.deepEqual(forgets, [], "nothing reached the store");
+});
+
+test("forget still works with the chat switched off, and answers 502 when the store fails", async () => {
+  process.env.WEBSITE_CHAT_DISABLED = "1";
+  try {
+    assert.equal((await forget({ did: "did:plc:abcdefghijklmnopqrstuvwx" })).status, 200);
+  } finally {
+    delete process.env.WEBSITE_CHAT_DISABLED;
+  }
+  globalThis.__websiteTestForget = async () => { throw new Error("blob down: eve/memory/file/memscope1_secret"); };
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => logged.push(args.join(" "));
+  try {
+    const res = await forget({ did: "did:plc:abcdefghijklmnopqrstuvwx" });
+    assert.equal(res.status, 502);
+    assert.equal(await res.text(), "");
+  } finally {
+    console.error = original;
+    globalThis.__websiteTestForget = async () => ({ hadNotes: true, published: true });
+  }
+  assert.deepEqual(logged, ["forget failed Error"], "only the error name is logged");
 });

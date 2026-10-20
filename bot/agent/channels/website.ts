@@ -1,9 +1,11 @@
 import { defineChannel, POST, type Session } from "eve/channels";
 import type { MessageStreamEvent } from "eve/client";
 import { MAX_TRACKED_LINKS } from "../lib/bluesky";
+import { forgetNotes } from "../lib/published-memory";
 import {
   WEBSITE_SECRET_HEADER,
   WebsiteChat,
+  WebsiteForget,
   buildWebsitePrompt,
   websiteAddress,
   websiteAuth,
@@ -332,6 +334,27 @@ export default defineChannel({
       return new Response(streamTurn({ session, startIndex, deliveryId, signal: request.signal }), {
         headers: SSE_HEADERS,
       });
+    }),
+
+    // "Forget me" from the settings page on atpota.to: wipe the notes Poe
+    // keeps for a DID the proxy verified (WebsiteForget). Not behind
+    // WEBSITE_CHAT_DISABLED: switching the chat off must never stop someone
+    // from being forgotten. Sessions that already recalled the notes keep
+    // them in their history until they expire, and the proxy drops the
+    // visitor's own conversation cookie so their next chat starts clean.
+    POST("/website/forget", async (request) => {
+      if (!websiteSecretMatches(request.headers.get(WEBSITE_SECRET_HEADER))) {
+        return new Response(null, { status: 401 });
+      }
+      const parsed = WebsiteForget.safeParse(await readBody(request));
+      if (!parsed.success) return new Response(null, { status: 400 });
+      try {
+        return Response.json(await forgetNotes(parsed.data.did), { headers: { "cache-control": "no-store" } });
+      } catch (err) {
+        // The error name only: a Blob error can quote the key.
+        console.error("forget failed", err instanceof Error ? err.name : "unknown");
+        return new Response(null, { status: 502 });
+      }
     }),
   ],
 

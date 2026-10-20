@@ -239,7 +239,7 @@ deciding whether to save.
 
 ## Forgetting
 
-Three paths, all of which need to exist before the account goes live:
+The paths, all of which need to exist before the account goes live:
 
 1. **"forget me" in a reply.** Extend the opt-out gate in
    `09-bluesky-channel.md`: the phrase adds the DID to the denylist and deletes
@@ -249,10 +249,25 @@ Three paths, all of which need to exist before the account goes live:
    `person__remove_memory` for the entry. This is the everyday case.
 3. **An admin delete.** For a request that arrives by email, or anything
    involving a minor or a person in distress.
+4. **The settings page on atpota.to** (`/settings`, since 2026-10-20). A
+   signed-in reader presses "make poe forget me". The browser asks their own
+   PDS for a one-minute service-auth token for `to.atpota.poe.forget` (its own
+   `rpc:` permission, so the chat token sent with every message can never
+   wipe anything), sends it with `DELETE /api/poe`, and the proxy verifies it
+   exactly like a chat token. The bot's `POST /website/forget` empties the
+   person's document in Blob, conditional on the version it read, and hands the
+   empty version to the droplet, which replaces the public copy in Poe's repo.
+   Readers who signed in before the permission existed are asked to sign in
+   again. It does not denylist anyone: Poe still answers them, and may note new
+   things later.
 
-A gap worth knowing about: `fileMemory()` gives the model per-entry removal, so
-wiping an entire scope is a store-level delete you write yourself against the
-Blob backend. Build that before launch, not after the first request for it.
+`fileMemory()` gives the model per-entry removal only, so wiping an entire
+scope is a store-level write of our own: `forgetNotes` in
+`bot/agent/lib/published-memory.ts`. Outside a turn there is no
+`ctx.memory.scope.key`, so `lib/memory-key.ts` works out eve's key for the
+person slot itself; a test holds it to eve's own derivation, and every person
+turn logs an error if the real key ever stops matching. Sessions that already
+recalled the notes keep them in their history until they expire.
 
 Also decide a retention window. A fact nobody has touched in a year is probably
 wrong anyway, and a TTL means the system forgets by default rather than

@@ -1,6 +1,7 @@
 import { defineMemoryProvider, type MemoryProvider, type MemoryScope } from "eve/memory";
-import { fileMemory, inMemory, type MemoryDocumentBackend } from "eve/memory/file";
+import { fileMemory, inMemory, MemoryDocumentConflictError, type MemoryDocumentBackend } from "eve/memory/file";
 import { vercelBlob } from "eve/memory/file/vercel";
+import { PERSON_SLOT, personNotesKey } from "./memory-key";
 
 /**
  * fileMemory exactly as the model knows it, with every saved version of a
@@ -54,12 +55,12 @@ function didOf(scope: MemoryScope): string | undefined {
 /**
  * Hand one version of someone's notes to the droplet. Never throws, and gives
  * up quickly: the note is already safe in Blob, and the droplet retries its
- * own publishing.
+ * own publishing. True when the droplet took it.
  */
-async function handOver(did: string, content: string, timeoutMs: number): Promise<void> {
+async function handOver(did: string, content: string, timeoutMs: number): Promise<boolean> {
   const callback = process.env.DROPLET_CALLBACK_URL;
   const secret = process.env.DROPLET_SHARED_SECRET;
-  if (!callback || !secret) return;
+  if (!callback || !secret) return false;
   try {
     const res = await fetch(new URL("/memory", callback), {
       method: "POST",
@@ -68,9 +69,72 @@ async function handOver(did: string, content: string, timeoutMs: number): Promis
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) console.error("notes not handed to the droplet", res.status);
+    return res.ok;
   } catch (err) {
     console.error("notes not handed to the droplet", String(err));
+    return false;
   }
+}
+
+const HEADER = /^<!-- eve-memory-file-v1 lastAllocatedIndex=(-1|0|[1-9]\d*) -->\n/;
+
+/**
+ * A fileMemory document with no notes in it. It keeps the old counter, so a
+ * note saved later never takes the number of one that was forgotten.
+ */
+export function emptyNotes(previous: string | null): string {
+  const last = previous ? HEADER.exec(previous)?.[1] ?? "-1" : "-1";
+  return `<!-- eve-memory-file-v1 lastAllocatedIndex=${last} -->\n`;
+}
+
+export interface Forgotten {
+  /** There were notes to wipe. False when Poe had nothing on this DID. */
+  hadNotes: boolean;
+  /** The emptied notes reached the droplet, which replaces the public copy in Poe's repo. */
+  published: boolean;
+}
+
+/**
+ * Wipe everything Poe remembers about one person: the private Blob copy that
+ * is recalled every turn, then the public copy in Poe's repo, by handing the
+ * droplet the emptied document like any other saved version. The Blob write
+ * is conditional on the version just read, so a note saved at the same moment
+ * is never resurrected; it is read and wiped again instead.
+ *
+ * Only call it for a DID a trusted caller asserted (see channels/website.ts).
+ * Throws when the Blob store cannot be reached, so the caller can say so.
+ */
+export async function forgetNotes(did: string): Promise<Forgotten> {
+  const key = personNotesKey(did);
+  const signal = AbortSignal.timeout(10_000);
+  for (let attempt = 0; ; attempt++) {
+    const doc = await store.read({ key, signal });
+    // Nothing stored: nothing published either, and handing the droplet an
+    // empty document would publish a record about someone Poe never met.
+    if (!doc) return { hadNotes: false, published: false };
+    const content = emptyNotes(doc.content);
+    if (doc.content === content) return { hadNotes: false, published: await handOver(did, content, 5000) };
+    try {
+      await store.write({ key, content, expectedVersion: doc.version, signal });
+    } catch (err) {
+      if (MemoryDocumentConflictError.is(err) && attempt < 2) continue;
+      throw err;
+    }
+    return { hadNotes: true, published: await handOver(did, content, 5000) };
+  }
+}
+
+let warnedKey = false;
+/**
+ * forgetNotes finds a person's notes by working the key out itself. Check that
+ * against the key eve actually used, once per instance, so a mismatch (an eve
+ * upgrade, a renamed slot) shows up in the logs before anyone asks to be
+ * forgotten.
+ */
+function checkForgetKey(slot: string, key: string, did: string): void {
+  if (warnedKey || slot !== PERSON_SLOT || personNotesKey(did) === key) return;
+  warnedKey = true;
+  console.error("forgetNotes would miss this person's notes: lib/memory-key.ts no longer matches eve's key");
 }
 
 // Both slots use the existing private Blob store, but only person memory
@@ -90,6 +154,7 @@ export function publishedFileMemory(): MemoryProvider {
         // person talks to the potato. The droplet ignores a version it has.
         const did = didOf(ctx.memory.scope);
         if (did) {
+          checkForgetKey(ctx.memory.slot, ctx.memory.scope.key, did);
           const doc = await store
             .read({ key: ctx.memory.scope.key, signal: ctx.abortSignal })
             .catch(() => null);

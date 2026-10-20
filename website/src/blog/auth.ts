@@ -20,7 +20,9 @@
  *                 a short-lived token proving to atpota.to's Poe who they are, so Poe can
  *                 remember them (src/poe/identity.ts, server/identity.ts). A reader who
  *                 signed in before it was added has a session without it, and Poe asks
- *                 them to sign in again.
+ *                 them to sign in again. And rpc:to.atpota.poe.forget, the same for the
+ *                 settings page's "forget me" (src/scripts/settings.ts, server/forget.ts),
+ *                 so the chat token sent with every message can never wipe anything.
  *
  * Handles are resolved by atpota.to's own PDS, so a typed handle isn't sent to anyone else.
  * The library is loaded on demand: a reader who never signs in never downloads it.
@@ -45,8 +47,10 @@ export const CALLBACK_PATH = '/blog';
  * atpota.to, and that is all server/identity.ts accepts.
  */
 export const POE_CHAT_SCOPE = 'rpc:to.atpota.poe.chat?aud=*';
-/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending, your own garden, and Poe. */
-export const SCOPE = `atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete ${POE_CHAT_SCOPE}`;
+/** The same for asking Poe to forget the reader (the settings page). */
+export const POE_FORGET_SCOPE = 'rpc:to.atpota.poe.forget?aud=*';
+/** Subscriptions and recommends (standard.site's own permission set), comments, flowers, tending, your own garden, and Poe (chatting, and forgetting you). */
+export const SCOPE = `atproto include:site.standard.authSocial repo:pub.leaflet.comment?action=create&action=delete repo:to.atpota.garden.sprout?action=create&action=delete repo:to.atpota.garden.tend?action=create repo:to.atpota.garden.patch?action=create&action=update&action=delete ${POE_CHAT_SCOPE} ${POE_FORGET_SCOPE}`;
 export const HANDLE_RESOLVER = 'https://pds.atpota.to';
 /** Where the library remembers the signed-in account (localStorage). */
 export const SESSION_KEY = '@@atproto/oauth-client-browser(sub)';

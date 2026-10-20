@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>settings · atpotato</title>
+    <meta name="title" content="settings · atpotato">
+    <meta name="description" content="your settings on atpota.to: who you are signed in as, and asking poe to forget everything it remembers about you.">
+    <link rel="canonical" href="https://atpota.to/settings">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="atpotato">
+    <meta property="og:url" content="https://atpota.to/settings">
+    <meta property="og:title" content="settings · atpotato">
+    <meta property="og:description" content="your settings on atpota.to: who you are signed in as, and asking poe to forget everything it remembers about you.">
+    <meta property="og:image" content="https://atpota.to/og/home.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="atpotato: making the atmosphere a little more fun. poe, a smiling potato with an @ on its tummy, waves from a dirt mound under a yellow sunburst.">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/settings.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="settings">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="settings-page" tabindex="-1">
+        <!-- src/scripts/settings.ts: data-state is checking, unavailable, signed-out or signed-in. -->
+        <div class="settings" data-settings-page data-state="checking">
+            <header class="tile settings-head" aria-labelledby="settings-title">
+                <span class="settings-head__avatar" aria-hidden="true" data-settings-avatar></span>
+                <div class="settings-head__words">
+                    <p class="eyebrow">settings</p>
+                    <h1 class="settings-head__title" id="settings-title" data-settings-title>your settings</h1>
+                    <p class="settings-head__lede" data-settings-lede>checking who you are…</p>
+                </div>
+            </header>
+
+            <section class="tile settings-card" aria-labelledby="settings-signin-title" data-settings-signin hidden>
+                <h2 class="settings-card__title" id="settings-signin-title">sign in first</h2>
+                <p class="settings-card__text">settings belong to your bluesky or atmosphere account, so sign in to see and change yours.</p>
+                <button type="button" class="btn btn--primary settings-card__action" data-settings-signin-button>sign in</button>
+            </section>
+
+            <section class="tile settings-card" aria-labelledby="settings-memory-title" data-settings-memory hidden>
+                <h2 class="settings-card__title" id="settings-memory-title">what poe remembers</h2>
+                <p class="settings-card__text">poe keeps a few short notes about the people it talks to, so it can keep its answers short: what you build, how technical you are, how you like to be talked to. it saves them when you mention it on bluesky or chat with it here while signed in, and they're public, in poe's own repo.</p>
+                <p class="settings-card__text">if you'd rather it didn't, poe can forget you. that empties every note it keeps about you, on bluesky and here, and replaces the public copy in its repo.</p>
+                <p class="settings-card__note">poe will still answer you after that. if you tell it new things about yourself later, it may jot those down again, and you can come back here any time.</p>
+
+                <div class="settings-forget" data-forget>
+                    <button type="button" class="btn btn--soil settings-card__action" data-forget-start>make poe forget me</button>
+                    <div class="settings-forget__confirm" role="group" aria-labelledby="settings-forget-ask" data-forget-confirm hidden>
+                        <p class="settings-forget__ask" id="settings-forget-ask">forget everything poe remembers about you? this can't be undone.</p>
+                        <div class="settings-forget__buttons">
+                            <button type="button" class="btn btn--soil btn--sm" data-forget-yes>yes, forget me</button>
+                            <button type="button" class="btn btn--outline btn--sm" data-forget-no>never mind</button>
+                        </div>
+                    </div>
+                    <p class="settings-forget__status" role="status" data-forget-status></p>
+                    <button type="button" class="btn btn--outline btn--sm" data-forget-signin hidden>sign in again</button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>

@@ -7,6 +7,7 @@ import {
   clearIdentityCache,
   identify,
   parseKey,
+  POE_FORGET_LXM,
   POE_LXM,
   POE_SERVICE_DID,
   readToken,
@@ -194,6 +195,20 @@ describe('tokens', () => {
 });
 
 describe('identify', () => {
+  it('takes a forget token only when asked for one, and never a chat token in its place', async () => {
+    const key = makeKey('secp256k1');
+    const net = fakeFetch({ [DID]: didDoc(DID, key) });
+    const deps = { fetch: net.impl, now: () => NOW };
+    const forget = jwt(key, claims({ lxm: POE_FORGET_LXM }));
+    const chat = jwt(key, claims());
+    expect(POE_FORGET_LXM).toBe('to.atpota.poe.forget');
+    expect(await identify(forget, { ...deps, lxm: POE_FORGET_LXM })).toEqual({ ok: true, visitor: { did: DID, handle: 'someone.example' } });
+    expect(await identify(chat, { ...deps, lxm: POE_FORGET_LXM })).toEqual({ ok: false, reason: 'claims' });
+    expect(await identify(forget, deps)).toEqual({ ok: false, reason: 'claims' });
+    expect(readToken(forget, NOW, POE_FORGET_LXM).ok).toBe(true);
+    expect(readToken(forget, NOW).ok).toBe(false);
+  });
+
   for (const curve of ['secp256k1', 'p256'] as const) {
     it(`verifies a ${curve} token against the DID document and names the AppView's handle`, async () => {
       const key = makeKey(curve);

@@ -4,6 +4,7 @@ import { resetFirewallWarning } from '../server/firewall.js';
 import { createPoeHandlers, type PoeDeps } from '../server/handler.js';
 import type { LogFields } from '../server/log.js';
 import { createLocalLimiter } from '../server/rate-limit.js';
+import { MESSAGES } from '../server/messages.js';
 
 // Handler-level tests for /api/poe (SPEC 4.1-4.4). The bot is replaced by a stubbed
 // global fetch that returns a scripted event stream.
@@ -453,6 +454,89 @@ describe('upstream request', () => {
     const { calls } = happyFetch();
     await collect(await handlers({ ...ENV, POE_AGENT_URL: 'https://bot-preview.example/base/' }).POST(post({ message: 'hi' })));
     expect(calls[0]!.url).toBe('https://bot-preview.example/base/website/chat');
+  });
+});
+
+describe('forget me', () => {
+  const DID = 'did:plc:abcdefghijklmnopqrstuvwx';
+  const BOT_FORGET = 'https://atpotato-bot.vercel.app/website/forget';
+  const verified = async () => ({ ok: true as const, visitor: { did: DID, handle: 'someone.example' } });
+  const del = (headers: Record<string, string> = { authorization: 'Bearer aaa.bbb.ccc' }) =>
+    new Request(URL_HTTPS, { method: 'DELETE', headers: { origin: 'https://atpota.to', ...headers } });
+
+  it('verifies a forget token, has the bot forget that DID, and clears the cookie', async () => {
+    const { calls } = stubFetch(() => Response.json({ hadNotes: true, published: true }));
+    const asked: Array<[string, string]> = [];
+    const h = handlers(ENV, { identify: async (token, lxm) => (asked.push([token, lxm]), verified()) });
+    const res = await h.DELETE(del());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ hadNotes: true, published: true });
+    expect(res.headers.get('set-cookie')).toMatch(/^poe_conversation=; .*Max-Age=0/);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(asked).toEqual([['aaa.bbb.ccc', 'to.atpota.poe.forget']]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(BOT_FORGET);
+    expect(calls[0]!.body).toEqual({ did: DID });
+    expect(calls[0]!.headers.get('x-atpotato-website-secret')).toBe(SECRET);
+    expect(calls[0]!.init.redirect).toBe('error');
+    expect(h.logs).toEqual([{ event: 'forget', status: 200, identity: 'verified', code: 'had_notes' }]);
+    expect(JSON.stringify(h.logs).includes(DID)).toBe(false);
+  });
+
+  it('passes on that there was nothing to forget, or that the public copy has not caught up', async () => {
+    for (const answer of [{ hadNotes: false, published: false }, { hadNotes: true, published: false }]) {
+      stubFetch(() => Response.json(answer));
+      const res = await handlers(ENV, { identify: verified }).DELETE(del());
+      expect(await res.json()).toEqual(answer);
+    }
+  });
+
+  it('refuses a token that does not verify, without reaching the bot or clearing the cookie', async () => {
+    const { calls } = stubFetch(() => Response.json({ hadNotes: true, published: true }));
+    for (const headers of [{ authorization: 'Bearer aaa.bbb.ccc' }, { authorization: 'Basic abc' }, { authorization: '' }]) {
+      const h = handlers(ENV, { identify: async () => ({ ok: false, reason: 'bad_signature' }) });
+      const res = await h.DELETE(del(headers));
+      expect(res.status).toBe(401);
+      expect(await errorBody(res)).toEqual({ code: 'bad_request', message: MESSAGES.forget_sign_in });
+      expect(res.headers.get('set-cookie')).toBeNull();
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('answers 502 when the bot fails, is unreachable or answers nonsense', async () => {
+    for (const make of [
+      () => new Response(null, { status: 502 }),
+      () => Promise.reject(new TypeError('fetch failed')),
+      () => Response.json({ hadNotes: 'yes' }),
+    ]) {
+      stubFetch(make);
+      const h = handlers(ENV, { identify: verified });
+      const res = await h.DELETE(del());
+      expect(res.status).toBe(502);
+      expect(await errorBody(res)).toEqual({ code: 'upstream', message: MESSAGES.forget_failed });
+      expect(res.headers.get('set-cookie')).toBeNull();
+      expect(h.logs[0]!.event).toBe('forget_error');
+    }
+  });
+
+  it('works with the chat switched off, but not without identity or configuration', async () => {
+    stubFetch(() => Response.json({ hadNotes: true, published: true }));
+    expect((await handlers({ ...ENV, POE_CHAT_DISABLED: '1' }, { identify: verified }).DELETE(del())).status).toBe(200);
+    let asked = false;
+    for (const env of [{ ...ENV, POE_IDENTITY_DISABLED: '1' }, {}]) {
+      const res = await handlers(env, { identify: async () => ((asked = true), verified()) }).DELETE(del());
+      expect(res.status).toBe(503);
+      expect(await errorBody(res)).toEqual({ code: 'not_configured', message: MESSAGES.forget_unavailable });
+    }
+    expect(asked).toBe(false);
+  });
+
+  it('is refused from a foreign origin before anything is verified', async () => {
+    let asked = false;
+    const h = handlers(ENV, { identify: async () => ((asked = true), verified()) });
+    const res = await h.DELETE(new Request(URL_HTTPS, { method: 'DELETE', headers: { origin: 'https://evil.example', authorization: 'Bearer aaa.bbb.ccc' } }));
+    expect(res.status).toBe(403);
+    expect(asked).toBe(false);
   });
 });
 
