@@ -212,11 +212,11 @@
             </section>
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
-                <h2 class="eyebrow" id="weather-how-title">how it&#39;s measured</h2>
-                <p>atpotato&#39;s weather station listens to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a>, all the time, and counts what goes by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky. the numbers up top are the last 60 seconds, and the station writes down every minute for the trends.</p>
-                <p>flip <strong>records</strong> to <strong>accounts</strong> on the trends or the apps to count who&#39;s writing instead of how much: every different account (DID) once, however many records it writes, so one busy bot can&#39;t pass for a crowd. they&#39;re counted with hyperloglog sketches: within about 2%, and the station never keeps a DID.</p>
-                <p>the clouds up top are the diversity index: a clear sky when nearly everything is bluesky, cloudier the more records come from other apps. poe pipes up from its corner when a new app blows in, a storm rolls in, or the sky gets more mixed, once a minute at most.</p>
-                <p>a quiet app can still miss a minute, and one busy bot can tip the index for a while. this page checks again every few seconds while it&#39;s open. <a href="/">back home</a>.</p>
+                <h2 class="eyebrow" id="weather-how-title">how i measure it</h2>
+                <p>this is my weather station! i listen to the whole firehose through bluesky&#39;s <a href="https://github.com/bluesky-social/jetstream">jetstream</a>, day and night, and count every record that floats by. every app on atproto writes into the same stream, so it&#39;s a fair look at the whole sky. the numbers up top are my last 60 seconds, and i jot it all down once a minute for the trends.</p>
+                <p>flip <strong>records</strong> to <strong>accounts</strong> on the trends or the apps and i&#39;ll count who&#39;s writing instead of how much: each different account (DID) counts once, however many records it writes, so one busy bot can&#39;t dress up as a crowd. i count them with hyperloglog sketches, which land within about 2%, and i never keep a DID. the sketch remembers roughly how many, never who.</p>
+                <p>the clouds up top are the diversity index: a clear sky when nearly everything is bluesky, cloudier the more records come from other apps. cloudy is my favourite weather, honestly. i&#39;ll pipe up from my corner when a new app blows in, a storm rolls in, or the sky gets more mixed, but once a minute at most, so i don&#39;t get carried away (◕‿◕)</p>
+                <p>a quiet app can still slip past me for a minute, and one busy bot can tip the index for a while. i&#39;m a potato, not a satellite! while this page is open i check the sky again every few seconds. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>
         </div>
