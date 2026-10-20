@@ -256,7 +256,9 @@ come from read-only functions (applied):
 fine to keep forever). `atmosphere_minute_app` is the long tail: expect tens of
 apps a minute, so roughly 50k rows a day. Once there's real data, if that grows
 too much, add an hourly app table and a pg_cron job that rolls up and deletes
-minute-level app rows older than 30 days. Not needed on day one.
+minute-level app rows older than 30 days. Not needed on day one. (Done 2026-10-20:
+[`sql/atmosphere_retention.sql`](sql/atmosphere_retention.sql), and README.md's
+"What's kept".)
 
 If the views get slow over years of data, turn `atmosphere_hour` into a table
 filled by pg_cron. Its shape stays the same, so nothing downstream changes.

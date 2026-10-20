@@ -73,7 +73,7 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-r-ratio]')).toBe('1 in 56 new records came from outside bluesky');
     expect(text('[data-r-else-share]')).toBe('(1.8%)');
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 2');
-    expect(text('[data-r-event="deletes"]')).toBe('13.5');
+    expect(text('[data-r-event="deletes"]')).toBe('810'); // 13.5 a second, counted over the minute
     expect(text('[data-r-collections]')).toBe('40');
     expect(report.querySelector<HTMLElement>('[data-r-marker]')!.style.left).toMatch(/^13\.8/);
   });
@@ -121,9 +121,8 @@ describe('the atmosphere weather report', () => {
 describe('live from the weather station', () => {
   const series = Array.from({ length: 60 }, (_, i) => (i === 30 ? null : { t: 1792512960 + i, creates: 440, bluesky: 438, elsewhere: 2, posts: 40 + (i % 5) }));
 
-  it('says the reading is the last 60 seconds, with a sparkline of them', () => {
+  it('draws a sparkline of the last 60 seconds', () => {
     renderReport(report, { ...READING, source: 'station', seconds: 60, series });
-    expect(text('[data-r-when]')).toBe('the last 60 seconds, live. updates every few seconds.');
     const spark = report.querySelector<HTMLElement>('[data-r-spark]')!;
     expect(spark.hidden).toBe(false);
     // the missing second breaks the line in two
@@ -133,7 +132,6 @@ describe('live from the weather station', () => {
   it('a sampled reading has no sparkline', () => {
     renderReport(report, { ...READING, source: 'sample' });
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true);
-    expect(text('[data-r-when]')).toMatch(/^read at .*, from 5 seconds of the firehose\. next reading in about a minute\.$/);
   });
 });
 
@@ -160,15 +158,27 @@ describe('trends', () => {
     expect(trendSummary({ ...HISTORY, points: [], total: point('x', 0) })).toBe('no readings yet for the last hour. the station fills this in as it goes.');
   });
 
-  it('draws both charts from the start of the range, and lists every point in the table', () => {
+  it('draws both charts from the start of the range, the summary only for screen readers', () => {
     const section = report.querySelector<HTMLElement>('[data-r-trends]')!;
     renderTrends(section, HISTORY, NOW);
     expect(section.dataset.state).toBe('ready');
     const records = section.querySelector('[data-t-chart="records"]')!;
     expect(records.querySelector('svg')!.getAttribute('aria-label')).toMatch(/^new records a second/);
     expect(records.querySelectorAll('.weather-chart__line')).toHaveLength(1);
-    expect(section.querySelectorAll('[data-t-rows] tr')).toHaveLength(3);
-    expect(section.querySelector('[data-t-rows] tr td')!.textContent).toBe('440'); // newest first
+    const summary = section.querySelector('[data-t-summary]')!;
+    expect(summary.textContent).toBe(trendSummary(HISTORY));
+    expect(summary.classList.contains('visually-hidden')).toBe(true);
+  });
+
+  it('offers the last hour, day, week and 30 days', () => {
+    const buttons = [...report.querySelectorAll<HTMLButtonElement>('[data-range]')];
+    expect(buttons.map((b) => [b.dataset.range, b.textContent])).toEqual([
+      ['hour', '1h'],
+      ['day', '1d'],
+      ['week', '1w'],
+      ['month', '30d'],
+    ]);
+    expect(buttons.every((b) => b.getAttribute('aria-label')?.startsWith('last '))).toBe(true);
   });
 
   it('lists the busiest apps over the range, when there are any', () => {
@@ -253,12 +263,14 @@ describe('records or accounts', () => {
   const HISTORY: History = { range: 'hour', points: [pts('2026-10-20T16:59:00.000Z')], total: pts('2026-10-20T17:00:00.000Z'), accounts: acct };
   const section = () => report.querySelector<HTMLElement>('[data-r-trends]')!;
 
-  it('says how many accounts wrote in the last minute, and the index by accounts', () => {
+  it("puts the last minute's active accounts in the last minute, and the index by accounts", () => {
     renderReport(report, LIVE);
-    expect(text('[data-r-accounts]')).toBe('21,345 different accounts wrote in that time.');
+    const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
+    expect(minute.hidden).toBe(false);
+    expect(text('[data-r-active]')).toBe('21,345');
     expect(text('[data-r-acct-index]')).toBe('by accounts: 2.9% of the 21,345 accounts active just now wrote somewhere other than bluesky.');
     renderReport(report, READING);
-    expect(report.querySelector<HTMLElement>('[data-r-accounts]')!.hidden).toBe(true);
+    expect(minute.hidden).toBe(true);
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
   });
 
@@ -267,13 +279,10 @@ describe('records or accounts', () => {
     const labels = () => [...report.querySelectorAll('[data-r-apps] .weather-bars__label')].map((l) => l.textContent);
     expect(labels()).toEqual(['whtwnd.com', 'tangled.sh']);
     expect(report.querySelector('[data-r-apps] .weather-bars__value')!.textContent).toBe('140');
-    expect(text('[data-r-apps-note]')).toBe('busiest first, by how many different accounts wrote to each in the last 60 seconds.');
     renderReport(report, LIVE, 'records');
     expect(labels()).toEqual(['tangled.sh', 'whtwnd.com']);
-    expect(text('[data-r-apps-note]')).toBe('busiest first, records a second.');
     renderReport(report, READING, 'accounts');
     expect(labels()).toEqual(['tangled.sh', 'whtwnd.com']);
-    expect(text('[data-r-apps-note]')).toMatch(/^accounts come from the weather station/);
   });
 
   it('draws the trends by accounts: each bucket, the range as a union, and apps by accounts', () => {
@@ -284,14 +293,18 @@ describe('records or accounts', () => {
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('active accounts each minute');
     expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('share of accounts writing elsewhere');
     expect(s.querySelector('[data-t-chart="records"] svg')!.getAttribute('aria-label')).toMatch(/^active accounts each minute/);
-    expect([...s.querySelectorAll('[data-t-head] th')].map((th) => th.textContent)).toEqual(['when', 'active accounts', 'on bluesky', 'writing elsewhere', 'share elsewhere']);
-    const newest = [...s.querySelectorAll('[data-t-rows] tr')[0]!.children].map((c) => c.textContent);
-    expect(newest.slice(1)).toEqual(['22,000', '21,410', '600', '2.7%']);
-    expect(newest[0]).not.toMatch(/so far/); // 16:59 is over at 17:00
+    // focusing a chart reads its newest point
+    const newest = (chart: string) => {
+      const host = s.querySelector(`[data-t-chart="${chart}"]`)!;
+      host.querySelector('svg')!.dispatchEvent(new FocusEvent('focus'));
+      return [...host.querySelector('.weather-chart__tip')!.children].map((c) => c.textContent);
+    };
+    expect(newest('records')[0]).toBe('22,000');
+    expect(newest('index')[0]).toBe('2.7%');
+    expect(newest('records')[1]).not.toMatch(/so far/); // 16:59 is over at 17:00
     renderTrends(section(), HISTORY, NOW - 30_000, 'accounts');
-    expect(s.querySelector('[data-t-rows] tr th')!.textContent).toMatch(/\(so far\)$/);
+    expect(newest('records')[1]).toMatch(/\(so far\)$/);
     renderTrends(section(), HISTORY, NOW, 'accounts');
-    expect(s.querySelector<HTMLElement>('[data-t-measure-note]')!.hidden).toBe(false);
     expect(s.querySelector('[data-t-apps-title]')!.textContent).toBe('busiest apps elsewhere, the last hour: active accounts');
     const rows = [...s.querySelectorAll('[data-t-apps] li')];
     expect(rows.map((r) => [r.querySelector('.weather-bars__label')!.textContent, r.querySelector('.weather-bars__value')!.textContent, r.querySelector('.weather-bars__change')!.getAttribute('data-trend')])).toEqual([
@@ -299,11 +312,10 @@ describe('records or accounts', () => {
       ['tangled.sh', '280', 'new'],
     ]);
 
-    // and back: records put their own titles, header and note back
+    // and back: records put their own titles back
     renderTrends(section(), HISTORY, NOW, 'records');
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('new records a second');
-    expect([...s.querySelectorAll('[data-t-head] th')].map((th) => th.textContent)).toEqual(['when', 'new records a second', 'bluesky posts a second', 'diversity index']);
-    expect(s.querySelector<HTMLElement>('[data-t-measure-note]')!.hidden).toBe(true);
+    expect(newest('records')[0]).toBe('440');
   });
 
   it('says so when there are no account counts yet, or they cannot be read', () => {
@@ -311,7 +323,7 @@ describe('records or accounts', () => {
     expect(accountSummary({ ...HISTORY, accounts: { ...acct, seconds: 0, points: [], apps: [], total: { active: 0, bluesky: 0, elsewhere: 0 } } })).toMatch(/^no account counts yet for the last hour/);
     renderTrends(section(), { ...HISTORY, accounts: undefined }, NOW, 'accounts');
     expect(section().querySelector<HTMLElement>('[data-t-apps-wrap]')!.hidden).toBe(true);
-    expect(section().querySelectorAll('[data-t-rows] tr')).toHaveLength(0);
+    expect(section().querySelector('[data-t-summary]')!.textContent).toBe('the account counts are hard to read right now. the records are still here.');
   });
 
   it('compares apps\' accounts only when both windows were heard about as well', () => {

@@ -8,7 +8,7 @@
  * them, so a smooth line never shows a peak or a dip that isn't in the data.
  *
  * Hover, touch or the arrow keys move a crosshair to the nearest point and show its value
- * and time; every value is also in the page's table view, so nothing lives only here.
+ * and time, read out politely for the arrow keys, so no value needs a mouse to reach.
  * Labels only reach the DOM through textContent.
  */
 

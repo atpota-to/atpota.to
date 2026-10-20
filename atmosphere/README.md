@@ -113,8 +113,8 @@ row's `through` is the last minute merged into it. After a restart, the first mi
 of each period reloads that period's row, then merges the minute rows after its
 `through`. So a restart loses nothing, and a retry never counts a minute twice.
 pg_cron (`atmosphere-prune-sketches`, hourly at :17) keeps minute sketches for 2 hours
-(26 for apps: the last hour is compared with the same hour yesterday) and hour
-sketches for 8 days. Days and months stay.
+(26 for apps: the last hour is compared with the same hour yesterday) and apps' hour
+sketches for 30 days. Everyone's hours, days and months stay.
 
 A partly covered minute is written with its real `seconds_covered`. A minute with
 no coverage isn't written. Failed writes wait in memory and are retried oldest
@@ -129,13 +129,14 @@ with 60/60 seconds.
 
 The data is in the Supabase project **atpota.to** (`zdzjtziydmwkxbzlkwxv`). The
 migration is in [`supabase/atmosphere_weather_station.sql`](supabase/atmosphere_weather_station.sql),
-applied 2026-10-20. The accounts tables are in
-[`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql), also applied 2026-10-20.
-[`sql/atmosphere_accounts_cleanup.sql`](sql/atmosphere_accounts_cleanup.sql) drops a
-first try at them that was never used. It has **not** been run yet: the Supabase
-connector holds DROPs for confirmation. Besides the two tables, it adds views `atmosphere_hour` and
+applied 2026-10-20. Besides the two tables, it adds views `atmosphere_hour` and
 `atmosphere_day` (security_invoker). Anyone can read; only the service role
-writes (RLS). For any range:
+writes (RLS). The later SQL is in [`sql/`](sql/): the almanac, the accounts tables
+([`atmosphere_accounts.sql`](sql/atmosphere_accounts.sql)) and what's kept for how long
+([`atmosphere_retention.sql`](sql/atmosphere_retention.sql)), all applied.
+[`sql/atmosphere_accounts_cleanup.sql`](sql/atmosphere_accounts_cleanup.sql) drops a
+first try at the accounts tables that was never used. It has **not** been run yet:
+the Supabase connector holds DROPs for confirmation. For any range:
 
 ```sql
 -- the index and rates over a range: divide sums, never average per-minute numbers
@@ -144,9 +145,26 @@ select 100.0 * sum(elsewhere) / nullif(sum(creates), 0) as index,
 from atmosphere_minute where minute >= now() - interval '24 hours';
 ```
 
-`atmosphere_minute_app` is the long tail: tens of apps a minute, roughly 50k rows
-a day. Once it grows, add an hourly app table and a pg_cron job that rolls up and
-deletes app rows older than 30 days.
+## What's kept, and for how long
+
+Everything kept is an exact sum, or a sketch that merges exactly. So keeping less
+detail of old data never makes the report less accurate.
+[`sql/atmosphere_retention.sql`](sql/atmosphere_retention.sql) has the details.
+
+| Table | Kept | Size |
+|---|---|---|
+| `atmosphere_minute`: the whole firehose and its active accounts, each minute | forever | ~100 MB a year |
+| `atmosphere_minute_app`: each app, each minute | 30 days | ~150 MB, flat |
+| `atmosphere_hour_app`: each app, each hour | forever | ~80 MB a year |
+| `atmosphere_day_app`: each app, each day | forever | small |
+| `atmosphere_account_sketch`: everyone's active accounts | minutes 2 h; hours, days, months forever | ~50 MB a year |
+| `atmosphere_account_app_sketch`: each app's | minutes 26 h, hours 30 days; days, months forever | ~25 MB a year |
+
+The per-app minute rows were the long tail, about 23k rows (5 MB) a day.
+pg_cron re-sums each hour of them into `atmosphere_hour_app` every 10 minutes
+(`atmosphere-hour-apps`, at :01, :11 …). Once a day, `atmosphere-prune-minute-apps`
+(04:23 UTC) deletes the ones over 30 days old. It deletes only rows whose hour is in
+`atmosphere_hour_app` with the same total; anything else stays, to be looked at.
 
 ## Replaying and backfilling
 
@@ -161,8 +179,8 @@ cd /root/atpotato-weather && /opt/node22/bin/node --env-file=.env \
   /root/atpota-live/atmosphere/src/replay.js --from 2026-10-20T17:36Z --to 2026-10-20T17:40Z --dry-run
 ```
 
-It rewrites a minute's row and all its app rows, then re-sums the daily roll-up
-(`atmosphere_day_app`) from `--from` on. It's safe while the live station runs:
+It rewrites a minute's row and all its app rows, then re-sums the hourly and daily
+roll-ups (`atmosphere_hour_app`, `atmosphere_day_app`) from `--from` on. It's safe while the live station runs:
 `--to` must be at least 3 minutes ago, and the station never goes back to a minute
 it has written. It takes up to 48 hours a run, and reads about 6 minutes of history
 in 30 s.
@@ -246,8 +264,8 @@ cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
   /root/atpota-live/atmosphere/src/archive.js --from 2026-10-06T14:00Z --to 2026-10-20T16:50Z
 ```
 
-It takes up to 31 days in one run, re-sums each UTC day's app roll-up
-(`atmosphere_day_app`) as it finishes it, and ends with a summary: minutes written,
+It takes up to 31 days in one run, re-sums each UTC day's app roll-ups
+(`atmosphere_hour_app`, `atmosphere_day_app`) as it finishes it, and ends with a summary: minutes written,
 minutes left alone because they already existed, and any it didn't hear whole. If it
 stops, run it again with `--from` at 00:00Z of the last day it printed, so that day's
 account sketch comes out whole.
@@ -257,14 +275,16 @@ For the trends it also writes hour and day sketches (`atmosphere_account_sketch`
 `atmosphere_account_app_sketch`), but only for an hour or day wholly inside
 `--from`..`--to` that has no row yet: the station keeps rewriting today's and this
 month's from memory, so the backfill never touches those, nor any the station wrote.
-Hours older than the 8 days hour sketches are kept aren't written. So with the run
-above, the days Oct 7 to 19 and the last 8 days' hours get sketches; Oct 6 (a partial
-day), Oct 20 and October as a month count only what the station heard.
+So with the run above, every hour from Oct 6 14:00 to Oct 20 16:00 and the days
+Oct 7 to 19 get sketches; Oct 6 (a partial day), Oct 20 and October as a month count
+only what the station heard.
 
 **What it adds to Supabase.** For the 14 days above: about 20,000 minute rows
-(6 MB), 320,000 app rows (75–80 MB), a few thousand `atmosphere_day_app` rows, and a
-few MB of sketches. No schema changes. Everything before 2026-10-20T16:50Z came from
-the archive, so it can be taken out by time if ever needed.
+(6 MB, kept), about 320,000 minute app rows (75–80 MB, trimmed after 30 days once
+their hours are in `atmosphere_hour_app`, as the station's are), the hour and day app
+roll-ups, and a few MB of sketches. No schema changes. Everything before
+2026-10-20T16:50Z came from the archive, so it can be taken out by time if ever
+needed.
 
 `--host` picks another v2 instance (default `https://jetstream.us-east.bsky.network`),
 and `JETSTREAM_SDK_DIR` another SDK folder.

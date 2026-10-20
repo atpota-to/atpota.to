@@ -31,7 +31,9 @@
 // station writes them, and as hour and day sketches (rollup.js's rows) for the trends.
 // A sketch is only written for an hour or day wholly inside --from..--to that has no row
 // yet, so the backfill never touches one the station keeps rewriting (today's, this
-// month's), and hours older than the 8 days hour sketches are kept aren't written at all.
+// month's). The app roll-ups (atmosphere_hour_app, atmosphere_day_app) are re-summed as
+// each UTC day is written, so the minute app rows can be trimmed after 30 days like the
+// station's (sql/atmosphere_retention.sql).
 //
 // Needs JETSTREAM_API_KEY in .env (free, from https://bsky.network/account) and the
 // official SDK, @bsky/jetstream, installed once outside the release, since deploys copy
@@ -65,8 +67,6 @@ export const LIVE_MAX_RATE = 5000;
  * archive caught up on, and rev placement (clock.js) puts its records back.
  */
 export const MAX_SILENCE_S = MAX_EARLIER_S;
-/** Hour sketches older than this are pruned (atmosphere_prune_sketches), so they aren't written. */
-export const HOUR_SKETCHES_KEPT_S = 8 * 86400;
 /** Tries per Supabase request before giving up on the run. */
 export const WRITE_TRIES = 5;
 
@@ -230,9 +230,10 @@ async function tries(what, fn) {
  * One run: plans the range from the segment list, reads it through the SDK's snapshot,
  * and writes whole minutes an hour at a time (or only prints them, with no `db`). Minutes
  * that already have a row are left alone unless args.overwrite. Each UTC day's app
- * roll-up is re-summed once the day is written.
+ * roll-ups are re-summed once the day is written, and each hour's and day's account
+ * sketches written once it's over.
  */
-export async function backfill({ args, host, apiKey, db, Jetstream, fetch = globalThis.fetch, log = console.log, warn = console.warn, now = () => Date.now() }) {
+export async function backfill({ args, host, apiKey, db, Jetstream, fetch = globalThis.fetch, log = console.log, warn = console.warn }) {
   const plan = planRange(await listSegments({ host, key: apiKey, fetch }), args.fromSec, args.toSec);
   log(`backfilling ${iso(args.fromSec)} to ${iso(args.toSec)} from ${host}: ${plan.segments} segments, about ${(plan.bytes / 1e9).toFixed(1)} GB to download${db ? '' : ' (dry run: nothing is written)'}`);
   log('if it stops, run it again with --from at 00:00Z of the last day it printed: minutes already written are left alone, and that day comes out whole');
@@ -246,7 +247,6 @@ export async function backfill({ args, host, apiKey, db, Jetstream, fetch = glob
   const periods = { hour: null, day: null };
   async function finish(e) {
     if (!db || e.t < args.fromSec || periodEnd(e.period, e.t) > args.toSec) return;
-    if (e.period === 'hour' && e.t < now() / 1000 - HOUR_SKETCHES_KEPT_S) return;
     if (await tries(`reading the ${e.period} sketch for ${iso(e.t)}`, () => db.sketchExists(e.period, iso(e.t)))) {
       sum.sketches.there++;
       return;
@@ -282,9 +282,9 @@ export async function backfill({ args, host, apiKey, db, Jetstream, fetch = glob
     }
     // Accounts of whole minutes only, as only those are written.
     for (const m of list) if (m.seconds === 60 && m.accounts) await addAccounts({ minute: m.minuteSec, seconds: m.seconds, bluesky: m.accounts.bluesky, elsewhere: m.accounts.elsewhere, apps: m.accounts.apps });
-    // A UTC day is done: re-sum its apps (and anything after it, which is little).
+    // A UTC day is done: re-sum its apps by hour and day (and anything after it, which is little).
     if (db && rollFrom && (last + 60) % 86400 === 0) {
-      await tries('re-summing the daily roll-up', () => db.rollUp(rollFrom));
+      await tries('re-summing the app roll-ups', () => db.rollUp(rollFrom));
       rollFrom = null;
     }
     const creates = whole.reduce((a, r) => a + r.minute.creates, 0);
@@ -317,7 +317,7 @@ export async function backfill({ args, host, apiKey, db, Jetstream, fetch = glob
     toSec: args.toSec,
     onMinutes,
   });
-  if (db && rollFrom) await tries('re-summing the daily roll-up', () => db.rollUp(rollFrom));
+  if (db && rollFrom) await tries('re-summing the app roll-ups', () => db.rollUp(rollFrom));
   for (const e of Object.values(periods)) if (e) await finish(e);
 
   log(`read ${read.events.toLocaleString('en-US')} events in ${Math.round((Date.now() - started) / 60_000)} min${read.firstUs ? `, ${isoUs(read.firstUs)} to ${isoUs(read.lastUs)}` : ''}`);

@@ -222,7 +222,7 @@ test('a run writes new minutes only, and re-sums each day once it is written', a
   };
   const lines = [];
   const args = parseArgs(['--from', new Date((DAY - 3600) * 1000).toISOString(), '--to', new Date((DAY + 3600) * 1000).toISOString()], (DAY + 86400) * 1000);
-  const out = await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch, log: (l) => lines.push(l), warn: () => {}, now: () => (DAY + 86400) * 1000 });
+  const out = await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch, log: (l) => lines.push(l), warn: () => {} });
 
   assert.equal(FakeJetstream.opts.apiKey, 'k');
   assert.equal(FakeJetstream.asked.raw, true);
@@ -241,21 +241,6 @@ test('a run writes new minutes only, and re-sums each day once it is written', a
   ]);
   assert.deepEqual([out.written, out.kept, out.partial.length, out.sketches], [119, 1, 0, { hour: 1, day: 0, there: 1 }]);
   assert.match(lines.find((l) => l.startsWith('2026-10-07T00:00Z')), /60\/60 min +2\.0 records\/s .* 59 written +100\.0%/);
-});
-
-test('hour sketches older than the 8 days they are kept are not written', async () => {
-  const list = steady(DAY - 100, DAY + 3600 + 200, 1);
-  const segs = [{ ...segment(0, 0, 0, list.length, list[0].seq), minWitnessedAt: timeUsOf(list[0].time), maxWitnessedAt: timeUsOf(list.at(-1).time) }];
-  class FakeJetstream {
-    async *snapshot() {
-      yield* list;
-    }
-  }
-  const calls = [];
-  const db = { existing: async () => new Set(), minutes: async () => {}, rollUp: async () => {}, sketchExists: async (...a) => calls.push(a) && false, insertSketches: async () => {} };
-  const args = parseArgs(['--from', new Date(DAY * 1000).toISOString(), '--to', new Date((DAY + 3600) * 1000).toISOString()], (DAY + 86400) * 1000);
-  await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch: async () => new Response(JSON.stringify({ segments: segs })), log: () => {}, now: () => (DAY + 9 * 86400) * 1000 });
-  assert.deepEqual(calls, []);
 });
 
 test('sketch rows go in apps first, and never over a row that is there', async () => {
