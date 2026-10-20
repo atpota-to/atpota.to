@@ -8,6 +8,7 @@
  */
 
 import { sharedAuth } from '../blog/auth';
+import { isTouchFirst } from '../scripts/typing-focus';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../scripts/mascot';
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
 import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, DIGGING_LINES, contextLabel, noteCopy } from './copy';
@@ -520,10 +521,9 @@ export class PoeWidget {
     void this.panel.offsetWidth;
     this.panel.classList.add('is-open');
 
-    // On phones only a keyboard opening puts the cursor in the input; a tap would pop the
-    // on-screen keyboard over the sheet, so focus goes to the dialog itself.
-    if (this.isPhone() && options.via !== 'keyboard') this.panel.focus({ preventScroll: true });
-    else this.focusInput();
+    // Only a keyboard opening puts the cursor in the input on a phone or touch screen; a tap
+    // would pop the on-screen keyboard over the sheet (focusInput).
+    this.focusInput(options.via === 'keyboard');
     this.scrollLog(true);
     // Who Poe will know them as; loads the sign-in library only for a remembered account.
     this.renderAccount();
@@ -604,8 +604,14 @@ export class PoeWidget {
     else this.open({ opener, via });
   }
 
-  private focusInput(): void {
-    this.input.focus({ preventScroll: true });
+  /**
+   * The cursor in the input, except on a phone or touch screen, where that would pop the
+   * on-screen keyboard: there the dialog itself takes focus, unless `fromKeyboard` (a
+   * hardware keyboard is already in use).
+   */
+  private focusInput(fromKeyboard = false): void {
+    if (!fromKeyboard && (this.isPhone() || isTouchFirst(this.win))) this.panel.focus({ preventScroll: true });
+    else this.input.focus({ preventScroll: true });
   }
 
   private restoreFocus(): void {
@@ -944,7 +950,7 @@ export class PoeWidget {
   private askChip(chip: string): void {
     // The chips are re-rendered and hidden while Poe answers, which would drop focus to
     // <body>. Phones focus the log, so the on-screen keyboard stays down.
-    if (this.isPhone()) this.log.focus({ preventScroll: true });
+    if (this.isPhone() || isTouchFirst(this.win)) this.log.focus({ preventScroll: true });
     else this.focusInput();
     if (chip === COPY.summarize) {
       const root = this.doc.querySelector(ASKABLE_SELECTOR);
@@ -1376,7 +1382,7 @@ export class PoeWidget {
     if (isSlashShortcut(event, active)) {
       if (otherModalOpen(doc, this.root)) return;
       event.preventDefault(); // also keeps Firefox quick find closed
-      if (this.isOpen) this.focusInput();
+      if (this.isOpen) this.focusInput(true);
       else this.open({ opener: active, via: 'keyboard' });
     }
   }

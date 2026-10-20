@@ -14,6 +14,7 @@
 
 import { PrepareError, type Auth, type Prepared } from './auth';
 import { HANDLE_KEY } from './state';
+import { focusForTyping } from '../scripts/typing-focus';
 import type { KeyValueStore } from '../poe/storage';
 
 export const APPVIEW = 'https://public.api.bsky.app';
@@ -228,8 +229,7 @@ function wire(opts: SignInOptions): SignIn {
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
     }
-    input.focus();
-    input.select();
+    focusForTyping(input, win, { select: true });
   }
 
   dialog?.querySelector('[data-blog-signin-close]')?.addEventListener('click', close);
@@ -247,8 +247,7 @@ function wire(opts: SignInOptions): SignIn {
   });
   back?.addEventListener('click', () => {
     reset();
-    input?.focus();
-    input?.select();
+    focusForTyping(input, win, { select: true });
   });
   goButton?.addEventListener('click', () => void leave());
   // Back from the sign-in page through the browser's back/forward cache: the button works again.
@@ -284,7 +283,7 @@ function wire(opts: SignInOptions): SignIn {
     const value = normalizeHandle(input.value);
     if (!value) {
       showDialogError(dialogError, SIGNIN_COPY.errors.badHandle);
-      input.focus();
+      focusForTyping(input, win);
       return;
     }
     showDialogError(dialogError, '');
@@ -306,7 +305,7 @@ function wire(opts: SignInOptions): SignIn {
     } catch (error) {
       if (ticket !== lookup) return;
       showDialogError(dialogError, error instanceof PrepareError && error.code === 'unreachable' ? SIGNIN_COPY.errors.unreachable : SIGNIN_COPY.errors.noAccount);
-      input.focus();
+      focusForTyping(input, win);
     } finally {
       if (ticket === lookup) {
         setBusy(submit, false);
