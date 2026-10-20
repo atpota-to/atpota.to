@@ -467,8 +467,8 @@ a.tile.tile--soil:hover {
 }
 
 .site-account__signin .site-account__icon {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   flex: none;
 }
 
@@ -640,7 +640,7 @@ a.tile.tile--soil:hover {
   }
 
   .site-account__signin:hover {
-    transform: translateY(-2px) rotate(-6deg);
+    transform: translateY(-2px);
   }
 
   .site-account__label {

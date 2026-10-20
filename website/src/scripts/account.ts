@@ -1,6 +1,6 @@
 /**
- * The reader's account in the header, on every page: a round "sign in" button (an empty
- * potato, where an avatar will go) when nobody is signed in, and their avatar once they are, which opens a little card with their name, a
+ * The reader's account in the header, on every page: a round "sign in" button (the usual
+ * arrow-through-a-door icon) when nobody is signed in, and their avatar once they are, which opens a little card with their name, a
  * link to their garden and to their Bluesky profile, and "sign out".
  *
  * Signing in uses the same dialog and session as everything else (src/blog/signin.ts,
@@ -102,7 +102,7 @@ export function mountAccount(opts: AccountOptions = {}): void {
     menuOpen = false;
     if (view.kind === 'signed-out') {
       const button = el(doc, 'button', { type: 'button', class: 'btn btn--outline site-account__signin', 'aria-label': ACCOUNT_COPY.signInLabel, title: ACCOUNT_COPY.signInLabel });
-      button.append(potato(), el(doc, 'span', { class: 'site-account__label' }, ACCOUNT_COPY.signIn));
+      button.append(signInIcon(), el(doc, 'span', { class: 'site-account__label' }, ACCOUNT_COPY.signIn));
       button.addEventListener('click', () => openSignIn('account'));
       slot!.append(button);
       return;
@@ -141,21 +141,15 @@ export function mountAccount(opts: AccountOptions = {}): void {
     slot!.append(toggle, card);
   }
 
-  /** A little potato with a face: the spot where the reader's avatar will be. */
-  function potato(): SVGSVGElement {
+  /** The usual sign-in mark: an arrow going in through a door. */
+  function signInIcon(): SVGSVGElement {
     const NS = 'http://www.w3.org/2000/svg';
     const svg = doc.createElementNS(NS, 'svg');
-    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', class: 'site-account__icon' })) svg.setAttribute(k, v);
-    const shapes: Array<[string, Record<string, string>]> = [
-      ['path', { d: 'M12.4 2.8c4 .2 6.8 3.8 6.6 8.7-.2 5.5-3.6 9.8-7.8 9.7-4.1-.1-6.6-3.7-6.2-8.8.4-5.6 3.4-9.8 7.4-9.6z' }],
-      ['circle', { cx: '9.6', cy: '10.6', r: '1', fill: 'currentColor', stroke: 'none' }],
-      ['circle', { cx: '14.4', cy: '10.4', r: '1', fill: 'currentColor', stroke: 'none' }],
-      ['path', { d: 'M10.2 14.2c1.1.9 2.7.9 3.7-.1' }],
-    ];
-    for (const [tag, attrs] of shapes) {
-      const node = doc.createElementNS(NS, tag);
-      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
-      svg.append(node);
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'site-account__icon' })) svg.setAttribute(k, v);
+    for (const d of ['M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4', 'M9.5 16.5 14 12 9.5 7.5', 'M14 12H4']) {
+      const path = doc.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      svg.append(path);
     }
     return svg as SVGSVGElement;
   }
