@@ -22,7 +22,7 @@ for (const [file, from, to] of [
 }
 const { memoryKey, personNotesKey, PERSON_SLOT } = await import(new URL("memory-key.js", out));
 const { personScope } = await import(new URL("person-scope.js", out));
-const { emptyNotes, forgetNotes, publishedFileMemory } = await import(new URL("published-memory.js", out));
+const { emptyNotes, forgetNotes, publishedFileMemory, retryingConcurrentWrites } = await import(new URL("published-memory.js", out));
 const { createMemoryLock } = await import("../node_modules/eve/dist/src/shared/memory-state.js");
 const { defaultNamespace } = await import("eve/memory");
 
@@ -113,4 +113,30 @@ test("forgetNotes wipes one person's notes, hands the empty version over, and le
     delete process.env.DROPLET_CALLBACK_URL;
     delete process.env.DROPLET_SHARED_SECRET;
   }
+});
+
+test("a save that loses a Blob write race is retried instead of failing", async () => {
+  const { fileMemory, inMemory } = await import("eve/memory/file");
+  // Vercel Blob's answer to two conditional writes at once, verbatim from the
+  // production log of a remove and a save the model made in parallel.
+  const raced = new Error("Vercel Blob: The conditional request cannot succeed due to a conflicting operation against this resource.");
+  const backing = inMemory();
+  let failures = 1;
+  const backend = retryingConcurrentWrites({
+    read: (input) => backing.read(input),
+    async write(input) {
+      if (failures-- > 0) throw raced;
+      return backing.write(input);
+    },
+  });
+  const abortSignal = new AbortController().signal;
+  const tools = await fileMemory({ backend }).tools({ memory: { scope: { key: "k", namespace: "n", value: "v" }, slot: "person" },
+    abortSignal, turn: { id: "t", input: [], sequence: 0 } });
+  await tools.save_memory.execute({ text: "builds feeds" }, { abortSignal });
+  assert.match((await backing.read({ key: "k", signal: abortSignal })).content, /builds feeds/);
+
+  // Anything else still fails the write as it did.
+  const down = new Error("Vercel Blob: The blob service is currently not available. Please try again.");
+  const failing = retryingConcurrentWrites({ read: async () => null, write: async () => { throw down; } });
+  await assert.rejects(failing.write({ key: "k", content: "", expectedVersion: null, signal: abortSignal }), (err) => err === down);
 });

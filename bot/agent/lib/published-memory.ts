@@ -41,10 +41,34 @@ function blob(): MemoryDocumentBackend {
   throw new Error("person memory needs the Vercel Blob store that `eve add memory/file` provisions");
 }
 
-const store: MemoryDocumentBackend = {
+/**
+ * Two writes racing on one Blob document can lose with a 409, "The
+ * conditional request cannot succeed due to a conflicting operation against
+ * this resource", which eve's Blob backend (0.58.1) passes on as a plain
+ * error. Only an ETag mismatch becomes the conflict fileMemory re-reads and
+ * retries, so on 2026-10-20 a save made in parallel with a remove failed
+ * outright. Report both as the conflict they are.
+ */
+const CONCURRENT_WRITE = /conditional request cannot succeed due to a conflicting operation/i;
+
+export function retryingConcurrentWrites(backend: MemoryDocumentBackend): MemoryDocumentBackend {
+  return {
+    read: (input) => backend.read(input),
+    async write(input) {
+      try {
+        return await backend.write(input);
+      } catch (err) {
+        if (err instanceof Error && CONCURRENT_WRITE.test(err.message)) throw new MemoryDocumentConflictError(input.key);
+        throw err;
+      }
+    },
+  };
+}
+
+const store = retryingConcurrentWrites({
   read: (input) => blob().read(input),
   write: (input) => blob().write(input),
-};
+});
 
 /** The DID a memory slot is locked to: the last DID in its scope. */
 function didOf(scope: MemoryScope): string | undefined {
