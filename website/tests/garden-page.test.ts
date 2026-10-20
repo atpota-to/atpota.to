@@ -16,6 +16,7 @@ import {
   markSeen,
   numbersFor,
   parseGardenPath,
+  poeNotesUrl,
   seenBloom,
 } from '../src/scripts/garden-page.js';
 import { describeBloom, flowerVariant, GARDEN_SUBJECT, PATCH_NSID, patchUri, SPROUT_NSID, TEND_NSID, type FlowerPatch, type GardenerFlower } from '../src/scripts/garden.js';
@@ -77,6 +78,7 @@ interface PersonOpts {
   flowers?: GardenerFlower[];
   garden?: boolean;
   displayName?: string | null;
+  poe?: { pets: number; notes: number };
 }
 
 interface Rig {
@@ -148,6 +150,7 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
         garden: g ? { rkey: 'self', uri: patchUri('self', did), name: g.name, note: g.note ?? null, open: !g.closesAt, plots: Number(g.cols) * Number(g.rows), planted: 2 } : null,
         flowers: p.flowers ?? [],
         given: { total: 7, helped: 2, recent: [{ at: '2026-10-19T10:00:00Z', action: 'water', flower: { uri: `at://${BO}/${SPROUT_NSID}/3kx`, owner: { did: BO, handle: 'bo.example' } } }] },
+        poe: p.poe,
       });
     }
     if (url.pathname === '/api/garden') {
@@ -318,6 +321,23 @@ describe('the garden page', () => {
     expect([...document.querySelectorAll('[data-visitors-list] a')].map((a) => a.getAttribute('href'))).toEqual(['/garden/mo.example', '/garden/bo.example']);
     expect(shown('[data-setup]')).toBe(false);
     expect(shown('[data-settings]')).toBe(false);
+  });
+
+  it("someone's page counts their pets for poe, and links to what poe remembers about them", async () => {
+    await rig({ path: '/garden/cy.example', people: { [CY]: { flowers: [flowerOf(CY)], garden: true, displayName: 'Cy', poe: { pets: 108, notes: 2 } } } }).run();
+    const items = [...document.querySelectorAll<HTMLElement>('.garden-stats__item')];
+    expect(items.slice(-2).map((li) => li.textContent)).toEqual([`108${COPY.stats.pets(108)}`, `2${COPY.stats.notes(2)}`]);
+    // the pets are just a number; the notes are poe's public record about them
+    expect(items.at(-2)!.querySelector('a')).toBeNull();
+    const link = items.at(-1)!.querySelector('a.garden-stats__link')!;
+    expect(link.getAttribute('href')).toBe(poeNotesUrl(CY));
+    expect(poeNotesUrl(CY)).toBe(`https://aturi.to/profile/did:plc:6qw63oash3jfnpykvpbwnq5z/to.atpota.poe.memory/did%3Aplc%3A${'c'.repeat(24)}`);
+    // one of each, and none at all says nothing
+    await rig({ path: '/garden/cy.example', people: { [CY]: { flowers: [], garden: true, poe: { pets: 1, notes: 1 } } } }).run();
+    expect([...document.querySelectorAll('.garden-stats__item')].slice(-2).map((li) => li.textContent)).toEqual([`1${COPY.stats.pets(1)}`, `1${COPY.stats.notes(1)}`]);
+    await rig({ path: '/garden/cy.example', people: { [CY]: { flowers: [], garden: true, poe: { pets: 0, notes: 0 } } } }).run();
+    expect(document.querySelector('.garden-stats a')).toBeNull();
+    expect(document.querySelector('[data-head-stats]')!.textContent).not.toContain('poe');
   });
 
   it('switching levels changes the address, and back goes back', async () => {
