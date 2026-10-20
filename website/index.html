@@ -64,23 +64,28 @@
 
         <div class="tile home-sun" data-mascot-trigger data-scene data-ground="meadow">
           <script>
-            // First paint: the scene's time of day, season and place (src/scripts/scene.ts picks the
-            // rest; its timeOfDay, seasonOf, pickPlace and parseScene follow the same rules).
+            // First paint: the scene's time of day, season, the calendar's special day and place
+            // (src/scripts/scene.ts picks the rest; its clockScene, seasonOf, pickPlace and parseScene
+            // follow the same rules).
             (function (tile) {
-              var now = new Date(), hour = now.getHours() + now.getMinutes() / 60, asked = {};
+              var now = new Date(), hour = now.getHours() + now.getMinutes() / 60, month = now.getMonth(), day = now.getDate(), asked = {};
               try {
-                (new URLSearchParams(location.search).get('scene') || '').toLowerCase().split(/[\s,]+/).forEach(function (word) { asked[word] = true; });
+                (new URLSearchParams(location.search).get('scene') || '').toLowerCase().split(/[\s,]+/).forEach(function (word) { asked[word.split('-')[0]] = true; });
               } catch (e) {}
               function pick(values, fallback) {
                 for (var i = 0; i < values.length; i++) if (asked[values[i]]) return values[i];
                 return fallback;
               }
+              var times = ['dawn', 'day', 'golden', 'night'];
               var dark = document.documentElement.getAttribute('data-theme') === 'dark';
-              var time = pick(['dawn', 'day', 'golden', 'night'], dark ? 'night' : hour >= 5 && hour < 8 ? 'dawn' : hour >= 8 && hour < 17 ? 'day' : hour >= 17 && hour < 19.5 ? 'golden' : 'night');
-              var season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][now.getMonth()];
+              var clock = pick(times, dark ? 'night' : hour >= 5 && hour < 8 ? 'dawn' : hour >= 8 && hour < 17 ? 'day' : hour >= 17 && hour < 19.5 ? 'golden' : 'night');
+              var event = pick(['halloween', 'newyear', 'dispatch'], month === 9 && (day === 31 || (day >= 24 && clock === 'night')) ? 'halloween' : (month === 11 && day === 31 && clock === 'night') || (month === 0 && day === 1 && now.getHours() < 5) ? 'newyear' : 'none');
+              var time = pick(times, event === 'halloween' || event === 'newyear' ? 'night' : clock);
+              var season = pick(['plain', 'spring', 'summer', 'autumn', 'winter'], ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][month]);
               tile.setAttribute('data-time', time);
-              tile.setAttribute('data-season', pick(['plain', 'spring', 'summer', 'autumn', 'winter'], season));
-              tile.setAttribute('data-place', pick(['hill', 'cloud', 'moon'], Math.random() < 1 / 40 ? (time === 'night' ? 'moon' : 'cloud') : 'hill'));
+              tile.setAttribute('data-season', season);
+              tile.setAttribute('data-event', event);
+              tile.setAttribute('data-place', pick(['hill', 'cloud', 'moon', 'beach'], event !== 'none' || Math.random() >= 1 / 40 ? 'hill' : time === 'night' ? 'moon' : season === 'summer' && Math.random() < 0.5 ? 'beach' : 'cloud'));
             })(document.currentScript.parentNode);
           </script>
           <span class="home-sun__rays" aria-hidden="true"></span>
@@ -107,6 +112,7 @@
             <span class="home-sun__drift home-sun__drift--wet" style="--y: 20%; --dur: 160s; --at: -110s; --rest: 96%; --size: 1.3"><span class="home-sun__cloud"></span></span>
             <span class="home-sun__drift home-sun__drift--wet" style="--y: 10%; --dur: 150s; --at: -75s; --rest: 64%; --size: 1.2"><span class="home-sun__cloud"></span></span>
           </div>
+          <div class="home-sun__sea" aria-hidden="true"><span class="home-sun__wave home-sun__wave--far"></span><span class="home-sun__wave home-sun__wave--near"></span></div>
           <div class="home-sun__mound" aria-hidden="true"></div>
           <div class="home-sun__cloudbed" aria-hidden="true"></div>
           <div class="home-sun__fireflies" aria-hidden="true">
@@ -127,13 +133,16 @@
           <img class="home-sun__sprout home-sun__sprout--2" src="/src/assets/sprout.svg" alt="" width="46" height="43">
           <img class="home-sun__sprout home-sun__sprout--3" src="/src/assets/sprout.svg" alt="" width="58" height="54">
           <svg class="home-sun__flag" viewBox="0 0 120 152" aria-hidden="true" focusable="false"><ellipse cx="30" cy="145" rx="24" ry="6" fill="#A9A5B9"/><rect x="25" y="16" width="10" height="132" rx="5" fill="#B9B5C8"/><rect x="27.5" y="18" width="5" height="128" rx="2.5" fill="#EEECF3"/><path d="M33,24 C52,16 70,32 92,24 C100,21 106,20 113,22 L113,76 C106,74 100,75 92,78 C70,86 52,70 33,78Z" fill="#A58650"/><path d="M36,29 C53,22 71,37 92,29 C99,27 104,26 108,27 L108,71 C103,70 98,71 92,73 C71,81 53,66 36,73Z" fill="#E3CE90"/><path transform="translate(17.1 -8.3) scale(0.23)" fill="#A58650" d="M282.31,331.03c1.71,10.05-1.82,11.3-10.15,12.55-24.71,3.83-48.09,1.31-67.76-8.54-19.43-9.95-35.4-26.41-41.56-52.84-6.44-27.77,4.53-51.16,20.33-67.95,16.01-16.8,36.4-28.08,56.68-32.83,19.71-4.57,39.42-2.18,56.48,6.94,16.86,9.12,29.02,24.07,34.73,44.8,7.83,26.59-2.28,61.58-33.03,65.94-9.73,1.47-20.05-.29-25.48-8.01-7.11,9.11-13.89,12.84-23.32,14.19-22.03,3.13-42-10-45.56-29.24-3.98-21.53,13.19-49.44,45.55-55.27,23.2-4.21,37,7.77,40.2,23.26,1.82,8.98-.68,17.77-1.68,22.41-.52,2.22-.78,4.61-.41,6.69.59,3.32,2.86,5.75,7.15,5.08,10.15-1.56,19.58-17.06,14.79-38.14-7.98-33.05-38.02-43.54-65.24-37.95-33.44,6.89-70.14,34.1-62.58,75.31,9.04,42.76,50.79,49.11,86.54,44.57,9-1.07,12.68-.77,14.35,9.04ZM266.83,251.89c-1.81-9.92-9.51-12.67-18.2-9.8-14.48,4.44-23.63,19.04-21.9,29.04,1.47,8.56,12.02,14.64,21.06,13.34,15.23-2.17,21.08-21.43,19.03-32.58Z"/><circle cx="30" cy="14" r="9" fill="#E0A93A"/><circle cx="30" cy="14" r="6" fill="#FFD978"/></svg>
+          <svg class="home-sun__stage" data-scene-stage="back" aria-hidden="true" focusable="false"></svg>
           <span class="home-sun__shadow" aria-hidden="true"></span>
+          <svg class="home-sun__worn" data-scene-worn="back" viewBox="0 0 515 419" aria-hidden="true" focusable="false"></svg>
           <img class="home-sun__mascot" data-mascot="kawaii" data-mascot-dark="sleepy" data-mascot-faces="wow wink happy" data-pet src="/src/assets/mascot/potato-kawaii.svg" alt="poe, the atpotato mascot: a smiling potato with an @ on its tummy and leafy vine arms, standing on a grassy hill and waving" width="360" height="293" fetchpriority="high">
-          <span class="home-sun__helmet" aria-hidden="true"></span>
+          <svg class="home-sun__worn" data-scene-worn="front" viewBox="0 0 515 419" aria-hidden="true" focusable="false"></svg>
           <span class="home-sun__tuft home-sun__tuft--front" style="--x: -70px" aria-hidden="true"></span>
           <span class="home-sun__tuft home-sun__tuft--front" style="--x: -32px" aria-hidden="true"></span>
           <span class="home-sun__tuft home-sun__tuft--front" style="--x: 22px" aria-hidden="true"></span>
           <span class="home-sun__tuft home-sun__tuft--front" style="--x: 56px" aria-hidden="true"></span>
+          <svg class="home-sun__stage home-sun__stage--front" data-scene-stage="front" aria-hidden="true" focusable="false"></svg>
           <div class="home-sun__visitors" data-scene-visitor aria-hidden="true"></div>
           <div class="home-sun__life" data-scene-life aria-hidden="true"></div>
           <p class="home-sun__bubble" aria-hidden="true"><span class="only-hover">psst, hover me (◕‿◕)</span><span class="only-touch">psst, tap me (◕‿◕)</span><span class="home-sun__say" data-pet-say></span></p>

@@ -360,6 +360,41 @@ html[data-theme="dark"] {
   --shadow-c: rgba(58, 54, 80, 0.35);
 }
 
+.home-sun[data-place="beach"] {
+  --sky-a0: #BFE3F3;
+  --sky-b0: #AFD9EE;
+  --tint-amt: 0%;
+  --sky-top: transparent;
+  --glow: rgba(255, 255, 255, 0.4);
+  --ground: #F6DEA2;
+  --ground-shade: #EFD08A;
+  --cap: 0px;
+  --shadow-c: rgba(138, 106, 46, 0.22);
+}
+
+.home-sun[data-place="beach"][data-time="night"] {
+  --sky-a0: var(--home-night);
+  --sky-b0: var(--home-night-deep);
+  --glow: transparent;
+}
+
+/* special days: a purple halloween night, and new year's eve over moonlit snow */
+.home-sun[data-event="halloween"] {
+  --sky-a0: #4B3366;
+  --sky-b0: #40295A;
+  --tint-amt: 0%;
+  --glow: transparent;
+}
+
+.home-sun[data-event="newyear"] {
+  --sky-a0: #222B47;
+  --sky-b0: #1B2339;
+  --ground: #C3CFE0;
+  --ground-shade: #A9B8CE;
+  --tone-amt: 0%;
+  --cap: 0px;
+}
+
 /* The sunburst: rays round the point the hill rises to, on their own layer so the wind can
    turn them without repainting the tile. */
 .home-sun__rays {
@@ -401,6 +436,10 @@ html[data-theme="dark"] {
   background: radial-gradient(120% 90% at 50% 80%, transparent 30%, rgba(28, 22, 14, 0.38) 100%);
 }
 
+.home-sun[data-event="halloween"] .home-sun__air {
+  background: linear-gradient(to bottom, rgba(30, 18, 51, 0.5), transparent 62%);
+}
+
 .home-sun__night {
   position: absolute;
   inset: 0;
@@ -436,7 +475,7 @@ html[data-theme="dark"] {
   background: url("../assets/scene/earth.svg") center / contain no-repeat;
 }
 
-.home-sun[data-place="moon"] .home-sun__moon {
+.home-sun:is([data-place="moon"], [data-event="halloween"]) .home-sun__moon {
   display: none;
 }
 
@@ -555,7 +594,7 @@ html[data-theme="dark"] {
   pointer-events: none;
 }
 
-.home-sun[data-time="night"][data-place="hill"]:not([data-season="winter"], [data-weather="rain"], [data-weather="snow"]) .home-sun__fireflies {
+.home-sun[data-time="night"][data-place="hill"]:not([data-season="winter"], [data-weather="rain"], [data-weather="snow"], [data-event="halloween"], [data-event="newyear"]) .home-sun__fireflies {
   display: block;
 }
 
@@ -658,6 +697,70 @@ html[data-theme="dark"] {
 
 .home-sun[data-weather="rain"] .home-sun__mound::before {
   filter: brightness(0.85) saturate(0.85);
+}
+
+/* the beach: sand with a rim and a scatter of grains, the sea behind */
+.home-sun[data-place="beach"] .home-sun__mound {
+  box-shadow: inset 0 0 0 calc(6px * var(--poe-scale)) #E3BD6E;
+}
+
+.home-sun[data-place="beach"] .home-sun__mound::before {
+  background:
+    url("../assets/scene/sand.svg") 20px 30px / 220px 70px repeat-x,
+    url("../assets/scene/sand.svg") 120px 84px / 260px 83px repeat-x;
+}
+
+.home-sun__sea {
+  --hill-top: 140px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: none;
+  height: calc(var(--hill-top) + 48px * var(--poe-scale));
+  overflow: hidden;
+  background: #A3D8F0;
+  pointer-events: none;
+}
+
+.home-sun[data-place="beach"] .home-sun__sea {
+  display: block;
+}
+
+.home-sun__wave {
+  position: absolute;
+  left: -40px;
+  right: -40px;
+  bottom: 0;
+  height: calc(var(--hill-top) + 34px * var(--poe-scale));
+  background:
+    url("../assets/scene/wave-far.svg") 0 0 / 20px 12px repeat-x,
+    linear-gradient(transparent 8px, #8ACDEC 8px);
+}
+
+.home-sun__wave--near {
+  height: calc(var(--hill-top) + 14px * var(--poe-scale));
+  background:
+    url("../assets/scene/wave-near.svg") 0 0 / 20px 12px repeat-x,
+    linear-gradient(transparent 8px, #73C1E6 8px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-sun[data-place="beach"] .home-sun__wave {
+    animation: home-wave 2.8s linear infinite;
+  }
+
+  .home-sun[data-place="beach"] .home-sun__wave--near {
+    animation-duration: 3.6s;
+    animation-direction: reverse;
+  }
+}
+
+@keyframes home-wave {
+  to {
+    transform: translateX(-20px);
+  }
 }
 
 /* the moon: grey dust and craters */
@@ -766,7 +869,12 @@ html[data-theme="dark"] {
   transform-origin: 50% 100%;
   transition:
     transform var(--dur-spring) var(--ease-spring),
-    filter var(--dur) ease;
+    filter var(--dur) ease,
+    opacity 0.6s ease;
+}
+
+.home-sun:is([data-right-prop], [data-event="halloween"]) .home-sun__sprout--3 {
+  opacity: 0;
 }
 
 .home-sun[data-season="autumn"] .home-sun__sprout {
@@ -827,7 +935,7 @@ html[data-theme="dark"] {
   width: 58px;
 }
 
-/* The moon: Poe's own @ flag, a fishbowl helmet, and Poe floating in low gravity. */
+/* The moon: Poe's own @ flag, a fishbowl helmet (scene-art.ts), and Poe floating in low gravity. */
 .home-sun__flag {
   position: absolute;
   left: calc(18% - 26px);
@@ -839,38 +947,12 @@ html[data-theme="dark"] {
   pointer-events: none;
 }
 
-.home-sun__helmet {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--poe-bottom) - var(--poe-w) * 0.06);
-  z-index: 3;
-  display: none;
-  width: calc(var(--poe-w) * 0.98);
-  height: calc(var(--poe-w) * 0.9);
-  margin-left: calc(var(--poe-w) * -0.49 - 4px);
-  border: calc(var(--poe-w) * 0.018) solid rgba(255, 255, 255, 0.75);
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.24), rgba(221, 242, 255, 0.08) 58%);
-  pointer-events: none;
-}
-
-.home-sun__helmet::before {
-  content: "";
-  position: absolute;
-  inset: 7%;
-  border: calc(var(--poe-w) * 0.035) solid transparent;
-  border-top-color: rgba(255, 255, 255, 0.6);
-  border-radius: 50%;
-  transform: rotate(-38deg);
-}
-
-.home-sun[data-place="moon"] :is(.home-sun__flag, .home-sun__helmet) {
+.home-sun[data-place="moon"] .home-sun__flag {
   display: block;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :where(.home-sun[data-place="moon"]) .home-sun__mascot,
-  .home-sun[data-place="moon"] .home-sun__helmet {
+  :where(.home-sun[data-place="moon"]) :is(.home-sun__mascot, .home-sun__worn) {
     animation: home-float 4.5s ease-in-out infinite alternate;
   }
 
@@ -902,6 +984,369 @@ html[data-theme="dark"] {
 }
 
 /* ---------- visitors and weather in front (scene.ts draws them) ---------- */
+
+/* The drawn layers (scene-art.ts), in tile pixels: behind Poe and in front of Poe. */
+.home-sun__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-sun__stage--front {
+  z-index: 4;
+}
+
+:is(.home-art-crawl, .home-art-shellbob, .home-art-hop, .home-art-tilt, .home-art-note, .home-art-heart, .home-art-flag, .home-art-wiggle, .home-art-flutter, .home-art-sparkle, .home-art-spark, .home-art-flicker, .home-art-ghost, .home-art-burst, .home-art-rays, .home-art-hopabout, .home-art-twinkle, .home-art-batwings) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.home-art-crawl,
+.home-art-tilt {
+  transform-origin: 50% 100%;
+}
+
+.home-art-flutter {
+  transform-origin: 15% 85%;
+}
+
+.home-art-flag {
+  transform-origin: 8% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-art-crawl {
+    animation: home-art-crawl 1.5s ease-in-out infinite;
+  }
+
+  .home-art-shellbob {
+    animation: home-art-shellbob 1.5s ease-in-out infinite;
+  }
+
+  .home-art-hop {
+    animation: home-art-hop 4.4s ease-in-out infinite;
+  }
+
+  .home-art-tilt {
+    animation: home-art-tilt 4.4s ease-in-out infinite;
+  }
+
+  .home-art-note {
+    animation: home-art-note 4.4s ease-out infinite;
+  }
+
+  .home-art-heart {
+    animation: home-art-heart 3.4s ease-out infinite;
+  }
+
+  .home-art-flag {
+    animation: home-art-flag 5s ease-in-out infinite;
+  }
+
+  .home-art-wiggle {
+    animation: home-art-wiggle 2.6s ease-in-out infinite;
+  }
+
+  .home-art-flutter {
+    animation: home-art-flutter 0.3s ease-in-out infinite alternate;
+  }
+
+  .home-art-sparkle {
+    animation: home-art-sparkle 0.16s ease-in-out infinite alternate;
+  }
+
+  .home-art-spark {
+    animation: home-art-spark var(--dur) ease-out var(--d) infinite;
+  }
+
+  .home-art-flicker {
+    animation: home-art-flicker 1.7s ease-in-out infinite;
+  }
+
+  .home-art-ghost {
+    animation: home-art-ghost 4.2s ease-in-out infinite;
+  }
+
+  .home-art-burst {
+    animation: home-art-burst 3.4s ease-out var(--d) infinite;
+  }
+
+  .home-art-rays {
+    animation: home-rays 40s linear infinite;
+  }
+
+  .home-art-hopabout {
+    animation: home-art-hopabout 6.5s ease-in-out infinite;
+  }
+
+  .home-art-twinkle {
+    animation: home-twinkle 2.8s ease-in-out var(--d, 0s) infinite;
+  }
+
+  .home-art-batwings {
+    animation: home-art-batwings 0.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes home-art-crawl {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+
+  50% {
+    transform: scale(1.06, 0.95);
+  }
+}
+
+@keyframes home-art-shellbob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-1.6px);
+  }
+}
+
+@keyframes home-art-hop {
+  0%,
+  58%,
+  100% {
+    transform: translateY(0);
+  }
+
+  64% {
+    transform: translateY(-9px);
+  }
+
+  70% {
+    transform: translateY(0);
+  }
+
+  76% {
+    transform: translateY(-6px);
+  }
+
+  82% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-art-tilt {
+  0%,
+  18%,
+  52%,
+  100% {
+    transform: rotate(0);
+  }
+
+  26%,
+  44% {
+    transform: rotate(-10deg);
+  }
+}
+
+@keyframes home-art-note {
+  0%,
+  24% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+
+  34% {
+    opacity: 1;
+  }
+
+  64%,
+  100% {
+    opacity: 0;
+    transform: translate(10px, -26px) scale(1);
+  }
+}
+
+@keyframes home-art-heart {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.5);
+  }
+
+  22% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  78% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(1.05);
+  }
+}
+
+@keyframes home-art-flag {
+  0%,
+  68%,
+  100% {
+    transform: rotate(0);
+  }
+
+  74% {
+    transform: rotate(-16deg);
+  }
+
+  80% {
+    transform: rotate(10deg);
+  }
+
+  86% {
+    transform: rotate(-5deg);
+  }
+
+  92% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes home-art-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+
+  25% {
+    transform: rotate(-7deg);
+  }
+
+  75% {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes home-art-flutter {
+  to {
+    transform: scaleY(0.4);
+  }
+}
+
+@keyframes home-art-sparkle {
+  from {
+    transform: rotate(0) scale(0.9);
+  }
+
+  to {
+    transform: rotate(20deg) scale(1.12);
+  }
+}
+
+@keyframes home-art-spark {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.4);
+  }
+}
+
+@keyframes home-art-flicker {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+
+  30% {
+    opacity: 0.6;
+  }
+
+  55% {
+    opacity: 1;
+  }
+
+  75% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes home-art-ghost {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(-4deg);
+  }
+
+  50% {
+    transform: translate(5px, -11px) rotate(4deg);
+  }
+}
+
+@keyframes home-art-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.15);
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(8px) scale(1.06);
+  }
+}
+
+@keyframes home-art-hopabout {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  7% {
+    transform: translate(-11px, -11px);
+  }
+
+  13%,
+  40% {
+    transform: translate(-22px, 0);
+  }
+
+  47% {
+    transform: translate(-34px, -10px);
+  }
+
+  53%,
+  72% {
+    transform: translate(-46px, 0);
+  }
+
+  81% {
+    transform: translate(-23px, -13px);
+  }
+
+  90% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes home-art-batwings {
+  to {
+    transform: scaleY(0.35);
+  }
+}
 
 .home-sun__visitors,
 .home-sun__life {
@@ -1278,10 +1723,31 @@ html[data-theme="dark"] {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* What Poe holds or wears (scene-art.ts) sits in an overlay on Poe's box. scene.ts copies
+   Poe's classes and style onto it, so it leans, hops and flips with Poe. */
+.home-sun__worn {
+  position: absolute;
+  left: 50%;
+  bottom: var(--poe-bottom);
+  z-index: 3;
+  width: var(--poe-w);
+  height: auto;
+  margin-left: var(--poe-left);
+  overflow: visible;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  transform: translate(calc(var(--lean-x, 0) * 14px), calc(var(--lean-y, 0) * 6px)) rotate(calc(var(--lean-x, 0) * 6deg));
+  transition: transform 360ms var(--ease-out);
+}
+
+.home-sun__worn:empty {
+  display: none;
+}
+
 /* Mouse and pen only: a tap leaves :hover stuck on touch screens, which kept the
    potato lifted until the next tap somewhere else. Taps still swap the face (mascot.ts). */
 @media (hover: hover) and (pointer: fine) {
-  .home-sun:hover .home-sun__mascot {
+  .home-sun:hover :is(.home-sun__mascot, .home-sun__worn) {
     transform: translate(calc(var(--lean-x, 0) * 14px), calc(-6px + var(--lean-y, 0) * 6px)) rotate(calc(-1.5deg + var(--lean-x, 0) * 6deg));
   }
 }
@@ -1290,23 +1756,23 @@ html[data-theme="dark"] {
    twice in a row, and pet.ts jitters --pet-hop / --pet-tilt / --pet-dur per pet so no two
    look alike. The eighth pet is a hop and flip, turning around Poe's middle rather than
    its feet. A blush later on. */
-.home-sun__mascot.is-squished {
+:is(.home-sun__mascot, .home-sun__worn).is-squished {
   animation: home-squish var(--pet-dur, 700ms) var(--ease-out);
 }
 
-.home-sun__mascot.is-wobbling {
+:is(.home-sun__mascot, .home-sun__worn).is-wobbling {
   animation: home-wobble var(--pet-dur, 760ms) ease-out;
 }
 
-.home-sun__mascot.is-booped {
+:is(.home-sun__mascot, .home-sun__worn).is-booped {
   animation: home-boop var(--pet-dur, 420ms) var(--ease-out);
 }
 
-.home-sun__mascot.is-wiggling {
+:is(.home-sun__mascot, .home-sun__worn).is-wiggling {
   animation: home-wiggle var(--pet-dur, 620ms) ease-in-out;
 }
 
-.home-sun__mascot.is-spinning {
+:is(.home-sun__mascot, .home-sun__worn).is-spinning {
   animation: home-flip 1000ms cubic-bezier(0.33, 0, 0.25, 1);
 }
 
@@ -2857,6 +3323,10 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
     --k: 0.62;
   }
 
+  .home-sun__sea {
+    --hill-top: 88px;
+  }
+
   .home-sun__flag {
     left: calc(17% - 17px);
     bottom: 62px;
@@ -3219,7 +3689,8 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
 
 @media (prefers-reduced-motion: reduce) {
   .home-sun__mascot,
-  .home-sun:hover .home-sun__mascot,
+  .home-sun__worn,
+  .home-sun:hover :is(.home-sun__mascot, .home-sun__worn),
   .home-guide:hover .home-guide__potato {
     transform: none;
   }

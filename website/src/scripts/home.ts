@@ -492,6 +492,16 @@ export async function loadLatest(tile: HTMLElement, fetchImpl: typeof fetch = fe
   }
 }
 
+/** Runs `task` once the page is idle, so it never competes with the hero's first paint. */
+function afterLoad<T>(task: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const run = () => task().then(resolve, reject);
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(run, { timeout: 1500 });
+    else window.setTimeout(run, 300);
+  });
+}
+
 /** Start loading when the tile is close to the viewport, so it never competes with the hero. */
 function whenNear(el: Element, run: () => void): void {
   if (!('IntersectionObserver' in window)) {
@@ -533,7 +543,27 @@ export function initLatest(root: ParentNode = document, fetchImpl: typeof fetch 
     renderItems(tile, cached);
     return;
   }
-  whenNear(tile, () => void loadLatest(tile, fetchImpl));
+  // the hero's dispatch day may have read the feed since (newestDispatch)
+  whenNear(tile, () => {
+    const fresh = readCache();
+    if (fresh) renderItems(tile, fresh);
+    else void loadLatest(tile, fetchImpl);
+  });
+}
+
+/**
+ * When poe's newest dispatch issue went out (ms since the epoch), for the hero's dispatch day
+ * (scene.ts). It reads the same feed as the latest tile and keeps it for that tile, so the
+ * page asks once. Null when the feed has no issue or can't be read.
+ */
+export async function newestDispatch(fetchImpl: typeof fetch = fetch): Promise<number | null> {
+  let items = readCache();
+  if (!items) {
+    items = await fetchFeed(fetchImpl).catch(() => null);
+    if (items) writeCache(items);
+  }
+  const issue = items?.find((item) => item.source === 'dispatch');
+  return issue ? Date.parse(issue.createdAt) : null;
 }
 
 const COPIED_MS = 1800;
@@ -594,7 +624,7 @@ export function init(): void {
   initLatest();
   initCopyEmail();
   initPet();
-  initScene();
+  initScene(document, { dispatchedAt: () => afterLoad(() => newestDispatch()) });
   initWeather();
   initGardenTeaserWhenNear();
 }
