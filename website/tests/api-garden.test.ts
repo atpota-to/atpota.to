@@ -11,13 +11,18 @@ import {
   FLOWER_KINDS,
   GARDEN_SUBJECT,
   GROW_DAYS,
+  isOpen,
   isThirsty,
   MAX_COLS,
   MAX_PLOTS,
   MAX_ROWS,
   MIN_COLS,
   MIN_ROWS,
+  NAME_MAX,
   newestPerAccount,
+  NOTE_MAX,
+  OWN_PATCH_RKEY,
+  parsePatchUri,
   PATCH_NSID,
   resolvePlots,
   SEASONS,
@@ -27,44 +32,98 @@ import {
   TEND_ACTIONS,
   TEND_NSID,
   tidTime,
+  toOwner,
   toPatch,
   toSprout,
   type PatchSummary,
 } from '../server/garden.js';
 import * as flowers from '../src/scripts/flowers.js';
 import * as client from '../src/scripts/garden.js';
-import { CID, DAY, did, fakeFetch, patchRecord, patchUri, sprout, tendOf, tid, type Net } from './garden-net.js';
+import { CID, DAY, did, fakeFetch, gardenRecord as ownGarden, patchRecord, patchUri, sprout, tendOf, tid, type Net } from './garden-net.js';
 
-// /api/garden against a scripted network (tests/garden-net.ts): atpotato's PDS lists the
-// patches, Constellation the sprouts in each and the tends on each flower, Slingshot serves
-// each record, and the AppView names the accounts.
+// /api/garden against a scripted network (tests/garden-net.ts): a PDS lists each owner's
+// patches (atpotato's seasonal ones, and other people's own gardens), Constellation the
+// sprouts in each and the tends on each flower, Slingshot serves each record, and the
+// AppView names the accounts.
 
 const NOW = Date.parse('2026-10-20T12:00:00.000Z');
 const lexicon = (name: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../lexicons/to/atpota/garden/${name}.json`, import.meta.url)), 'utf8'));
 const patchEntry = (rkey: string, value: Record<string, unknown>, uri = patchUri(rkey)) => ({ uri, cid: 'bafypatchcid', value });
+/** atpotato when the AppView has no profile for it. */
+const ATPOTATO = { did: GARDEN_SUBJECT, handle: 'atpota.to', displayName: 'atpotato', avatar: null };
 
 beforeEach(() => resetDiscussionCaches());
 
 describe('patch records', () => {
-  it('accepts well-formed patches from atpotato only', () => {
+  it('accepts well-formed patches from the repo they are said to be in', () => {
     const autumn = patchRecord('autumn 2026', '2026-09-01T00:00:00Z', '2026-12-01T00:00:00Z');
     expect(toPatch(patchEntry('2026-autumn', autumn))).toEqual({
+      owner: GARDEN_SUBJECT,
       rkey: '2026-autumn',
       uri: patchUri('2026-autumn'),
       cid: 'bafypatchcid',
       name: 'autumn 2026',
+      note: null,
       season: 'autumn',
       cols: 12,
       rows: 8,
       opensAt: '2026-09-01T00:00:00.000Z',
       closesAt: '2026-12-01T00:00:00.000Z',
+      createdAt: '2026-08-01T00:00:00.000Z',
     });
     expect(toPatch(patchEntry('x', autumn, `at://${did(1)}/${PATCH_NSID}/x`))).toBeNull();
-    expect(toPatch(patchEntry('x', { ...autumn, season: 'monsoon' }))).toBeNull();
+    // an unknown season is just no season
+    expect(toPatch(patchEntry('x', { ...autumn, season: 'monsoon' }))?.season).toBeNull();
+    expect(toPatch(patchEntry('x', { ...autumn, createdAt: undefined }))).toBeNull();
+    expect(toPatch(patchEntry('x', { ...autumn, opensAt: 'soon' }))).toBeNull();
     expect(toPatch(patchEntry('x', { ...autumn, cols: MAX_COLS + 1 }))).toBeNull();
     expect(toPatch(patchEntry('x', { ...autumn, rows: 1.5 }))).toBeNull();
     expect(toPatch(patchEntry('x', { ...autumn, closesAt: autumn.opensAt }))).toBeNull();
     expect(toPatch(patchEntry('x', { ...autumn, name: 'a'.repeat(41) }))).toBeNull();
+    expect(toPatch(patchEntry('x', { ...autumn, name: '  ' }))).toBeNull();
+  });
+
+  it('a garden of someone’s own: no season or dates, open from when it was made, with a note', () => {
+    const uri = patchUri(OWN_PATCH_RKEY, did(1));
+    const mine = ownGarden('dame’s garden', 6, 4, { note: '  plant\nsomething   cheerful!\u202e ' });
+    const p = toPatch(patchEntry(OWN_PATCH_RKEY, mine, uri), did(1))!;
+    expect(p).toEqual({
+      owner: did(1),
+      rkey: 'self',
+      uri,
+      cid: 'bafypatchcid',
+      name: 'dame’s garden',
+      note: 'plant something cheerful!',
+      season: null,
+      cols: 6,
+      rows: 4,
+      opensAt: null,
+      closesAt: null,
+      createdAt: '2026-09-15T00:00:00.000Z',
+    });
+    expect(isOpen(p, NOW)).toBe(true);
+    expect(isOpen(p, Date.parse('2026-09-14T00:00:00Z'))).toBe(false);
+    // closing it presses it
+    const closed = toPatch(patchEntry(OWN_PATCH_RKEY, { ...mine, closesAt: '2026-10-01T00:00:00Z' }, uri), did(1))!;
+    expect(isOpen(closed, NOW)).toBe(false);
+    expect(toPatch(patchEntry(OWN_PATCH_RKEY, { ...mine, closesAt: '2026-09-01T00:00:00Z' }, uri), did(1))).toBeNull();
+    // a long note is cut to NOTE_MAX graphemes (one family emoji is one)
+    const long = toPatch(patchEntry(OWN_PATCH_RKEY, { ...mine, note: '👨‍👩‍👧'.repeat(NOTE_MAX + 5) }, uri), did(1))!;
+    expect(long.note).toBe('👨‍👩‍👧'.repeat(NOTE_MAX));
+    expect(toPatch(patchEntry(OWN_PATCH_RKEY, { ...mine, name: '🌻'.repeat(NAME_MAX) }, uri), did(1))?.name).toBe('🌻'.repeat(NAME_MAX));
+    expect(parsePatchUri(uri)).toEqual({ owner: did(1), rkey: 'self' });
+    expect(parsePatchUri(`at://${did(1)}/${SPROUT_NSID}/self`)).toBeNull();
+  });
+
+  it('owners come from the AppView: hidden accounts, and answers for someone else, are nobody', () => {
+    const view = { did: did(1), handle: 'Dame.IS', displayName: '  Dame  ', avatar: 'https://cdn.bsky.app/a.jpg' };
+    expect(toOwner(view, did(1))).toEqual({ did: did(1), handle: 'dame.is', displayName: 'Dame', avatar: 'https://cdn.bsky.app/a.jpg' });
+    expect(toOwner(view, 'dame.is')).toMatchObject({ did: did(1) });
+    expect(toOwner(view, 'other.test')).toBeNull();
+    expect(toOwner(view, did(2))).toBeNull();
+    expect(toOwner({ ...view, avatar: 'http://cdn.bsky.app/a.jpg', displayName: '' }, did(1))).toMatchObject({ avatar: null, displayName: null });
+    expect(toOwner({ ...view, labels: [{ val: '!hide' }] }, did(1))).toBeNull();
+    expect(toOwner({ ...view, handle: 'handle.invalid' }, did(1))).toMatchObject({ handle: did(1) });
   });
 
   it('the lexicons describe the same records', () => {
@@ -74,13 +133,16 @@ describe('patch records', () => {
     expect(patch.defs.main.record.properties.season.knownValues).toEqual([...SEASONS]);
     expect([patch.defs.main.record.properties.cols.minimum, patch.defs.main.record.properties.cols.maximum]).toEqual([MIN_COLS, MAX_COLS]);
     expect([patch.defs.main.record.properties.rows.minimum, patch.defs.main.record.properties.rows.maximum]).toEqual([MIN_ROWS, MAX_ROWS]);
-    expect(patch.defs.main.record.properties.name.maxGraphemes).toBe(40);
+    expect(patch.defs.main.record.properties.name.maxGraphemes).toBe(NAME_MAX);
+    expect(patch.defs.main.record.properties.note.maxGraphemes).toBe(NOTE_MAX);
+    expect(patch.defs.main.record.required).toEqual(['name', 'cols', 'rows', 'createdAt']);
 
     const sprouted = lexicon('sprout');
     expect(sprouted.id).toBe(SPROUT_NSID);
     expect(sprouted.defs.main.record.required).toEqual(['patch', 'kind', 'plot', 'createdAt']);
     expect(sprouted.defs.main.record.properties.patch.ref).toBe('com.atproto.repo.strongRef');
     expect(sprouted.defs.main.record.properties.patch.description).toContain(GARDEN_SUBJECT);
+    expect(sprouted.defs.main.record.properties.patch.description).toContain('garden owner');
     expect(sprouted.defs.main.record.properties.kind.knownValues).toEqual([...FLOWER_KINDS]);
     expect(sprouted.defs.main.record.properties.plot.maximum).toBe(MAX_PLOTS - 1);
 
@@ -234,6 +296,28 @@ describe('growing and tending', () => {
       createdAt: new Date(NOW).toISOString(),
     });
     expect(client.patchUri('2026-autumn')).toBe(patchUri('2026-autumn'));
+    expect(client.patchUri('self', did(1))).toBe(patchUri('self', did(1)));
+    expect([client.OWN_PATCH_RKEY, client.NAME_MAX, client.NOTE_MAX, client.MIN_COLS, client.MIN_ROWS]).toEqual([OWN_PATCH_RKEY, NAME_MAX, NOTE_MAX, MIN_COLS, MIN_ROWS]);
+    for (const size of Object.values(client.GARDEN_SIZES)) {
+      expect(size.cols).toBeGreaterThanOrEqual(MIN_COLS);
+      expect(size.rows).toBeGreaterThanOrEqual(MIN_ROWS);
+    }
+  });
+
+  it('your own garden’s record: limited by graphemes, inside the lexicon’s sizes, and the server reads it back', () => {
+    const now = new Date(NOW);
+    const record = client.gardenRecord({ name: '  🌷 my\n garden  ', note: `${'🌱'.repeat(NOTE_MAX + 3)}`, cols: 100, rows: 1 }, now);
+    expect(record).toEqual({ $type: PATCH_NSID, name: '🌷 my garden', note: '🌱'.repeat(NOTE_MAX), cols: MAX_COLS, rows: MIN_ROWS, createdAt: now.toISOString() });
+    expect(client.gardenRecord({ name: '', note: '   ', cols: 8, rows: 6, createdAt: '2026-09-01T00:00:00.000Z', closesAt: null }, now)).toEqual({
+      $type: PATCH_NSID,
+      name: 'my garden',
+      cols: 8,
+      rows: 6,
+      createdAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(client.gardenRecord({ name: 'x'.repeat(50), cols: 6, rows: 4, closesAt: '2026-11-01T00:00:00.000Z' }, now)).toMatchObject({ name: 'x'.repeat(NAME_MAX), closesAt: '2026-11-01T00:00:00.000Z' });
+    const uri = patchUri(OWN_PATCH_RKEY, did(1));
+    expect(toPatch(patchEntry(OWN_PATCH_RKEY, record, uri), did(1))).toMatchObject({ name: '🌷 my garden', cols: MAX_COLS, rows: MIN_ROWS, note: '🌱'.repeat(NOTE_MAX) });
   });
 });
 
@@ -313,16 +397,19 @@ describe('/api/garden', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE_OK);
     const body = await res.json();
+    expect(body.owner).toEqual(ATPOTATO);
     expect(body.patch).toEqual({
       rkey: '2026-autumn',
       uri: patchUri('2026-autumn'),
       cid: 'bafypatch2026autumn',
       name: 'autumn 2026',
+      note: null,
       season: 'autumn',
       cols: 4,
       rows: 2,
       opensAt: '2026-09-01T00:00:00.000Z',
       closesAt: '2026-12-01T00:00:00.000Z',
+      createdAt: '2026-08-01T00:00:00.000Z',
       open: true,
     });
     expect(body.patches).toEqual([
@@ -379,7 +466,7 @@ describe('/api/garden', () => {
     const empty = createGardenHandlers({ fetch: fakeFetch({ patches: {}, records: {}, profiles: [] }), now: () => NOW, log: () => undefined });
     const res = await empty.GET(new Request('https://atpota.to/api/garden'));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ patch: null, patches: [], flowers: [], total: 0 });
+    expect(await res.json()).toEqual({ owner: ATPOTATO, patch: null, patches: [], flowers: [], total: 0 });
   });
 
   it('says 503 when the patches or the index are down', async () => {
@@ -413,5 +500,122 @@ describe('/api/garden', () => {
   it('only takes GET and HEAD', async () => {
     const res = await api.DELETE(new Request('https://atpota.to/api/garden', { method: 'DELETE' }));
     expect(res.status).toBe(405);
+  });
+});
+
+/** gardenNet, plus gardens of people's own: did(1)'s (it blocks did(3)), and did(6)'s three. */
+function peopleNet(): Net {
+  const net = gardenNet();
+  net.gardens = {
+    [did(1)]: { self: ownGarden('one’s garden', 6, 4, { note: 'plant something cheerful' }) },
+    [did(6)]: {
+      self: ownGarden('six’s garden', 4, 2),
+      spare: ownGarden('six’s spare', 4, 2, { createdAt: '2026-10-01T00:00:00Z' }),
+      old: ownGarden('six’s old', 4, 2, { createdAt: '2026-06-01T00:00:00Z', closesAt: '2026-08-01T00:00:00Z' }),
+    },
+  };
+  net.ownerBlocks = { [did(1)]: [did(3)] };
+  Object.assign(net.records, {
+    // in did(1)'s garden: did(3)'s goes (did(1) blocks it), and did(7)'s moves along from plot 4
+    [`${did(2)}/${SPROUT_NSID}/g2`]: sprout('self', 'rose', '2026-10-12T00:00:00Z', 4, did(1)),
+    [`${did(3)}/${SPROUT_NSID}/g3`]: sprout('self', 'tulip', '2026-10-13T00:00:00Z', 4, did(1)),
+    [`${did(7)}/${SPROUT_NSID}/g7`]: sprout('self', 'daisy', '2026-10-16T00:00:00Z', 4, did(1)),
+    // did(2) in both of did(6)'s open gardens: only the newest counts there
+    [`${did(2)}/${SPROUT_NSID}/s6a`]: sprout('self', 'violet', '2026-10-02T00:00:00Z', 0, did(6)),
+    [`${did(2)}/${SPROUT_NSID}/s6b`]: sprout('spare', 'poppy', '2026-10-05T00:00:00Z', 1, did(6)),
+    // did(6)'s old garden, closed
+    [`${did(7)}/${SPROUT_NSID}/o7`]: sprout('old', 'sunflower', '2026-07-01T00:00:00Z', 0, did(6)),
+  });
+  net.profiles = net.profiles.map((p) => (p.did === did(1) ? { ...p, displayName: 'One', avatar: 'https://cdn.bsky.app/one.jpg' } : p));
+  net.profiles.push({ did: did(6), handle: 'six.test', avatar: 'http://insecure.test/six.jpg' });
+  return net;
+}
+
+describe('anyone’s garden', () => {
+  const handlers = (net = peopleNet()) => createGardenHandlers({ fetch: fakeFetch(net), now: () => NOW, log: () => undefined });
+  const get = async (h: ReturnType<typeof handlers>, query: string) => {
+    const res = await h.GET(new Request(`https://atpota.to/api/garden?${query}`));
+    return { status: res.status, body: await res.json() };
+  };
+
+  it('shows someone’s own garden, by handle or by DID, with who it belongs to', async () => {
+    const h = handlers();
+    const { status, body } = await get(h, 'owner=one.test');
+    expect(status).toBe(200);
+    expect(body.owner).toEqual({ did: did(1), handle: 'one.test', displayName: 'One', avatar: 'https://cdn.bsky.app/one.jpg' });
+    expect(body.patch).toEqual({
+      rkey: 'self',
+      uri: patchUri('self', did(1)),
+      cid: 'bafypatchself',
+      name: 'one’s garden',
+      note: 'plant something cheerful',
+      season: null,
+      cols: 6,
+      rows: 4,
+      opensAt: null,
+      closesAt: null,
+      createdAt: '2026-09-15T00:00:00.000Z',
+      open: true,
+    });
+    expect(body.patches).toEqual([{ rkey: 'self', name: 'one’s garden', season: null, open: true, planted: 2, plots: 24, opensAt: null, closesAt: null }]);
+    expect(body.flowers.map((f: { did: string; plot: number }) => [f.did, f.plot])).toEqual([
+      [did(2), 4],
+      [did(7), 5],
+    ]);
+    expect((await get(h, `owner=${did(1)}`)).body).toEqual(body);
+    // atpotato's garden doesn't mind who did(1) blocks
+    expect((await get(h, 'owner=atpota.to')).body.flowers.map((f: { rkey: string }) => f.rkey)).toEqual(['u7', 'p2', 's3']);
+  });
+
+  it('one flower per account across an owner’s open patches; a closed one keeps everything', async () => {
+    const h = handlers();
+    const { body } = await get(h, 'owner=six.test');
+    expect(body.owner).toEqual({ did: did(6), handle: 'six.test', displayName: null, avatar: null });
+    expect(body.patches.map((p: { rkey: string; open: boolean; planted: number }) => [p.rkey, p.open, p.planted])).toEqual([
+      ['old', false, 1],
+      ['self', true, 0],
+      ['spare', true, 1],
+    ]);
+    expect(body.patch.rkey).toBe('self');
+    expect((await get(h, 'owner=six.test&patch=spare')).body.flowers.map((f: { rkey: string }) => f.rkey)).toEqual(['s6b']);
+    const old = (await get(h, 'owner=six.test&patch=old')).body;
+    expect(old.patch).toMatchObject({ open: false, closesAt: '2026-08-01T00:00:00.000Z' });
+    expect(old.flowers.map((f: { rkey: string }) => f.rkey)).toEqual(['o7']);
+    // did(2)'s community flower is another garden's: it stays
+    expect((await get(h, '')).body.flowers.map((f: { rkey: string }) => f.rkey)).toContain('p2');
+  });
+
+  it('someone without a garden yet has an empty one; nobody, junk, and hidden or blocked owners are a 404', async () => {
+    const h = handlers();
+    expect(await get(h, 'owner=seven.test')).toEqual({
+      status: 200,
+      body: { owner: { did: did(7), handle: 'seven.test', displayName: null, avatar: null }, patch: null, patches: [], flowers: [], total: 0 },
+    });
+    for (const q of ['owner=nobody.test', 'owner=not%20a%20handle', 'owner=bob', `owner=${did(5)}`, `owner=${did(4)}`, 'owner=one.test&patch=nope', 'owner=seven.test&patch=self']) {
+      expect((await get(h, q)).status, q).toBe(404);
+    }
+  });
+
+  it('says 503 when an owner’s patches can’t be read', async () => {
+    const res = await get(handlers({ ...peopleNet(), pdsDown: true }), 'owner=one.test');
+    expect(res.status).toBe(503);
+  });
+
+  it('the browser reads anyone’s garden, and checks the patch is theirs', async () => {
+    const h = handlers();
+    const browserFetch = (async (input: RequestInfo | URL) => h.GET(new Request(new URL(String(input), 'https://atpota.to')))) as typeof fetch;
+    const view = await client.fetchGarden(browserFetch, { owner: 'one.test' });
+    expect(view?.owner).toEqual({ did: did(1), handle: 'one.test', displayName: 'One', avatar: 'https://cdn.bsky.app/one.jpg' });
+    expect(view?.patch).toMatchObject({ rkey: 'self', note: 'plant something cheerful', season: null, opensAt: null, closesAt: null, open: true });
+    expect(view?.flowers.map((f) => f.rkey)).toEqual(['g2', 'g7']);
+    expect((await client.fetchGarden(browserFetch, { owner: 'six.test', rkey: 'old' }))?.patch?.open).toBe(false);
+    expect((await client.fetchGarden(browserFetch, '2026-summer'))?.patch?.rkey).toBe('2026-summer');
+    expect((await client.fetchGarden(browserFetch))?.owner).toEqual(ATPOTATO);
+    expect(await client.fetchGarden(browserFetch, { owner: 'nobody.test' })).toBeNull();
+    // an answer whose patch isn't in its owner's repo is turned down; so is a bad avatar
+    const lying = (async () => Response.json({ owner: { did: did(2), handle: 'two.test', displayName: null, avatar: 'javascript:alert(1)' }, patch: { ...view!.patch }, patches: [], flowers: [] })) as typeof fetch;
+    const odd = await client.fetchGarden(lying, { owner: 'two.test' });
+    expect(odd?.owner?.avatar).toBeNull();
+    expect(odd?.patch).toBeNull();
   });
 });

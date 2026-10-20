@@ -1,7 +1,7 @@
 // A scripted network for the garden's functions (/api/garden, /api/gardener): DID
-// documents from plc.directory, one PDS for everyone (atpotato's patches and blocks, and
-// each person's own sprouts), Constellation's backlinks, Slingshot's records and the
-// AppView's profiles.
+// documents from plc.directory, one PDS for everyone (atpotato's patches and blocks, other
+// people's gardens and blocks, and each person's own sprouts and tends), Constellation's
+// backlinks, Slingshot's records and the AppView's profiles.
 
 import { CONSTELLATION, SLINGSHOT } from '../server/blog/discussion.js';
 import { GARDEN_SUBJECT, PATCH_NSID, SPROUT_NSID, TEND_NSID } from '../server/garden.js';
@@ -31,6 +31,10 @@ export function json(body: unknown, status = 200): Response {
 export interface Net {
   /** atpotato's patch records, by rkey. */
   patches: Record<string, Record<string, unknown>>;
+  /** Other people's patch records: owner DID -> rkey -> value. */
+  gardens?: Record<string, Record<string, Record<string, unknown>>>;
+  /** Accounts other owners block: owner DID -> blocked DIDs. */
+  ownerBlocks?: Record<string, string[]>;
   /** Every record anyone has, "did/collection/rkey" -> value. */
   records: Record<string, Record<string, unknown>>;
   profiles: Array<Record<string, unknown>>;
@@ -57,11 +61,21 @@ export const patchRecord = (name: string, opensAt: string, closesAt: string, col
   createdAt: '2026-08-01T00:00:00Z',
 });
 
-export const patchUri = (rkey: string) => `at://${GARDEN_SUBJECT}/${PATCH_NSID}/${rkey}`;
+/** A garden of someone's own: no season, no dates, maybe a note. */
+export const gardenRecord = (name: string, cols = 6, rows = 4, extra: Record<string, unknown> = {}) => ({
+  $type: PATCH_NSID,
+  name,
+  cols,
+  rows,
+  createdAt: '2026-09-15T00:00:00Z',
+  ...extra,
+});
 
-export const sprout = (patch: string, kind: string, createdAt: string, plot: unknown = 0) => ({
+export const patchUri = (rkey: string, owner: string = GARDEN_SUBJECT) => `at://${owner}/${PATCH_NSID}/${rkey}`;
+
+export const sprout = (patch: string, kind: string, createdAt: string, plot: unknown = 0, owner: string = GARDEN_SUBJECT) => ({
   $type: SPROUT_NSID,
-  patch: { uri: patchUri(patch), cid: CID },
+  patch: { uri: patchUri(patch, owner), cid: CID },
   kind,
   plot,
   createdAt,
@@ -101,11 +115,13 @@ export function fakeFetch(net: Net): typeof fetch {
       if (net.pdsDown) return new Response('down', { status: 503 });
       const repo = url.searchParams.get('repo')!;
       const collection = url.searchParams.get('collection')!;
-      if (repo === GARDEN_SUBJECT && collection === PATCH_NSID) {
-        return json({ records: Object.entries(net.patches).map(([rkey, value]) => ({ uri: patchUri(rkey), cid: `bafypatch${rkey.replace(/[^a-z0-9]/g, '')}`, value })) });
+      if (collection === PATCH_NSID) {
+        const patches = repo === GARDEN_SUBJECT ? net.patches : (net.gardens?.[repo] ?? {});
+        return json({ records: Object.entries(patches).map(([rkey, value]) => ({ uri: patchUri(rkey, repo), cid: `bafypatch${rkey.replace(/[^a-z0-9]/g, '')}`, value })) });
       }
-      if (repo === GARDEN_SUBJECT && collection === 'app.bsky.graph.block') {
-        return json({ records: (net.blocks ?? []).map((subject, i) => ({ uri: `at://${GARDEN_SUBJECT}/app.bsky.graph.block/b${i}`, cid: CID, value: { subject } })) });
+      if (collection === 'app.bsky.graph.block') {
+        const blocked = repo === GARDEN_SUBJECT ? (net.blocks ?? []) : (net.ownerBlocks?.[repo] ?? []);
+        return json({ records: blocked.map((subject, i) => ({ uri: `at://${repo}/app.bsky.graph.block/b${i}`, cid: CID, value: { subject } })) });
       }
       const records = Object.entries(net.records)
         .filter(([key]) => key.startsWith(`${repo}/${collection}/`))
@@ -122,6 +138,11 @@ export function fakeFetch(net: Net): typeof fetch {
       const key = `${url.searchParams.get('repo')}/${url.searchParams.get('collection')}/${url.searchParams.get('rkey')}`;
       const value = net.records[key];
       return value ? json({ uri: `at://${key}`, cid: CID, value }) : json({ error: 'RecordNotFound' }, 404);
+    }
+    if (url.pathname.endsWith('app.bsky.actor.getProfile')) {
+      const actor = url.searchParams.get('actor')!.toLowerCase();
+      const found = net.profiles.find((p) => p.did === actor || String(p.handle).toLowerCase() === actor);
+      return found ? json(found) : json({ error: 'InvalidRequest', message: 'Profile not found' }, 400);
     }
     if (url.pathname.endsWith('app.bsky.actor.getProfiles')) {
       const wanted = url.searchParams.getAll('actors');

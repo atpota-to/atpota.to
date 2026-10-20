@@ -1,6 +1,7 @@
-// Vercel Function (Node.js runtime, Web handlers): the garden page: one person's flowers
-// (their flower in the open patch and the ones they grew before; see server/gardener.ts).
-//   GET / HEAD ?did=<did>  -> { did, handle, flowers: [...] }
+// Vercel Function (Node.js runtime, Web handlers): the garden page: one person, their own
+// garden, the flowers they've planted in anyone's garden and the tending they've given
+// (see server/gardener.ts).
+//   GET / HEAD ?actor=<did or handle>  -> { did, handle, displayName, avatar, garden, flowers, given }
 //   anything else -> 405
 // Local imports end in ".js": Vercel runs the compiled files as native ESM.
 

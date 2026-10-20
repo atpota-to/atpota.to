@@ -121,6 +121,22 @@ export async function createRecord(session: Session, collection: string, record:
   return { uri: body.uri, cid: body.cid };
 }
 
+/** Writes (creates or replaces) one of the reader's own records at a record key they choose. */
+export async function putRecord(session: Session, collection: string, rkey: string, record: Record<string, unknown>): Promise<RecordRef> {
+  const res = await session.fetch('/xrpc/com.atproto.repo.putRecord', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ repo: session.did, collection, rkey, record }),
+  });
+  if (!res.ok) throw await xrpcError(res);
+  const body = (await res.json()) as { uri?: unknown; cid?: unknown };
+  const at = typeof body?.uri === 'string' ? parseRecordUri(body.uri) : null;
+  if (typeof body?.uri !== 'string' || typeof body.cid !== 'string' || at?.did !== session.did || at.collection !== collection || at.rkey !== rkey) {
+    throw new RepoError(res.status, 'bad putRecord response');
+  }
+  return { uri: body.uri, cid: body.cid };
+}
+
 /** Deletes one of the reader's own records; anything else is refused before any request. */
 export async function deleteRecord(session: Session, uri: string): Promise<void> {
   const at = parseRecordUri(uri);

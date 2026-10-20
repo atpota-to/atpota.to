@@ -38,31 +38,31 @@
  */
 
 import { createAuth, type Auth, type Session } from '../blog/auth';
-import { createRecord, deleteRecord, findOwnWhere, parseRecordUri, RepoError, type RecordRef } from '../blog/repo';
+import { createRecord, deleteRecord, findOwnWhere, parseRecordUri, RepoError } from '../blog/repo';
 import { el, isBusy, loadMe, mountSignIn, setBusy, type Me, type SignIn } from '../blog/signin';
 import { clearPending, localStoreFor, readPending, savePending, sessionStoreFor } from '../blog/state';
 import type { KeyValueStore } from '../poe/storage';
 import { burst, cheer } from './burst';
-import { DAY_MS, drawFlower, FLOWER_KINDS, flowerSeed, GROW_DAYS, sampleVariant, stageFor, variantFor, type FlowerKind, type Stage, type Variant } from './flowers';
+import { DAY_MS, drawFlower, FLOWER_KINDS, GROW_DAYS, sampleVariant, stageFor, type FlowerKind, type Stage, type Variant } from './flowers';
+import {
+  fetchGarden,
+  flowerVariant,
+  isFlowerKind,
+  isPlot,
+  patchUri,
+  SPROUT_NSID,
+  sproutRecord,
+  tend,
+  type Flower,
+  type Patch,
+  type PatchSummary,
+} from './garden-api';
 import { readReader, rememberReader } from './reader';
 
 export { FLOWER_KINDS, type FlowerKind } from './flowers';
+// The data (records, answers, writes) lives in garden-api.ts; everything there is here too.
+export * from './garden-api';
 
-export const PATCH_NSID = 'to.atpota.garden.patch';
-export const SPROUT_NSID = 'to.atpota.garden.sprout';
-export const TEND_NSID = 'to.atpota.garden.tend';
-/** atpotato's DID: the patches are records in its repo. */
-export const GARDEN_SUBJECT = 'did:plc:qntsxa2i4sb24noi45fx4np2';
-export const GARDEN_ENDPOINT = '/api/garden';
-export const GARDENER_ENDPOINT = '/api/gardener';
-export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
-export type Season = (typeof SEASONS)[number];
-export const TEND_ACTIONS = ['water', 'sun', 'talk'] as const;
-export type TendAction = (typeof TEND_ACTIONS)[number];
-/** Match server/garden.ts: the biggest patch is 24 × 40. */
-export const MAX_COLS = 24;
-export const MAX_ROWS = 40;
-export const MAX_PLOTS = MAX_COLS * MAX_ROWS;
 /** sessionStorage: the flower, plot and patch picked before leaving to sign in. */
 export const KIND_KEY = 'garden:kind';
 export const PLOT_KEY = 'garden:plot';
@@ -71,72 +71,6 @@ export const PATCH_KEY = 'garden:patch';
 export const TEND_KEY = 'garden:tend';
 /** localStorage: the flowers this reader watered today ({ date, uris }), so the button rests. */
 export const WATERED_KEY = 'garden:watered';
-
-export interface Patch {
-  rkey: string;
-  uri: string;
-  cid: string;
-  name: string;
-  season: Season;
-  cols: number;
-  rows: number;
-  opensAt: string;
-  closesAt: string;
-  open: boolean;
-}
-
-export interface PatchSummary {
-  rkey: string;
-  name: string;
-  season: Season;
-  open: boolean;
-  planted: number;
-  plots: number;
-  opensAt: string;
-  closesAt: string;
-}
-
-export interface Flower {
-  did: string;
-  rkey: string;
-  uri: string;
-  cid: string;
-  handle: string;
-  kind: FlowerKind;
-  plot: number;
-  plantedAt: string;
-  /** 0 to 1: how well it was tended while it grew. */
-  care: number;
-  /** Neighbours who helped it grow (up to 3). */
-  helpers: number;
-  lastTended: string | null;
-  thirsty: boolean;
-}
-
-export interface GardenView {
-  /** Null until the first patch exists. */
-  patch: Patch | null;
-  patches: PatchSummary[];
-  flowers: Flower[];
-}
-
-export interface Tend {
-  did: string;
-  handle: string;
-  action: TendAction;
-  at: string;
-}
-
-export interface GardenerFlower extends Flower {
-  patch: { rkey: string; uri: string; name: string; season: Season; open: boolean; cols: number; rows: number };
-  tends: Tend[];
-}
-
-export interface GardenerView {
-  did: string;
-  handle: string;
-  flowers: GardenerFlower[];
-}
 
 export const COPY = {
   pick: 'pick a plot',
@@ -239,41 +173,6 @@ function closeIcon(doc: Document): SVGSVGElement {
   return svg;
 }
 
-export function isFlowerKind(value: unknown): value is FlowerKind {
-  return typeof value === 'string' && (FLOWER_KINDS as readonly string[]).includes(value);
-}
-
-export function isTendAction(value: unknown): value is TendAction {
-  return typeof value === 'string' && (TEND_ACTIONS as readonly string[]).includes(value);
-}
-
-/** A whole plot number in a patch of `plots` plots (any patch, by default). */
-export function isPlot(value: unknown, plots: number = MAX_PLOTS): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < plots;
-}
-
-export function patchUri(rkey: string): string {
-  return `at://${GARDEN_SUBJECT}/${PATCH_NSID}/${rkey}`;
-}
-
-export function sproutRecord(patch: RecordRef, kind: FlowerKind, plot: number, now: Date): Record<string, unknown> {
-  return { $type: SPROUT_NSID, patch: { uri: patch.uri, cid: patch.cid }, kind, plot, createdAt: now.toISOString() };
-}
-
-export function tendRecord(flowerUri: string, flowerCid: string, action: TendAction, now: Date): Record<string, unknown> {
-  return { $type: TEND_NSID, subject: { uri: flowerUri, cid: flowerCid }, action, createdAt: now.toISOString() };
-}
-
-/** Tends a flower (anyone's): a to.atpota.garden.tend record in the reader's repo. */
-export function tend(session: Session, flower: RecordRef, action: TendAction, now: Date = new Date()): Promise<RecordRef> {
-  return createRecord(session, TEND_NSID, tendRecord(flower.uri, flower.cid, action, now));
-}
-
-/** A flower's look: from its DID and record key, fuller with care. */
-export function flowerVariant(flower: Pick<Flower, 'did' | 'rkey' | 'kind' | 'care'>): Variant {
-  return variantFor(flower.kind, flowerSeed(flower.did, flower.rkey), flower.care);
-}
-
 /** Plots across on a narrow screen: half of a wide, even patch (so each row shows as two). */
 export function narrowCols(cols: number): number {
   return cols >= 10 && cols % 2 === 0 ? cols / 2 : cols;
@@ -304,120 +203,6 @@ export function freePlotFrom(plot: number, taken: ReadonlySet<number>, plots: nu
 }
 
 const RKEY_RE = /^[A-Za-z0-9._:~-]{1,512}$/;
-
-function isSeason(value: unknown): value is Season {
-  return typeof value === 'string' && (SEASONS as readonly string[]).includes(value);
-}
-
-function isDate(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
-}
-
-function isSize(cols: unknown, rows: unknown): boolean {
-  return typeof cols === 'number' && typeof rows === 'number' && Number.isInteger(cols) && Number.isInteger(rows) && cols >= 1 && cols <= MAX_COLS && rows >= 1 && rows <= MAX_ROWS;
-}
-
-function isPatch(v: unknown): v is Patch {
-  const p = v as Patch;
-  return (
-    typeof p?.rkey === 'string' &&
-    RKEY_RE.test(p.rkey) &&
-    p.uri === patchUri(p.rkey) &&
-    typeof p.cid === 'string' &&
-    typeof p.name === 'string' &&
-    isSeason(p.season) &&
-    isSize(p.cols, p.rows) &&
-    isDate(p.opensAt) &&
-    isDate(p.closesAt) &&
-    typeof p.open === 'boolean'
-  );
-}
-
-function isSummary(v: unknown): v is PatchSummary {
-  const p = v as PatchSummary;
-  return (
-    typeof p?.rkey === 'string' &&
-    RKEY_RE.test(p.rkey) &&
-    typeof p.name === 'string' &&
-    isSeason(p.season) &&
-    typeof p.open === 'boolean' &&
-    isPlot(p.planted, MAX_PLOTS + 1) &&
-    isPlot(p.plots, MAX_PLOTS + 1) &&
-    isDate(p.opensAt) &&
-    isDate(p.closesAt)
-  );
-}
-
-function isFlower(v: unknown): v is Flower {
-  const f = v as Flower;
-  return (
-    typeof f?.did === 'string' &&
-    f.did.startsWith('did:') &&
-    typeof f.rkey === 'string' &&
-    typeof f.uri === 'string' &&
-    parseRecordUri(f.uri)?.did === f.did &&
-    typeof f.cid === 'string' &&
-    typeof f.handle === 'string' &&
-    isFlowerKind(f.kind) &&
-    isPlot(f.plot) &&
-    isDate(f.plantedAt) &&
-    typeof f.care === 'number' &&
-    f.care >= 0 &&
-    f.care <= 1 &&
-    typeof f.helpers === 'number' &&
-    (f.lastTended === null || isDate(f.lastTended)) &&
-    typeof f.thirsty === 'boolean'
-  );
-}
-
-/** A patch from /api/garden (the default one, or `rkey`), checked; null when it didn't load. */
-export async function fetchGarden(fetchImpl: typeof fetch = fetch, rkey?: string): Promise<GardenView | null> {
-  try {
-    const url = rkey ? `${GARDEN_ENDPOINT}?${new URLSearchParams({ patch: rkey })}` : GARDEN_ENDPOINT;
-    const res = await fetchImpl(url, { headers: { accept: 'application/json' } });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { patch?: unknown; patches?: unknown; flowers?: unknown };
-    if (!Array.isArray(body?.flowers) || !Array.isArray(body.patches)) return null;
-    const patch = isPatch(body.patch) ? body.patch : null;
-    const plots = patch ? patch.cols * patch.rows : 0;
-    return {
-      patch,
-      patches: body.patches.filter(isSummary),
-      flowers: patch ? body.flowers.filter((f): f is Flower => isFlower(f) && f.plot < plots) : [],
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** One person's flowers from /api/gardener (for the garden page), checked; null when it didn't load. */
-export async function fetchGardener(did: string, fetchImpl: typeof fetch = fetch): Promise<GardenerView | null> {
-  try {
-    const res = await fetchImpl(`${GARDENER_ENDPOINT}?${new URLSearchParams({ did })}`, { headers: { accept: 'application/json' } });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { did?: unknown; handle?: unknown; flowers?: unknown };
-    if (body?.did !== did || typeof body.handle !== 'string' || !Array.isArray(body.flowers)) return null;
-    const flowers = body.flowers.filter((f): f is GardenerFlower => {
-      const g = f as GardenerFlower;
-      return (
-        isFlower(g) &&
-        typeof g.patch?.rkey === 'string' &&
-        g.patch.uri === patchUri(g.patch.rkey) &&
-        typeof g.patch.name === 'string' &&
-        isSeason(g.patch.season) &&
-        typeof g.patch.open === 'boolean' &&
-        isSize(g.patch.cols, g.patch.rows) &&
-        Array.isArray(g.tends)
-      );
-    });
-    for (const f of flowers) {
-      f.tends = f.tends.filter((t) => typeof t?.did === 'string' && typeof t.handle === 'string' && isTendAction(t.action) && isDate(t.at));
-    }
-    return { did, handle: body.handle, flowers };
-  } catch {
-    return null;
-  }
-}
 
 export interface GardenOptions {
   doc?: Document;
@@ -487,7 +272,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   /** Why planting is off here, or null when it's on. */
   const shut = (): string | null => {
     if (!patch) return COPY.noPatch;
-    if (!patch.open) return now() < Date.parse(patch.opensAt) ? COPY.notYet(patch.name) : COPY.closed(patch.name);
+    if (!patch.open) return now() < Date.parse(patch.opensAt ?? patch.createdAt) ? COPY.notYet(patch.name) : COPY.closed(patch.name);
     const others = new Set(flowers.filter((f) => !isMine(f)).map((f) => f.plot));
     return others.size >= total() ? COPY.full : null;
   };
@@ -533,7 +318,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
       plots.replaceChildren(...Array.from({ length: n }, (_, i) => plotButton(i, at)));
       if (hadFocus) plots.querySelector<HTMLButtonElement>(`[data-plot="${focusAt}"]`)?.focus();
     }
-    plots?.toggleAttribute('data-pressed', Boolean(patch && !patch.open && now() >= Date.parse(patch.closesAt)));
+    plots?.toggleAttribute('data-pressed', Boolean(patch && !patch.open && patch.closesAt !== null && now() >= Date.parse(patch.closesAt)));
     renderTabs();
     if (count) count.textContent = patch ? COPY.count(flowers.length, n) : '';
     if (digButton) digButton.hidden = !(patch?.open && flowers.some(isMine));
@@ -770,12 +555,13 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   /** The last two closed patches, the open ones, the next to open, and whichever is shown. */
   function tabPatches(): PatchSummary[] {
     const t = now();
-    const closed = patches.filter((p) => !p.open && Date.parse(p.closesAt) <= t).slice(-2);
-    const soon = patches.filter((p) => !p.open && Date.parse(p.opensAt) > t).slice(0, 1);
+    const closed = patches.filter((p) => !p.open && p.closesAt !== null && Date.parse(p.closesAt) <= t).slice(-2);
+    const soon = patches.filter((p) => !p.open && p.opensAt !== null && Date.parse(p.opensAt) > t).slice(0, 1);
     const list = [...closed, ...patches.filter((p) => p.open), ...soon];
     const shown = patches.find((p) => p.rkey === patch?.rkey);
     if (shown && !list.includes(shown)) list.push(shown);
-    return list.sort((a, b) => Date.parse(a.opensAt) - Date.parse(b.opensAt));
+    const opens = (p: PatchSummary) => (p.opensAt ? Date.parse(p.opensAt) : 0);
+    return list.sort((a, b) => opens(a) - opens(b));
   }
 
   function renderTabs(): void {
@@ -786,7 +572,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     const hadFocus = tabs.contains(doc.activeElement) ? (doc.activeElement as HTMLElement).dataset.patch : undefined;
     tabs.replaceChildren(
       ...list.map((p) => {
-        const upcoming = !p.open && Date.parse(p.opensAt) > t;
+        const opensAt = p.opensAt;
+        const upcoming = !p.open && opensAt !== null && Date.parse(opensAt) > t;
         const on = p.rkey === patch?.rkey;
         const b = el(doc, 'button', { type: 'button', role: 'tab', class: 'home-patch__tab', 'data-patch': p.rkey, 'aria-selected': String(on) });
         if (plots?.id) b.setAttribute('aria-controls', plots.id);
@@ -794,7 +581,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
         b.disabled = upcoming;
         b.append(
           el(doc, 'span', { class: 'home-patch__tab-name' }, p.name),
-          el(doc, 'span', { class: 'home-patch__tab-note' }, p.open ? COPY.tabs.open : upcoming ? COPY.tabs.soon(shortDate(p.opensAt)) : COPY.tabs.closed),
+          el(doc, 'span', { class: 'home-patch__tab-note' }, p.open ? COPY.tabs.open : upcoming && opensAt ? COPY.tabs.soon(shortDate(opensAt)) : COPY.tabs.closed),
         );
         return b;
       }),

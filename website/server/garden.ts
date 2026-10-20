@@ -1,12 +1,12 @@
 /**
- * /api/garden: the flower patches on the home page. Each patch is a record in atpotato's
- * own repo, written by scripts/open-patches.ts, one per season (plus an overflow patch if
- * one fills up):
+ * /api/garden: a garden. Anyone can keep one: a patch record in their own repo (record key
+ * "self" by convention, written from their garden page). atpotato's are the community
+ * patches on the home page, seasonal, written by scripts/open-patches.ts:
  *
- *   to.atpota.garden.patch   { name: "autumn 2026", season, cols, rows, opensAt, closesAt, createdAt }
+ *   to.atpota.garden.patch   { name, note?, season?, cols, rows, opensAt?, closesAt?, createdAt }
  *
  * Visitors sign in with Bluesky and plant a flower in an open patch. It's a record in their
- * own repo, pointing at the patch with a strong ref (src/scripts/garden.ts writes it):
+ * own repo, pointing at the patch with a strong ref (src/scripts/garden-api.ts writes it):
  *
  *   to.atpota.garden.sprout  { patch: { uri, cid }, kind: "sunflower" | ..., plot, createdAt }
  *
@@ -17,44 +17,55 @@
  * A patch is cols × rows plots; `plot` is the cell, counted from the top left, row by row.
  * Two flowers that claim the same plot: the one planted first keeps it, the other moves to
  * the next free plot along (resolvePlots); one that doesn't fit is left out. A patch is open
- * from opensAt until closesAt. One flower per account across the open patches (its newest);
- * a closed patch keeps every flower it had, pressed, in full bloom.
+ * from opensAt (or, without one, createdAt) until closesAt, if it has one. One flower per
+ * account across a garden's open patches (its newest); a closed patch keeps every flower it
+ * had, pressed, in full bloom.
  *
  * A flower grows for GROW_DAYS: a sprout, then a bud, then the bloom. Tending while it grows
  * makes a better bloom (careFrom): every day its owner tends it counts, and so does every
  * neighbour who helps (up to MAX_HELPERS). Tend times come from the records' TID keys. After
  * it blooms, a flower nobody has tended for THIRSTY_DAYS droops until someone does.
  *
- * Nothing is stored on atpota.to. atpotato's PDS lists the patches, Constellation lists the
- * records that link to a patch (and to a flower), Slingshot serves each record, and the
- * public AppView gives the handles. A flower is left out when its record no longer points
- * at the patch or names an unknown kind, when its account has no profile view or carries
- * one of HIDDEN_LABELS, or when atpotato blocks the account on Bluesky. There is no free
- * text anywhere, so blocking is all the moderation it needs.
+ * Nothing is stored on atpota.to. The public AppView says who the garden's owner is (a
+ * handle works too), their DID document where their PDS is, which lists their patches;
+ * Constellation lists the records that link to a patch (and to a flower), Slingshot serves
+ * each record, and the AppView gives the handles. A flower is left out when its record no
+ * longer points at the patch or names an unknown kind, when its account has no profile view
+ * or carries one of HIDDEN_LABELS, or when atpotato or the garden's owner blocks the account
+ * on Bluesky. A garden whose owner is hidden, or blocked by atpotato, isn't shown at all.
+ * The only free text is the owner's own name and note for their garden.
  *
- *   GET /api/garden[?patch=<rkey>]  ->  { patch, patches, flowers, total }
+ *   GET /api/garden[?owner=<did or handle>][&patch=<rkey>]  ->  { owner, patch, patches, flowers, total }
+ *     owner    { did, handle, displayName, avatar }; atpotato by default
  *     patch    the one asked for; by default the first open patch with a free plot (see
- *              defaultPatch). { rkey, uri, cid, name, season, cols, rows, opensAt,
- *              closesAt, open }; null when there are no patches yet.
+ *              defaultPatch). { rkey, uri, cid, name, note, season, cols, rows, opensAt,
+ *              closesAt, createdAt, open } (note, season and the dates may be null); null
+ *              when the owner has no patches yet.
  *     patches  every patch, oldest first: { rkey, name, season, open, planted, plots,
  *              opensAt, closesAt }
  *     flowers  the patch's flowers, oldest first: { did, rkey, uri, cid, handle, kind, plot,
  *              plantedAt, care, helpers, lastTended, thirsty }. The browser grows each one's
  *              look from its DID, record key and care (src/scripts/flowers.ts).
- *   An unknown patch is a 404.
+ *   An unknown owner or patch is a 404.
  *
  * Fresh for a minute at the CDN, served stale while it refreshes.
  */
 
-import { fetchJson, listRecords, resolveDid, TtlCache, type Fetch, type Identity, type RecordEntry } from './blog/atproto.js';
-import { ATPOTATO_DID } from './blog/config.js';
-import { backlinks, commentAuthors, mapPool, ownerBlocks, SLINGSHOT, type CommentAuthor } from './blog/discussion.js';
+import { APPVIEW, AtprotoError, fetchJson, listRecords, resolveDid, TtlCache, type Fetch, type Identity, type RecordEntry } from './blog/atproto.js';
+import { ATPOTATO_DID, isDid } from './blog/config.js';
+import { backlinks, commentAuthors, HIDDEN_LABELS, mapPool, ownerBlocks, SLINGSHOT, type CommentAuthor } from './blog/discussion.js';
+import { httpUrl } from './blog/html.js';
 
 export const PATCH_NSID = 'to.atpota.garden.patch';
 export const SPROUT_NSID = 'to.atpota.garden.sprout';
 export const TEND_NSID = 'to.atpota.garden.tend';
-/** atpotato's DID: the patches are records in its repo. */
+/** atpotato's DID: the community patches are records in its repo, and its garden is the default. */
 export const GARDEN_SUBJECT = ATPOTATO_DID;
+/** The record key of someone's own garden, by convention. */
+export const OWN_PATCH_RKEY = 'self';
+/** A garden's name and note, in graphemes. */
+export const NAME_MAX = 40;
+export const NOTE_MAX = 140;
 export const FLOWER_KINDS = ['sunflower', 'rose', 'daisy', 'violet', 'poppy', 'tulip'] as const;
 export type FlowerKind = (typeof FLOWER_KINDS)[number];
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
@@ -80,6 +91,9 @@ export const THIRSTY_DAYS = 4;
 
 export const GARDEN_TTL_MS = 30_000;
 export const PATCHES_TTL_MS = 60_000;
+/** Owners' profiles and DID documents are re-read after these. */
+const OWNER_TTL_MS = 5 * 60_000;
+const IDENTITY_TTL_MS = 10 * 60_000;
 /** Sprouts of an open patch are re-read after this; a closed patch's change rarely. */
 const OPEN_SPROUTS_TTL_MS = 60_000;
 const CLOSED_SPROUTS_TTL_MS = 10 * 60_000;
@@ -95,34 +109,50 @@ export const CONCURRENCY = 8;
 
 const RKEY_RE = /^[A-Za-z0-9._:~-]{1,512}$/;
 const CID_RE = /^[a-zA-Z0-9]{8,200}$/;
+const HANDLE_RE = /^(?=.{3,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+// Control and direction characters (zero-width joiners stay: emoji need them).
+// eslint-disable-next-line no-control-regex
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 const TID_RE = /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/;
 const S32 = '234567abcdefghijklmnopqrstuvwxyz';
 
+/** A garden's owner, from the AppView. */
+export interface Owner {
+  did: string;
+  handle: string;
+  displayName: string | null;
+  avatar: string | null;
+}
+
 export interface Patch {
+  /** The DID whose repo it's in. */
+  owner: string;
   rkey: string;
   uri: string;
   cid: string;
   name: string;
-  season: Season;
+  note: string | null;
+  season: Season | null;
   cols: number;
   rows: number;
-  opensAt: string;
-  closesAt: string;
+  opensAt: string | null;
+  closesAt: string | null;
+  createdAt: string;
 }
 
-export interface PatchView extends Patch {
+export interface PatchView extends Omit<Patch, 'owner'> {
   open: boolean;
 }
 
 export interface PatchSummary {
   rkey: string;
   name: string;
-  season: Season;
+  season: Season | null;
   open: boolean;
   planted: number;
   plots: number;
-  opensAt: string;
-  closesAt: string;
+  opensAt: string | null;
+  closesAt: string | null;
 }
 
 export interface Flower {
@@ -143,6 +173,7 @@ export interface Flower {
 }
 
 export interface Garden {
+  owner: Owner;
   patch: PatchView | null;
   patches: PatchSummary[];
   flowers: Flower[];
@@ -177,8 +208,34 @@ export function isPlot(value: unknown): value is number {
   return isInt(value, 0, MAX_PLOTS - 1);
 }
 
-export function patchUri(rkey: string): string {
-  return `at://${GARDEN_SUBJECT}/${PATCH_NSID}/${rkey}`;
+export function patchUri(rkey: string, owner: string = GARDEN_SUBJECT): string {
+  return `at://${owner}/${PATCH_NSID}/${rkey}`;
+}
+
+/** The owner and record key of a patch's at:// URI; null for anything else. */
+export function parsePatchUri(uri: string): { owner: string; rkey: string } | null {
+  const m = /^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(uri);
+  if (!m || m[2] !== PATCH_NSID || !isDid(m[1]!) || !RKEY_RE.test(m[3]!)) return null;
+  return { owner: m[1]!, rkey: m[3]! };
+}
+
+/** A DID or a handle. */
+export function isActor(value: string): boolean {
+  return isDid(value) || HANDLE_RE.test(value);
+}
+
+const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter('en', { granularity: 'grapheme' }) : null;
+
+/** The text's graphemes (characters as a reader sees them). */
+export function graphemes(text: string): string[] {
+  return segmenter ? Array.from(segmenter.segment(text), (s) => s.segment) : [...text];
+}
+
+/** Free text from a record: no control or direction characters, spaces collapsed, at most `max` graphemes. */
+export function cleanText(text: string, max: number): string {
+  const one = text.replace(CONTROL_RE, ' ').replace(/\s+/g, ' ').trim();
+  const g = graphemes(one);
+  return g.length > max ? g.slice(0, max).join('').trim() : one;
 }
 
 /** { uri, cid } with an at:// URI and a CID-shaped cid; null otherwise. */
@@ -188,32 +245,49 @@ export function strongRef(value: unknown): { uri: string; cid: string } | null {
   return { uri: v.uri, cid: v.cid };
 }
 
-/** A patch record from atpotato's repo, checked field by field; null otherwise. */
-export function toPatch(entry: RecordEntry): Patch | null {
+/** A patch record from `owner`'s repo (atpotato's by default), checked field by field; null otherwise. */
+export function toPatch(entry: RecordEntry, owner: string = GARDEN_SUBJECT): Patch | null {
   const v = entry.value as Record<string, unknown>;
   const rkey = entry.uri.slice(entry.uri.lastIndexOf('/') + 1);
-  if (entry.uri !== patchUri(rkey) || !RKEY_RE.test(rkey) || !CID_RE.test(entry.cid)) return null;
-  if (typeof v.name !== 'string' || v.name.trim() === '' || [...v.name].length > 40) return null;
-  if (typeof v.season !== 'string' || !(SEASONS as readonly string[]).includes(v.season)) return null;
+  if (entry.uri !== patchUri(rkey, owner) || !RKEY_RE.test(rkey) || !CID_RE.test(entry.cid)) return null;
+  if (typeof v.name !== 'string') return null;
+  const name = v.name.replace(CONTROL_RE, ' ').replace(/\s+/g, ' ').trim();
+  if (name === '' || graphemes(name).length > NAME_MAX) return null;
   if (!isInt(v.cols, MIN_COLS, MAX_COLS) || !isInt(v.rows, MIN_ROWS, MAX_ROWS)) return null;
-  const opens = typeof v.opensAt === 'string' ? Date.parse(v.opensAt) : NaN;
-  const closes = typeof v.closesAt === 'string' ? Date.parse(v.closesAt) : NaN;
-  if (!Number.isFinite(opens) || !Number.isFinite(closes) || opens >= closes) return null;
+  const date = (value: unknown): number | null | undefined => {
+    if (value === undefined || value === null) return null;
+    const t = typeof value === 'string' ? Date.parse(value) : NaN;
+    return Number.isFinite(t) ? t : undefined;
+  };
+  const created = date(v.createdAt);
+  const opens = date(v.opensAt);
+  const closes = date(v.closesAt);
+  if (created === undefined || created === null || opens === undefined || closes === undefined) return null;
+  if (closes !== null && closes <= (opens ?? created)) return null;
+  const note = typeof v.note === 'string' ? cleanText(v.note, NOTE_MAX) : '';
   return {
+    owner,
     rkey,
     uri: entry.uri,
     cid: entry.cid,
-    name: v.name.trim(),
-    season: v.season as Season,
+    name,
+    note: note || null,
+    season: typeof v.season === 'string' && (SEASONS as readonly string[]).includes(v.season) ? (v.season as Season) : null,
     cols: v.cols,
     rows: v.rows,
-    opensAt: new Date(opens).toISOString(),
-    closesAt: new Date(closes).toISOString(),
+    opensAt: opens === null ? null : new Date(opens).toISOString(),
+    closesAt: closes === null ? null : new Date(closes).toISOString(),
+    createdAt: new Date(created).toISOString(),
   };
 }
 
-export function isOpen(patch: Pick<Patch, 'opensAt' | 'closesAt'>, now: number): boolean {
-  return Date.parse(patch.opensAt) <= now && now < Date.parse(patch.closesAt);
+/** When a patch opens: opensAt, or when it was made. */
+export function opensFrom(patch: Pick<Patch, 'opensAt' | 'createdAt'>): string {
+  return patch.opensAt ?? patch.createdAt;
+}
+
+export function isOpen(patch: Pick<Patch, 'opensAt' | 'closesAt' | 'createdAt'>, now: number): boolean {
+  return Date.parse(opensFrom(patch)) <= now && (patch.closesAt === null || now < Date.parse(patch.closesAt));
 }
 
 /** A sprout record (by `did`, at `rkey`), checked field by field, with the patch it points at; null otherwise. */
@@ -334,7 +408,7 @@ export function isThirsty(plantedAt: string, lastTended: number | null, now: num
  */
 export function defaultPatch(patches: readonly PatchSummary[], now: number): PatchSummary | null {
   const open = patches.filter((p) => p.open);
-  const opened = patches.filter((p) => Date.parse(p.opensAt) <= now);
+  const opened = patches.filter((p) => p.opensAt === null || Date.parse(p.opensAt) <= now);
   return open.find((p) => p.planted < p.plots) ?? open.at(-1) ?? opened.at(-1) ?? patches[0] ?? null;
 }
 
@@ -350,20 +424,43 @@ type Planted = Omit<Flower, 'care' | 'helpers' | 'lastTended' | 'thirsty'>;
 export interface GardenReader {
   now(): number;
   log: NonNullable<GardenDeps['log']>;
-  /** Every valid patch, oldest first. */
-  patches(): Promise<Patch[]>;
-  /** A patch's flowers as shown, oldest first, without care. */
+  /** Who a DID or handle is (the AppView's profile); null for an unknown or hidden account. */
+  owner(actor: string): Promise<Owner | null>;
+  /** A DID's document: where its PDS is. */
+  identity(did: string): Promise<Identity>;
+  /** Every valid patch in `owner`'s repo, oldest first. */
+  patches(owner: string): Promise<Patch[]>;
+  /** A patch's flowers as shown, oldest first, without care. `all` is its owner's patches. */
   planted(patch: Patch, all: readonly Patch[]): Promise<Planted[]>;
   care(flower: Pick<Flower, 'did' | 'uri' | 'plantedAt'>, open: boolean): Promise<Care>;
-  authors(dids: readonly string[]): Promise<{ authors: Map<string, CommentAuthor>; blocked: Set<string> }>;
+  /** Accounts atpotato blocks, plus those `owner` blocks when given. */
+  blocked(owner?: string): Promise<Set<string>>;
+  /** Profiles for these DIDs, and who is blocked (as blocked()). */
+  authors(dids: readonly string[], owner?: string): Promise<{ authors: Map<string, CommentAuthor>; blocked: Set<string> }>;
   fetch: Fetch;
 }
 
+/** atpotato, when the AppView can't say: the community garden never hangs on its own profile. */
+const ATPOTATO_OWNER: Owner = { did: GARDEN_SUBJECT, handle: 'atpota.to', displayName: 'atpotato', avatar: null };
+
+/** An AppView profile view as an owner; null for a missing, mismatched or hidden account. */
+export function toOwner(view: unknown, actor: string): Owner | null {
+  const v = view as { did?: unknown; handle?: unknown; displayName?: unknown; avatar?: unknown; labels?: unknown } | null;
+  if (typeof v?.did !== 'string' || !isDid(v.did)) return null;
+  const labels = Array.isArray(v.labels) ? v.labels : [];
+  if (labels.some((l) => HIDDEN_LABELS.has((l as { val?: unknown })?.val as string) && (l as { neg?: unknown }).neg !== true)) return null;
+  const handle = typeof v.handle === 'string' && HANDLE_RE.test(v.handle) && v.handle !== 'handle.invalid' ? v.handle.toLowerCase() : null;
+  if (isDid(actor) ? v.did !== actor : handle !== actor.toLowerCase()) return null;
+  const name = typeof v.displayName === 'string' ? cleanText(v.displayName, 64) : '';
+  const avatar = httpUrl(v.avatar);
+  return { did: v.did, handle: handle ?? v.did, displayName: name || null, avatar: avatar?.startsWith('https://') ? avatar : null };
+}
+
 /**
- * Reads the garden from the network, with small per-instance caches: atpotato's PDS, the
- * patch list, each patch's sprouts, and each flower's care. A flower whose care can no
- * longer change keeps it for an hour, and a failed read falls back to the last one, so a
- * bloom never flickers between looks.
+ * Reads gardens from the network, with small per-instance caches: owners' profiles and DID
+ * documents, each owner's patch list, each patch's sprouts, and each flower's care. A
+ * flower whose care can no longer change keeps it for an hour, and a failed read falls back
+ * to the last one, so a bloom never flickers between looks.
  */
 export function createGardenReader(deps: GardenDeps = {}): GardenReader {
   const doFetch: Fetch = deps.fetch ?? ((input, init) => globalThis.fetch(input, init));
@@ -375,30 +472,77 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
       if (fields.event.endsWith('_error')) console.warn(line);
       else console.info(line);
     });
-  let owner: Promise<Identity> | null = null;
-  const patchCache = new TtlCache<Promise<Patch[]>>(PATCHES_TTL_MS, now);
+  const ownerCache = new TtlCache<Promise<Owner | null>>(OWNER_TTL_MS, now, 500);
+  const identityCache = new TtlCache<Promise<Identity>>(IDENTITY_TTL_MS, now, 500);
+  const patchCache = new TtlCache<Promise<Patch[]>>(PATCHES_TTL_MS, now, 500);
   const sproutCache = new Map<string, { at: number; value: Promise<Sprout[]> }>();
   const careCache = new Map<string, Care & { at: number }>();
 
-  function ownerIdentity(): Promise<Identity> {
-    owner ??= resolveDid(doFetch, GARDEN_SUBJECT).catch(() => {
-      owner = null;
-      return { did: GARDEN_SUBJECT, pds: 'https://pds.atpota.to', handle: 'atpota.to' };
-    });
-    return owner;
+  function owner(actor: string): Promise<Owner | null> {
+    // Handles are case-insensitive; DIDs are kept as asked (toOwner checks them exactly).
+    const key = isDid(actor) ? actor : actor.toLowerCase();
+    const cached = ownerCache.get(key);
+    if (cached) return cached;
+    const atpotato = actor === GARDEN_SUBJECT || key === ATPOTATO_OWNER.handle;
+    const pending = (async () => {
+      let res: Response;
+      try {
+        res = await doFetch(`${APPVIEW}/xrpc/app.bsky.actor.getProfile?${new URLSearchParams({ actor })}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      } catch (error) {
+        if (atpotato) return ATPOTATO_OWNER;
+        throw new AtprotoError('upstream', `profile fetch failed: ${(error as Error)?.name ?? 'Error'}`);
+      }
+      // The AppView answers an unknown actor with a 400.
+      if (res.status === 400 || res.status === 404) {
+        await res.body?.cancel().catch(() => undefined);
+        return atpotato ? ATPOTATO_OWNER : null;
+      }
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        if (atpotato) return ATPOTATO_OWNER;
+        throw new AtprotoError('upstream', `status ${res.status}`);
+      }
+      const found = toOwner(await res.json().catch(() => null), atpotato ? GARDEN_SUBJECT : actor);
+      return found ?? (atpotato ? ATPOTATO_OWNER : null);
+    })();
+    ownerCache.set(key, pending);
+    pending.catch(() => ownerCache.delete(key));
+    return pending;
   }
 
-  function patches(): Promise<Patch[]> {
-    const cached = patchCache.get('patches');
+  function identity(did: string): Promise<Identity> {
+    const cached = identityCache.get(did);
     if (cached) return cached;
-    const pending = ownerIdentity().then(async (o) => {
-      const records = await listRecords(doFetch, o.pds, GARDEN_SUBJECT, PATCH_NSID, 3);
-      const list = records.map(toPatch).filter((p): p is Patch => p !== null);
-      return list.sort((a, b) => a.opensAt.localeCompare(b.opensAt) || a.rkey.localeCompare(b.rkey));
+    const pending = resolveDid(doFetch, did).catch((error) => {
+      if (did === GARDEN_SUBJECT) return { did, pds: 'https://pds.atpota.to', handle: 'atpota.to' };
+      throw error;
     });
-    patchCache.set('patches', pending);
-    pending.catch(() => patchCache.delete('patches'));
+    identityCache.set(did, pending);
+    pending.catch(() => identityCache.delete(did));
     return pending;
+  }
+
+  function patches(ownerDid: string): Promise<Patch[]> {
+    const cached = patchCache.get(ownerDid);
+    if (cached) return cached;
+    const pending = identity(ownerDid).then(async (o) => {
+      const records = await listRecords(doFetch, o.pds, ownerDid, PATCH_NSID, 3);
+      const list = records.map((r) => toPatch(r, ownerDid)).filter((p): p is Patch => p !== null);
+      return list.sort((a, b) => opensFrom(a).localeCompare(opensFrom(b)) || a.rkey.localeCompare(b.rkey));
+    });
+    patchCache.set(ownerDid, pending);
+    pending.catch(() => patchCache.delete(ownerDid));
+    return pending;
+  }
+
+  async function blocked(ownerDid?: string): Promise<Set<string>> {
+    const site = identity(GARDEN_SUBJECT).then((o) => ownerBlocks(doFetch, o));
+    if (!ownerDid || ownerDid === GARDEN_SUBJECT) return site;
+    const theirs = identity(ownerDid)
+      .then((o) => ownerBlocks(doFetch, o))
+      .catch(() => new Set<string>());
+    const [a, b] = await Promise.all([site, theirs]);
+    return new Set([...a, ...b]);
   }
 
   /** Every sprout record pointing at the patch (Constellation, then Slingshot per record). */
@@ -427,10 +571,9 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
     return value;
   }
 
-  async function authors(dids: readonly string[]): Promise<{ authors: Map<string, CommentAuthor>; blocked: Set<string> }> {
-    const blocks = ownerIdentity().then((o) => ownerBlocks(doFetch, o));
-    const [found, blocked] = await Promise.all([dids.length ? commentAuthors(doFetch, [...new Set(dids)]) : new Map<string, CommentAuthor>(), blocks]);
-    return { authors: found, blocked };
+  async function authors(dids: readonly string[], ownerDid?: string): Promise<{ authors: Map<string, CommentAuthor>; blocked: Set<string> }> {
+    const [found, blocks] = await Promise.all([dids.length ? commentAuthors(doFetch, [...new Set(dids)]) : new Map<string, CommentAuthor>(), blocked(ownerDid)]);
+    return { authors: found, blocked: blocks };
   }
 
   async function planted(patch: Patch, all: readonly Patch[]): Promise<Planted[]> {
@@ -442,11 +585,14 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
       const keep = newestPerAccount(everywhere);
       mine = mine.filter((s) => keep.has(s.uri));
     }
-    const { authors: found, blocked } = await authors(mine.map((s) => s.did));
+    const { authors: found, blocked: blocks } = await authors(
+      mine.map((s) => s.did),
+      patch.owner,
+    );
     const shown = mine
       .filter((s) => {
         const author = found.get(s.did);
-        return author && !blocked.has(s.did) && !author.handle.startsWith('did:');
+        return author && !blocks.has(s.did) && !author.handle.startsWith('did:');
       })
       .sort(byPlanting);
     return resolvePlots(shown, patch.cols * patch.rows).map((s) => ({
@@ -481,7 +627,7 @@ export function createGardenReader(deps: GardenDeps = {}): GardenReader {
     }
   }
 
-  return { now, log, patches, planted, care, authors, fetch: doFetch };
+  return { now, log, owner, identity, patches, planted, care, blocked, authors, fetch: doFetch };
 }
 
 /** The flowers with their care, and whether each is thirsty. */
@@ -499,7 +645,8 @@ export async function withCare(reader: GardenReader, flowers: readonly Planted[]
 }
 
 export function view(patch: Patch, now: number): PatchView {
-  return { ...patch, open: isOpen(patch, now) };
+  const { owner: _owner, ...rest } = patch;
+  return { ...rest, open: isOpen(patch, now) };
 }
 
 export interface GardenHandlers {
@@ -530,10 +677,14 @@ class NotFound extends Error {}
 
 export function createGardenHandlers(deps: GardenDeps = {}): GardenHandlers {
   const reader = createGardenReader(deps);
-  const cache = new TtlCache<Promise<Garden>>(GARDEN_TTL_MS, reader.now);
+  const cache = new TtlCache<Promise<Omit<Garden, 'owner'>>>(GARDEN_TTL_MS, reader.now, 500);
 
-  async function read(rkey: string | null): Promise<Garden> {
-    const all = await reader.patches();
+  async function read(ownerDid: string, rkey: string | null): Promise<Omit<Garden, 'owner'>> {
+    const all = await reader.patches(ownerDid).catch((error) => {
+      // A DID document that isn't there: nobody to show.
+      if (error instanceof AtprotoError && error.code === 'not_found') throw new NotFound();
+      throw error;
+    });
     const at = reader.now();
     if (rkey !== null && !all.some((p) => p.rkey === rkey)) throw new NotFound();
     if (all.length === 0) return { patch: null, patches: [], flowers: [], total: 0 };
@@ -555,30 +706,34 @@ export function createGardenHandlers(deps: GardenDeps = {}): GardenHandlers {
     return { patch: view(patch, at), patches: summaries, flowers, total: flowers.length };
   }
 
-  function load(rkey: string | null): Promise<Garden> {
-    const key = rkey ?? '';
+  function load(ownerDid: string, rkey: string | null): Promise<Omit<Garden, 'owner'>> {
+    const key = `${ownerDid} ${rkey ?? ''}`;
     const cached = cache.get(key);
     if (cached) return cached;
-    const pending = read(rkey);
+    const pending = read(ownerDid, rkey);
     cache.set(key, pending);
     pending.catch((error) => {
       cache.delete(key);
-      if (!(error instanceof NotFound)) reader.log({ event: 'garden_error', error: (error as Error)?.message ?? 'Error' });
+      if (!(error instanceof NotFound)) reader.log({ event: 'garden_error', owner: ownerDid, error: (error as Error)?.message ?? 'Error' });
     });
     return pending;
   }
 
   async function GET(request: Request): Promise<Response> {
-    const asked = new URL(request.url).searchParams.get('patch');
-    if (asked !== null && !RKEY_RE.test(asked)) return jsonResponse(request, 404, { error: 'not_found' }, CACHE_MISSING);
+    const params = new URL(request.url).searchParams;
+    const actor = params.get('owner') ?? GARDEN_SUBJECT;
+    const asked = params.get('patch');
+    const missing = () => jsonResponse(request, 404, { error: 'not_found' }, CACHE_MISSING);
+    if (!isActor(actor) || (asked !== null && !RKEY_RE.test(asked))) return missing();
     try {
-      return jsonResponse(request, 200, await load(asked), CACHE_OK);
+      const owner = await reader.owner(actor);
+      if (!owner || (owner.did !== GARDEN_SUBJECT && (await reader.blocked()).has(owner.did))) return missing();
+      return jsonResponse(request, 200, { owner, ...(await load(owner.did, asked)) }, CACHE_OK);
     } catch (error) {
-      if (error instanceof NotFound) return jsonResponse(request, 404, { error: 'not_found' }, CACHE_MISSING);
+      if (error instanceof NotFound) return missing();
       return jsonResponse(request, 503, { error: 'unavailable' }, 'no-store');
     }
   }
 
   return { GET, HEAD: GET, methodNotAllowed };
 }
-
