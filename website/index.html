@@ -210,11 +210,11 @@
           <p class="visually-hidden" role="status" data-copy-status></p>
         </section>
 
-        <section class="tile home-weather" aria-labelledby="home-weather-title" data-weather data-state="loading">
+        <a class="tile tile--link home-weather" href="/weather" data-weather data-state="loading">
           <h2 class="eyebrow home-weather__title" id="home-weather-title">atmospheric conditions</h2>
           <div class="home-weather__now">
             <svg class="home-weather__sun" aria-hidden="true" focusable="false" viewBox="0 0 100 100">
-              <g class="home-weather__rays"><path d="M50 2 L55 20 L45 20 Z"/><path d="M50 98 L45 80 L55 80 Z"/><path d="M2 50 L20 45 L20 55 Z"/><path d="M98 50 L80 55 L80 45 Z"/><path d="M16 16 L30 26 L26 30 Z"/><path d="M84 84 L70 74 L74 70 Z"/><path d="M84 16 L74 30 L70 26 Z"/><path d="M16 84 L26 70 L30 74 Z"/></g>
+              <g class="home-weather__rays" data-weather-rays><path d="M50 2 L55 20 L45 20 Z"/><path d="M50 98 L45 80 L55 80 Z"/><path d="M2 50 L20 45 L20 55 Z"/><path d="M98 50 L80 55 L80 45 Z"/><path d="M16 16 L30 26 L26 30 Z"/><path d="M84 84 L70 74 L74 70 Z"/><path d="M84 16 L74 30 L70 26 Z"/><path d="M16 84 L26 70 L30 74 Z"/></g>
               <circle class="home-weather__disc" cx="50" cy="50" r="24"/>
               <path class="home-weather__face" d="M41 47 q2 -3 4 0 M55 47 q2 -3 4 0 M45 56 q5 4 10 0"/>
             </svg>
@@ -228,8 +228,19 @@
             <div><dt>reposts</dt><dd data-weather-reposts>&ndash;</dd></div>
             <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
           </dl>
-          <p class="home-weather__note">all per second, from a few seconds of bluesky's firehose, counted once a minute.</p>
-        </section>
+          <!-- the diversity index: how much of the atmosphere isn't bluesky (shown once a reading has it) -->
+          <div class="home-weather__mix" data-weather-mix hidden>
+            <p class="home-weather__mix-head"><span class="home-weather__mix-label">diversity index</span> <strong class="home-weather__index" data-weather-index>&ndash;</strong> <span class="home-weather__level" data-weather-level></span></p>
+            <div class="weather-ratio" aria-hidden="true">
+              <span class="weather-ratio__bsky" data-weather-bar-bsky></span><span class="weather-ratio__else" data-weather-bar-else></span>
+            </div>
+            <p class="home-weather__mix-text" data-weather-mix-text></p>
+          </div>
+          <div class="home-weather__foot">
+            <p class="home-weather__note">per second, from a few seconds of the whole firehose, read once a minute.</p>
+            <span class="btn btn--primary btn--sm home-weather__go">full weather report</span>
+          </div>
+        </a>
 
         <a class="tile tile--link home-garden" href="/garden/atpota.to" data-garden-teaser>
           <div class="home-garden__head">

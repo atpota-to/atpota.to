@@ -72,6 +72,10 @@
   --selection: #FFE29A;
   --blush: #E9879A;
 
+  /* the weather report's two kinds of record: bluesky's, and everyone else's */
+  --weather-bsky: #1A73C9;
+  --weather-else: #006837;
+
   /* shape and depth */
   --radius-tile: 32px;
   --radius-lg: 36px;
@@ -174,6 +178,9 @@ html[data-theme="dark"] {
   --focus-on-dark: var(--sun);
   --scrim: rgba(0, 0, 0, 0.6);
   --selection: #6B5420;
+
+  --weather-bsky: #3E8DD8;
+  --weather-else: #3E9F50;
 
   --shadow-pop: 0 20px 56px rgba(0, 0, 0, 0.5);
   --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.35);

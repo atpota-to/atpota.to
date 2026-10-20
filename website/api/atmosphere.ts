@@ -1,6 +1,6 @@
-// Vercel Function (Node.js runtime, Web handlers): the home page's "atmospheric conditions"
+// Vercel Function (Node.js runtime, Web handlers): "atmospheric conditions" and /weather
 // (a few seconds of the firehose, counted; see server/atmosphere.ts).
-//   GET / HEAD  -> { measuredAt, seconds, perSecond, condition }
+//   GET / HEAD  -> { measuredAt, seconds, perSecond, condition, records, diversity, apps, bluesky, events }
 //   anything else -> 405
 // Local imports end in ".js": Vercel runs the compiled files as native ESM.
 
