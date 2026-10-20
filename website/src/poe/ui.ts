@@ -41,7 +41,7 @@ const PILL_SETTLE_MS = 180;
 const SWIPE_CLOSE_PX = 90;
 const QUOTE_DISPLAY_MAX = 140;
 const RESET_TIMEOUT_MS = 5000;
-/** Where "sign in with bluesky" goes from a page without the blog's sign-in dialog. */
+/** Where "sign in" goes from a page without the blog's sign-in dialog. */
 export const SIGN_IN_HREF = '/blog#sign-in';
 
 export interface PoeWidgetOptions {
@@ -510,6 +510,7 @@ export class PoeWidget {
     }
     this.panel.hidden = false;
     this.panel.style.transform = '';
+    delete this.root.dataset.handoff;
     this.root.dataset.open = 'true';
     this.applyMode();
     this.syncOpeners();
@@ -545,13 +546,32 @@ export class PoeWidget {
     this.account.hidden = !this.account.firstChild;
   }
 
-  /** On a blog page the sign-in dialog is right here (src/blog/ui.ts); elsewhere the link goes to it. */
+  /**
+   * The sign-in dialog is on every page (the header partial brings it; src/blog/ui.ts or
+   * src/scripts/account.ts answer "poe:signin"), so the panel hands over to it in place: the
+   * panel tucks away as the dialog rises from Poe's corner, and closing the dialog without
+   * signing in brings the chat back. Without a wired dialog the link goes to /blog#sign-in.
+   */
   private onAccountClick(event: Event): void {
     const link = (event.target as Element | null)?.closest?.('a');
-    if (!link || !this.doc.querySelector('dialog[data-blog-signin][data-poe-ready]')) return;
+    const dialog = this.doc.querySelector<HTMLDialogElement>('dialog[data-blog-signin][data-poe-ready]');
+    if (!link || !dialog) return;
     event.preventDefault();
+    this.root.dataset.handoff = '';
+    dialog.dataset.from = 'poe';
+    const opener = this.opener;
+    const back = () => {
+      delete dialog.dataset.from;
+      if (!this.isOpen) this.open({ opener, via: 'event' });
+    };
+    dialog.addEventListener('close', back, { once: true });
     this.close({ restoreFocus: false });
     this.win.dispatchEvent(new Event('poe:signin'));
+    // Engines without showModal never fire "close"; the dialog stays as it was.
+    if (!dialog.hasAttribute('open')) {
+      dialog.removeEventListener('close', back);
+      delete dialog.dataset.from;
+    }
   }
 
   close(options: { restoreFocus?: boolean } = {}): void {
@@ -566,6 +586,7 @@ export class PoeWidget {
 
     const finish = () => {
       this.hideTimer = undefined;
+      delete this.root.dataset.handoff;
       if (this.isOpen) return;
       this.panel.hidden = true;
       this.scrim.hidden = true;

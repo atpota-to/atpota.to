@@ -159,7 +159,8 @@ describe('mount', () => {
     expect(hint.textContent).toBe(' press / on any page to open it.');
     expect(hint.querySelector('kbd')!.textContent).toBe('/');
     const header = readFileSync(join(process.cwd(), 'src/partials/header.html'), 'utf8');
-    expect(header).toMatch(/<kbd class="kbd only-hover" aria-hidden="true">\/<\/kbd>/);
+    // The header button has no keycap (it saves room); its title and aria-keyshortcuts still say "/".
+    expect(header).toMatch(/data-poe-open aria-keyshortcuts="\/" title="ask poe \(press \/\)"/);
     expect(Array.from(document.querySelectorAll('.poe-textbtn')).map((b) => b.textContent)).toEqual(['new chat']);
   });
 

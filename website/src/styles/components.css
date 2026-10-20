@@ -434,11 +434,6 @@ a.tile.tile--soil:hover {
   font-size: 16px;
 }
 
-.ask-poe-btn .kbd {
-  background: var(--card);
-  color: var(--leaf-strong);
-}
-
 /* Set by the widget while the panel is open (aria-expanded on [data-poe-open]). */
 .ask-poe-btn[aria-expanded="true"],
 .ask-poe-btn[aria-expanded="true"]:hover {
@@ -446,9 +441,297 @@ a.tile.tile--soil:hover {
   color: var(--leaf-tint);
 }
 
-.ask-poe-btn[aria-expanded="true"] .kbd {
-  background: color-mix(in srgb, var(--leaf-tint) 22%, var(--leaf-strong));
-  color: var(--leaf-tint);
+/* ---------- the reader's account (src/scripts/account.ts) ---------- */
+
+.site-header__end {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-account {
+  position: relative;
+  display: flex;
+}
+
+.site-account:empty {
+  display: none;
+}
+
+.site-account__signin {
+  --btn-h: 48px;
+  gap: 8px;
+  padding: 0 18px;
+  font-size: 16px;
+}
+
+.site-account__signin .site-account__icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+.site-account__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform var(--dur-spring) var(--ease-spring),
+    box-shadow var(--dur) ease;
+}
+
+.site-account__toggle:hover {
+  transform: translateY(-2px) rotate(-3deg);
+  box-shadow: var(--shadow-soft);
+}
+
+.site-account__toggle[aria-expanded="true"] {
+  box-shadow: 0 0 0 3px var(--leaf);
+  transform: none;
+}
+
+/* On wide screens the avatar says it all; the label has the handle. */
+.site-account__name {
+  display: none;
+}
+
+.site-account__avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--line);
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.site-account__avatar--blank {
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+}
+
+.site-account__avatar--big {
+  width: 48px;
+  height: 48px;
+}
+
+.site-account.is-new .site-account__toggle {
+  animation: account-hello 900ms var(--ease-spring);
+}
+
+@keyframes account-hello {
+  0% { transform: scale(0.4); }
+  45% { transform: scale(1.15) rotate(-8deg); }
+  70% { transform: scale(0.96) rotate(4deg); }
+  100% { transform: none; }
+}
+
+.site-account__card {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: var(--z-menu);
+  width: 264px;
+  padding: 14px;
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  transform: translateY(-6px) scale(0.94);
+  transform-origin: calc(100% - 24px) 0;
+  transition:
+    opacity var(--dur) ease,
+    transform var(--dur-spring) var(--ease-spring);
+}
+
+.site-account__card.is-open {
+  opacity: 1;
+  transform: none;
+}
+
+.site-account__who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 12px;
+  border-bottom: 2px dashed var(--line);
+}
+
+.site-account__names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.site-account__display {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.site-account__handle {
+  color: var(--muted);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.site-account__links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-account__link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.site-account__link:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.site-account__out {
+  color: var(--text-soft);
+}
+
+/* In the header bar the sign-in button is a circle the size of an avatar; its title and
+   label say what it is. In the phone sheet (below) it is a full row with its label. */
+@media (min-width: 881px) {
+  .site-account__signin {
+    width: 48px;
+    padding: 0;
+    transition:
+      transform var(--dur-spring) var(--ease-spring),
+      background-color var(--dur) ease;
+  }
+
+  .site-account__signin:hover {
+    transform: translateY(-2px);
+  }
+
+  .site-account__label {
+    display: none;
+  }
+}
+
+@media (max-width: 880px) {
+  html.js .site-menu .site-header__end {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  html.js .site-menu .site-account {
+    flex-direction: column;
+  }
+
+  html.js .site-menu .site-account__signin {
+    width: 100%;
+    --btn-h: 52px;
+    font-size: 17px;
+  }
+
+  html.js .site-menu .site-account__toggle {
+    width: 100%;
+    min-height: 56px;
+    padding: 6px 18px 6px 6px;
+    border-radius: 20px;
+    background: var(--bg);
+    font-size: 17px;
+  }
+
+  html.js .site-menu .site-account__toggle:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  html.js .site-menu .site-account__name {
+    display: inline;
+    overflow-wrap: anywhere;
+  }
+
+  /* In the phone sheet the card opens in place, under the avatar. */
+  html.js .site-menu .site-account__card {
+    position: static;
+    width: auto;
+    margin-top: 6px;
+    padding: 4px;
+    box-shadow: none;
+  }
+
+  html.js .site-menu .site-account__card .site-account__who {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html.js .site-menu .site-account {
+      opacity: 0;
+      transform: translateY(-10px);
+      transition:
+        opacity var(--dur) ease,
+        transform var(--dur-spring) var(--ease-spring);
+    }
+
+    html.js .site-header.is-menu-open .site-menu .site-account {
+      opacity: 1;
+      transform: none;
+      transition-delay: 200ms;
+    }
+
+    html.js .site-header.is-menu-open .site-menu .ask-poe-btn {
+      transition-delay: 240ms;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-account__toggle,
+  .site-account__card,
+  .site-account__signin {
+    transition: none;
+  }
+
+  .site-account__signin:hover {
+    transform: none;
+  }
+
+  .site-account.is-new .site-account__toggle {
+    animation: none;
+  }
 }
 
 .site-header__menu-btn {
@@ -812,6 +1095,70 @@ html:has(.blog-signin[open]) {
 
   .blog-signin__panel {
     padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Opening: the dialog rises in; from Poe's panel it grows out of Poe's corner, as the panel
+   tucks away (poe.css). Each step slides in as it takes over. */
+@media (prefers-reduced-motion: no-preference) {
+  .blog-signin[open] {
+    animation: signin-rise var(--dur-spring) var(--ease-spring);
+  }
+
+  .blog-signin[open][data-from="poe"] {
+    transform-origin: 100% 100%;
+    animation: signin-from-poe 420ms var(--ease-spring);
+  }
+
+  .blog-signin[open]::backdrop {
+    animation: signin-fade var(--dur) ease;
+  }
+
+  .blog-signin__step:not([hidden]) {
+    animation: signin-step 280ms var(--ease-out);
+  }
+}
+
+@keyframes signin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+}
+
+@keyframes signin-from-poe {
+  from {
+    opacity: 0;
+    transform: translate(28vw, 30vh) scale(0.5) rotate(4deg);
+  }
+  60% {
+    opacity: 1;
+  }
+}
+
+@keyframes signin-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes signin-step {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+@media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+  .blog-signin[open],
+  .blog-signin[open][data-from="poe"] {
+    animation: signin-sheet 420ms var(--ease-out);
+  }
+}
+
+@keyframes signin-sheet {
+  from {
+    transform: translateY(100%);
   }
 }
 
