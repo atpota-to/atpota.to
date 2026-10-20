@@ -191,7 +191,7 @@ describe('records', () => {
 });
 
 describe('state', () => {
-  it('only returns home, to the garden, or to paths under /blog', () => {
+  it('only returns home, to the garden, to the guides, or to paths under /blog', () => {
     expect(safeReturnTo('/blog')).toBe('/blog');
     expect(safeReturnTo('/blog/3myasnk4bzk22')).toBe('/blog/3myasnk4bzk22');
     expect(safeReturnTo('/')).toBe('/');
@@ -199,7 +199,9 @@ describe('state', () => {
     expect(safeReturnTo('/garden')).toBe('/garden');
     expect(safeReturnTo('/garden/dame.is')).toBe('/garden/dame.is');
     expect(safeReturnTo('/garden/did:plc:qntsxa2i4sb24noi45fx4np2/flowers')).toBe('/garden/did:plc:qntsxa2i4sb24noi45fx4np2/flowers');
-    for (const bad of ['//evil.com', '/gardens', '/garden/a/b', '/garden/../blog', '/garden/x/flowers/y', '/garden?x=1', '/garden/a b', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
+    expect(safeReturnTo('/guides')).toBe('/guides');
+    expect(safeReturnTo('/guides/bluesky-for-brands.html')).toBe('/guides/bluesky-for-brands.html');
+    for (const bad of ['//evil.com', '/gardens', '/garden/a/b', '/garden/../blog', '/garden/x/flowers/y', '/garden?x=1', '/garden/a b', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guidesx', '/guides/a/b', '/guides/../blog', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
       expect(safeReturnTo(bad), String(bad)).toBeNull();
     }
   });
@@ -671,15 +673,7 @@ describe('mountBlog', () => {
     expect(h.calls).toEqual([]);
   });
 
-  it("opens the sign-in dialog for Poe's panel, from its event or from /blog#sign-in", async () => {
-    const h = setup({ start: null });
-    await h.mounted;
-    expect($<HTMLDialogElement>('dialog[data-blog-signin]').dataset.poeReady).toBe('');
-    h.win.dispatchEvent(new Event('poe:signin'));
-    expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
-    expect($('[data-blog-signin-lede]').textContent).toBe(COPY.lede.poe);
-
-    document.body.innerHTML = postPage();
+  it("opens the sign-in dialog for Poe's panel from /blog#sign-in", async () => {
     const linked = setup({ start: null, path: '/blog', hash: '#sign-in' });
     await linked.mounted;
     expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);

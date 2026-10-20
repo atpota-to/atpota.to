@@ -20,9 +20,10 @@
  * Kind things get a little thanks (src/scripts/burst.ts): leaves burst from the button on
  * subscribing and commenting, hearts on recommending, and the corner Poe hops.
  *
- * Poe's panel signs readers in here too, so Poe can remember them: on a blog page its link
- * fires "poe:signin" on window, elsewhere it comes to /blog#sign-in. Either opens the dialog,
- * and once the reader is back the panel opens again. The session is the page's shared one
+ * Poe's panel signs readers in with the same dialog, so Poe can remember them: its link fires
+ * "poe:signin" on window, which src/scripts/account.ts answers on every page (and
+ * /blog#sign-in opens it here). Once the reader is back on a blog page, the panel opens
+ * again from here. The session is the page's shared one
  * (sharedAuth), and every sign-in or sign-out here is announced with SESSION_EVENT so Poe
  * never keeps using a session the reader ended.
  */
@@ -735,10 +736,8 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     cheer(win);
   }
 
-  // Poe's panel: "sign in with bluesky so poe can remember you". The marker tells it the
-  // dialog is wired; without it the panel's link just comes to /blog#sign-in.
-  win.addEventListener('poe:signin', () => openSignIn('poe'));
-  if (dialog) dialog.dataset.poeReady = '';
+  // Poe's panel: "sign in with bluesky so poe can remember you". Its link opens the dialog
+  // in place (src/scripts/account.ts answers "poe:signin"); /blog#sign-in still works.
   if (win.location.hash === '#sign-in') {
     win.history?.replaceState?.(win.history.state, '', `${win.location.pathname}${win.location.search ?? ''}`);
     openSignIn('poe');

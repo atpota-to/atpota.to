@@ -2,7 +2,8 @@
  * Shared entry for every page (<script type="module" src="/src/scripts/main.ts">).
  *
  * 1. theme toggle wiring, header nav (phone menu sheet), mascot expression swapping,
- *    the tab title that asks you to come back, the footer's changing tagline
+ *    the tab title that asks you to come back, the footer's changing tagline, and the
+ *    header's account button (./account.ts, which also opens sign-in for Poe's panel)
  * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
  *    "blog" -> ./blog.ts, "garden" -> ./garden-page.ts (dynamic import; each page module
  *    exports `init()`, called once)
@@ -12,6 +13,7 @@
  */
 
 import { mountPoe } from '../poe/index';
+import { mountAccount } from './account';
 import { initMascots } from './mascot';
 import { initNav } from './nav';
 import { initTabTitle } from './tab';
@@ -49,6 +51,7 @@ async function initPage(): Promise<void> {
 
 safely('theme', initTheme);
 safely('nav', () => initNav());
+safely('account', () => mountAccount());
 safely('mascot', () => initMascots());
 safely('tab', () => initTabTitle());
 safely('tagline', () => initTagline());

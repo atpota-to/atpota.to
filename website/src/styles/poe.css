@@ -456,6 +456,14 @@ html[data-theme="dark"] .poe-pill {
   outline: none;
 }
 
+/* Handing over to the sign-in dialog (ui.ts onAccountClick): the panel shrinks toward the
+   middle of the page, where the dialog is rising. */
+@media (min-width: 640px) {
+  .poe[data-handoff] .poe-panel:not(.is-open) {
+    transform: translate(-40px, -48px) scale(0.86);
+  }
+}
+
 .poe-panel__potato {
   position: absolute;
   left: 16px;

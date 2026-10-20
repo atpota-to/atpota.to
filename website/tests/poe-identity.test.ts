@@ -232,7 +232,26 @@ describe('the widget, signed in or not', () => {
     expect(net.seen[0]!.has('authorization')).toBe(false);
   });
 
-  it("on a blog page, the link opens the blog's own sign-in dialog instead of leaving", async () => {
+  it('hands over to the sign-in dialog in place, and comes back when it is closed', async () => {
+    document.body.insertAdjacentHTML('beforeend', '<dialog data-blog-signin data-poe-ready></dialog>');
+    const dialog = document.querySelector<HTMLDialogElement>('dialog[data-blog-signin]')!;
+    const asked = vi.fn(() => dialog.setAttribute('open', ''));
+    window.addEventListener('poe:signin', asked);
+    const widget = mountPoe({ identity: new PoeIdentity(fakeAuth(null, false).auth) })!;
+    widget.open();
+    await vi.waitFor(() => expect(widget.account.querySelector('a')).not.toBeNull());
+    widget.account.querySelector('a')!.click();
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(widget.opened).toBe(false);
+    expect(dialog.dataset.from).toBe('poe');
+    dialog.removeAttribute('open');
+    dialog.dispatchEvent(new Event('close'));
+    expect(widget.opened).toBe(true);
+    expect(dialog.dataset.from).toBeUndefined();
+    window.removeEventListener('poe:signin', asked);
+  });
+
+  it("opens the page's sign-in dialog instead of leaving", async () => {
     document.body.insertAdjacentHTML('beforeend', '<dialog data-blog-signin data-poe-ready></dialog>');
     const asked = vi.fn();
     window.addEventListener('poe:signin', asked);

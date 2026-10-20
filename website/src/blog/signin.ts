@@ -1,6 +1,9 @@
 /**
- * The Bluesky sign-in dialog, shared by the blog (src/blog/ui.ts) and the home page's
- * flower patch (src/scripts/garden.ts). The markup is the src/partials/signin.html partial.
+ * The Bluesky sign-in dialog, shared by the blog (src/blog/ui.ts), the flower patches
+ * (src/scripts/garden.ts, garden-page.ts), the header's account button and Poe's panel
+ * (src/scripts/account.ts). The markup is the src/partials/signin.html partial, which the
+ * header partial brings to every page. A dialog is wired once, by whoever mounts it first;
+ * later mounts share that wiring and only bring their own beforeLeave.
  *
  * Step one asks for a handle. Step two shows who that is and the site the button leads to
  * ("continue at bsky.social"), so nobody is sent somewhere they didn't expect. Just before
@@ -114,14 +117,33 @@ export interface SignInOptions {
   beforeLeave: () => void;
 }
 
+export interface OpenOptions {
+  /** Replaces the mount's beforeLeave for this opening. */
+  beforeLeave?: () => void;
+  /** Runs when the reader closes the dialog without leaving to sign in. */
+  onDismiss?: () => void;
+}
+
 export interface SignIn {
   /** Opens the dialog with `lede` as its opening line. */
-  open(lede: string): void;
+  open(lede: string, options?: OpenOptions): void;
   close(): void;
 }
 
+const mounted = new WeakMap<HTMLDialogElement, SignIn>();
+
 export function mountSignIn(opts: SignInOptions): SignIn {
-  const { doc, win, dialog, auth, fetchImpl, local, now, beforeLeave } = opts;
+  const shared = opts.dialog ? mounted.get(opts.dialog) : undefined;
+  const signIn = shared ?? wire(opts);
+  if (!shared && opts.dialog) mounted.set(opts.dialog, signIn);
+  return {
+    open: (lede, options = {}) => signIn.open(lede, { beforeLeave: opts.beforeLeave, ...options }),
+    close: () => signIn.close(),
+  };
+}
+
+function wire(opts: SignInOptions): SignIn {
+  const { doc, win, dialog, auth, fetchImpl, local, now } = opts;
 
   const q = <T extends Element = HTMLElement>(sel: string) => dialog?.querySelector<T>(sel) ?? null;
   const title = q('[data-blog-signin-title]');
@@ -139,6 +161,8 @@ export function mountSignIn(opts: SignInOptions): SignIn {
   const back = q<HTMLButtonElement>('[data-blog-signin-back]');
 
   let opener: HTMLElement | null = null;
+  let beforeLeave: () => void = opts.beforeLeave;
+  let onDismiss: (() => void) | null = null;
   /** The input that was looked up, and what came back. */
   let prepared: { input: string; ready: Prepared } | null = null;
   /** Bumped whenever a lookup's answer would no longer be wanted (back, close). */
@@ -184,14 +208,19 @@ export function mountSignIn(opts: SignInOptions): SignIn {
   /** Esc, the close button or a backdrop click: focus goes back to the button that opened it. */
   function onClosed(): void {
     reset();
-    if (opener?.isConnected) opener.focus();
+    const dismissed = onDismiss;
+    onDismiss = null;
+    if (dismissed) dismissed();
+    else if (opener?.isConnected) opener.focus();
     opener = null;
   }
 
-  function open(text: string): void {
+  function open(text: string, options: OpenOptions = {}): void {
     if (!dialog || !form || !input) return;
     auth.warm();
     reset();
+    beforeLeave = options.beforeLeave ?? opts.beforeLeave;
+    onDismiss = options.onDismiss ?? null;
     if (lede) lede.textContent = text;
     if (!input.value) input.value = local.get(HANDLE_KEY) ?? '';
     opener = doc.activeElement instanceof HTMLElement && doc.activeElement !== doc.body ? doc.activeElement : null;
