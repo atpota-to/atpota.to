@@ -102,6 +102,16 @@ export const WebsiteChat = z.strictObject({
 export type WebsiteChat = z.infer<typeof WebsiteChat>;
 
 /**
+ * A signed-in visitor asking Poe to forget them, from the settings page. The
+ * proxy sends it only after verifying a service-auth token their own PDS
+ * signed for atpota.to's forget method, a different method from the chat's,
+ * so a chat token can never be replayed into wiping someone's notes.
+ */
+export const WebsiteForget = z.strictObject({
+  did: z.string().regex(VISITOR_DID),
+});
+
+/**
  * The channel address for a chat. A signed-in visitor gets one of their own
  * under the same cookie, so signing in, signing out or switching accounts
  * starts a fresh session: notes recalled for one person never sit in a history

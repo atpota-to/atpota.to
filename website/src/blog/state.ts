@@ -71,9 +71,9 @@ const GARDEN_RE = /^\/garden(?:\/[A-Za-z0-9._:%-]{1,253}(?:\/flowers)?)?\/?$/;
 /** /guides and a guide (/guides/bluesky-for-brands.html). */
 const GUIDES_RE = /^\/guides(?:\/[a-z0-9-]{1,100}(?:\.html)?)?\/?$/;
 
-/** The home page, a garden page, a guide, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
+/** The home page, the settings page, a garden page, a guide, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
 export function safeReturnTo(path: unknown): string | null {
-  if (path === '/') return path;
+  if (path === '/' || path === '/settings') return path;
   if (typeof path !== 'string' || path.length > 600) return null;
   if (!(RETURN_RE.test(path) || GARDEN_RE.test(path) || GUIDES_RE.test(path)) || path.split('/').some((segment) => segment === '.' || segment === '..')) return null;
   return path;

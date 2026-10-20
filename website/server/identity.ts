@@ -5,7 +5,8 @@
  * This checks it the way any atproto service checks inter-service auth:
  *
  *   header   alg ES256K or ES256; never an OAuth access, refresh or DPoP token
- *   payload  aud = POE_SERVICE_DID, lxm = POE_LXM, iss a did:plc or plain did:web,
+ *   payload  aud = POE_SERVICE_DID, lxm = POE_LXM (or POE_FORGET_LXM, when the caller asks for
+ *            it), iss a did:plc or plain did:web,
  *            exp in the future and at most an hour away (the most a PDS will sign)
  *   sig      by the #atproto key in iss's DID document, low-S, as the reference
  *            verifier insists; on a miss the document is fetched again, once, in
@@ -25,8 +26,13 @@ import { APPVIEW, didDocumentUrl, fetchJson, TtlCache, type Fetch } from './blog
 
 /** The audience a token must name: atpota.to, as a service. */
 export const POE_SERVICE_DID = 'did:web:atpota.to';
-/** The one method a token must be scoped to (see the rpc: scope in src/blog/auth.ts). */
+/** The method a chat token must be scoped to (see the rpc: scopes in src/blog/auth.ts). */
 export const POE_LXM = 'to.atpota.poe.chat';
+/**
+ * The method a "forget me" token must be scoped to (the settings page). Its own method, so a
+ * chat token, which the widget sends with every message, can never be used to wipe notes.
+ */
+export const POE_FORGET_LXM = 'to.atpota.poe.forget';
 export const MAX_TOKEN_LENGTH = 4096;
 export const MAX_LIFETIME_S = 3600;
 export const CLOCK_SKEW_S = 60;
@@ -45,6 +51,8 @@ export type IdentifyResult =
 export interface IdentifyDeps {
   fetch?: Fetch;
   now?: () => number;
+  /** The method the token must name. Default POE_LXM. */
+  lxm?: typeof POE_LXM | typeof POE_FORGET_LXM;
 }
 
 const DID_RE = /^did:(?:plc:[a-z2-7]{24}|web:[a-zA-Z0-9.-]{1,253})$/;
@@ -178,7 +186,7 @@ interface Claims {
 }
 
 /** Everything that can be checked without the network. */
-export function readToken(token: string, nowMs: number): { ok: true; claims: Claims } | { ok: false; reason: 'malformed' | 'claims' | 'expired' } {
+export function readToken(token: string, nowMs: number, method: string = POE_LXM): { ok: true; claims: Claims } | { ok: false; reason: 'malformed' | 'claims' | 'expired' } {
   const parts = token.split('.');
   if (parts.length !== 3 || !B64URL_RE.test(parts[2]!)) return { ok: false, reason: 'malformed' };
   const header = decodePart(parts[0]!);
@@ -188,7 +196,7 @@ export function readToken(token: string, nowMs: number): { ok: true; claims: Cla
   if (alg !== 'ES256K' && alg !== 'ES256') return { ok: false, reason: 'claims' };
   if (header.typ === 'at+jwt' || header.typ === 'refresh+jwt' || header.typ === 'dpop+jwt') return { ok: false, reason: 'claims' };
   const { iss, aud, lxm, exp } = payload;
-  if (typeof iss !== 'string' || !DID_RE.test(iss) || aud !== POE_SERVICE_DID || lxm !== POE_LXM) return { ok: false, reason: 'claims' };
+  if (typeof iss !== 'string' || !DID_RE.test(iss) || aud !== POE_SERVICE_DID || lxm !== method) return { ok: false, reason: 'claims' };
   if (typeof exp !== 'number' || !Number.isFinite(exp)) return { ok: false, reason: 'claims' };
   const now = nowMs / 1000;
   if (exp <= now) return { ok: false, reason: 'expired' };
@@ -245,7 +253,7 @@ async function handleFor(doFetch: Fetch, did: string): Promise<string | null> {
 export async function identify(token: string, deps: IdentifyDeps = {}): Promise<IdentifyResult> {
   const doFetch: Fetch = deps.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = deps.now ?? (() => Date.now());
-  const read = readToken(token, now());
+  const read = readToken(token, now(), deps.lxm ?? POE_LXM);
   if (!read.ok) return read;
   const { iss, alg, signed, sig } = read.claims;
 

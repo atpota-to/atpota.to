@@ -97,7 +97,26 @@ describe('header account', () => {
     expect(localStorage.getItem(READER_KEY)).toBeNull();
   });
 
-  it('opens a card with the garden, the profile and sign out; Esc closes it', async () => {
+  it("answers the settings page's sign-in button with a plain sign-in that comes back to /settings", async () => {
+    history.replaceState(null, '', '/settings');
+    try {
+      const h = setup();
+      h.mount();
+      window.dispatchEvent(new Event('account:signin'));
+      expect(dialog().hasAttribute('open')).toBe(true);
+      expect(document.querySelector('[data-blog-signin-lede]')!.textContent).toBe(ACCOUNT_COPY.lede);
+      document.querySelector<HTMLInputElement>('#blog-signin-handle')!.value = 'someone.example';
+      document.querySelector<HTMLFormElement>('[data-blog-signin-form]')!.requestSubmit();
+      await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[data-blog-signin-confirm]')!.hidden).toBe(false));
+      document.querySelector<HTMLButtonElement>('[data-blog-signin-go]')!.click();
+      await vi.waitFor(() => expect(h.go).toHaveBeenCalled());
+      expect(readPending(h.store, NOW)).toEqual({ kind: 'account', returnTo: '/settings', at: NOW });
+    } finally {
+      history.replaceState(null, '', '/');
+    }
+  });
+
+  it('opens a card with the garden, the profile, settings and sign out; Esc closes it', async () => {
     const session = fakeSession();
     const h = setup({ eager: true, session });
     h.mount();
@@ -108,7 +127,7 @@ describe('header account', () => {
     toggle.click();
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(card.hidden).toBe(false);
-    expect([...card.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/garden/someone.example', 'https://bsky.app/profile/someone.example']);
+    expect([...card.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['/garden/someone.example', 'https://bsky.app/profile/someone.example', '/settings']);
     card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(card.hidden).toBe(true);
     expect(document.activeElement).toBe(toggle);

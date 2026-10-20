@@ -37,6 +37,9 @@ export const MESSAGES = {
   timeout: 'poe is still digging. ask again in a minute.',
   conversation_over: 'this chat has run its course. start a new chat to keep going.',
   busy: 'poe is still answering your last message.',
+  forget_unavailable: "poe can't forget anyone from the website right now. try again a little later.",
+  forget_sign_in: "poe couldn't tell it's you. sign in again, then ask once more.",
+  forget_failed: "poe couldn't finish forgetting just now. try again in a moment.",
 } as const;
 
 /** Default message for an error code relayed from the bot. */
