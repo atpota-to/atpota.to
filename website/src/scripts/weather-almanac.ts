@@ -405,8 +405,11 @@ export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
   tile.dataset.state = 'ready';
 }
 
-/** The three tiles, a first load, and a check every minute while the tab is visible. */
-export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch = fetch): void {
+/**
+ * The three tiles, a first load, and a check every minute while the tab is visible.
+ * `onLoad` hears every almanac that arrives (the weather alerts watch it for new apps).
+ */
+export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch = fetch, onLoad?: (a: Almanac) => void): void {
   const today = $(root, '[data-a-today]');
   const fresh = $(root, '[data-a-new]');
   const heat = $(root, '[data-a-heat]');
@@ -422,6 +425,7 @@ export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch
     if (today && (a.today || a.normal)) renderToday(today, a, now, tz);
     if (fresh) renderNewApps(fresh, a, now, tz);
     if (heat) renderHeatmap(heat, a, now, tz);
+    onLoad?.(a);
   };
   void load();
   const tick = () =>

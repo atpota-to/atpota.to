@@ -1348,28 +1348,9 @@ html:not(.js) .home-weather {
   height: 92px;
 }
 
-.home-weather__rays {
-  fill: var(--sun-deep);
-  transform-box: fill-box;
-  transform-origin: center;
-}
 
-@media (prefers-reduced-motion: no-preference) {
-  /* weather.ts speeds this up or slows it down with how busy the network is */
-  .home-weather__rays {
-    animation: home-rays 10s linear infinite;
-  }
-}
 
-@keyframes home-rays {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
-.home-weather__disc {
-  fill: var(--sun);
-}
 
 
 .home-weather__reading {

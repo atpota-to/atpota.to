@@ -15,7 +15,8 @@
  * same span a day (or a month, or a year) earlier.
  *
  * The almanac tiles (today so far, new in the atmosphere, when the sky is busiest) are
- * weather-almanac.ts.
+ * weather-almanac.ts; the header's clouds, weather-sky.ts; and the weather alerts that
+ * pop up when something changes between readings, weather-alerts.ts.
  *
  * Collection names and app domains come from other people's records, so they only reach
  * the DOM through textContent (weather.ts has already dropped any that don't look right).
@@ -23,8 +24,10 @@
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
-import { initAlmanac } from './weather-almanac';
-import { renderChart, type ChartPoint } from './weather-chart';
+import { alertsFor, createAlertDesk, newAppAlert, type AlertDesk, type Watch } from './weather-alerts';
+import { clock, initAlmanac, readerTimeZone, type Almanac } from './weather-almanac';
+import { renderChart, smoothPath, type ChartPoint } from './weather-chart';
+import { cloudCount, renderClouds } from './weather-sky';
 import {
   CONDITION_TEXT,
   ERROR_TEXT,
@@ -163,6 +166,8 @@ export function renderReport(report: HTMLElement, r: Reading): void {
     live ? `the last ${r.seconds ?? 60} seconds, live. updates every few seconds.` : when ? `read at ${when}${r.seconds ? `, from ${r.seconds} seconds of the firehose` : ''}. next reading in about a minute.` : '',
   );
   spinRays(report, r.perSecond.posts);
+  const sky = $(report, '[data-weather-sky]');
+  if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
   const spark = $(report, '[data-r-spark]');
   if (spark) {
     const posts = (r.series ?? []).map((p) => p?.posts ?? null);
@@ -223,16 +228,13 @@ export function renderSparkline(host: HTMLElement, values: Array<number | null>)
   const h = 36;
   const max = Math.max(1, ...values.filter((v): v is number => v !== null));
   const step = values.length > 1 ? w / (values.length - 1) : w;
-  let d = '';
-  let pen = false;
+  // one smooth run per stretch of seconds the station heard
+  const runs: Array<Array<[number, number]>> = [[]];
   values.forEach((v, i) => {
-    if (v === null) {
-      pen = false;
-      return;
-    }
-    d += `${pen ? 'L' : 'M'}${(i * step).toFixed(1)},${(h - 2 - (v / max) * (h - 4)).toFixed(1)}`;
-    pen = true;
+    if (v === null) runs.push([]);
+    else runs[runs.length - 1]!.push([i * step, h - 2 - (v / max) * (h - 4)]);
   });
+  const d = runs.filter((r) => r.length).map(smoothPath).join('');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.setAttribute('preserveAspectRatio', 'none');
@@ -520,10 +522,18 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   if (!report || report.dataset.weatherBound === 'true') return;
   report.dataset.weatherBound = 'true';
   let every = REFRESH_MS;
+  const region = $(root, '[data-weather-alerts]');
+  const desk = region ? createAlertDesk(region) : null;
+  if (desk) bindHush(root, desk);
+  let watch: Watch | null = null;
   const load = async () => {
     const reading = await fetchReading(fetchImpl);
-    if (reading) renderReport(report, reading);
-    else renderReportError(report);
+    if (reading) {
+      renderReport(report, reading);
+      const next = alertsFor(watch, reading);
+      watch = next.watch;
+      for (const a of next.alerts) desk?.push(a);
+    } else renderReportError(report);
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
   };
   const tick = () =>
@@ -534,5 +544,28 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, fetchImpl);
-  initAlmanac(report, fetchImpl);
+  initAlmanac(report, fetchImpl, desk ? watchNewApps(desk) : undefined);
+}
+
+/** Alerts for apps the almanac lists as new that it didn't list last time (the first load only sets the scene). */
+export function watchNewApps(desk: AlertDesk, tz = readerTimeZone()): (a: Almanac) => void {
+  let known: Set<string> | null = null;
+  return (a) => {
+    const apps = a.newApps && !a.newApps.warmingUp ? a.newApps.apps : null;
+    if (!apps) return;
+    if (known) for (const app of apps) if (!known.has(app.domain)) desk.push(newAppAlert(app.domain, clock(app.firstSeen, tz)));
+    known = new Set([...(known ?? []), ...apps.map((app) => app.domain)]);
+  };
+}
+
+/** The "hush weather alerts" button in "how it's measured", kept in step with the desk. */
+function bindHush(root: ParentNode, desk: AlertDesk): void {
+  const button = $<HTMLButtonElement>(root, '[data-alerts-toggle]');
+  if (!button) return;
+  const show = (hushed: boolean) => {
+    button.textContent = hushed ? 'turn weather alerts back on' : 'hush weather alerts';
+  };
+  show(desk.hushed);
+  desk.onHushChange(show);
+  button.addEventListener('click', () => (desk.hushed ? desk.unhush() : desk.hush()));
 }
