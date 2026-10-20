@@ -18,12 +18,13 @@
  * the list or the fallback line). Once the list shows, its "5 minutes ago"
  * dates keep themselves current.
  *
- * Also here: the "say hi" tile's copy button, the hero Poe (pet.ts), atmospheric
- * conditions (weather.ts) and the way into the community garden (garden-teaser.ts,
- * loaded when it comes near the screen).
+ * Also here: the "say hi" tile's copy button, the hero Poe (pet.ts) and the scene around
+ * it (scene.ts), atmospheric conditions (weather.ts) and the way into the community garden
+ * (garden-teaser.ts, loaded when it comes near the screen).
  */
 
 import { initPet } from './pet';
+import { initScene } from './scene';
 import { initWeather } from './weather';
 
 export const FEED_ENDPOINT = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed';
@@ -593,6 +594,7 @@ export function init(): void {
   initLatest();
   initCopyEmail();
   initPet();
+  initScene();
   initWeather();
   initGardenTeaserWhenNear();
 }

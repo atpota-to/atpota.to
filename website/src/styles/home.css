@@ -164,32 +164,241 @@ html[data-theme="dark"] {
   }
 }
 
-/* ---------- sunburst + mascot ---------- */
+/* ---------- sunburst + mascot: poe's hill ---------- */
+
+/* The tile is a scene in layers (scene.ts): data-time, data-season, data-weather, data-ground,
+   data-visitor and data-place on .home-sun pick the colours below, and the layers show or hide
+   with them. Seasons and weather only change Poe's surroundings. The colours are registered,
+   so a change of weather or theme fades in rather than jumping. */
+@property --sky-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #FFD978;
+}
+
+@property --sky-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #FFCD5E;
+}
+
+@property --ground-c {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #B9DE93;
+}
+
+@property --ground-shade-c {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #9DC47E;
+}
 
 .home-sun {
   --tile-pad: 0;
+  /* Poe's box; visitors, the shadow and the moon's helmet line up with it */
+  --poe-w: 360px;
+  --poe-left: -184px;
+  --poe-bottom: 100px;
+  --poe-scale: 1;
+  /* sky: a base for the time of day, mixed with a season tint and then the weather */
+  --sky-a0: var(--sun);
+  --sky-b0: var(--sun-deep);
+  --tint: #FFFFFF;
+  --tint-amt: 0%;
+  --wx: #FFFFFF;
+  --wx-amt: 0%;
+  --sky-a: color-mix(in srgb, color-mix(in srgb, var(--sky-a0), var(--tint) var(--tint-amt)), var(--wx) var(--wx-amt));
+  --sky-b: color-mix(in srgb, color-mix(in srgb, var(--sky-b0), var(--tint) var(--tint-amt)), var(--wx) var(--wx-amt));
+  --sky-top: transparent;
+  --glow: transparent;
+  --cloud: var(--home-cloud);
+  /* ground: a colour for the ground and season, toned by the light and the weather */
+  --ground: #B9DE93;
+  --ground-shade: color-mix(in srgb, var(--ground), #4C7A33 26%);
+  --tone: #FFFFFF;
+  --tone-amt: 0%;
+  --ground-c: color-mix(in srgb, var(--ground), var(--tone) var(--tone-amt));
+  --ground-shade-c: color-mix(in srgb, var(--ground-shade), var(--tone) var(--tone-amt));
+  --tuft-c: color-mix(in srgb, color-mix(in srgb, var(--ground), #2F5A22 50%), var(--tone) var(--tone-amt));
+  --cap: 0px;
+  --cap-c: color-mix(in srgb, #F3F7FA, var(--tone) var(--tone-amt));
+  --shadow-c: rgba(42, 30, 16, 0.2);
   position: relative;
   overflow: hidden;
   min-height: 540px;
   border-radius: var(--radius-lg);
-  background: repeating-conic-gradient(from 0deg at 50% 74%, var(--sun) 0deg 8deg, var(--sun-deep) 8deg 16deg);
+  background: var(--sky-a);
   isolation: isolate;
+  transition:
+    --sky-a 1.2s ease,
+    --sky-b 1.2s ease,
+    --ground-c 1.2s ease,
+    --ground-shade-c 1.2s ease;
 }
 
-/* Night: the same warm rays, a little dimmer towards the top. */
-html[data-theme="dark"] .home-sun::before {
-  content: "";
+/* seasons: a tint on the daytime sky, and the meadow's colour */
+.home-sun[data-season="spring"] {
+  --tint: #FFEAA8;
+  --tint-amt: 30%;
+  --ground: #C3E6A0;
+}
+
+.home-sun[data-season="summer"] {
+  --ground: #ADD884;
+  --glow: rgba(255, 255, 255, 0.42);
+}
+
+.home-sun[data-season="autumn"] {
+  --tint: #FFBE72;
+  --tint-amt: 28%;
+  --ground: #D2C67C;
+}
+
+.home-sun[data-season="winter"] {
+  --tint: #DDEBF3;
+  --tint-amt: 62%;
+  --ground: #F3F7FA;
+  --ground-shade: #DCE6EE;
+  --cap: 22px;
+  --shadow-c: rgba(111, 135, 160, 0.25);
+}
+
+/* deeper soil: dark loam, with a snow cap in winter */
+.home-sun[data-ground="deeper"] {
+  --ground: #4E3B24;
+  --ground-shade: #45341F;
+}
+
+/* the time of day */
+.home-sun[data-time="dawn"] {
+  --sky-a0: #FFE0C4;
+  --sky-b0: #FCD0B1;
+  --sky-top: rgba(185, 164, 230, 0.34);
+  --glow: rgba(255, 255, 255, 0.55);
+  --tone: #E8A0B0;
+  --tone-amt: 8%;
+}
+
+.home-sun[data-time="golden"] {
+  --sky-a0: #FFBA7A;
+  --sky-b0: #FCA968;
+  --sky-top: rgba(224, 106, 140, 0.42);
+  --glow: rgba(255, 224, 160, 0.5);
+  --tone: #FF8A4C;
+  --tone-amt: 10%;
+}
+
+/* Night: the warm rays turn to a starry sky with a moon, the hill dims, the sprouts droop
+   and Poe naps (scene.ts restFace). The dark theme is always night. */
+.home-sun[data-time="night"] {
+  --sky-a0: var(--home-night);
+  --sky-b0: var(--home-night-deep);
+  --tint-amt: 0%;
+  --glow: transparent;
+  --tone: #1E273D;
+  --tone-amt: 50%;
+  --cloud: #3A4562;
+}
+
+/* weather: grey skies under rain, pale ones under snow */
+.home-sun[data-weather="rain"] {
+  --wx: #B3BEC8;
+  --wx-amt: 60%;
+  --glow: transparent;
+  --cloud: #E2E8EC;
+  --tone: #6F7A86;
+  --tone-amt: 15%;
+}
+
+.home-sun[data-weather="snow"] {
+  --wx: #E3EBF1;
+  --wx-amt: 55%;
+  --glow: transparent;
+  --cloud: #FFFFFF;
+}
+
+.home-sun[data-time="night"][data-weather="rain"] {
+  --wx: #141A28;
+  --tone: #1E273D;
+  --tone-amt: 50%;
+  --cloud: #3A4258;
+}
+
+.home-sun[data-time="night"][data-weather="snow"] {
+  --wx: #2B3652;
+  --cloud: #4A5674;
+}
+
+/* away days */
+.home-sun[data-place="cloud"] {
+  --sky-a0: #CFE8F6;
+  --sky-b0: #C1E0F2;
+  --tint-amt: 0%;
+  --sky-top: transparent;
+  --glow: rgba(255, 255, 255, 0.4);
+  --shadow-c: rgba(143, 176, 198, 0.35);
+}
+
+.home-sun[data-place="cloud"][data-time="night"] {
+  --sky-a0: var(--home-night);
+  --sky-b0: var(--home-night-deep);
+  --glow: transparent;
+}
+
+.home-sun[data-place="moon"] {
+  --sky-a0: #1B1E33;
+  --sky-b0: #15182B;
+  --tint-amt: 0%;
+  --wx-amt: 0%;
+  --sky-top: transparent;
+  --glow: transparent;
+  --ground: #C4C1CF;
+  --ground-shade: #B5B1C3;
+  --tone-amt: 0%;
+  --cap: 0px;
+  --shadow-c: rgba(58, 54, 80, 0.35);
+}
+
+/* The sunburst: rays round the point the hill rises to, on their own layer so the wind can
+   turn them without repainting the tile. */
+.home-sun__rays {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 74%;
   z-index: 0;
-  background: radial-gradient(120% 90% at 50% 80%, transparent 30%, rgba(28, 22, 14, 0.38) 100%);
+  width: 1300px;
+  height: 1300px;
+  margin: -650px 0 0 -650px;
+  background: repeating-conic-gradient(from 0deg, var(--sky-a) 0deg 8deg, var(--sky-b) 8deg 16deg);
   pointer-events: none;
 }
 
-/* Night proper: a starry sky with a moon. The sprouts droop and Poe naps
-   (data-mascot-dark="sleepy" in index.html, mascot.ts). */
-html[data-theme="dark"] .home-sun {
-  background: repeating-conic-gradient(from 0deg at 50% 74%, var(--home-night) 0deg 8deg, var(--home-night-deep) 8deg 16deg);
+@media (prefers-reduced-motion: no-preference) {
+  .home-sun[data-weather="gusty"] .home-sun__rays {
+    animation: home-rays 100s linear infinite;
+  }
+}
+
+@keyframes home-rays {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* the light: a tint at the top of the sky and a glow behind the hill */
+.home-sun__air {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(to bottom, var(--sky-top), transparent 62%),
+    radial-gradient(circle at 50% 74%, var(--glow), transparent 60%);
+  pointer-events: none;
+}
+
+.home-sun[data-time="night"] .home-sun__air {
+  background: radial-gradient(120% 90% at 50% 80%, transparent 30%, rgba(28, 22, 14, 0.38) 100%);
 }
 
 .home-sun__night {
@@ -200,7 +409,9 @@ html[data-theme="dark"] .home-sun {
   pointer-events: none;
 }
 
-html[data-theme="dark"] .home-sun__night {
+/* stars come out on a clear night, and on the moon */
+.home-sun[data-time="night"]:not([data-weather="rain"], [data-weather="snow"]) .home-sun__night,
+.home-sun[data-place="moon"] .home-sun__night {
   display: block;
 }
 
@@ -213,6 +424,24 @@ html[data-theme="dark"] .home-sun__night {
   border-radius: 50%;
   box-shadow: inset -16px -6px 0 0 var(--home-moon);
   transform: rotate(-12deg);
+}
+
+.home-sun__earth {
+  position: absolute;
+  right: 36px;
+  top: 30px;
+  display: none;
+  width: 92px;
+  height: 92px;
+  background: url("../assets/scene/earth.svg") center / contain no-repeat;
+}
+
+.home-sun[data-place="moon"] .home-sun__moon {
+  display: none;
+}
+
+.home-sun[data-place="moon"] .home-sun__earth {
+  display: block;
 }
 
 .home-sun__star {
@@ -245,8 +474,8 @@ html[data-theme="dark"] .home-sun__night {
   }
 }
 
-/* Ambient life: clouds drift across by day, fireflies come out at night. Under
-   reduced motion the clouds rest where they are and the fireflies just glow. */
+/* Clouds drift across by day, and in rain or snow at night. A gusty atmosphere sends small
+   quick ones over; rain and snow bring big slow ones. Under reduced motion they rest. */
 .home-sun__day {
   position: absolute;
   inset: 0;
@@ -255,8 +484,13 @@ html[data-theme="dark"] .home-sun__night {
   pointer-events: none;
 }
 
-html[data-theme="dark"] .home-sun__day {
+.home-sun[data-time="night"] .home-sun__day,
+.home-sun[data-place="moon"] .home-sun__day {
   display: none;
+}
+
+.home-sun[data-time="night"]:is([data-weather="rain"], [data-weather="snow"]):not([data-place="moon"]) .home-sun__day {
+  display: block;
 }
 
 /* Each drift is as wide as the tile; its cloud sits just off the left edge, so moving
@@ -269,6 +503,16 @@ html[data-theme="dark"] .home-sun__day {
   transform: translateX(calc(var(--rest) + 130px));
 }
 
+.home-sun__drift--gust,
+.home-sun__drift--wet {
+  display: none;
+}
+
+.home-sun[data-weather="gusty"] .home-sun__drift--gust,
+.home-sun:is([data-weather="rain"], [data-weather="snow"]) .home-sun__drift--wet {
+  display: block;
+}
+
 .home-sun__cloud {
   position: absolute;
   right: 100%;
@@ -276,7 +520,7 @@ html[data-theme="dark"] .home-sun__day {
   width: 110px;
   height: 32px;
   border-radius: 32px;
-  background: var(--home-cloud);
+  background: var(--cloud);
   transform: scale(var(--size, 1));
   transform-origin: 100% 50%;
 }
@@ -311,7 +555,7 @@ html[data-theme="dark"] .home-sun__day {
   pointer-events: none;
 }
 
-html[data-theme="dark"] .home-sun__fireflies {
+.home-sun[data-time="night"][data-place="hill"]:not([data-season="winter"], [data-weather="rain"], [data-weather="snow"]) .home-sun__fireflies {
   display: block;
 }
 
@@ -367,23 +611,8 @@ html[data-theme="dark"] .home-sun__fireflies {
   }
 }
 
-.home-sun__sprout {
-  transform-origin: 50% 100%;
-  transition: transform var(--dur-spring) var(--ease-spring);
-}
-
-html[data-theme="dark"] .home-sun__sprout--1 {
-  transform: rotate(-16deg) scaleY(0.9);
-}
-
-html[data-theme="dark"] .home-sun__sprout--2 {
-  transform: rotate(14deg) scaleY(0.88);
-}
-
-html[data-theme="dark"] .home-sun__sprout--3 {
-  transform: rotate(18deg) scaleY(0.9);
-}
-
+/* The hill: a meadow by default, or deeper soil. A darker band low down gives it a little
+   roundness; the season's flowers, buttercups or fallen leaves are scattered on top. */
 .home-sun__mound {
   position: absolute;
   left: -8%;
@@ -392,14 +621,192 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   z-index: 1;
   height: 150px;
   border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  background: var(--home-mound);
+  background:
+    radial-gradient(56.6% 94% at 50% 136%, var(--ground-shade-c) 99%, transparent 100%),
+    var(--ground-c);
+  box-shadow: inset 0 var(--cap) 0 0 var(--cap-c);
 }
 
+.home-sun__mound::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.home-sun[data-season="spring"] .home-sun__mound::before {
+  background:
+    url("../assets/scene/flowers.svg") 30px 26px / 250px 64px repeat-x,
+    url("../assets/scene/flowers.svg") 160px 74px / 300px 77px repeat-x;
+}
+
+.home-sun[data-season="summer"] .home-sun__mound::before {
+  background:
+    url("../assets/scene/buttercups.svg") 10px 30px / 250px 64px repeat-x,
+    url("../assets/scene/buttercups.svg") 140px 80px / 290px 74px repeat-x;
+}
+
+.home-sun[data-season="autumn"] .home-sun__mound::before {
+  background:
+    url("../assets/scene/leaves.svg") 0 22px / 250px 64px repeat-x,
+    url("../assets/scene/leaves.svg") 120px 72px / 310px 79px repeat-x;
+}
+
+.home-sun[data-time="night"] .home-sun__mound::before {
+  filter: brightness(0.5) saturate(0.7);
+}
+
+.home-sun[data-weather="rain"] .home-sun__mound::before {
+  filter: brightness(0.85) saturate(0.85);
+}
+
+/* the moon: grey dust and craters */
+.home-sun[data-place="moon"] .home-sun__mound {
+  background:
+    radial-gradient(26px 8px at 19% 70px, #B9B5C8 62%, #A9A5B9 66% 98%, transparent 100%),
+    radial-gradient(16px 5px at 35% 54px, #B9B5C8 62%, #A9A5B9 66% 98%, transparent 100%),
+    radial-gradient(22px 7px at 66.7% 72px, #B9B5C8 62%, #A9A5B9 66% 98%, transparent 100%),
+    radial-gradient(30px 9px at 82% 90px, #B9B5C8 62%, #A9A5B9 66% 98%, transparent 100%),
+    radial-gradient(34px 10px at 51.4% 112px, #B9B5C8 62%, #A9A5B9 66% 98%, transparent 100%),
+    radial-gradient(18px 6px at 28.4% 118px, #B9B5C8 62%, #A9A5B9 66% 98%, transparent 100%),
+    var(--ground-c);
+}
+
+.home-sun[data-place="moon"] .home-sun__mound::before {
+  background: none;
+}
+
+/* a cloud instead of the hill: puffs on a soft blue shadow */
+.home-sun__cloudbed {
+  --k: 1;
+  --puff: color-mix(in srgb, #FFFFFF, var(--tone) var(--tone-amt));
+  --puff-shade: color-mix(in srgb, #D6E6F1, var(--tone) var(--tone-amt));
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: 0;
+  z-index: 1;
+  display: none;
+  height: calc(170px * var(--k));
+  background:
+    radial-gradient(circle calc(80px * var(--k)) at 12.5% calc(150px * var(--k)), var(--puff) 98%, transparent 100%),
+    radial-gradient(circle calc(82px * var(--k)) at 18% calc(142px * var(--k)), var(--puff) 98%, transparent 100%),
+    radial-gradient(circle calc(88px * var(--k)) at 33.3% calc(130px * var(--k)), var(--puff) 98%, transparent 100%),
+    radial-gradient(circle calc(96px * var(--k)) at 50% calc(126px * var(--k)), var(--puff) 98%, transparent 100%),
+    radial-gradient(circle calc(88px * var(--k)) at 66.7% calc(130px * var(--k)), var(--puff) 98%, transparent 100%),
+    radial-gradient(circle calc(82px * var(--k)) at 82% calc(142px * var(--k)), var(--puff) 98%, transparent 100%),
+    radial-gradient(circle calc(80px * var(--k)) at 95.8% calc(150px * var(--k)), var(--puff) 98%, transparent 100%),
+    linear-gradient(transparent calc(150px * var(--k)), var(--puff) 0),
+    radial-gradient(circle calc(80px * var(--k)) at 12.5% calc(164px * var(--k)), var(--puff-shade) 98%, transparent 100%),
+    radial-gradient(circle calc(88px * var(--k)) at 33.3% calc(144px * var(--k)), var(--puff-shade) 98%, transparent 100%),
+    radial-gradient(circle calc(96px * var(--k)) at 50% calc(140px * var(--k)), var(--puff-shade) 98%, transparent 100%),
+    radial-gradient(circle calc(88px * var(--k)) at 66.7% calc(144px * var(--k)), var(--puff-shade) 98%, transparent 100%),
+    radial-gradient(circle calc(80px * var(--k)) at 95.8% calc(164px * var(--k)), var(--puff-shade) 98%, transparent 100%);
+  pointer-events: none;
+}
+
+.home-sun[data-place="cloud"] .home-sun__cloudbed {
+  display: block;
+}
+
+.home-sun:not([data-place="hill"]) :is(.home-sun__sprout, .home-sun__tuft),
+.home-sun[data-place="cloud"] .home-sun__mound {
+  display: none;
+}
+
+/* Grass tufts on a meadow: a few along the crest and a few in front of Poe's feet. */
+.home-sun__tuft {
+  position: absolute;
+  left: var(--p);
+  bottom: var(--b);
+  z-index: 2;
+  display: none;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  background: var(--tuft-c);
+  -webkit-mask: url("../assets/scene/tuft.svg") center / contain no-repeat;
+  mask: url("../assets/scene/tuft.svg") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.home-sun__tuft--front {
+  left: calc(50% + var(--x) * var(--poe-scale));
+  bottom: calc(var(--poe-bottom) - 8px);
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+}
+
+.home-sun[data-ground="meadow"][data-place="hill"]:not([data-season="winter"]) .home-sun__tuft {
+  display: block;
+}
+
+/* a soft shadow where Poe stands */
+.home-sun__shadow {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--poe-bottom) - var(--poe-w) * 0.035);
+  z-index: 2;
+  width: calc(var(--poe-w) * 0.68);
+  height: calc(var(--poe-w) * 0.08);
+  margin-left: calc(var(--poe-w) * -0.34 - 4px);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--shadow-c), transparent);
+  pointer-events: none;
+}
+
+/* The sprouts: autumn colours, a droop at night, a sway in the wind. */
 .home-sun__sprout {
   position: absolute;
   z-index: 2;
   height: auto;
   pointer-events: none;
+  transform-origin: 50% 100%;
+  transition:
+    transform var(--dur-spring) var(--ease-spring),
+    filter var(--dur) ease;
+}
+
+.home-sun[data-season="autumn"] .home-sun__sprout {
+  filter: hue-rotate(-95deg) saturate(1.3) brightness(1.08);
+}
+
+.home-sun[data-time="night"] .home-sun__sprout--1 {
+  transform: rotate(-16deg) scaleY(0.9);
+}
+
+.home-sun[data-time="night"] .home-sun__sprout--2 {
+  transform: rotate(14deg) scaleY(0.88);
+}
+
+.home-sun[data-time="night"] .home-sun__sprout--3 {
+  transform: rotate(18deg) scaleY(0.9);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-sun[data-weather="gusty"] .home-sun__sprout {
+    animation: home-sway 1.6s ease-in-out infinite alternate;
+  }
+
+  .home-sun[data-weather="gusty"] .home-sun__sprout--2 {
+    animation-delay: -0.6s;
+  }
+
+  .home-sun[data-weather="gusty"] .home-sun__sprout--3 {
+    animation-delay: -1.1s;
+  }
+}
+
+@keyframes home-sway {
+  from {
+    rotate: -6deg;
+  }
+
+  to {
+    rotate: 8deg;
+  }
 }
 
 .home-sun__sprout--1 {
@@ -420,15 +827,447 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   width: 58px;
 }
 
+/* The moon: Poe's own @ flag, a fishbowl helmet, and Poe floating in low gravity. */
+.home-sun__flag {
+  position: absolute;
+  left: calc(18% - 26px);
+  bottom: 100px;
+  z-index: 2;
+  display: none;
+  width: 104px;
+  height: auto;
+  pointer-events: none;
+}
+
+.home-sun__helmet {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--poe-bottom) - var(--poe-w) * 0.06);
+  z-index: 3;
+  display: none;
+  width: calc(var(--poe-w) * 0.98);
+  height: calc(var(--poe-w) * 0.9);
+  margin-left: calc(var(--poe-w) * -0.49 - 4px);
+  border: calc(var(--poe-w) * 0.018) solid rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.24), rgba(221, 242, 255, 0.08) 58%);
+  pointer-events: none;
+}
+
+.home-sun__helmet::before {
+  content: "";
+  position: absolute;
+  inset: 7%;
+  border: calc(var(--poe-w) * 0.035) solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  transform: rotate(-38deg);
+}
+
+.home-sun[data-place="moon"] :is(.home-sun__flag, .home-sun__helmet) {
+  display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(.home-sun[data-place="moon"]) .home-sun__mascot,
+  .home-sun[data-place="moon"] .home-sun__helmet {
+    animation: home-float 4.5s ease-in-out infinite alternate;
+  }
+
+  .home-sun[data-place="moon"] .home-sun__shadow {
+    animation: home-float-shadow 4.5s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes home-float {
+  from {
+    translate: 0 4px;
+  }
+
+  to {
+    translate: 0 -16px;
+  }
+}
+
+@keyframes home-float-shadow {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+
+  to {
+    opacity: 0.55;
+    scale: 0.75;
+  }
+}
+
+/* ---------- visitors and weather in front (scene.ts draws them) ---------- */
+
+.home-sun__visitors,
+.home-sun__life {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.home-sun__visitor svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.home-sun__wings {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* A blue butterfly flies in, sits on the side of Poe's head for a while, and flies off. */
+.home-sun__visitor--butterfly {
+  position: absolute;
+  left: calc(50% + var(--poe-left) + var(--poe-w) * 0.79);
+  bottom: calc(var(--poe-bottom) + var(--poe-w) * 0.7);
+  width: calc(var(--poe-w) * 0.15);
+  translate: -50% 45%;
+}
+
+/* A moth loops about under the moon. */
+.home-sun__visitor--moth {
+  position: absolute;
+  right: 120px;
+  top: 128px;
+  width: 44px;
+}
+
+/* A worm comes up out of its hole after rain, looks around, and goes back down. The window
+   it rises through is cut off at the hole, and it tilts round its base, under the ground. */
+.home-sun__visitor--worm {
+  position: absolute;
+  left: 89%;
+  bottom: 70px;
+}
+
+.home-sun__hole {
+  position: absolute;
+  left: -16px;
+  top: -6px;
+  width: 32px;
+  height: 11px;
+  border-radius: 50%;
+  background: color-mix(in srgb, #2E2216, var(--tone) calc(var(--tone-amt) * 0.5));
+}
+
+.home-sun__burrow {
+  position: absolute;
+  left: -40px;
+  bottom: 0;
+  width: 80px;
+  height: 80px;
+  clip-path: inset(-40px -40px 0 -40px);
+}
+
+.home-sun__worm {
+  position: absolute;
+  left: 29px;
+  bottom: -12px;
+  width: 22px;
+  transform-origin: 50% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-sun__visitor--butterfly {
+    animation: home-butterfly 20s ease-in-out -9s infinite;
+  }
+
+  .home-sun__visitor--butterfly .home-sun__wings {
+    animation: home-flap 0.28s ease-in-out infinite alternate;
+  }
+
+  .home-sun__visitor--moth {
+    animation: home-moth 9s ease-in-out infinite;
+  }
+
+  .home-sun__visitor--moth .home-sun__wings {
+    animation: home-flap 0.45s ease-in-out infinite alternate;
+  }
+
+  .home-sun__worm {
+    animation: home-worm 8s ease-in-out infinite;
+  }
+
+  .home-sun__worm-face {
+    animation: home-worm-look 8s ease-in-out infinite;
+  }
+}
+
+@keyframes home-flap {
+  to {
+    transform: scaleX(0.22);
+  }
+}
+
+@keyframes home-butterfly {
+  0% {
+    transform: translate(-480px, 40px);
+  }
+
+  12% {
+    transform: translate(-320px, -90px);
+  }
+
+  24% {
+    transform: translate(-110px, -40px);
+  }
+
+  30%,
+  70% {
+    transform: translate(0, 0);
+  }
+
+  80% {
+    transform: translate(130px, -90px);
+  }
+
+  90% {
+    transform: translate(280px, -50px);
+  }
+
+  100% {
+    transform: translate(480px, -170px);
+  }
+}
+
+@keyframes home-moth {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(-6deg);
+  }
+
+  15% {
+    transform: translate(34px, -30px) rotate(8deg);
+  }
+
+  30% {
+    transform: translate(78px, -8px) rotate(-4deg);
+  }
+
+  45% {
+    transform: translate(58px, 34px) rotate(10deg);
+  }
+
+  60% {
+    transform: translate(14px, 44px) rotate(-8deg);
+  }
+
+  75% {
+    transform: translate(-30px, 18px) rotate(6deg);
+  }
+
+  88% {
+    transform: translate(-22px, -12px) rotate(-4deg);
+  }
+}
+
+@keyframes home-worm {
+  0%,
+  10% {
+    transform: translateY(105%);
+  }
+
+  22% {
+    transform: translateY(0);
+  }
+
+  30% {
+    transform: translateY(0) rotate(-9deg);
+  }
+
+  42% {
+    transform: translateY(0) rotate(9deg);
+  }
+
+  50% {
+    transform: translateY(-3px) rotate(0);
+  }
+
+  58% {
+    transform: translateY(0);
+  }
+
+  72%,
+  100% {
+    transform: translateY(105%);
+  }
+}
+
+@keyframes home-worm-look {
+  0%,
+  24%,
+  54%,
+  100% {
+    transform: translateX(0);
+  }
+
+  30% {
+    transform: translateX(-1.6px);
+  }
+
+  42% {
+    transform: translateX(1.6px);
+  }
+}
+
+/* Rain, snow, leaves and petals. Each bit is a column (or a row, for gusts) as tall as the
+   tile, so moving it by 100% of itself carries the bit across; the shape is its ::before.
+   Under reduced motion each rests at its own --y. */
+.home-sun__bit {
+  position: absolute;
+  left: var(--x);
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transform: translateY(var(--y));
+}
+
+.home-sun__bit::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -16px;
+  rotate: var(--turn);
+  scale: var(--size);
+}
+
+.home-sun__bit--rain::before {
+  top: -22px;
+  width: 2.4px;
+  height: 20px;
+  border-radius: 2px;
+  background: rgba(95, 127, 163, 0.6);
+  rotate: 12deg;
+  scale: 1;
+}
+
+.home-sun[data-time="night"] .home-sun__bit--rain::before {
+  background: rgba(169, 190, 223, 0.6);
+}
+
+.home-sun__bit--snow::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.home-sun__bit--leaf::before,
+.home-sun__bit--gust::before {
+  width: 13px;
+  height: 13px;
+  border-radius: 0 75% 0 75%;
+  background: var(--c);
+}
+
+.home-sun__bit--petal::before {
+  width: 9px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.home-sun__bit--gust {
+  left: 0;
+  right: 0;
+  top: var(--y);
+  bottom: auto;
+  width: auto;
+  height: 0;
+  transform: translateX(var(--x));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-sun__bit {
+    animation: home-fall var(--dur) linear var(--at) infinite;
+  }
+
+  .home-sun__bit--rain {
+    animation-name: home-rain;
+  }
+
+  .home-sun__bit--snow::before,
+  .home-sun__bit--leaf::before,
+  .home-sun__bit--petal::before {
+    animation: home-flutter calc(var(--dur) / 3) ease-in-out var(--at) infinite alternate;
+  }
+
+  .home-sun__bit--gust {
+    animation-name: home-gust;
+  }
+
+  .home-sun__bit--gust::before {
+    animation: home-tumble 1.4s linear var(--at) infinite;
+  }
+}
+
+@keyframes home-fall {
+  from {
+    transform: translateY(-4%);
+  }
+
+  to {
+    transform: translateY(104%);
+  }
+}
+
+@keyframes home-rain {
+  from {
+    transform: translate(0, -6%);
+  }
+
+  to {
+    transform: translate(-46px, 104%);
+  }
+}
+
+@keyframes home-flutter {
+  from {
+    translate: -12px 0;
+    rotate: calc(var(--turn) - 40deg);
+  }
+
+  to {
+    translate: 14px 0;
+    rotate: calc(var(--turn) + 60deg);
+  }
+}
+
+@keyframes home-gust {
+  from {
+    transform: translate(-6%, 0);
+  }
+
+  to {
+    transform: translate(106%, 60px);
+  }
+}
+
+@keyframes home-tumble {
+  to {
+    rotate: calc(var(--turn) + 360deg);
+  }
+}
+
 .home-sun__mascot {
   position: absolute;
   left: 50%;
-  bottom: 100px;
+  bottom: var(--poe-bottom);
   z-index: 3;
-  width: 360px;
+  width: var(--poe-w);
   max-width: none;
   height: auto;
-  margin-left: -184px;
+  margin-left: var(--poe-left);
   cursor: pointer;
   transform-origin: 50% 100%;
   /* --lean-x / --lean-y (-1..1) follow the pointer (pet.ts) */
@@ -1983,10 +2822,63 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
 
   /* sunburst comes first on phones */
   .home-sun {
+    --poe-w: 240px;
+    --poe-left: -122px;
+    --poe-bottom: 64px;
+    --poe-scale: 0.667;
     order: -1;
     min-height: 330px;
     border-radius: 30px;
-    background: repeating-conic-gradient(from 0deg at 50% 76%, var(--sun) 0deg 9deg, var(--sun-deep) 9deg 18deg);
+  }
+
+  .home-sun__rays {
+    top: 76%;
+    width: 760px;
+    height: 760px;
+    margin: -380px 0 0 -380px;
+    background: repeating-conic-gradient(from 0deg, var(--sky-a) 0deg 9deg, var(--sky-b) 9deg 18deg);
+  }
+
+  .home-sun__tuft {
+    bottom: var(--bp);
+    width: 18px;
+    height: 18px;
+    margin-left: -9px;
+  }
+
+  .home-sun__tuft--front {
+    bottom: calc(var(--poe-bottom) - 6px);
+    width: 19px;
+    height: 19px;
+    margin-left: -9.5px;
+  }
+
+  .home-sun__cloudbed {
+    --k: 0.62;
+  }
+
+  .home-sun__flag {
+    left: calc(17% - 17px);
+    bottom: 62px;
+    width: 68px;
+  }
+
+  .home-sun__earth {
+    right: 18px;
+    top: 16px;
+    width: 64px;
+    height: 64px;
+  }
+
+  .home-sun__visitor--worm {
+    bottom: 44px;
+    scale: 0.8;
+  }
+
+  .home-sun__visitor--moth {
+    right: 70px;
+    top: 84px;
+    width: 34px;
   }
 
   .home-sun__mound {
@@ -2012,11 +2904,6 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
     width: 38px;
   }
 
-  .home-sun__mascot {
-    bottom: 64px;
-    width: 240px;
-    margin-left: -122px;
-  }
 
   .home-sun__bubble {
     left: 16px;
