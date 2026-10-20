@@ -13,6 +13,7 @@
 // to the next URL; a connection that worked and then dropped retries the same one.
 
 import { eventOfMessage } from './atmosphere.js';
+import { happenedUs } from './clock.js';
 
 export const DEFAULT_URLS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-east.bsky.network/subscribe'];
 export const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
@@ -107,7 +108,7 @@ export function createJetstream({
         station.counts.unparseable++;
         return;
       }
-      station.ingest(m?.time_us, eventOfMessage(m));
+      station.ingest(m?.time_us, eventOfMessage(m), happenedUs(m));
     };
 
     sock.onerror = (e) => fail('error', e?.message ?? e?.error?.message);

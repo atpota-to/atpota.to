@@ -64,8 +64,13 @@ brief.
   mentions service filters to `app.bsky.feed.post` and posts publicly; don't
   widen its filter or share its process. A crash here must not take down replies.
 - **Bucket by event time, not arrival time.** Each Jetstream message has
-  `time_us`. Put it in the bucket for `floor(time_us / 1e6)`. That way a
-  reconnect that replays with `cursor` lands in the right seconds.
+  `time_us`, but that's when Jetstream handled it: after a pause upstream, a
+  backlog comes out stamped late. So a new record goes in the second its commit's
+  `rev` (a TID its PDS stamped) says, clamped to `[time_us − 60 s, time_us]`; a
+  `rev` over 5 min behind, or one that isn't a real time, falls back to `time_us`
+  (`src/clock.js`). Coverage and the cursor still go by `time_us`. That way a
+  reconnect that replays with `cursor` lands in the right seconds, and so does a
+  backlog. (Added 2026-10-20, after jetstream2 paused for 25 s at 17:37.)
 - **On reconnect**, resume with `cursor = last time_us seen − 2 s` (in
   microseconds) so nothing is lost, and **drop events you've already counted**:
   keep the highest `time_us` per second already counted, or simply ignore

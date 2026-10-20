@@ -190,3 +190,19 @@ test('a minute sums its covered seconds', () => {
   assert.equal(half.minute(T0).seconds, 30);
   assert.equal(new Station().minute(T0).seconds, 0);
 });
+
+test('counts a record in the second it was made, up to a minute before Jetstream stamped it', () => {
+  const c = clock(T0 + 100);
+  const s = new Station({ now: c.now });
+  s.beginSession();
+  s.ingest(us(T0 + 90), POST, us(T0 + 62)); // let out late after a pause
+  s.ingest(us(T0 + 90), LIKE, us(T0 + 95)); // claims to be from after Jetstream saw it
+  s.ingest(us(T0 + 90), POST, NaN);
+  assert.equal(s.buckets.get(T0 + 62).tally.creates.get('app.bsky.feed.post'), 1);
+  assert.equal(s.buckets.get(T0 + 90).tally.creates.get('app.bsky.feed.like'), 1, 'never later than its stamp');
+  assert.equal(s.buckets.get(T0 + 90).tally.creates.get('app.bsky.feed.post'), 1);
+  assert.equal(s.counts.movedBack, 1);
+  assert.equal(s.counts.maxMovedMs, 28_000);
+  // coverage still follows the stream: nothing past T0 + 89 is covered yet
+  assert.equal(s.coveredThrough, T0 + 89);
+});

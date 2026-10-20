@@ -59,11 +59,12 @@ test('one minute\'s rows: raw counts, the split, and its apps busiest first', ()
   ]);
 });
 
-test('writes a minute about 15 s after it ends, once the stream is past it', async () => {
-  const h = setup({ nowSec: T0 + 74, to: T0 + 73 });
+test('writes a minute once the stream is a minute past it, in case a backlog still adds to it', async () => {
+  const h = setup({ nowSec: T0 + 76, to: T0 + 75 });
   await h.writer.tick();
-  assert.equal(h.written.length, 0, 'not before 15 s');
-  h.clock.ms = (T0 + 75) * 1000;
+  assert.equal(h.written.length, 0, 'records after a pause can still land in it');
+  h.clock.ms = (T0 + 121) * 1000;
+  for (let k = (T0 + 75) * 10 + 1; k <= (T0 + 120) * 10; k++) h.station.ingest(k * 100_000, null);
   await h.writer.tick();
   assert.equal(h.written.length, 2);
   assert.equal(h.written[0].minute.minute, '2026-10-20T16:00:00.000Z');
@@ -80,13 +81,14 @@ test('waits for a reconnect to replay a minute it missed, then writes it whole',
   await h.writer.tick();
   assert.equal(h.written.length, 0, 'the stream has not got past the minute');
   h.station.beginSession({ dropThroughUs: h.station.lastUs });
-  for (let k = (T0 + 38) * 10; k <= (T0 + 90) * 10; k++) h.station.ingest(k * 100_000, { kind: 'create', collection: 'app.bsky.feed.post' });
+  h.clock.ms = (T0 + 126) * 1000;
+  for (let k = (T0 + 38) * 10; k <= (T0 + 125) * 10; k++) h.station.ingest(k * 100_000, { kind: 'create', collection: 'app.bsky.feed.post' });
   await h.writer.tick();
   assert.equal(h.written[0].minute.seconds_covered, 60);
 });
 
 test('writes a partly covered minute with its real coverage, and skips an uncovered one', async () => {
-  const h = setup({ from: T0 + 29.5, to: T0 + 200, nowSec: T0 + 200 });
+  const h = setup({ from: T0 + 29.5, to: T0 + 260, nowSec: T0 + 260 });
   await h.writer.tick();
   const minutes = h.written.filter((w) => typeof w === 'object').map((w) => [w.minute.minute, w.minute.seconds_covered]);
   assert.deepEqual(minutes, [
@@ -95,7 +97,7 @@ test('writes a partly covered minute with its real coverage, and skips an uncove
     ['2026-10-20T16:02:00.000Z', 60],
   ]);
 
-  const gap = setup({ from: T0 + 70.5, to: T0 + 200, nowSec: T0 + 200 });
+  const gap = setup({ from: T0 + 70.5, to: T0 + 260, nowSec: T0 + 260 });
   await gap.writer.tick();
   const written = gap.written.filter((w) => typeof w === 'object').map((w) => w.minute.minute);
   assert.deepEqual(written, ['2026-10-20T16:01:00.000Z', '2026-10-20T16:02:00.000Z'], 'the minute with no coverage is not written');
@@ -105,8 +107,8 @@ test('a failed write is retried with backoff, oldest minute first', async () => 
   let fail = 2;
   const attempts = [];
   const h = setup({
-    to: T0 + 200,
-    nowSec: T0 + 200,
+    to: T0 + 260,
+    nowSec: T0 + 260,
     upsert: async (rows) => {
       attempts.push(rows.minute.minute);
       if (fail-- > 0) throw new Error('HTTP 503');
@@ -169,4 +171,21 @@ test('upserts on the primary keys, minute first, so a rewrite is idempotent', as
 
   const failing = supabaseUpsert({ url: 'https://example.supabase.co', key: 'k', fetch: async () => new Response('{"code":"23514"}', { status: 400 }) });
   await assert.rejects(failing(rows), (err) => err.status === 400 && /atmosphere_minute: HTTP 400/.test(err.message));
+});
+
+test('a pause and a backlog after it: the minute is written as it happened, not as it arrived', async () => {
+  // The 17:37 case: the stream goes quiet for 25 s, then lets out the backlog, stamped
+  // late, each record carrying when it was really made (atUs, from its rev).
+  const clock = { ms: (T0 + 186) * 1000 };
+  const station = new Station({ now: () => clock.ms });
+  station.beginSession();
+  const post = { kind: 'create', collection: 'app.bsky.feed.post' };
+  for (let k = (T0 - 1) * 10; k <= (T0 + 35) * 10; k++) station.ingest(k * 100_000, post);
+  for (let k = (T0 + 35) * 10 + 1; k < (T0 + 60) * 10; k++) station.ingest((T0 + 60) * 1e6 + (k % 100) * 1000, post, k * 100_000);
+  for (let k = (T0 + 60) * 10; k <= (T0 + 185) * 10; k++) station.ingest(k * 100_000, post);
+  const written = [];
+  const writer = createWriter({ station, log: quiet, startMinute: T0, now: () => clock.ms, upsert: async (rows) => written.push(rows) });
+  await writer.tick();
+  assert.equal(written[0].minute.creates, 600, 'ten a second, all minute long');
+  assert.equal(written[1].minute.creates, 600, 'and the backlog not piled into the next minute');
 });
