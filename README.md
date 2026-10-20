@@ -22,7 +22,7 @@ this repo is atpota.to itself, and poe, the potato who lives there.
 | [`website/`](website/) | atpota.to: a Vite multi-page site with Vercel Functions behind it |
 | [`bot/`](bot/) | Poe, an [eve](https://eve.dev) agent on Vercel. Answers on Bluesky as [@poe.atpota.to](https://bsky.app/profile/poe.atpota.to), chats on the website, and writes the weekly dispatch |
 | [`mentions/`](mentions/) | The build brief for the droplet, the always-on service that watches Bluesky for mentions and posts Poe's replies. Its code is not in this repo |
-| [`atmosphere/`](atmosphere/) | The build brief for the weather station, a planned second service on the droplet that would keep a rolling 60-second count of the firehose and a minute-by-minute history for `/weather` |
+| [`atmosphere/`](atmosphere/) | The build brief for the weather station, a second service on the droplet that keeps a rolling 60-second count of the firehose (`hook.atpota.to/weather/v1/now`) and writes a minute-by-minute history to Supabase for `/weather` |
 | [`agent-spec/`](agent-spec/) | The planning documents Poe was built from. Historical: where they disagree with `bot/`, `bot/` wins |
 | [`branding/`](branding/) | Avatars, the mascot, the OG image and the brand proposal |
 
@@ -57,8 +57,8 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
 
 | path | what's there |
 | --- | --- |
-| `/` | The projects, the guide, "atmospheric conditions" (a few seconds of the firehose, counted), the latest posts from atpotato, poe, anisota and aturi, and a link to the community garden |
-| `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, and everything else on the wire |
+| `/` | The projects, the guide, "atmospheric conditions" (the last minute of the firehose, from the weather station), the latest posts from atpotato, poe, anisota and aturi, and a link to the community garden |
+| `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (the share of new records written by apps other than Bluesky), which of those apps are busiest, everything else on the wire, live every few seconds, and trends over the last hour, 24 hours, 30 days and 12 months |
 | `/guides`, `/guides/bluesky-for-brands` | The guides. Written in markdown under `public/guides/`, and also published as a [standard.site](https://standard.site) publication in atpota.to's repo |
 | `/blog` | Poe's atmosphere dispatch, a weekly roundup written in [Leaflet](https://leaflet.pub) ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
 | `/garden/<handle>` | Gardens. Plant a flower in atpotato's seasonal patch, tend your neighbours' flowers, or set up a garden of your own. `/garden/atpota.to` is the community garden |
@@ -79,7 +79,8 @@ in `website/server/`, so Vercel only builds the entry points.
 | `api/garden.ts` | One garden's patches and flowers |
 | `api/gardener.ts` | One person's garden page: their garden, the flowers they've planted anywhere, and the tending they've given |
 | `api/latest.ts` | The home page's "latest" feed |
-| `api/atmosphere.ts` | A few seconds of Jetstream, counted, for the home page's "atmospheric conditions" and `/weather`. One sample serves everyone for a minute |
+| `api/atmosphere.ts` | The weather station's rolling 60 seconds, for the home page's "atmospheric conditions" and `/weather` (cached 5 seconds; needs `ATMOSPHERE_STATION_SECRET`). Without the station it samples a few seconds of Jetstream itself, and one sample serves everyone for a minute |
+| `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key) |
 
 ### layout
 
