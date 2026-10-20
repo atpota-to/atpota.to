@@ -377,6 +377,14 @@ a.tile.tile--soil:hover {
   color: var(--text);
 }
 
+/* Narrow desktops: a little less room around each link, so the wordmark keeps its size
+   until the phone menu takes over at 880px. */
+@media (min-width: 881px) and (max-width: 960px) {
+  .site-nav__link {
+    padding: 0 14px;
+  }
+}
+
 /* Desktop with JS (nav.ts): one hover pill slides between the links instead of each
    link lighting up on its own. nav.ts sets --pill-x / --pill-w and data-pill. */
 @media (min-width: 881px) {

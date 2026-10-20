@@ -13,9 +13,10 @@ import type { Plugin, ViteDevServer } from 'vite';
  *                                             with the given attributes added to <svg>
  *                                             plus aria-hidden="true" focusable="false"
  *
- * Active navigation: links carrying data-nav="home|projects|blog|about" get
- * aria-current="page" when they match the page. The page is read from
- * <body data-page="home|guide|guides|blog|notfound">; <body data-nav-current="..."> overrides it.
+ * Active navigation: links carrying data-nav="projects|blog|garden|weather|about" get
+ * aria-current="page" when they match the page, and so does the wordmark (data-nav="home";
+ * the nav itself has no home link). The page is read from
+ * <body data-page="home|guide|guides|blog|garden|weather|notfound">; <body data-nav-current="..."> overrides it.
  * This is the ONLY place aria-current is set for the main nav (nav.ts does not).
  */
 
@@ -35,6 +36,7 @@ export const NAV_FOR_PAGE: Record<string, string> = {
   home: 'home',
   blog: 'blog',
   garden: 'garden',
+  weather: 'weather',
 };
 
 function insideDir(dir: string, file: string): boolean {
