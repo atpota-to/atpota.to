@@ -201,7 +201,49 @@ export function publishedFileMemory(): MemoryProvider {
           return saved;
         },
       };
-      return (await fileMemory({ backend: publishing }).tools?.(ctx)) ?? null;
+      const tools = await fileMemory({ backend: publishing }).tools?.(ctx);
+      if (!tools?.save_memory) return tools ?? null;
+      const save = tools.save_memory;
+      return {
+        ...tools,
+        save_memory: {
+          ...save,
+          async execute(input: { text: string }, context) {
+            const refusal = unpublishableNote(input.text);
+            if (refusal) throw new Error(refusal);
+            return save.execute(input as never, context);
+          },
+        },
+      };
     },
   });
+}
+
+/**
+ * The droplet publishes a note only if it would pass as a Bluesky reply: no
+ * http(s) link and 300 graphemes at most (publishable in
+ * mentions/src/memory.js). It holds anything else back, so a longer note is
+ * recalled but never reaches the repo, and when it is someone's only note
+ * their record is deleted. On 2026-10-20 a 331-grapheme rewrite did exactly
+ * that while Poe told the person it was published. So the person slot's save
+ * refuses such a note, and the model rewrites it while the person is there.
+ */
+const NOTE_MAX_GRAPHEMES = 300;
+const LINK = /https?:\/\/[^\s<>()[\]]/i;
+const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
+
+/** Why the droplet would hold this note back, or null when it would publish it. */
+export function unpublishableNote(text: string): string | null {
+  // eve stores a note trimmed, with each run of whitespace made one space.
+  const note = text.trim().replaceAll(/\s+/g, " ");
+  if (LINK.test(note)) {
+    return "Not saved: a note with a link is never published in your repo. Name the thing instead of linking it, then save again.";
+  }
+  let length = 0;
+  for (const _ of graphemes.segment(note)) length++;
+  if (length > NOTE_MAX_GRAPHEMES) {
+    return `Not saved: this note is ${length} characters, and your repo only publishes notes of ` +
+      `${NOTE_MAX_GRAPHEMES} or fewer. Shorten it or split it into two notes, then save again.`;
+  }
+  return null;
 }
