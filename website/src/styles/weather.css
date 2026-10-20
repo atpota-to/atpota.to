@@ -74,12 +74,8 @@ html[data-theme="dark"] {
   color: var(--weather-sky-text);
 }
 
-.weather-hero__eyebrow {
-  color: var(--weather-sky-mono);
-}
-
 .weather-hero__title {
-  margin: 6px 0 10px;
+  margin: 0 0 10px;
   font-size: clamp(32px, 5vw, 52px);
   line-height: 1.05;
 }
@@ -101,52 +97,45 @@ html[data-theme="dark"] {
   height: 120px;
 }
 
-
-
-
-
-
 .weather-hero__reading {
   min-width: 0;
 }
 
+/* "457 rec/sec" on one line; the forecast under it is words, so it reads lighter. */
 .weather-hero__big {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
+  gap: 8px;
   font-size: 64px;
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .weather-hero__unit {
-  font-size: 18px;
+  font-size: 22px;
+  color: var(--weather-sky-mono);
 }
 
 .weather-hero__cond {
-  margin-top: 8px;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.weather-hero__when {
-  margin-top: 6px;
-  font-size: 14px;
-  color: var(--weather-sky-mono);
+  max-width: 26ch;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 2px solid color-mix(in srgb, var(--weather-sky-text) 18%, transparent);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 /* The station's last 60 seconds, under the reading (weather-page.ts renderSparkline). */
 .weather-spark {
-  display: grid;
-  gap: 2px;
   max-width: 260px;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .weather-spark svg {
+  display: block;
   width: 100%;
   height: 36px;
   overflow: visible;
@@ -158,11 +147,6 @@ html[data-theme="dark"] {
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
-}
-
-.weather-spark__caption {
-  font-size: 12px;
-  color: var(--weather-sky-mono);
 }
 
 /* ---------- the almanac: today so far, new in the atmosphere (weather-almanac.ts) ---------- */
@@ -708,45 +692,6 @@ html[data-theme="dark"] {
   color: var(--muted);
 }
 
-.weather-trends__table summary {
-  width: fit-content;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.weather-trends__scroll {
-  max-height: 320px;
-  margin-top: 10px;
-  overflow: auto;
-}
-
-.weather-trends__table table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-trends__table th,
-.weather-trends__table td {
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--line);
-  text-align: right;
-}
-
-.weather-trends__table th:first-child {
-  text-align: left;
-}
-
-.weather-trends__table thead th {
-  position: sticky;
-  top: 0;
-  background: var(--card);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 /* ---------- bars: apps elsewhere, bluesky's collections ---------- */
 
 .weather-bars {
@@ -863,10 +808,11 @@ html[data-theme="dark"] {
   margin: 0;
 }
 
+/* the page's own cream, so each box stands out from the white card */
 .weather-stats div {
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-stats dt {

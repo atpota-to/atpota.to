@@ -6,6 +6,7 @@
  *
  *   GET /api/weather-history?range=hour   the last 60 minutes, a point a minute
  *                                ?range=day    the last 24 hours, a point an hour
+ *                                ?range=week   the last 7 days, a point an hour
  *                                ?range=month  the last 30 days, a point a day
  *                                ?range=year   the last 12 months, a point a month
  *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime? }
@@ -18,7 +19,8 @@
  * left out if it fails:
  *   apps          the busiest apps outside Bluesky over the range, each with its count in
  *                 an earlier window of the same length (atmosphere_app_trends): the same
- *                 hour yesterday, the day before, the 30 days before, the year before
+ *                 hour yesterday, the day before, the week before, the 30 days before,
+ *                 the year before
  *   compare       how much of the range and of that earlier window the station heard, so
  *                 the page compares rates, not counts
  *   appsOverTime  how many apps outside Bluesky were heard each minute, hour, day or
@@ -57,6 +59,7 @@ const DAY = 86_400_000;
 export const RANGES = {
   hour: { table: 'atmosphere_minute', key: 'minute', spanMs: 60 * 60_000, lagMs: DAY, bucket: 'minute', cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
   day: { table: 'atmosphere_hour', key: 'hour', spanMs: DAY, lagMs: DAY, bucket: 'hour', cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
+  week: { table: 'atmosphere_hour', key: 'hour', spanMs: 7 * DAY, lagMs: 7 * DAY, bucket: 'hour', cache: 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600' },
   month: { table: 'atmosphere_day', key: 'day', spanMs: 30 * DAY, lagMs: 30 * DAY, bucket: 'day', cache: 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400' },
   year: { table: 'atmosphere_day', key: 'day', spanMs: 366 * DAY, lagMs: 366 * DAY, bucket: 'month', cache: 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400' },
 } as const satisfies Record<string, { table: string; key: string; spanMs: number; lagMs: number; bucket: Bucket; cache: string }>;
@@ -143,7 +146,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
 
   async function GET(request: Request): Promise<Response> {
     const range = new URL(request.url).searchParams.get('range') ?? 'day';
-    if (!isRange(range)) return json(request, 400, { error: 'range must be hour, day, month or year' }, 'no-store');
+    if (!isRange(range)) return json(request, 400, { error: 'range must be hour, day, week, month or year' }, 'no-store');
     const db = supabase(env(), fetchImpl);
     const at = now();
     const { key: column, cache, lagMs, bucket } = RANGES[range];

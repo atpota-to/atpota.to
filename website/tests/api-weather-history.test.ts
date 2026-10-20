@@ -57,8 +57,11 @@ describe('weather history', () => {
     expect(hour.searchParams.get('minute')).toBe('gte.2026-10-20T16:00:00.000Z');
     expect(hour.searchParams.get('order')).toBe('minute.asc');
     expect(new URL(queryUrl(SUPABASE_URL, 'day', NOW)).pathname).toBe('/rest/v1/atmosphere_hour');
+    const week = new URL(queryUrl(SUPABASE_URL, 'week', NOW));
+    expect(week.pathname).toBe('/rest/v1/atmosphere_hour');
+    expect(week.searchParams.get('hour')).toBe('gte.2026-10-13T17:00:00.000Z');
     expect(new URL(queryUrl(SUPABASE_URL, 'month', NOW)).searchParams.get('day')).toBe('gte.2026-09-20T17:00:00.000Z');
-    expect(Object.keys(RANGES)).toEqual(['hour', 'day', 'month', 'year']);
+    expect(Object.keys(RANGES)).toEqual(['hour', 'day', 'week', 'month', 'year']);
   });
 
   it('reads rows, including sums that arrive as strings, and refuses odd ones', () => {

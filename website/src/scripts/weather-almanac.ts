@@ -231,12 +231,6 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
     setText(tile, '[data-a-total]', bigNumber(t.creates));
     const share = t.creates > 0 ? (t.elsewhere / t.creates) * 100 : 0;
     setText(tile, '[data-a-total-note]', t.creates > 0 ? `new records, ${share < 1 ? share.toFixed(2) : share.toFixed(1)}% from other apps` : 'new records');
-    const heardAll = t.seconds >= (nowMs - Date.parse(t.start)) / 1000 - 300;
-    setText(
-      tile,
-      '[data-a-today-note]',
-      `the high and low are whole minutes, by new records a second. today started at midnight where you are${heardAll ? '' : `; the station has heard ${roughly(t.seconds * 1000)} of it`}.`,
-    );
   }
   tile.dataset.state = 'ready';
 }

@@ -52,17 +52,15 @@
                 <!-- clouds that come with the diversity index (src/scripts/weather-sky.ts) -->
                 <div class="weather-sky" aria-hidden="true" data-weather-sky></div>
                 <div class="weather-hero__words">
-                    <p class="eyebrow weather-hero__eyebrow">live from the firehose</p>
                     <h1 class="weather-hero__title" id="weather-title">the atmosphere weather report</h1>
                     <p class="weather-hero__lede">how the whole network is doing right now: how busy bluesky is, how much of the sky belongs to other apps, and who they are.</p>
                 </div>
                 <div class="weather-hero__now">
                 <!-- @svg weather-sun.svg class="weather-hero__sun weather-sun" -->
                     <div class="weather-hero__reading">
-                        <p class="weather-hero__big"><span data-r-records>&ndash;</span> <span class="weather-hero__unit">new records a second</span></p>
+                        <p class="weather-hero__big"><span data-r-records>&ndash;</span> <span class="weather-hero__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
-                        <p class="weather-hero__when" data-r-when></p>
-                        <!-- new records a second over the station's 60 seconds; the number above says the same in words -->
+                        <!-- new records a second over the station's 60 seconds, when it's live; the number above says it in words -->
                         <div class="weather-spark" data-r-spark aria-hidden="true" hidden></div>
                     </div>
                 </div>
@@ -79,7 +77,6 @@
                     <div><dt>today&#39;s low</dt><dd><strong data-a-low>&ndash;</strong> <span data-a-low-at></span></dd></div>
                     <div><dt>so far</dt><dd><strong data-a-total>&ndash;</strong> <span data-a-total-note>new records</span></dd></div>
                 </dl>
-                <p class="weather-tile__note" data-a-today-note>the high and low are whole minutes, by new records a second. today started at midnight where you are.</p>
             </section>
 
             <section class="tile weather-tile weather-new" aria-labelledby="weather-new-title" data-a-new data-state="loading">
@@ -89,7 +86,6 @@
                 </div>
                 <p class="weather-new__lede" data-a-new-lede>listening for new arrivals…</p>
                 <ul class="weather-new__list" role="list" data-a-new-list></ul>
-                <p class="weather-tile__note">apps outside bluesky the station heard for the first time in the last 24 hours. an app that only writes now and then can look new too.</p>
             </section>
 
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
@@ -125,12 +121,13 @@
                 <div class="weather-tile__head">
                     <h2 class="eyebrow" id="weather-trends-title">trends</h2>
                     <div class="weather-range" role="group" aria-label="time range">
-                        <button type="button" class="weather-range__btn" data-range="hour" aria-pressed="false">last hour</button>
-                        <button type="button" class="weather-range__btn" data-range="day" aria-pressed="true">24 hours</button>
-                        <button type="button" class="weather-range__btn" data-range="month" aria-pressed="false">30 days</button>
-                        <button type="button" class="weather-range__btn" data-range="year" aria-pressed="false">12 months</button>
+                        <button type="button" class="weather-range__btn" data-range="hour" aria-pressed="false" aria-label="last hour">1h</button>
+                        <button type="button" class="weather-range__btn" data-range="day" aria-pressed="true" aria-label="last 24 hours">1d</button>
+                        <button type="button" class="weather-range__btn" data-range="week" aria-pressed="false" aria-label="last 7 days">1w</button>
+                        <button type="button" class="weather-range__btn" data-range="month" aria-pressed="false" aria-label="last 30 days">30d</button>
                     </div>
                 </div>
+                <!-- loading and errors show here; once the charts are drawn it's only read out, for screen readers -->
                 <p class="weather-trends__summary" data-t-summary aria-live="polite">digging through the records…</p>
                 <div class="weather-trends__charts">
                     <figure class="weather-chart-card">
@@ -151,16 +148,6 @@
                     <ol class="weather-bars weather-bars--changes" role="list" data-t-apps></ol>
                     <p class="weather-tile__note" data-t-apps-note></p>
                 </div>
-                <details class="weather-trends__table">
-                    <summary>show as a table</summary>
-                    <div class="weather-trends__scroll">
-                        <table>
-                            <thead><tr><th scope="col">when</th><th scope="col">new records a second</th><th scope="col">bluesky posts a second</th><th scope="col">diversity index</th></tr></thead>
-                            <tbody data-t-rows></tbody>
-                        </table>
-                    </div>
-                </details>
-                <p class="weather-tile__note">from the weather station&#39;s minute-by-minute records. a gap in a line is time the station wasn&#39;t listening.</p>
             </section>
 
             <section class="tile weather-tile weather-apps" aria-labelledby="weather-apps-title">
@@ -170,7 +157,6 @@
                 </div>
                 <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
                 <ol class="weather-bars" role="list" data-r-apps></ol>
-                <p class="weather-tile__note">apps are named after their lexicons: <code>sh.tangled.*</code> is tangled.sh. busiest first, records a second.</p>
             </section>
 
             <section class="tile weather-tile weather-bsky" aria-labelledby="weather-bsky-title">
@@ -196,11 +182,13 @@
                     <span data-a-heat-max>&ndash;</span>
                     <span class="weather-heat__legend-empty"><i class="weather-heat__cell--empty"></i> not heard yet</span>
                 </div>
-                <p class="weather-tile__note">new records a second, every app, for each hour of the week in your time zone, over the last 8 weeks. the outlined square is now.</p>
             </section>
 
             <section class="tile weather-tile weather-wire" aria-labelledby="weather-wire-title">
-                <h2 class="eyebrow" id="weather-wire-title">everything on the wire</h2>
+                <div class="weather-tile__head">
+                    <h2 class="eyebrow" id="weather-wire-title">everything on the wire</h2>
+                    <p class="weather-tile__aside">a second</p>
+                </div>
                 <dl class="weather-stats weather-stats--wire">
                     <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd></div>
                     <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd></div>
@@ -208,7 +196,6 @@
                     <div><dt>identity changes</dt><dd data-r-event="identity">&ndash;</dd></div>
                     <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd></div>
                 </dl>
-                <p class="weather-tile__note">a second. identity changes are mostly new handles; account changes are accounts being switched on, off or moved.</p>
             </section>
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">

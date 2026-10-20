@@ -104,9 +104,8 @@ describe('the atmosphere weather report', () => {
 describe('live from the weather station', () => {
   const series = Array.from({ length: 60 }, (_, i) => (i === 30 ? null : { t: 1792512960 + i, creates: 440, bluesky: 438, elsewhere: 2, posts: 40 + (i % 5) }));
 
-  it('says the reading is the last 60 seconds, with a sparkline of them', () => {
+  it('draws a sparkline of the last 60 seconds', () => {
     renderReport(report, { ...READING, source: 'station', seconds: 60, series });
-    expect(text('[data-r-when]')).toBe('the last 60 seconds, live. updates every few seconds.');
     const spark = report.querySelector<HTMLElement>('[data-r-spark]')!;
     expect(spark.hidden).toBe(false);
     // the missing second breaks the line in two
@@ -116,7 +115,6 @@ describe('live from the weather station', () => {
   it('a sampled reading has no sparkline', () => {
     renderReport(report, { ...READING, source: 'sample' });
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true);
-    expect(text('[data-r-when]')).toMatch(/^read at .*, from 5 seconds of the firehose\. next reading in about a minute\.$/);
   });
 });
 
@@ -143,15 +141,27 @@ describe('trends', () => {
     expect(trendSummary({ ...HISTORY, points: [], total: point('x', 0) })).toBe('no readings yet for the last hour. the station fills this in as it goes.');
   });
 
-  it('draws both charts from the start of the range, and lists every point in the table', () => {
+  it('draws both charts from the start of the range, the summary only for screen readers', () => {
     const section = report.querySelector<HTMLElement>('[data-r-trends]')!;
     renderTrends(section, HISTORY, NOW);
     expect(section.dataset.state).toBe('ready');
     const records = section.querySelector('[data-t-chart="records"]')!;
     expect(records.querySelector('svg')!.getAttribute('aria-label')).toMatch(/^new records a second/);
     expect(records.querySelectorAll('.weather-chart__line')).toHaveLength(1);
-    expect(section.querySelectorAll('[data-t-rows] tr')).toHaveLength(3);
-    expect(section.querySelector('[data-t-rows] tr td')!.textContent).toBe('440'); // newest first
+    const summary = section.querySelector('[data-t-summary]')!;
+    expect(summary.textContent).toBe(trendSummary(HISTORY));
+    expect(summary.classList.contains('visually-hidden')).toBe(true);
+  });
+
+  it('offers the last hour, day, week and 30 days', () => {
+    const buttons = [...report.querySelectorAll<HTMLButtonElement>('[data-range]')];
+    expect(buttons.map((b) => [b.dataset.range, b.textContent])).toEqual([
+      ['hour', '1h'],
+      ['day', '1d'],
+      ['week', '1w'],
+      ['month', '30d'],
+    ]);
+    expect(buttons.every((b) => b.getAttribute('aria-label')?.startsWith('last '))).toBe(true);
   });
 
   it('lists the busiest apps over the range, when there are any', () => {
