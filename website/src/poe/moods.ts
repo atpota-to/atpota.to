@@ -1,7 +1,7 @@
 /**
  * Poe's moods (SPEC 4.6) and the potato face each one shows.
  *
- *   resting  -> normal     corner potato, nothing going on
+ *   resting  -> normal     corner potato, nothing going on (blinks and waves now and then, idle.ts)
  *   curious  -> kawaii     hover/focus on the corner potato; the open panel while idle
  *   nudge    -> wink       while the nudge bubble shows
  *   digging  -> sleepy     a turn is in flight

@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTE_CODES } from '../src/poe/storage.js';
 import { POE_BLUESKY_URL, noteCopy, waitPhrase } from '../src/poe/copy.js';
 import { mountPoe, unmountPoe } from '../src/poe/index.js';
+import { BLINK_MS, WAVE_MS, idleGap } from '../src/poe/idle.js';
 import { faceUrl } from '../src/poe/moods.js';
+import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../src/scripts/mascot.js';
 import { PHONE_QUERY, type PoeWidget } from '../src/poe/ui.js';
 import { resetStoresForTests } from '../src/poe/storage.js';
 
@@ -1004,6 +1006,109 @@ describe('moods', () => {
     expect(img.getAttribute('src')).toBe(faceUrl('curious'));
     potato.blur();
     expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+  });
+});
+
+describe('idle life', () => {
+  // Math.random at 0.99: the longest gap between beats, single blinks, no glances.
+  const GAP = idleGap(() => 0.99);
+
+  function quietMount() {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    delete document.body.dataset.poeNudge;
+    mount();
+    return { potato: $<HTMLButtonElement>('.poe-potato'), img: $<HTMLImageElement>('.poe-potato__img') };
+  }
+
+  /** Every value the corner face and the waving flag take from here on. */
+  function watch(potato: HTMLElement, img: HTMLImageElement) {
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(img, { attributes: true, attributeOldValue: true, attributeFilter: ['src'] });
+    observer.observe(potato, { attributes: true, attributeOldValue: true, attributeFilter: ['data-waving'] });
+    return () => {
+      const records = observer.takeRecords();
+      observer.disconnect();
+      return {
+        faces: records.filter((r) => r.attributeName === 'src').map((r) => r.oldValue ?? '').concat(img.getAttribute('src') ?? ''),
+        waved: records.some((r) => r.attributeName === 'data-waving'),
+      };
+    };
+  }
+
+  it('blinks while resting, waves early on, and settles back each time', () => {
+    const { potato, img } = quietMount();
+    expect(potato.querySelector('.poe-potato__arm')!.getAttribute('src')).toBe(MASCOT_ARM_URL);
+    vi.advanceTimersByTime(GAP - 1);
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+    vi.advanceTimersByTime(1);
+    expect(img.getAttribute('src')).toBe(MASCOT_URLS.sleepy);
+    vi.advanceTimersByTime(BLINK_MS);
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+
+    // Two gaps of rest is past the first wave.
+    vi.advanceTimersByTime(GAP - BLINK_MS);
+    expect(img.getAttribute('src')).toBe(MASCOT_WAVE_URL);
+    expect(potato.dataset.waving).toBe('true');
+    vi.advanceTimersByTime(WAVE_MS);
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+    expect(potato.dataset.waving).toBeUndefined();
+  });
+
+  it('hover cuts a beat short and the beats carry on afterwards', () => {
+    const { potato, img } = quietMount();
+    vi.advanceTimersByTime(GAP);
+    expect(img.getAttribute('src')).toBe(MASCOT_URLS.sleepy);
+    const enter = new Event('pointerenter');
+    Object.defineProperty(enter, 'pointerType', { value: 'mouse' });
+    potato.dispatchEvent(enter);
+    expect(img.getAttribute('src')).toBe(faceUrl('curious'));
+    potato.dispatchEvent(new Event('pointerleave'));
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+    vi.advanceTimersByTime(BLINK_MS);
+    expect(img.getAttribute('src')).toBe(faceUrl('resting'));
+    vi.advanceTimersByTime(GAP - BLINK_MS);
+    expect(img.getAttribute('src')).toBe(MASCOT_WAVE_URL);
+  });
+
+  it('holds still while the panel is open, and never waves again once Poe was opened', () => {
+    const { potato, img } = quietMount();
+    widget.open({ via: 'keyboard' });
+    let seen = watch(potato, img);
+    vi.advanceTimersByTime(60_000);
+    let result = seen();
+    expect(new Set(result.faces)).toEqual(new Set([faceUrl('resting')]));
+    expect(result.waved).toBe(false);
+
+    widget.close();
+    seen = watch(potato, img);
+    vi.advanceTimersByTime(120_000);
+    result = seen();
+    expect(result.faces).toContain(MASCOT_URLS.sleepy);
+    expect(result.faces).not.toContain(MASCOT_WAVE_URL);
+    expect(result.waved).toBe(false);
+  });
+
+  it('stays still under reduced motion and in a hidden tab', () => {
+    const base = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ ...base(query), matches: query === '(prefers-reduced-motion: reduce)' })) as typeof window.matchMedia;
+    let { potato, img } = quietMount();
+    let seen = watch(potato, img);
+    vi.advanceTimersByTime(120_000);
+    let result = seen();
+    expect(new Set(result.faces)).toEqual(new Set([faceUrl('resting')]));
+    expect(result.waved).toBe(false);
+    unmountPoe();
+
+    stubMatchMedia(false);
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    ({ potato, img } = quietMount());
+    seen = watch(potato, img);
+    vi.advanceTimersByTime(120_000);
+    result = seen();
+    expect(new Set(result.faces)).toEqual(new Set([faceUrl('resting')]));
+    expect(result.waved).toBe(false);
+    hidden.mockRestore();
   });
 });
 

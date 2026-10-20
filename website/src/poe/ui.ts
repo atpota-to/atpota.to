@@ -7,9 +7,11 @@
  * (textContent).
  */
 
+import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../scripts/mascot';
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
 import { CHIPS_DEFAULT, CHIPS_GUIDE, COPY, contextLabel, noteCopy } from './copy';
 import { icon } from './icons';
+import { BLINK_GAP_MS, BLINK_MS, GLANCE_MS, WAVE_MS, idleGap, nextBeat, startIdle, type IdleBeat } from './idle';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
 import { renderAnswer, splitTrailingFace } from './render';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
@@ -121,6 +123,10 @@ export class PoeWidget {
   private hoverPointer = false;
   private hoverFocus = false;
   private turnMood: Mood | null = null;
+  /** The face an idle beat is showing on the resting corner potato (idle.ts). */
+  private idleSrc: string | null = null;
+  private idlePlan = startIdle();
+  private everOpened = false;
   private modal = false;
   private rendered = false;
   private transcript: TranscriptEntry[] = [];
@@ -145,6 +151,8 @@ export class PoeWidget {
   private hideTimer: number | undefined;
   private pillTimer: number | undefined;
   private announceTimer: number | undefined;
+  private idleTimer: number | undefined;
+  private idleFrameTimer: number | undefined;
 
   private readonly cleanups: Array<() => void> = [];
   private phoneQuery: MediaQueryList | null = null;
@@ -179,7 +187,10 @@ export class PoeWidget {
     const potatoLabel = el(d, 'span', { class: 'poe-potato__label', 'aria-hidden': 'true' }, COPY.askPoe);
     this.potatoImg = el(d, 'img', { class: 'poe-potato__img', alt: '', width: '136', height: '111', draggable: 'false', decoding: 'async' });
     this.potatoImg.src = faceUrl('resting');
-    this.potato.append(potatoLabel, this.potatoImg);
+    // The leaf arm on its own, behind the body; it shows only while Poe waves.
+    const potatoArm = el(d, 'img', { class: 'poe-potato__arm', alt: '', width: '136', height: '111', draggable: 'false', decoding: 'async' });
+    potatoArm.src = MASCOT_ARM_URL;
+    this.potato.append(potatoLabel, this.potatoImg, potatoArm);
 
     // highlight-to-ask pill
     this.pill = el(d, 'button', { class: 'poe-pill', type: 'button' });
@@ -393,11 +404,12 @@ export class PoeWidget {
     }
 
     this.scheduleNudge();
+    this.scheduleIdle();
   }
 
   destroy(): void {
     for (const fn of this.cleanups.splice(0)) fn();
-    for (const t of [this.moodTimer, this.nudgeTimer, this.nudgeHideTimer, this.hideTimer, this.pillTimer, this.announceTimer]) {
+    for (const t of [this.moodTimer, this.nudgeTimer, this.nudgeHideTimer, this.hideTimer, this.pillTimer, this.announceTimer, this.idleTimer, this.idleFrameTimer]) {
       if (t !== undefined) this.win.clearTimeout(t);
     }
     this.turnController?.abort();
@@ -450,6 +462,7 @@ export class PoeWidget {
     this.opener = opener;
 
     this.isOpen = true;
+    this.everOpened = true;
     this.nudgeDone = true;
     this.win.clearTimeout(this.nudgeTimer);
     this.hideNudge();
@@ -624,11 +637,59 @@ export class PoeWidget {
     const state = this.moodState();
     const corner = cornerMood(state);
     const perched = perchedMood(state);
+    if (corner !== 'resting' || this.isOpen) this.stopIdleBeat();
     this.root.dataset.mood = this.isOpen ? perched : corner;
-    const cornerSrc = faceUrl(corner);
+    const cornerSrc = this.idleSrc ?? faceUrl(corner);
     const perchedSrc = faceUrl(perched);
     if (this.potatoImg.getAttribute('src') !== cornerSrc) this.potatoImg.src = cornerSrc;
     if (this.perchedImg.getAttribute('src') !== perchedSrc) this.perchedImg.src = perchedSrc;
+  }
+
+  /* ----------------------------------------------------------- idle life */
+
+  private scheduleIdle(): void {
+    const gap = idleGap();
+    this.idleTimer = this.win.setTimeout(() => {
+      // The next beat is booked before this one plays, so an interrupted beat never stops the loop.
+      this.scheduleIdle();
+      if (this.canIdle()) this.playBeat(nextBeat(this.idlePlan, gap, !this.everOpened));
+    }, gap);
+  }
+
+  private canIdle(): boolean {
+    return !this.isOpen && cornerMood(this.moodState()) === 'resting' && !this.reducedMotion() && this.doc.visibilityState !== 'hidden';
+  }
+
+  private playBeat(beat: IdleBeat): void {
+    const shut = MASCOT_URLS.sleepy;
+    const frames: Array<[src: string | null, ms: number]> =
+      beat.kind === 'wave'
+        ? [[MASCOT_WAVE_URL, WAVE_MS]]
+        : beat.kind === 'glance'
+          ? [[MASCOT_URLS[beat.face], GLANCE_MS]]
+          : beat.times === 2
+            ? [[shut, BLINK_MS], [null, BLINK_GAP_MS], [shut, BLINK_MS]]
+            : [[shut, BLINK_MS]];
+    if (beat.kind === 'wave') this.potato.dataset.waving = 'true';
+    const step = (i: number) => {
+      const frame = frames[i];
+      if (!frame) {
+        this.stopIdleBeat();
+        this.updateMoods();
+        return;
+      }
+      this.idleSrc = frame[0];
+      this.updateMoods();
+      this.idleFrameTimer = this.win.setTimeout(() => step(i + 1), frame[1]);
+    };
+    step(0);
+  }
+
+  /** Back to the plain resting face; the caller updates the image. */
+  private stopIdleBeat(): void {
+    this.win.clearTimeout(this.idleFrameTimer);
+    this.idleSrc = null;
+    delete this.potato.dataset.waving;
   }
 
   /* ---------------------------------------------------------- transcript */
