@@ -23,7 +23,8 @@ edits it. Secrets and live state never go into git.
   mentions -> releases/<sha>/mentions
   atmosphere -> releases/<sha>/atmosphere
   deploy.sh -> releases/<sha>/droplet/deploy.sh
-  logs/                           test output from each deploy
+  ci-deploy.sh -> releases/<sha>/droplet/ci-deploy.sh   what GitHub's deploy key is pinned to
+  logs/                           deploys.log, plus test output from each deploy
 
 /root/atpotato-mentions/          data: .env, mentions.db, gates.json, KILL, backups/
 /root/atpotato-weather/           data: .env, state.json
@@ -37,31 +38,54 @@ database, `gates.json`, `state.json`) resolve there. `ExecStart` points into
 
 ## Deploying
 
-Push to `main`, then on the droplet:
+**Merge to `main`. That's it.** The workflow `.github/workflows/deploy-droplet.yml`
+runs on every push to `main` that touches `mentions/`, `atmosphere/` or `droplet/`.
+It asks the droplet to deploy both services at that commit, and the droplet does
+this for each one:
+
+1. Fetches the commit from GitHub and unpacks it into `releases/<sha>/`.
+2. Skips the service if its folder hasn't changed since the release it's running.
+3. Runs the service's tests there. If they fail, nothing changes and the run goes
+   red.
+4. For Poe, waits until no reply is in flight (`npm run in-flight`). If Poe is still
+   busy after 10 minutes, it gives up without restarting and the run goes red; run
+   it again later.
+5. Switches the link, installs the unit file if it changed, and restarts that one
+   unit.
+6. Checks health (Poe's `/health`, the station's `/healthz`) for up to 90 s. If
+   either is unhealthy, it switches back to the previous release by itself, and the
+   run goes red.
+
+The output shows up in the Actions tab, and GitHub emails you about failures.
+Deploys run one at a time.
+
+**Rolling back or redeploying:** go to Actions → Deploy droplet → Run workflow,
+choose the service, and give it an older commit on `main`. Or, on the droplet:
 
 ```bash
-/root/atpota-live/deploy.sh atmosphere      # weather station: safe any time, a restart replays from Jetstream
-/root/atpota-live/deploy.sh mentions        # Poe: check nothing is in flight first
+/root/atpota-live/deploy.sh mentions <sha>          # any commit or branch on GitHub
+FORCE=1 /root/atpota-live/deploy.sh atmosphere      # restart even if nothing changed
+cat /root/atpota-live/logs/deploys.log              # every deploy, one line each
 ```
 
-The script:
+### The deploy key
 
-1. fetches
-2. unpacks the commit into `releases/<sha>/`
-3. runs that service's tests there; if they fail, nothing changes
-4. installs the unit file if it changed
-5. switches the link
-6. restarts the one unit
-7. prunes old releases, keeping the newest 5 and any a link points at
+The repo secret `DROPLET_DEPLOY_KEY` holds the private half of an ed25519 key. The
+public half is in `/root/.ssh/authorized_keys` on the droplet:
 
-It prints what changed in that service since the release it replaces.
+```
+restrict,command="/root/atpota-live/ci-deploy.sh" ssh-ed25519 AAAA… github-actions-deploy atpota-to/atpota.to
+```
 
-**Rolling back** means deploying an older commit:
-`deploy.sh mentions <sha>`. Any branch or commit on GitHub works the same way,
-for trying something before it merges.
+`restrict` rules out a shell, port forwarding and a pty. `command=` means that
+whatever the client asks to run, [`ci-deploy.sh`](ci-deploy.sh) runs instead.
+That script accepts only `<mentions|atmosphere> [<full sha on main>]` and calls
+`deploy.sh`, which fetches the code from GitHub itself. So the key can redeploy
+what's already on `main`, and nothing more. The workflow also pins the droplet's
+SSH host key.
 
-`git -C /root/atpota-live/repo.git log -1 $(cat /root/atpota-live/mentions/../REVISION)`
-shows exactly what's live.
+To replace the key: generate a new pair, swap the line in `authorized_keys`, and
+update the secret.
 
 ## What never goes in git
 

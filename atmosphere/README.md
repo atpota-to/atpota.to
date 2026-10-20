@@ -110,14 +110,16 @@ deletes app rows older than 30 days.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 43 tests, about a second, no network
-/root/atpota-live/deploy.sh atmosphere           # deploy main: tests, switch, restart
+npm test                                         # node:test, 44 tests, about a second, no network
+/root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
 journalctl -u atpotato-weather -o cat | grep 'minute written' | tail
 ```
 
-A restart costs nothing, because it replays from Jetstream. The unit is
+A restart costs nothing. On start the station replays from Jetstream: the minutes
+after the last one written, and at least the last 65 s, so `/v1/now` is complete
+again within seconds. The unit is
 [`atpotato-weather.service`](atpotato-weather.service), capped at MemoryMax=256M
 and CPUQuota=50%. Measured on 2026-10-20: ~7% of one core and 30–70 MB.
 

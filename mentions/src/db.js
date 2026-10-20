@@ -381,6 +381,22 @@ export function setStatus(id, status, extra = {}) {
   db.prepare(`UPDATE queue SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 }
 
+/**
+ * Replies on their way: queue rows that haven't settled (matched, sent to the agent,
+ * replaying after a nap, or drafted and not yet posted), touched in the last
+ * `freshMin` minutes. Older ones belong to the reconciliation sweep and don't count,
+ * so one stuck row can't hold up a deploy forever. droplet/deploy.sh waits for this
+ * to be empty before restarting the service (`npm run in-flight`).
+ */
+export function openWork(freshMin = 30, now = Date.now()) {
+  const since = new Date(now - freshMin * 60_000).toISOString();
+  return db.prepare(`
+    SELECT status, COUNT(*) AS n FROM queue
+     WHERE (status IN ('matched', 'sent_to_agent', 'replaying') OR (status = 'drafted' AND settled_at IS NULL))
+       AND MAX(matched_at, COALESCE(sent_at, ''), COALESCE(drafted_at, '')) >= ?
+     GROUP BY status ORDER BY status`).all(since).map((r) => ({ status: r.status, n: Number(r.n) }));
+}
+
 export function getQueueRow(id) {
   return db.prepare(`SELECT * FROM queue WHERE id = ?`).get(id);
 }

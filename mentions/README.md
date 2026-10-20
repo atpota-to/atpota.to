@@ -28,13 +28,9 @@ The droplet runs it from `/root/atpota-live/mentions`, a release of `main` that
 `src`, `test`, `scripts` and `package.json` there are links to the live release, so
 the commands below still work from that folder.
 
-To deploy: push to `main`, then on the droplet, after checking nothing is in flight:
-
-```bash
-/root/atpota-live/deploy.sh mentions
-```
-
-That runs the tests on the new release before it switches anything. See
+To deploy, merge to `main`. A GitHub Action has the droplet run the tests on the new
+release, wait until no reply is in flight (`npm run in-flight`), restart, and check
+`/health`. If the service isn't healthy, it rolls back by itself. See
 [`droplet/README.md`](../droplet/README.md).
 
 ## Running it
