@@ -1,5 +1,5 @@
 /**
- * The flower patch on the home page: a grid of plots, seen from above. The patches are
+ * The flower patch on a garden page: a grid of plots, seen from above. The patches are
  * seasonal, each a record in atpotato's repo (scripts/open-patches.ts writes them):
  *
  *   to.atpota.garden.patch   { name: "autumn 2026", season, cols, rows, opensAt, closesAt, createdAt }
@@ -225,13 +225,13 @@ export interface GardenOptions {
   root?: HTMLElement;
   /** Whose garden: a DID or handle. Defaults to atpotato's community garden. */
   owner?: string;
-  /** Where signing in comes back to (a path safeReturnTo accepts). Defaults to the home page. */
+  /** Where signing in comes back to (a path safeReturnTo accepts). Defaults to the community garden's page. */
   returnTo?: string;
   /** Defaults to createAuth(win); null means planting isn't offered on this host. */
   auth?: Auth | null;
   /**
    * Opens a sign-in dialog the page already has, running `beforeLeave` if the reader goes
-   * to sign in. Without it the garden mounts its own (the home page).
+   * to sign in. Without it the garden mounts its own.
    */
   openSignIn?: (lede: string, beforeLeave: () => void) => void;
   /** Called whenever what the garden shows changes (loaded, a tab, planting, digging). */
@@ -262,7 +262,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   if (!tile || tile.dataset.gardenBound === 'true') return null;
   tile.dataset.gardenBound = 'true';
   const box: HTMLElement = tile;
-  const returnTo = opts.returnTo ?? '/';
+  const returnTo = opts.returnTo ?? '/garden/atpota.to';
   const nameEl = tile.querySelector<HTMLElement>('[data-garden-name]');
   const noteEl = tile.querySelector<HTMLElement>('[data-garden-note]');
   const plots = tile.querySelector<HTMLElement>('[data-garden-plots]');

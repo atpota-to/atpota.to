@@ -19,8 +19,8 @@
  * dates keep themselves current.
  *
  * Also here: the "say hi" tile's copy button, the hero Poe (pet.ts), atmospheric
- * conditions (weather.ts) and the flower patch (garden.ts, loaded when it comes near the
- * screen, or straight away when the reader is back from signing in to plant).
+ * conditions (weather.ts) and the way into the community garden (garden-teaser.ts,
+ * loaded when it comes near the screen).
  */
 
 import { initPet } from './pet';
@@ -582,19 +582,11 @@ export function initCopyEmail(root: ParentNode = document): void {
   });
 }
 
-/** The flower patch's script, once the tile is close (it brings the sign-in code with it). */
-export function initGardenWhenNear(root: ParentNode = document): void {
-  const tile = root.querySelector<HTMLElement>('[data-garden]');
+/** The garden tile (garden-teaser.ts) fills in its count and map once it's close. */
+export function initGardenTeaserWhenNear(root: ParentNode = document): void {
+  const tile = root.querySelector<HTMLElement>('[data-garden-teaser]');
   if (!tile) return;
-  const run = () => void import('./garden').then((m) => m.initGarden()).catch(() => undefined);
-  let pending = false;
-  try {
-    pending = (window.sessionStorage.getItem('blog:pending') ?? '').includes('"plant"');
-  } catch {
-    // storage blocked: nothing can be pending
-  }
-  if (pending) run();
-  else whenNear(tile, run);
+  whenNear(tile, () => void import('./garden-teaser').then((m) => m.initGardenTeaser(tile)).catch(() => undefined));
 }
 
 export function init(): void {
@@ -602,5 +594,5 @@ export function init(): void {
   initCopyEmail();
   initPet();
   initWeather();
-  initGardenWhenNear();
+  initGardenTeaserWhenNear();
 }
