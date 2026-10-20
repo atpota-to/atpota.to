@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SCOPE, type Session } from '../src/blog/auth.js';
+import { grants } from './lexicon-helpers.js';
 import { putRecord, RepoError } from '../src/blog/repo.js';
 import { gardenRecord, OWN_PATCH_RKEY, PATCH_NSID, saveGarden } from '../src/scripts/garden-api.js';
 
@@ -52,6 +53,7 @@ describe('your own garden', () => {
   });
 
   it('signing in asks to keep a garden: create, update and delete', () => {
-    expect(SCOPE.split(' ')).toContain(`repo:${PATCH_NSID}?action=create&action=update&action=delete`);
+    expect(SCOPE.split(' ')).toContain('include:to.atpota.authFull');
+    expect(grants(PATCH_NSID)).toEqual(['create', 'update', 'delete']);
   });
 });

@@ -4,8 +4,9 @@
  *
  *   sessionStorage "blog:pending"           the action a reader started before signing in
  *                                           ({ kind, returnTo, at }), done once they're back;
- *                                           "plant" is the home page's flower patch, and
- *                                           "account" the header's plain sign-in
+ *                                           "plant" is the home page's flower patch,
+ *                                           "account" the header's plain sign-in, and "pet"
+ *                                           the home page's Poe (pet.ts)
  *   sessionStorage "blog:draft:<document>"  the comment being written, so the sign-in round
  *                                           trip doesn't lose it
  *   sessionStorage "blog:local:<document>"  the reader's own comments added or deleted in
@@ -33,11 +34,12 @@ const MAX_LOCAL = 20;
 /**
  * "poe": signing in so Poe can remember the reader (from the Poe panel, or /blog#sign-in).
  * "account": the header's sign-in button (src/scripts/account.ts), with nothing to finish after.
+ * "pet": the home page's pet count (src/scripts/pet.ts), which finishes it itself.
  */
-export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe' | 'plant' | 'tend' | 'account';
-/** The intents the blog itself opens the dialog for (planting and tending belong to the flower patch). */
-export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend' | 'account'>;
-const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'poe', 'plant', 'tend', 'account']);
+export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'poe' | 'plant' | 'tend' | 'account' | 'pet';
+/** The intents the blog itself opens the dialog for (planting and tending belong to the flower patch, petting to the home page). */
+export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend' | 'account' | 'pet'>;
+const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'poe', 'plant', 'tend', 'account', 'pet']);
 
 export interface Pending {
   kind: IntentKind;
