@@ -92,13 +92,34 @@ export function storeMemory(did, content) {
   return { ok: true, needsPublish: true };
 }
 
+// One publish at a time per person. Each reads the latest stored version when
+// it starts, so the last one to run always matches what is stored. Without
+// this, a publish waiting on the network could land after a newer version's,
+// most visibly putting notes back just after someone asked to be forgotten
+// (the settings page on atpota.to hands over their emptied notes), and then
+// mark that newer version settled so the sweep would never fix it.
+const publishing = new Map();
+
 /**
  * Bring the repo into step with what is stored for one person. `published_at`
  * records that the repo is settled for this version, with `publish_note`
  * saying why when nothing was published; only an error leaves it unsettled
  * for the sweep to retry.
  */
-export async function publishMemory(did, { api, didResolves }) {
+export function publishMemory(did, deps) {
+  return oneAtATime(did, () => publishLatest(did, deps));
+}
+
+function oneAtATime(did, work) {
+  const run = (publishing.get(did) ?? Promise.resolve()).then(work);
+  publishing.set(did, run);
+  run.finally(() => {
+    if (publishing.get(did) === run) publishing.delete(did);
+  }).catch(() => {});
+  return run;
+}
+
+async function publishLatest(did, { api, didResolves }) {
   try {
     if (db.isDenied(did)) {
       if (RKEY.test(did)) await deleteQuietly(api, MEMORY_COLLECTION, did);
@@ -140,6 +161,11 @@ export async function publishMemory(did, { api, didResolves }) {
 export async function forgetMemory(did, { api }) {
   db.deleteMemoryDoc(did);
   if (!RKEY.test(did)) return;
+  // Behind any publish already under way, so it cannot land after the delete.
+  return oneAtATime(did, () => deleteForgotten(did, api));
+}
+
+async function deleteForgotten(did, api) {
   try {
     await deleteQuietly(api, MEMORY_COLLECTION, did);
     logger.warn('forget-me: public memory record deleted', { did });
