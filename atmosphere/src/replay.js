@@ -17,9 +17,10 @@
 // (Jetstream v2's network replay, with an API key; see README.md).
 //
 // Rewriting replaces the minute's row and all its app rows (a recount can drop an app the
-// glitch put there), then re-sums the daily roll-up from --from on. It's safe while the
-// live station runs: the station never goes back to a minute it has written, and --to may
-// not be closer than WRITE_LAG_S to now, so the two never write the same minute.
+// glitch put there), then re-sums the hourly and daily roll-ups from --from on. It's safe
+// while the live station runs: the station never goes back to a minute it has written,
+// and --to may not be closer than WRITE_LAG_S to now, so the two never write the same
+// minute.
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -125,8 +126,9 @@ export function supabaseReplace({ url, key, fetch = globalThis.fetch }) {
       await call('DELETE', `atmosphere_minute_app?minute=eq.${encodeURIComponent(rows.minute.minute)}`, undefined, 'return=minimal');
       if (rows.apps.length) await call('POST', 'atmosphere_minute_app?on_conflict=minute,domain', rows.apps, 'resolution=merge-duplicates,return=minimal');
     },
-    /** Re-sums the daily per-app roll-up from `sinceIso` on. */
+    /** Re-sums the hourly and daily per-app roll-ups from `sinceIso` on (sql/atmosphere_retention.sql). */
     async rollUp(sinceIso) {
+      await call('POST', 'rpc/atmosphere_roll_up_hour_apps', { since: sinceIso });
       await call('POST', 'rpc/atmosphere_roll_up_day_apps', { since: sinceIso });
     },
   };
@@ -183,7 +185,7 @@ async function main(argv) {
   const db = supabaseReplace({ url, key });
   for (const rows of whole) await db.minute(rows);
   await db.rollUp(iso(args.fromSec));
-  console.log(`rewrote ${whole.length} minute(s), and re-summed the daily roll-up from ${iso(args.fromSec)}`);
+  console.log(`rewrote ${whole.length} minute(s), and re-summed the hourly and daily roll-ups from ${iso(args.fromSec)}`);
 }
 
 /** Run as a command (not imported by a test). Real paths: the droplet runs it through a symlink. */
