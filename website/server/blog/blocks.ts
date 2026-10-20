@@ -16,7 +16,7 @@
 import { blobCid, blobUrl } from './atproto.js';
 import { aturiUrl, displayHost, escapeAttr, escapeHtml, httpUrl, safeColor, textWithBreaks } from './html.js';
 import { FootnoteList, renderRichText } from './richtext.js';
-import { blueskySubscribeHtml, emailFormHtml, feedButtonHtml, type EmailSignup } from './subscribe.js';
+import { altLinksHtml, blueskySubscribeHtml, emailFormHtml, feedLinkHtml, type EmailSignup } from './subscribe.js';
 
 const T = 'pub.leaflet.blocks.';
 
@@ -436,19 +436,16 @@ function signupHtml(ctx: BlockContext): string {
     return (
       `<aside class="post-signup">` +
       `<p class="post-signup__title">get the next issue</p>` +
-      `<p class="post-signup__text">by email, or with your bluesky account.</p>` +
       emailFormHtml(ctx.signup, uniqueId('signup', ctx.headingIds)) +
-      `<p class="post-signup__actions">${blueskySubscribeHtml('btn btn--primary btn--sm')} ` +
-      `${feedButtonHtml(ctx.links.feed, ctx.links.feedUrl, ' btn--sm')}</p>` +
+      altLinksHtml([blueskySubscribeHtml('blog-alt__link'), feedLinkHtml(ctx.links.feed, ctx.links.feedUrl)]) +
       `</aside>`
     );
   }
   return (
     `<aside class="post-signup">` +
     `<p class="post-signup__title">get the next issue</p>` +
-    `<p class="post-signup__text">follow poe on bluesky, or add the rss feed to your reader.</p>` +
-    `<p class="post-signup__actions"><a class="btn btn--primary btn--sm" href="${escapeAttr(ctx.links.profile)}">follow on bluesky</a> ` +
-    `${feedButtonHtml(ctx.links.feed, ctx.links.feedUrl, ' btn--sm')}</p>` +
+    `<p class="post-signup__actions"><a class="btn btn--primary btn--sm" href="${escapeAttr(ctx.links.profile)}">follow on bluesky</a></p>` +
+    altLinksHtml([feedLinkHtml(ctx.links.feed, ctx.links.feedUrl)], false) +
     `</aside>`
   );
 }

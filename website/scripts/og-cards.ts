@@ -115,7 +115,7 @@ export async function readCards(load: LoadPage): Promise<CardResult[]> {
       title: text(doc, '/blog', '.blog-hero__title'),
       lede: text(doc, '/blog', '.blog-hero__lede'),
       chip: text(doc, '/blog', '.blog-hero__chip'),
-      handle: handleFrom(doc, '/blog', '.blog-hero__actions a[href^="https://bsky.app/profile/"]'),
+      handle: handleFrom(doc, '/blog', '.blog-hero .blog-alt a[href^="https://bsky.app/profile/"]'),
     };
   });
 

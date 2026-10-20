@@ -65,6 +65,7 @@ import type { KeyValueStore } from '../poe/storage';
 import { burst, cheer } from '../scripts/burst';
 import { el, isBusy, loadMe, mountSignIn, setBusy, SIGNIN_COPY, type Me } from './signin';
 import { forgetReader, rememberReader } from '../scripts/reader';
+import { focusForTyping } from '../scripts/typing-focus';
 
 export { APPVIEW, normalizeHandle, PREPARED_TTL_MS } from './signin';
 /** Matches MAX_COMMENT_DEPTH in server/blog/pages.ts. */
@@ -586,7 +587,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     if (!text) {
       error.textContent = COPY.empty;
       error.hidden = false;
-      area.focus();
+      focusForTyping(area, win);
       return;
     }
     error.hidden = true;
@@ -634,7 +635,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     const reply = el(doc, 'button', { type: 'button', class: 'comment__action', 'aria-expanded': 'false' }, COPY.reply);
     reply.addEventListener('click', () => {
       const open = li.querySelector(':scope > .comment-form--reply');
-      if (open) return (open.querySelector('textarea') as HTMLTextAreaElement | null)?.focus();
+      if (open) return void focusForTyping(open.querySelector('textarea'), win);
       const close = () => {
         f.remove();
         reply.setAttribute('aria-expanded', 'false');
@@ -643,7 +644,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
       const f = composer(li.dataset.comment ?? null, close);
       actions.after(f);
       reply.setAttribute('aria-expanded', 'true');
-      f.querySelector('textarea')?.focus();
+      focusForTyping(f.querySelector('textarea'), win);
     });
     actions.append(reply);
     if (li.dataset.commentAuthor === session.did) {
@@ -717,7 +718,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     else if (kind === 'comment') {
       const area = compose?.querySelector('textarea');
       area?.scrollIntoView?.({ block: 'center' });
-      area?.focus();
+      focusForTyping(area, win);
     }
   }
 

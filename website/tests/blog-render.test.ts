@@ -499,7 +499,7 @@ describe('email subscribe form', () => {
     const first = renderBlock(B('signup'), null, c);
     expect(first).toContain('id="signup"');
     expect(first).toContain('value="https://atpota.to/blog/3doc?subscribed=email#signup"');
-    expect(first).toContain('<button type="button" class="btn btn--primary btn--sm" data-blog-subscribe aria-pressed="false" hidden>');
+    expect(first).toContain('<button type="button" class="blog-alt__link" data-blog-subscribe aria-pressed="false" hidden>');
     expect(renderBlock(B('signup'), null, c)).toContain('id="signup-2"');
     const plain = renderBlock(B('signup'), null, ctx());
     expect(plain).not.toContain('<form');
