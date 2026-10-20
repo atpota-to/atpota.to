@@ -38,7 +38,9 @@ Other rules:
   code conditional in `src/gates/`, never a prompt rule. Read `mentions/README.md`
   before touching the gates or the pipeline.
 - **The counting rules are shared.** `atmosphere/src/atmosphere.js` copies them from
-  `website/server/atmosphere.ts`; change both together.
+  `website/server/atmosphere.ts`; change both together. Poe's `bot/agent/lib/weather.ts`
+  copies the weather words (the conditions and the diversity levels) too, and its
+  tests check them against the website's.
 - **To see what deployed:** check the run in the Actions tab, or
   `/root/atpota-live/logs/deploys.log` on the droplet. `droplet/README.md` has the
   whole layout, rollbacks, and the deploy key.

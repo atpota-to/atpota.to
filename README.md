@@ -40,6 +40,11 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
   out. A successful prompt injection should end as a draft the droplet rejects.
 - **Poe reads the Atmosphere** through [Aturi's MCP server](https://aturi.to/mcp),
   which is public and read-only, plus a few tools of its own in `bot/agent/tools/`.
+- **Poe reads the weather** with `read_weather`, from the same public endpoints
+  `/weather` uses (`/api/atmosphere`, `/api/weather-history`, `/api/weather-almanac`):
+  the last minute, today against usual, or the past week with an outlook. It writes
+  the dispatch's weather section from the week
+  ([`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md)).
 - **The website keeps no database.** The blog, gardens, comments and
   subscriptions are records in people's own repos, read through public
   infrastructure: plc.directory, the Bluesky AppView, Jetstream,
@@ -182,6 +187,7 @@ Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
 
 - [`bot/agent/instructions.md`](bot/agent/instructions.md): who Poe is, its rules, and its voice
 - [`bot/agent/skills/bluesky-reply.md`](bot/agent/skills/bluesky-reply.md): the Bluesky format and sample replies
+- [`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md): the dispatch's weather section and outlook
 - [`bot/agent/instructions/operator-dm.ts`](bot/agent/instructions/operator-dm.ts): private DMs
 
 ### running it

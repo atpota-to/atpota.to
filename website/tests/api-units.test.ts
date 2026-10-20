@@ -378,6 +378,7 @@ describe('tool labels', () => {
     expect(toolLabel('top_mentioned_posts')).toBe('finding the most mentioned posts');
     expect(toolLabel('web_search')).toBe('searching the web');
     expect(toolLabel('read_dispatch')).toBe('reading the dispatch');
+    expect(toolLabel('read_weather')).toBe('checking the weather station');
     // A signed-in visitor watches Poe keep its notes; the slot prefix doesn't matter.
     expect(toolLabel('person__save_memory')).toBe('making a note');
     expect(toolLabel('life__save_memory')).toBe('making a note');
