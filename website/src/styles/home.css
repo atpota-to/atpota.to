@@ -514,12 +514,10 @@ html[data-theme="dark"] .home-sun__sprout--3 {
 
 .home-project--flushes {
   background: var(--card);
-  --home-icon-bg: var(--butter);
 }
 
 .home-project--turtlemeat {
   background: var(--card);
-  --home-icon-bg: var(--leaf-tint);
 }
 
 .home-project__top {
@@ -534,14 +532,18 @@ html[data-theme="dark"] .home-sun__sprout--3 {
   justify-content: center;
   width: 54px;
   height: 54px;
+  overflow: hidden;
   border-radius: 18px;
   background: var(--home-icon-bg);
   color: var(--ink);
 }
 
-.home-project__icon svg {
-  width: 30px;
-  height: 30px;
+/* each project's own logo, full-bleed: the art carries its own background */
+.home-project__icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .home-project__arrow {
@@ -1496,11 +1498,6 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
     width: 44px;
     height: 44px;
     border-radius: 15px;
-  }
-
-  .home-project__icon svg {
-    width: 24px;
-    height: 24px;
   }
 
   .home-project__arrow,
