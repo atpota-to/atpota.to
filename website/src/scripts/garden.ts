@@ -2,9 +2,9 @@
  * The flower patch on a garden page: a grid of plots, seen from above. The patches are
  * seasonal, each a record in atpotato's repo (scripts/open-patches.ts writes them):
  *
- *   to.atpota.garden.patch   { name: "autumn 2026", season, cols, rows, opensAt, closesAt, createdAt }
+ *   to.atpota.garden.patch   { name: "autumn 2026", season, cols, rows, opensAt, closesAt, planting?, createdAt }
  *
- * Anyone can plant one flower in an open patch with their Bluesky account. It's a record in
+ * Anyone can plant a flower in an open patch with their Bluesky account. It's a record in
  * their own repo, tied to their DID, pointing at the patch with a strong ref:
  *
  *   to.atpota.garden.sprout  { patch: { uri, cid }, kind: "sunflower" | ..., plot, createdAt }
@@ -16,9 +16,13 @@
  * /api/garden (server/garden.ts) gathers everyone's from the network, settles plots two
  * people asked for (the earlier flower keeps it) and counts each flower's care. Each
  * flower's look grows from its DID, record key and care (flowers.ts), and it goes from
- * sprout to bud to bloom over its first week. Planting again moves your flower (a new
- * record, so a new look); "dig mine up" deletes it. Both leave flowers in patches that have
- * closed alone: those are pressed, and stay.
+ * sprout to bud to bloom over its first week. How many flowers each person grows is the
+ * garden's `planting`: "one" (the default, and the community garden's) is one each, staying
+ * where it was planted, so once yours is in, the picker gives way to a link to look after
+ * it; "move" is one each, and planting again moves yours (a new record, so a new look);
+ * "many" plants another each time. "dig mine up" deletes yours ("many": "dig it up" on a
+ * flower's card deletes that one). None of it touches flowers in patches that have closed:
+ * those are pressed, and stay.
  *
  * Picking: tap an empty plot (or "pick a plot" for one near the middle), then plant. The
  * plots are one tab stop; arrow keys move between them. On narrow screens a wide patch
@@ -51,6 +55,7 @@ import {
   isFlowerKind,
   isPlot,
   patchUri,
+  PLANTING,
   SPROUT_NSID,
   sproutRecord,
   tend,
@@ -82,6 +87,8 @@ export const COPY = {
   choose: (kind: FlowerKind) => `tap an empty plot to plant your ${kind} there, or plant it here.`,
   planted: (kind: FlowerKind) => `planted! your ${kind} is a sprout for now, and it blooms in a week. tend it to help it grow (◕‿◕)`,
   moved: (kind: FlowerKind) => `moved! a new ${kind} is growing in your new plot (◕‿◕)`,
+  oneEach: "your flower's growing here. it's one each, so look after it well (◕‿◕)",
+  plantedElsewhere: "you've already got a flower growing in this garden. it's one each, so look after that one (◕‿◕)",
   dug: 'dug up. the patch will miss you.',
   count: (n: number, plots: number) => (n === 0 ? `${plots} empty plots. be the first!` : `${n} of ${plots} plots planted`),
   loadFailed: "the patch didn't load just now. it's still growing, promise.",
@@ -110,6 +117,7 @@ export const COPY = {
   wateredToday: 'watered today',
   watered: (whose: string) => `watered! ${whose} perked right up (◕‿◕)`,
   lookAfter: 'look after it',
+  digIt: 'dig it up',
   theirGarden: 'their garden',
   tendLede: 'sign in with your bluesky or atmosphere account to water flowers. each watering is a small record in your own repo.',
   close: 'close',
@@ -283,7 +291,10 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   let flowers: Flower[] = [];
   let session: Session | null = null;
   let me: Me | null = null;
+  /** The flower just planted (its URI). */
   let fresh: string | null = null;
+  /** The reader's one flower is in another of this garden's open patches. */
+  let elsewhere = false;
   let selected: number | null = null;
   let focusAt = 0;
   /** What signing in is for: the flower being planted, or the one being watered. */
@@ -307,11 +318,16 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
 
   /** The reader's flower: by session, or by the handle the blog remembered. */
   const isMine = (f: Flower) => (me ? f.did === me.did : f.handle === readReader());
+  const planting = () => patch?.planting ?? PLANTING[0];
+  /** One each, and the reader already has theirs. */
+  const doneHere = () => planting() === 'one' && (elsewhere || flowers.some(isMine));
   /** Why planting is off here, or null when it's on. */
   const shut = (): string | null => {
     if (!patch) return COPY.noPatch;
     if (!patch.open) return now() < Date.parse(patch.opensAt ?? patch.createdAt) ? COPY.notYet(patch.name) : COPY.closed(patch.name);
-    const others = new Set(flowers.filter((f) => !isMine(f)).map((f) => f.plot));
+    if (doneHere()) return flowers.some(isMine) ? COPY.oneEach : COPY.plantedElsewhere;
+    // Planting again moves your one flower, so its plot is free to you; with many it isn't.
+    const others = new Set(flowers.filter((f) => planting() === 'many' || !isMine(f)).map((f) => f.plot));
     return others.size >= total() ? COPY.full : null;
   };
 
@@ -325,7 +341,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       const mine = isMine(f);
       b.classList.add('home-plot--planted');
       if (mine) b.classList.add('is-yours');
-      if (f.did === fresh) b.classList.add('is-new');
+      if (f.uri === fresh) b.classList.add('is-new');
       if (f.thirsty) b.classList.add('is-thirsty');
       b.setAttribute('aria-label', COPY.flowerPlot(mine ? 'your' : `@${f.handle}'s`, f.kind, stage, f.thirsty));
       b.append(drawFlower(doc, f.kind, stage, flowerVariant(f)));
@@ -361,14 +377,16 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     if (nameEl && patch) nameEl.textContent = patch.name;
     if (noteEl) noteEl.textContent = patch?.note ?? '';
     if (count) count.textContent = patch ? COPY.count(flowers.length, n) : '';
-    if (digButton) digButton.hidden = !(patch?.open && flowers.some(isMine));
+    if (digButton) digButton.hidden = !(patch?.open && planting() !== 'many' && flowers.some(isMine));
     const mine = patch?.open ? flowers.find(isMine) : undefined;
+    const yours = mine ?? (patch?.open && elsewhere ? me : null);
     if (mineLink) {
-      mineLink.hidden = !mine;
-      if (mine) mineLink.setAttribute('href', gardenPath(actorOf(mine), 'flowers'));
+      mineLink.hidden = !yours;
+      if (yours) mineLink.setAttribute('href', gardenPath(actorOf(yours), 'flowers'));
     }
-    // A closed or upcoming patch can't be planted in: no picker, no button.
-    const shutAway = Boolean(patch && !patch.open);
+    // A closed or upcoming patch can't be planted in, and nor can one where the reader has
+    // their one flower: no picker, no button.
+    const shutAway = Boolean(patch && (!patch.open || doneHere()));
     if (kindsGroup) kindsGroup.hidden = shutAway;
     if (plantButton) plantButton.hidden = shutAway;
     if (plantButton && !isBusy(plantButton)) {
@@ -525,18 +543,26 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       }
       const here = patch!;
       const did = me.did;
+      const rule = planting();
       // Someone may have taken the plot while this page was open: the next free one, then.
-      const others = new Set(flowers.filter((f) => f.did !== did).map((f) => f.plot));
+      const others = new Set(flowers.filter((f) => rule === 'many' || f.did !== did).map((f) => f.plot));
       const plot = freePlotFrom(selected, others, total());
       if (plot === null) {
         say(COPY.full);
         return;
       }
-      const existing = await openFlowers(s);
+      const existing = rule === 'many' ? [] : await openFlowers(s);
+      // One each: theirs is already in (here or in another open patch), and it stays put.
+      if (rule === 'one' && existing.length) {
+        elsewhere = true;
+        selected = null;
+        say(shut()!);
+        return;
+      }
       const planted = new Date(now());
       const ref = await createRecord(s, SPROUT_NSID, sproutRecord(here, kind, plot, planted));
-      // The new flower first, then the old ones go: a failed delete leaves two, and the
-      // patch shows the newest.
+      // Moving: the new flower first, then the old ones go: a failed delete leaves two, and
+      // the patch shows the newest.
       for (const uri of existing) if (uri !== ref.uri) await deleteRecord(s, uri);
       store.remove(KIND_KEY);
       store.remove(PLOT_KEY);
@@ -555,8 +581,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
         lastTended: null,
         thirsty: false,
       };
-      flowers = [...flowers.filter((f) => f.did !== did), mine];
-      fresh = did;
+      flowers = [...flowers.filter((f) => rule === 'many' || f.did !== did), mine];
+      fresh = mine.uri;
       selected = null;
       focusAt = plot;
       render();
@@ -584,6 +610,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       }
       for (const uri of await openFlowers(s)) await deleteRecord(s, uri);
       flowers = flowers.filter((f) => f.did !== me!.did);
+      elsewhere = false;
       render();
       say(COPY.dug);
       emit();
@@ -701,8 +728,11 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     const parts: HTMLElement[] = [top];
     if (open && f.thirsty) parts.push(el(doc, 'p', { class: 'home-card__note' }, COPY.thirstyFor(thirstyDays(f, now()))));
     const actions = el(doc, 'div', { class: 'home-card__actions' });
-    if (mine) actions.append(el(doc, 'a', { class: 'btn btn--primary btn--sm', href: gardenPath(actorOf(f), 'flowers') }, COPY.lookAfter));
-    else {
+    if (mine) {
+      actions.append(el(doc, 'a', { class: 'btn btn--primary btn--sm', href: gardenPath(actorOf(f), 'flowers') }, COPY.lookAfter));
+      // With many each, "dig mine up" would take them all: each card digs up its own.
+      if (open && planting() === 'many') actions.append(el(doc, 'button', { type: 'button', class: 'home-card__dig', 'data-garden-card-dig': '' }, COPY.digIt));
+    } else {
       if (open) {
         const done = wateredToday(local, f.uri, now());
         const water = el(doc, 'button', { type: 'button', class: 'btn btn--primary btn--sm', 'data-garden-water': '' }, done ? COPY.wateredToday : COPY.water);
@@ -773,10 +803,36 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     }
   }
 
+  /** Digs up the flower whose card is open (with many each). */
+  async function digOne(): Promise<void> {
+    const f = cardFlower();
+    const button = card?.querySelector<HTMLButtonElement>('[data-garden-card-dig]');
+    if (!f || !button || isBusy(button) || !auth || !signIn) return;
+    setBusy(button, true);
+    try {
+      const s = await ensureSession();
+      if (!s || !me) {
+        signIn.open(COPY.lede);
+        return;
+      }
+      await deleteRecord(s, f.uri);
+      flowers = flowers.filter((x) => x.uri !== f.uri);
+      closeCard(false);
+      render();
+      say(COPY.dug);
+      emit();
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   card?.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest('[data-garden-card-close]')) closeCard();
     else if (target?.closest('[data-garden-water]')) void water();
+    else if (target?.closest('[data-garden-card-dig]')) void digOne();
   });
   card?.addEventListener('keydown', (event) => {
     if ((event as KeyboardEvent).key === 'Escape') closeCard();
@@ -810,9 +866,9 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       patch = garden.patch;
       patches = garden.patches;
       // A flower planted while this was loading stays.
-      const planted = flowers.filter((f) => f.did === fresh);
-      flowers = [...garden.flowers.filter((f) => f.did !== fresh), ...planted];
-      if (!patch?.open) say(shut()!);
+      const planted = flowers.filter((f) => f.uri === fresh);
+      flowers = [...garden.flowers.filter((f) => f.uri !== fresh), ...planted];
+      if (!patch?.open || doneHere()) say(shut()!);
     } else say(COPY.loadFailed);
     tile.dataset.state = garden ? 'ready' : 'error';
     render();

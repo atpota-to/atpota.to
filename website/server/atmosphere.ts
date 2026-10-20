@@ -5,14 +5,20 @@
  * how many new records came from outside Bluesky (the diversity index), which apps wrote
  * them, and how many edits, deletions, identity and account events went by.
  *
- * Sampling happens here, not in the browser: the whole firehose is over 250 KB a second,
- * which no visitor should have to download for a weather report. One sample serves
- * everyone for a minute (CDN cache), and a function instance reuses its last sample for
- * SAMPLE_TTL_MS.
+ * The reading comes from the weather station (atmosphere/SPEC.md), an always-on consumer on
+ * the droplet that keeps a rolling 60 seconds: GET STATION_URL with the shared secret in
+ * ATMOSPHERE_STATION_SECRET. Its answer is checked field by field (fromStation), cached at
+ * the CDN for 5 seconds, so the station sees about a dozen requests a minute however many
+ * people are watching.
  *
- *   GET /api/atmosphere  ->  Reading (below)
+ * Without a secret, or while the station is down, this function samples Jetstream itself
+ * for a few seconds instead: the whole firehose is over 250 KB a second, which no visitor
+ * should have to download for a weather report. One sample serves everyone for a minute
+ * (CDN cache), and a function instance reuses its last sample for SAMPLE_TTL_MS.
  *
- * If Jetstream can't be reached, or stays silent, the answer is 503 and the tile says so.
+ *   GET /api/atmosphere  ->  Reading (below), with source "station" or "sample"
+ *
+ * If neither can be read, the answer is 503 and the tile says so.
  */
 
 import { TtlCache } from './blog/atproto.js';
@@ -36,6 +42,16 @@ export const SAMPLE_MS = 5000;
 export const CONNECT_TIMEOUT_MS = 4000;
 export const SAMPLE_TTL_MS = 30_000;
 export const CACHE_OK = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600';
+
+export const STATION_URL = 'https://hook.atpota.to/weather/v1/now';
+export const STATION_TIMEOUT_MS = 2500;
+/** A function instance reuses a station reading this long. */
+export const STATION_TTL_MS = 3000;
+/** After the station fails, sample instead for this long before trying it again. */
+export const STATION_BACKOFF_MS = 30_000;
+export const CACHE_LIVE = 'public, max-age=0, s-maxage=5, stale-while-revalidate=30';
+/** At most this many seconds in a station reading's series. */
+export const MAX_SERIES = 120;
 
 /** Posts a second at which each condition starts; anything below "light" is calm. */
 export const CONDITIONS = [
@@ -104,6 +120,21 @@ export interface Reading {
   bluesky: Array<Rate & { nsid: string }>;
   /** Everything that went by, a second. */
   events: { creates: number; updates: number; deletes: number; identity: number; account: number };
+  /** "station": a rolling 60 seconds from the weather station; "sample": a few seconds sampled here. */
+  source: 'station' | 'sample';
+  /** The station's window. */
+  window?: { from: string; to: string };
+  /** The station's window second by second, oldest first; null for a second it missed. */
+  series?: Array<SeriesPoint | null>;
+}
+
+export interface SeriesPoint {
+  /** Unix seconds. */
+  t: number;
+  creates: number;
+  bluesky: number;
+  elsewhere: number;
+  posts: number;
 }
 
 /** The parts of a WebSocket the sampler uses (the global WebSocket in Node 22 and browsers). */
@@ -259,7 +290,68 @@ export function summarize(tally: Tally, seconds: number, measuredAt: string): Re
       identity: rate(tally.identity),
       account: rate(tally.account),
     },
+    source: 'sample',
   };
+}
+
+const DOMAIN_RE = /^[a-z0-9-]{1,63}\.[a-z0-9-]{1,63}$/;
+
+const isCount = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
+const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+function counts<K extends string>(x: unknown, keys: readonly K[]): Record<K, number> | null {
+  if (!isRecord(x) || !keys.every((k) => isCount(x[k]))) return null;
+  return Object.fromEntries(keys.map((k) => [k, x[k] as number])) as Record<K, number>;
+}
+const isoOrNull = (x: unknown) => (typeof x === 'string' && Number.isFinite(Date.parse(x)) ? new Date(x).toISOString() : null);
+
+/**
+ * A station answer as a Reading, or null if any required part is off. Rebuilt from known
+ * fields only, names re-checked (they are someone else's text), condition and level
+ * worked out here from the numbers, so the two sources always agree on the words.
+ */
+export function fromStation(body: unknown): Reading | null {
+  if (!isRecord(body)) return null;
+  const measuredAt = isoOrNull(body.measuredAt);
+  const perSecond = counts(body.perSecond, ['posts', 'likes', 'reposts', 'follows'] as const);
+  const records = counts(body.records, ['perSecond', 'bluesky', 'elsewhere'] as const);
+  const diversity = counts(body.diversity, ['index', 'apps', 'collections'] as const);
+  const events = counts(body.events, ['creates', 'updates', 'deletes', 'identity', 'account'] as const);
+  if (!measuredAt || !isCount(body.seconds) || body.seconds === 0 || !perSecond || !records || !diversity || !events) return null;
+  if (!Array.isArray(body.apps) || !Array.isArray(body.bluesky)) return null;
+  const apps: App[] = body.apps
+    .filter((a): a is Record<string, unknown> => isRecord(a) && typeof a.domain === 'string' && DOMAIN_RE.test(a.domain) && isCount(a.perSecond) && isCount(a.count))
+    .slice(0, TOP_APPS)
+    .map((a) => ({
+      domain: a.domain as string,
+      perSecond: a.perSecond as number,
+      count: a.count as number,
+      collections: (Array.isArray(a.collections) ? a.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
+    }));
+  const bluesky = body.bluesky
+    .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b.nsid === 'string' && isNsid(b.nsid) && isBluesky(b.nsid) && isCount(b.perSecond) && isCount(b.count))
+    .slice(0, TOP_BLUESKY)
+    .map((b) => ({ nsid: b.nsid as string, perSecond: b.perSecond as number, count: b.count as number }));
+  const reading: Reading = {
+    measuredAt,
+    seconds: body.seconds,
+    perSecond,
+    condition: conditionFor(perSecond.posts),
+    records,
+    diversity: { ...diversity, level: diversityLevel(diversity.index) },
+    apps,
+    bluesky,
+    events,
+    source: 'station',
+  };
+  const w = isRecord(body.window) ? { from: isoOrNull(body.window.from), to: isoOrNull(body.window.to) } : null;
+  if (w?.from && w.to) reading.window = { from: w.from, to: w.to };
+  if (Array.isArray(body.series)) {
+    reading.series = body.series.slice(-MAX_SERIES).map((p) => {
+      const c = counts(p, ['t', 'creates', 'bluesky', 'elsewhere', 'posts'] as const);
+      return c ? { t: c.t, creates: c.creates, bluesky: c.bluesky, elsewhere: c.elsewhere, posts: c.posts } : null;
+    });
+  }
+  return reading;
 }
 
 /**
@@ -317,6 +409,10 @@ export interface AtmosphereDeps {
   now?: () => number;
   sampleMs?: number;
   log?: (fields: { event: string; [k: string]: unknown }) => void;
+  /** For the station; default the global fetch. */
+  fetch?: typeof fetch;
+  /** Read on every request; default process.env. */
+  env?: () => Record<string, string | undefined>;
 }
 
 export interface AtmosphereHandlers {
@@ -338,6 +434,43 @@ export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereH
       else console.info(line);
     });
   const cache = new TtlCache<Promise<Reading>>(SAMPLE_TTL_MS, now);
+  const stationCache = new TtlCache<Promise<Reading>>(STATION_TTL_MS, now);
+  const fetchImpl = deps.fetch ?? ((input, init) => fetch(input, init));
+  const env = deps.env ?? (() => process.env);
+  let stationDownUntil = 0;
+
+  function station(secret: string, url: string): Promise<Reading> {
+    const cached = stationCache.get('reading');
+    if (cached) return cached;
+    const pending = (async () => {
+      const res = await fetchImpl(url, {
+        headers: { accept: 'application/json', 'x-atpotato-weather-secret': secret },
+        signal: AbortSignal.timeout(STATION_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`station answered ${res.status}`);
+      const reading = fromStation(await res.json());
+      if (!reading) throw new Error('station reading did not check out');
+      return reading;
+    })();
+    stationCache.set('reading', pending);
+    pending.catch(() => stationCache.delete('reading'));
+    return pending;
+  }
+
+  /** The station's reading when it can be had, else a sample of our own. */
+  async function read(): Promise<Reading> {
+    const vars = env();
+    const secret = vars.ATMOSPHERE_STATION_SECRET?.trim();
+    if (secret && now() >= stationDownUntil) {
+      try {
+        return await station(secret, vars.ATMOSPHERE_STATION_URL?.trim() || STATION_URL);
+      } catch (error) {
+        stationDownUntil = now() + STATION_BACKOFF_MS;
+        log({ event: 'station_error', error: (error as Error)?.message ?? 'Error' });
+      }
+    }
+    return load();
+  }
 
   function load(): Promise<Reading> {
     const cached = cache.get('reading');
@@ -363,7 +496,7 @@ export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereH
   async function GET(request: Request): Promise<Response> {
     let reading: Reading;
     try {
-      reading = await load();
+      reading = await read();
     } catch {
       return new Response(request.method === 'HEAD' ? null : '{"error":"unavailable"}', {
         status: 503,
@@ -372,7 +505,7 @@ export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereH
     }
     return new Response(request.method === 'HEAD' ? null : JSON.stringify(reading), {
       status: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': CACHE_OK, ...BASE_HEADERS },
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': reading.source === 'station' ? CACHE_LIVE : CACHE_OK, ...BASE_HEADERS },
     });
   }
 

@@ -1,0 +1,40 @@
+[Unit]
+Description=atpotato weather station (whole-firehose counts, /v1/now, minute rows to Supabase)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+
+# Code from the deploy checkout (atmosphere/ in atpota-to/atpota.to, installed by
+# droplet/deploy.sh); secrets and state from the data folder, which is also the
+# working directory, so state.json lands there.
+WorkingDirectory=/root/atpotato-weather
+ExecStart=/opt/node22/bin/node /root/atpota-live/atmosphere/src/index.js
+EnvironmentFile=/root/atpotato-weather/.env
+# Node 22 explicitly: the default `node` on this droplet is 18.
+
+# The spec's "survives kill -9": systemd restarts it, and on start it replays from
+# Jetstream the minutes after the last one written (state.json), so nothing is
+# duplicated and a short outage leaves no gap.
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=atpotato-weather
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=160
+
+# The SIXTH consumer on this box, and the only unfiltered one: the whole firehose,
+# ~450 events/s, ~240 KB/s inbound (~20 GB a day; DigitalOcean doesn't bill
+# inbound). Its own connection and process, so a crash here can't touch the
+# mentions service. Memory is an hour of per-second tallies (~70 MB RSS at start).
+MemoryHigh=192M
+MemoryMax=256M
+CPUQuota=50%
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

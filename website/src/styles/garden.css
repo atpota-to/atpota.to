@@ -76,6 +76,11 @@ html[data-theme="dark"] {
   object-fit: cover;
 }
 
+.garden-head__avatar--garden .home-flower {
+  width: 74%;
+  height: 74%;
+}
+
 .garden-head__words {
   display: grid;
   gap: 6px;

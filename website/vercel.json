@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "npm install && sh scripts/og-browser.sh",
-  "buildCommand": "npm run build && PLAYWRIGHT_BROWSERS_PATH=0 npm run og -- --out dist/og --soft",
+  "buildCommand": "npm run publish:lexicons -- --vercel && npm run build && PLAYWRIGHT_BROWSERS_PATH=0 npm run og -- --out dist/og --soft",
   "devCommand": "vite --port $PORT",
   "outputDirectory": "dist",
   "functions": {

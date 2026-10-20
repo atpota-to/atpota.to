@@ -1,0 +1,13 @@
+# Live state and secrets stay on the droplet, in /root/atpotato-mentions (the data
+# folder); only code lives here. See droplet/README.md.
+.env
+.env.*
+!.env.template
+*.db
+*.db-wal
+*.db-shm
+mentions.db.*
+gates.json
+KILL
+backups/
+node_modules/

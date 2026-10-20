@@ -8,7 +8,8 @@
  * this saves an "account" intent (state.ts) so the blog's callback page sends the reader
  * back here. This module also answers Poe's "poe:signin" (src/poe/ui.ts), saving a "poe"
  * intent, so the panel's sign-in link opens the dialog in place on any page, and the settings
- * page's "account:signin" (src/scripts/settings.ts) with an "account" intent.
+ * page's "account:signin" (src/scripts/settings.ts) with an "account" intent, and the home
+ * page's pet count's PET_SIGNIN_EVENT (src/scripts/pet.ts) with a "pet" intent.
  *
  * Back from signing in on a page that isn't the blog: an "account" intent just ends with a
  * little cheer, a "poe" one opens the panel again. On blog pages src/blog/ui.ts does that.
@@ -26,6 +27,7 @@ import { el, loadMe, loadProfile, mountSignIn, type Me, type SignIn } from '../b
 import { clearPending, localStoreFor, readPending, safeReturnTo, savePending, sessionStoreFor, type IntentKind } from '../blog/state';
 import type { KeyValueStore } from '../poe/storage';
 import { cheer } from './burst';
+import { PET_SIGNIN_EVENT, type PetSignInDetail } from './pet-sync';
 import { forgetReader, readReader, rememberReader } from './reader';
 
 export const ACCOUNT_COPY = {
@@ -195,11 +197,11 @@ export function mountAccount(opts: AccountOptions = {}): void {
 
   /* ---------- signing in and out ---------- */
 
-  function openSignIn(kind: 'account' | 'poe'): void {
+  function openSignIn(kind: 'account' | 'poe' | 'pet', lede?: string): void {
     // The phone menu sheet traps focus; it closes first, and focus comes back to its toggle.
     const navToggle = doc.querySelector<HTMLElement>('[data-nav-toggle][aria-expanded="true"]');
     navToggle?.click();
-    signIn.open(kind === 'poe' ? ACCOUNT_COPY.poeLede : ACCOUNT_COPY.lede, {
+    signIn.open(lede ?? (kind === 'poe' ? ACCOUNT_COPY.poeLede : ACCOUNT_COPY.lede), {
       beforeLeave: leaveAs(kind),
       onDismiss: navToggle ? () => navToggle.focus() : undefined,
     });
@@ -255,6 +257,12 @@ export function mountAccount(opts: AccountOptions = {}): void {
   win.addEventListener('poe:signin', () => openSignIn('poe'));
   // The settings page: signing in, or again to grant Poe's forget permission. Comes back there.
   win.addEventListener('account:signin', () => openSignIn('account'));
+  // The home page's pet count (src/scripts/pet.ts), with its own opening line. A "pet" intent
+  // comes back to the home page, which finishes it itself.
+  win.addEventListener(PET_SIGNIN_EVENT, (event) => {
+    const lede = (event as CustomEvent<PetSignInDetail>).detail?.lede;
+    openSignIn('pet', typeof lede === 'string' && lede ? lede : undefined);
+  });
   if (dialog) dialog.dataset.poeReady = '';
 
   win.addEventListener(SESSION_EVENT, (event) => {

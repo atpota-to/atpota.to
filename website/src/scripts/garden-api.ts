@@ -4,7 +4,7 @@
  *
  *   to.atpota.garden.patch   a garden: atpotato's seasonal patches, or anyone's own (record
  *                            key OWN_PATCH_RKEY), { name, note?, season?, cols, rows,
- *                            opensAt?, closesAt?, createdAt }
+ *                            opensAt?, closesAt?, planting?, createdAt }
  *   to.atpota.garden.sprout  a flower, in the planter's repo: { patch: { uri, cid }, kind, plot, createdAt }
  *   to.atpota.garden.tend    tending a flower, in the tender's repo: { subject: { uri, cid }, action, createdAt }
  *
@@ -27,6 +27,12 @@ export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
 export type Season = (typeof SEASONS)[number];
 export const TEND_ACTIONS = ['water', 'sun', 'talk'] as const;
 export type TendAction = (typeof TEND_ACTIONS)[number];
+/**
+ * How many flowers each account grows in a garden's open patches: "one" (the default), which
+ * stays where it's planted; "move", one that planting again moves; or "many".
+ */
+export const PLANTING = ['one', 'move', 'many'] as const;
+export type Planting = (typeof PLANTING)[number];
 /** Match server/garden.ts: patches are 4–24 plots across and 2–40 down. */
 export const MIN_COLS = 4;
 export const MIN_ROWS = 2;
@@ -60,6 +66,7 @@ export interface Patch {
   opensAt: string | null;
   closesAt: string | null;
   createdAt: string;
+  planting: Planting;
   open: boolean;
 }
 
@@ -157,6 +164,10 @@ export function isTendAction(value: unknown): value is TendAction {
   return typeof value === 'string' && (TEND_ACTIONS as readonly string[]).includes(value);
 }
 
+export function isPlanting(value: unknown): value is Planting {
+  return typeof value === 'string' && (PLANTING as readonly string[]).includes(value);
+}
+
 /** A whole plot number in a patch of `plots` plots (any patch, by default). */
 export function isPlot(value: unknown, plots: number = MAX_PLOTS): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < plots;
@@ -202,9 +213,13 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, M
 /**
  * Your own garden's record: a to.atpota.garden.patch with a name (NAME_MAX graphemes; "my
  * garden" if it's blank), an optional note (NOTE_MAX), a size inside the lexicon's limits,
- * and createdAt (kept from the old record when editing). An empty note or closesAt is left out.
+ * how many flowers each visitor grows, and createdAt (kept from the old record when editing).
+ * An empty note or closesAt, and the default planting, are left out.
  */
-export function gardenRecord(opts: { name: string; note?: string | null; cols: number; rows: number; createdAt?: string; closesAt?: string | null }, now: Date): Record<string, unknown> {
+export function gardenRecord(
+  opts: { name: string; note?: string | null; cols: number; rows: number; createdAt?: string; closesAt?: string | null; planting?: Planting },
+  now: Date,
+): Record<string, unknown> {
   const name = clipText(opts.name, NAME_MAX) || 'my garden';
   const note = opts.note ? clipText(opts.note, NOTE_MAX) : '';
   const created = opts.createdAt && Number.isFinite(Date.parse(opts.createdAt)) ? opts.createdAt : now.toISOString();
@@ -215,6 +230,7 @@ export function gardenRecord(opts: { name: string; note?: string | null; cols: n
     cols: clamp(opts.cols, MIN_COLS, MAX_COLS),
     rows: clamp(opts.rows, MIN_ROWS, MAX_ROWS),
     ...(opts.closesAt && Number.isFinite(Date.parse(opts.closesAt)) ? { closesAt: opts.closesAt } : {}),
+    ...(opts.planting && opts.planting !== PLANTING[0] ? { planting: opts.planting } : {}),
     createdAt: created,
   };
 }
@@ -281,6 +297,8 @@ function toPatch(v: unknown, owner: string): Patch | null {
     opensAt,
     closesAt,
     createdAt,
+    // An answer from before planting was sent: the default.
+    planting: isPlanting(p.planting) ? p.planting : PLANTING[0],
     open: p.open,
   };
 }

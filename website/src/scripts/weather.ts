@@ -3,8 +3,9 @@
  * /api/atmosphere (server/atmosphere.ts samples the whole firehose for a few seconds).
  * The tile is a link to the full report at /weather (weather-page.ts), which reuses the
  * reading, its checks and its wording from here.
- * It loads when the tile comes near the screen and checks again once a minute while the
- * tile is on screen and the tab is visible. Numbers count up to each new reading, and the
+ * It loads when the tile comes near the screen and checks again while the tile is on
+ * screen and the tab is visible: every 15 seconds when the reading is the weather
+ * station's live 60 seconds, once a minute when it's the fallback sample. Numbers count up to each new reading, and the
  * little sun's rays turn faster when the network is busy. Under reduced motion the
  * numbers just change and the rays hold still.
  *
@@ -16,6 +17,8 @@
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
+/** How often the tile checks while readings come live from the weather station (a rolling 60 seconds). */
+export const LIVE_REFRESH_MS = 15_000;
 const COUNT_MS = 700;
 /** Posts a second that makes the rays turn at their CSS speed. */
 const RAYS_BASELINE = 25;
@@ -72,6 +75,10 @@ export interface Reading {
   apps?: App[];
   bluesky?: Array<Rate & { nsid: string }>;
   events?: { creates: number; updates: number; deletes: number; identity: number; account: number };
+  /** "station": a rolling 60 seconds from the weather station; "sample": a few seconds sampled by the function. */
+  source?: 'station' | 'sample';
+  /** The station's window, second by second, oldest first; null for a second it missed. */
+  series?: Array<{ t: number; creates: number; bluesky: number; elsewhere: number; posts: number } | null>;
 }
 
 const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
@@ -99,6 +106,8 @@ function clean(r: Reading): Reading {
     out.apps = r.apps.filter((a) => nums(a, ['perSecond', 'count']) && name(a.domain) && Array.isArray(a.collections)).map((a) => ({ ...a, collections: a.collections.filter(name).slice(0, 3) }));
   }
   if (Array.isArray(r.bluesky)) out.bluesky = r.bluesky.filter((b) => nums(b, ['perSecond', 'count']) && name(b.nsid));
+  if (r.source === 'station' || r.source === 'sample') out.source = r.source;
+  if (Array.isArray(r.series)) out.series = r.series.slice(-120).map((p) => (nums(p, ['t', 'creates', 'bluesky', 'elsewhere', 'posts']) ? p : null));
   return out;
 }
 
@@ -206,18 +215,23 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
   tile.dataset.weatherBound = 'true';
   let onScreen = false;
   let started = false;
+  let every = REFRESH_MS;
   const load = async () => {
     const reading = await fetchReading(fetchImpl);
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
+    every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
+  };
+  const tick = () => {
+    window.setTimeout(async () => {
+      if (onScreen && document.visibilityState !== 'hidden') await load();
+      tick();
+    }, every);
   };
   const begin = () => {
     if (started) return;
     started = true;
-    void load();
-    window.setInterval(() => {
-      if (onScreen && document.visibilityState !== 'hidden') void load();
-    }, REFRESH_MS);
+    void load().then(tick);
   };
   if (!('IntersectionObserver' in window)) {
     onScreen = true;

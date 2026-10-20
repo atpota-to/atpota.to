@@ -99,6 +99,7 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
   const people: Record<string, PersonOpts> = {
     [ME]: { flowers: [flowerOf(ME), flowerOf(ME, { rkey: '3kbo', patch: boGarden, kind: 'tulip', plot: 4, daysOld: 9, care: 0.43, thirsty: true }), pressedOf(ME, '3kold1', 'daisy')], garden: true },
     [CY]: { flowers: [flowerOf(CY), pressedOf(CY, '3kold1', 'daisy')], garden: true, displayName: 'Cy' },
+    [GARDEN_SUBJECT]: { flowers: [], garden: true, displayName: 'atpotato' },
     ...opts.people,
   };
   const gardens: Record<string, Record<string, unknown> | null> = {};
@@ -154,10 +155,18 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
       const did = didFor(url.searchParams.get('owner') ?? GARDEN_SUBJECT)!;
       const g = gardens[did];
       const owner = { did, handle: handles[did], displayName: null, avatar: null };
+      const visitor = (who: string, plot: number) => ({ did: who, rkey: `3k${plot}`, uri: `at://${who}/${SPROUT_NSID}/3k${plot}`, cid: 'bafyv', handle: handles[who], kind: 'daisy', plot, plantedAt: '2026-10-12T00:00:00Z', care: 0.5, helpers: 0, lastTended: null, thirsty: false });
+      if (did === GARDEN_SUBJECT) {
+        // atpotato's: this season's patch (two in bloom, one thirsty, one just planted), and last season's, pressed
+        const autumn = { rkey: '2026-autumn', uri: patchUri('2026-autumn'), cid: 'bafyautumn', name: 'autumn 2026', note: null, season: 'autumn', cols: 12, rows: 8, opensAt: '2026-09-01T00:00:00.000Z', closesAt: '2026-12-01T00:00:00.000Z', createdAt: '2026-08-01T00:00:00.000Z', open: true };
+        const flowers = [visitor(BO, 3), { ...visitor(MO, 9), thirsty: true }, { ...visitor(CY, 20), plantedAt: '2026-10-19T00:00:00Z' }];
+        const summary = (p: typeof autumn, planted: number, open: boolean) => ({ rkey: p.rkey, name: p.name, season: p.season, open, planted, plots: 96, opensAt: p.opensAt, closesAt: p.closesAt });
+        const summer = { ...autumn, rkey: '2026-summer', name: 'summer 2026', opensAt: '2026-06-01T00:00:00.000Z', closesAt: '2026-09-01T00:00:00.000Z' };
+        return Response.json({ owner, patch: autumn, patches: [summary(summer, 5, false), summary(autumn, 3, true)], flowers, total: flowers.length });
+      }
       if (!g) return Response.json({ owner, patch: null, patches: [], flowers: [], total: 0 });
       const open = !g.closesAt;
-      const patch = { rkey: 'self', uri: patchUri('self', did), cid: 'bafypatch', name: g.name, note: g.note ?? null, season: null, cols: g.cols, rows: g.rows, opensAt: null, closesAt: g.closesAt ?? null, createdAt: g.createdAt, open };
-      const visitor = (who: string, plot: number) => ({ did: who, rkey: `3k${plot}`, uri: `at://${who}/${SPROUT_NSID}/3k${plot}`, cid: 'bafyv', handle: handles[who], kind: 'daisy', plot, plantedAt: '2026-10-12T00:00:00Z', care: 0.5, helpers: 0, lastTended: null, thirsty: false });
+      const patch = { rkey: 'self', uri: patchUri('self', did), cid: 'bafypatch', name: g.name, note: g.note ?? null, season: null, cols: g.cols, rows: g.rows, opensAt: null, closesAt: g.closesAt ?? null, createdAt: g.createdAt, planting: g.planting, open };
       const flowers = [visitor(BO, 3), visitor(MO, 9)];
       return Response.json({ owner, patch, patches: [{ rkey: 'self', name: g.name, season: null, open, planted: flowers.length, plots: Number(g.cols) * Number(g.rows), opensAt: null, closesAt: g.closesAt ?? null }], flowers, total: flowers.length });
     }
@@ -226,23 +235,63 @@ describe('garden addresses', () => {
 });
 
 describe('the garden page', () => {
-  it('/garden signed out: a welcome, a way in, and how it grows', async () => {
-    await rig().run();
-    expect($('[data-garden-page]').dataset.state).toBe('landing');
-    expect(text('[data-head-title]')).toBe(COPY.landing.title);
+  it('/garden is the community garden: its patch to plant in, a way to sign in, and how it grows', async () => {
+    const r = rig();
+    await r.run();
+    expect(window.location.pathname).toBe('/garden');
+    expect(r.asked).toEqual([GARDEN_SUBJECT]);
+    expect($('[data-garden-page]').dataset.state).toBe('ready');
+    expect(text('[data-head-eyebrow]')).toBe(COPY.community.eyebrow);
+    expect(text('[data-head-title]')).toBe(COPY.community.title);
+    expect(text('[data-head-lede]')).toBe(COPY.community.lede);
+    expect(document.title).toBe(COPY.community.docTitle);
+    // the garden's face is a flower, not atpotato's avatar
+    expect($('.garden-head__avatar').classList.contains('garden-head__avatar--garden')).toBe(true);
+    expect(document.querySelector('.garden-head__avatar svg.home-flower')).not.toBeNull();
+    expect(document.querySelector('.garden-head__avatar img')).toBeNull();
+    // this season's numbers, not atpotato's own
+    const S = COPY.community.stats;
+    expect([...document.querySelectorAll('.garden-stats__item')].map((li) => li.textContent)).toEqual([
+      `3${S.growing(3)}`,
+      `2${S.bloom}`,
+      `1${S.thirsty(1)}`,
+      `93${S.free(93)}`,
+      `42${S.daysLeft(42)}`,
+      `8${S.ever}`,
+    ]);
+    // atpotato's patch, from the home tile's own code, and no "flowers" (that would be atpotato's own)
+    expect(shown('[data-garden]')).toBe(true);
+    expect(text('[data-garden-name]')).toBe('autumn 2026');
+    expect(new URLSearchParams(r.gardenAsked[0]).get('owner')).toBe(GARDEN_SUBJECT);
+    expect(shown('[data-levels]')).toBe(false);
     expect(shown('[data-how]')).toBe(true);
-    expect($('[data-head-actions] a').getAttribute('href')).toBe('/garden/atpota.to');
-    $('[data-landing-signin]').click();
+    expect(document.querySelector('[data-your-garden]')).toBeNull();
+    $<HTMLButtonElement>('[data-head-actions] button').click();
     await flush();
     expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
     expect(text('[data-blog-signin-lede]')).toBe(COPY.tendLede);
   });
 
-  it('/garden signed in becomes your own page, at your address', async () => {
+  it('/garden signed in is still the community garden, with yours a tap away', async () => {
     const r = rig({ signedIn: true });
     await r.run();
-    expect(window.location.pathname).toBe('/garden/me.test');
-    expect(r.asked).toEqual(['me.test']);
+    expect(window.location.pathname).toBe('/garden');
+    expect(r.asked).toEqual([GARDEN_SUBJECT]);
+    expect(text('[data-head-title]')).toBe(COPY.community.title);
+    const go = $('[data-your-garden]');
+    expect([go.textContent, go.getAttribute('href'), go.classList.contains('btn--primary')]).toEqual([COPY.community.yours, '/garden/me.test', true]);
+    // /garden/atpota.to is the same page; its flowers, asked for by address, keep the way back
+    await rig({ signedIn: true, path: '/garden/atpota.to' }).run();
+    expect(text('[data-head-title]')).toBe(COPY.community.title);
+    expect($('[data-your-garden]').getAttribute('href')).toBe('/garden/me.test');
+    await rig({ path: '/garden/atpota.to/flowers' }).run();
+    expect(shown('[data-levels]')).toBe(true);
+    expect($('[data-level-link="garden"]').getAttribute('href')).toBe('/garden/atpota.to');
+    // someone else's page has a quieter one
+    await rig({ signedIn: true, path: '/garden/cy.example' }).run();
+    expect([text('[data-your-garden]'), $('[data-your-garden]').classList.contains('btn--outline')]).toEqual([COPY.yourGarden, true]);
+    // and your own page is yours
+    await rig({ signedIn: true, path: '/garden/me.test' }).run();
     expect(text('[data-head-eyebrow]')).toBe(COPY.eyebrow(true));
     expect(document.title).toBe(COPY.docTitle(null));
   });
@@ -372,6 +421,8 @@ describe('the garden page', () => {
     const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
     expect(put).toMatchObject({ repo: ME, collection: PATCH_NSID, rkey: 'self' });
     expect(put.record).toMatchObject({ $type: PATCH_NSID, name: "me's garden", note: 'come say hi', cols: 6, rows: 4 });
+    // one flower each unless you say otherwise: the default, so it isn't written
+    expect(put.record).not.toHaveProperty('planting');
     // the garden is loaded at the version just saved, not an older cached one
     expect(new URLSearchParams(r.gardenAsked.at(-1)).get('v')).toBe('bafypatch1');
     expect(shown('[data-setup]')).toBe(false);
@@ -382,20 +433,24 @@ describe('the garden page', () => {
     expect(shown('[data-how]')).toBe(true);
   });
 
-  it('your garden settings: rename, resize, or close it', async () => {
+  it('your garden settings: rename, resize, let people plant more than one, or close it', async () => {
     const r = rig({ signedIn: true, path: '/garden/me.test' });
     await r.run();
     expect(shown('[data-settings]')).toBe(true);
     const form = $<HTMLFormElement>('[data-settings-form]');
+    const many = () => form.elements.namedItem('many') as HTMLInputElement;
     expect((form.elements.namedItem('name') as HTMLInputElement).value).toBe("me's garden");
     expect(form.querySelector<HTMLInputElement>('input[value="medium"]')!.checked).toBe(true);
+    expect(many().checked).toBe(false);
     (form.elements.namedItem('name') as HTMLInputElement).value = 'the back yard';
     form.querySelector<HTMLInputElement>('input[value="large"]')!.checked = true;
+    many().checked = true;
     (form.elements.namedItem('open') as HTMLInputElement).checked = false;
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await flush();
     const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
-    expect(put.record).toMatchObject({ name: 'the back yard', cols: 12, rows: 8, createdAt: '2026-10-01T00:00:00Z', closesAt: new Date(NOW).toISOString() });
+    expect(put.record).toMatchObject({ name: 'the back yard', cols: 12, rows: 8, planting: 'many', createdAt: '2026-10-01T00:00:00Z', closesAt: new Date(NOW).toISOString() });
+    expect(many().checked).toBe(true);
     expect(text('[data-settings-status]')).toBe(COPY.setup.saved);
     expect(new URLSearchParams(r.gardenAsked.at(-1)).get('v')).toBe('bafypatch1');
     expect(text('[data-garden-name]')).toBe('the back yard');
@@ -453,6 +508,7 @@ describe('the garden page', () => {
     await rig({ path: '/garden/nobody.example' }).run();
     expect($('[data-garden-page]').dataset.state).toBe('missing');
     expect(text('[data-head-lede]')).toBe(COPY.missing.lede('nobody.example'));
+    expect($('[data-head-actions] a').getAttribute('href')).toBe('/garden');
     await rig({ path: '/garden/a/b' }).run();
     expect($('[data-garden-page]').dataset.state).toBe('missing');
     await rig({ path: '/garden/cy.example', gardenerDown: true }).run();
