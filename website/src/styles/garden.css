@@ -1,0 +1,570 @@
+/* The garden page (garden/index.html, src/scripts/garden-page.ts): your flower, up close. */
+
+:root {
+  --garden-mound: var(--skin);
+  --garden-mound-ring: #8C7146;
+  --garden-path: #E6D6B0;
+  --garden-seed: #8C7146;
+  --garden-press-paper: #FBF6E9;
+  --garden-press-mound: #E4D5B2;
+}
+
+html[data-theme="dark"] {
+  --garden-mound: #6E5634;
+  --garden-mound-ring: #5A4428;
+  --garden-path: #3A2F20;
+  --garden-seed: #4A3820;
+  --garden-press-paper: #2C251A;
+  --garden-press-mound: #3E3424;
+}
+
+.garden-page {
+  padding: 24px var(--gutter, 16px) 64px;
+}
+
+.garden-page:focus {
+  outline: none;
+}
+
+.garden {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* flowers.ts draws every flower as an svg.home-flower */
+.garden .home-flower {
+  width: 88%;
+  height: 88%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.garden .home-flower--ghost {
+  opacity: 0.5;
+}
+
+/* ---------- the hero: your flower in its bed ---------- */
+
+.garden-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 32px 40px;
+}
+
+.garden-hero__bed {
+  position: relative;
+  display: grid;
+  flex: 0 1 340px;
+  place-items: center;
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--garden-mound);
+  box-shadow: inset 0 0 0 14px var(--garden-mound-ring);
+}
+
+.garden-hero__bed .home-flower {
+  width: 74%;
+  height: 74%;
+}
+
+.garden-hero__seed {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--garden-seed);
+}
+
+.garden-hero__bed.is-pressed {
+  background: var(--garden-press-paper);
+  box-shadow: inset 0 0 0 14px var(--garden-press-mound);
+}
+
+.garden-hero__bed.is-pressed .home-flower,
+.garden-herbarium__flower .home-flower,
+.garden-how__bed--pressed .home-flower {
+  filter: sepia(0.45) saturate(0.7);
+}
+
+.garden-hero__ribbon {
+  position: absolute;
+  bottom: 4%;
+  left: 50%;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: var(--soil);
+  color: var(--sun);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .garden-hero__bed.is-revealing .home-flower {
+    animation: garden-unfurl 1.3s var(--ease-spring) both;
+  }
+
+  .garden-hero__bed.is-revealing .garden-hero__ribbon {
+    animation: garden-ribbon 600ms var(--ease-spring) 700ms both;
+  }
+}
+
+@keyframes garden-unfurl {
+  from {
+    transform: scale(0.35) rotate(-50deg);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes garden-ribbon {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) rotate(-3deg) scale(0.6);
+  }
+}
+
+.garden-hero__words {
+  display: flex;
+  flex: 1 1 380px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.garden-hero__title {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 44px);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.garden-hero__title:focus {
+  outline: none;
+}
+
+.garden-hero__lede {
+  max-width: 34em;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+/* the first week, day by day */
+.garden-week {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-week[hidden] {
+  display: none;
+}
+
+.garden-week__day {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.garden-week__day svg,
+.garden-tend__btn svg,
+.garden-helpers__badge svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.garden-week__day.is-tended {
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+}
+
+.garden-week__day.is-today {
+  border: 2.5px solid var(--brown);
+  color: var(--text);
+}
+
+.garden-week__day.is-missed {
+  background: var(--bg);
+}
+
+.garden-week__day.is-ahead {
+  border: 2px dashed var(--dash);
+}
+
+.garden-week__bloom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 14px 0 6px;
+  border: 2px dashed var(--dash);
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.garden-week__bloom.is-done {
+  border-style: solid;
+  border-color: var(--leaf-tint);
+  background: var(--leaf-tint);
+  color: var(--leaf-strong);
+}
+
+.garden-week__bloom .home-flower {
+  width: 30px;
+  height: 30px;
+}
+
+/* tending */
+.garden-tend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garden-tend[hidden],
+.garden-tend__btn[hidden] {
+  display: none;
+}
+
+.garden-tend__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.garden-tend__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.garden-hero__care {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.garden-hero__care[hidden] {
+  display: none;
+}
+
+.garden-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garden-hero__actions:empty {
+  display: none;
+}
+
+.garden-hero__status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+/* ---------- below the hero ---------- */
+
+.garden-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.garden-row > * {
+  flex: 1 1 340px;
+}
+
+.garden-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.garden-card[hidden] {
+  display: none;
+}
+
+.garden-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.garden-card__link {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.garden-card__note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* who's helped */
+.garden-helpers__list,
+.garden-near__list,
+.garden-herbarium__list,
+.garden-how__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-helpers__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.garden-helpers__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.garden-helpers__badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--flesh-tint);
+  color: var(--text);
+}
+
+.garden-helpers__badge svg {
+  width: 18px;
+  height: 18px;
+}
+
+.garden-helpers__badge.is-water {
+  background: var(--water-tint);
+  color: var(--on-water-tint);
+}
+
+.garden-helpers__badge.is-sun {
+  background: var(--sun);
+  color: var(--on-sun);
+}
+
+.garden-helpers__words {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.garden-helpers__when {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* your neighbours */
+.garden-near__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.garden-near__plots {
+  display: grid;
+  grid-template-columns: repeat(var(--near-cols, 5), 44px);
+  gap: 5px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--garden-path);
+}
+
+.garden-near__plot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  background: var(--garden-mound);
+}
+
+.garden-near__plot.is-yours {
+  outline: 2.5px solid var(--brown);
+  outline-offset: 2px;
+}
+
+.garden-near__plot.is-thirsty .home-flower {
+  filter: saturate(0.55) brightness(0.92);
+}
+
+.garden-near__plot.is-thirsty::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--garden-path);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: var(--drop);
+}
+
+.garden-near__list {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.garden-near__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.garden-near__water {
+  flex: none;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--water-tint);
+  color: var(--on-water-tint);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.garden-near__water:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* the herbarium */
+.garden-herbarium__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 18px 16px;
+}
+
+.garden-herbarium__sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--garden-press-paper);
+  text-align: center;
+}
+
+.garden-herbarium__sheet::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 56px;
+  height: 15px;
+  margin-left: -28px;
+  background: var(--flesh-tint);
+  transform: rotate(-3deg);
+}
+
+.garden-herbarium__sheet:nth-child(even)::before {
+  transform: rotate(4deg);
+}
+
+.garden-herbarium__flower {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+}
+
+.garden-herbarium__name {
+  font-size: 15px;
+}
+
+.garden-herbarium__meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* how it grows */
+.garden-how__steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.garden-how__step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.garden-how__step strong {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.garden-how__bed {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: var(--garden-mound);
+}
+
+.garden-how__bed--pressed {
+  background: var(--garden-press-mound);
+}

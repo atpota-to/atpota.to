@@ -121,9 +121,29 @@ const PETALS: Record<FlowerKind, (r: () => number) => number> = {
 
 const CAN_DOUBLE: ReadonlySet<FlowerKind> = new Set(['sunflower', 'daisy', 'poppy']);
 
+const clampCare = (care: number) => (Number.isFinite(care) ? Math.min(1, Math.max(0, care)) : 0);
+
+export interface RarityOdds {
+  /** Null where the kind can't grow that look. */
+  twoTone: number | null;
+  double: number | null;
+  ladybug: number;
+}
+
+/** The chance of each rarer look for a kind, at this much care (0 to 1). */
+export function rarityOdds(kind: FlowerKind, care: number): RarityOdds {
+  const c = clampCare(care);
+  return {
+    twoTone: kind === 'rose' ? null : 0.1 + 0.2 * c,
+    double: CAN_DOUBLE.has(kind) ? 0.1 + 0.2 * c : null,
+    ladybug: 0.025 + 0.055 * c,
+  };
+}
+
 /** The look of one flower, from its seed (use flowerSeed) and care. Same seed and care, same flower. */
 export function variantFor(kind: FlowerKind, seed: number, care = 0): Variant {
-  const c = Number.isFinite(care) ? Math.min(1, Math.max(0, care)) : 0;
+  const c = clampCare(care);
+  const odds = rarityOdds(kind, c);
   const r = seeded(seed);
   const ways = COLOURWAYS[kind];
   const colourway = ways[Math.floor(r() * ways.length)] ?? ways[0]!;
@@ -139,9 +159,9 @@ export function variantFor(kind: FlowerKind, seed: number, care = 0): Variant {
   const petalLength = between(0.88, 1.12);
   const petalWidth = between(0.82, 1.18);
   const centerSize = between(0.85, 1.2);
-  const twoTone = r() < 0.1 + 0.2 * c;
-  const double = r() < 0.1 + 0.2 * c;
-  const ladybug = r() < 0.025 + 0.055 * c;
+  const twoTone = r() < (odds.twoTone ?? 0);
+  const double = r() < (odds.double ?? 0);
+  const ladybug = r() < odds.ladybug;
   const rotation = Math.round(r() * 360);
   const scale = between(0.86, 1);
   return {
@@ -150,8 +170,8 @@ export function variantFor(kind: FlowerKind, seed: number, care = 0): Variant {
     petalLength: Number((petalLength * (1 + 0.08 * c)).toFixed(2)),
     petalWidth: Number(petalWidth.toFixed(2)),
     centerSize: Number(centerSize.toFixed(2)),
-    twoTone: kind !== 'rose' && twoTone,
-    double: CAN_DOUBLE.has(kind) && double,
+    twoTone,
+    double,
     ladybug,
     leaves,
     rotation,

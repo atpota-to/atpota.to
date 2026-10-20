@@ -188,11 +188,13 @@ describe('records', () => {
 });
 
 describe('state', () => {
-  it('only returns to paths under /blog', () => {
+  it('only returns home, to the garden, or to paths under /blog', () => {
     expect(safeReturnTo('/blog')).toBe('/blog');
     expect(safeReturnTo('/blog/3myasnk4bzk22')).toBe('/blog/3myasnk4bzk22');
     expect(safeReturnTo('/')).toBe('/');
-    for (const bad of ['//evil.com', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
+    expect(safeReturnTo('/garden/')).toBe('/garden/');
+    expect(safeReturnTo('/garden')).toBe('/garden');
+    for (const bad of ['//evil.com', '/gardens', '/garden/x', '/garden?x=1', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
       expect(safeReturnTo(bad), String(bad)).toBeNull();
     }
   });

@@ -40,6 +40,11 @@
   /* tile tints and accents */
   --sage: #C5E3B0;
   --sky: #B3DDF0;
+  /* water: drops, thirsty notes (the flower patch) */
+  --drop: #7CC3E6;
+  --drop-deep: #4FA6D3;
+  --water-tint: #D6ECF7;
+  --on-water-tint: #1F4E66;
   --sun: #FFD978;
   --sun-deep: #FFCD5E;
   --on-sun: #3D2F1B;
@@ -144,6 +149,8 @@ html[data-theme="dark"] {
 
   --sage: #1F3322;
   --sky: #16323C;
+  --water-tint: #16323C;
+  --on-water-tint: #BFE3F4;
   --sun: #E0A93A;
   --sun-deep: #C99231;
   --on-sun: #241A0E;

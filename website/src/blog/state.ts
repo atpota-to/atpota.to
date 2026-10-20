@@ -29,10 +29,10 @@ export const PENDING_TTL_MS = 15 * 60_000;
 export const LOCAL_TTL_MS = 10 * 60_000;
 const MAX_LOCAL = 20;
 
-export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'plant';
-/** The intents the blog itself handles. */
-export type BlogIntent = Exclude<IntentKind, 'plant'>;
-const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'plant']);
+export type IntentKind = 'subscribe' | 'recommend' | 'comment' | 'plant' | 'tend';
+/** The intents the blog itself handles (planting and tending belong to the flower patch). */
+export type BlogIntent = Exclude<IntentKind, 'plant' | 'tend'>;
+const INTENTS: ReadonlySet<string> = new Set<IntentKind>(['subscribe', 'recommend', 'comment', 'plant', 'tend']);
 
 export interface Pending {
   kind: IntentKind;
@@ -62,9 +62,9 @@ export function resetBlogStoresForTests(): void {
 
 const RETURN_RE = /^\/blog(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*$/;
 
-/** The home page, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
+/** The home page, the garden page, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
 export function safeReturnTo(path: unknown): string | null {
-  if (path === '/') return path;
+  if (path === '/' || path === '/garden' || path === '/garden/') return path;
   if (typeof path !== 'string' || path.length > 600) return null;
   if (!RETURN_RE.test(path) || path.split('/').some((segment) => segment === '.' || segment === '..')) return null;
   return path;

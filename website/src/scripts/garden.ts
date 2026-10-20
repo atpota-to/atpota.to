@@ -22,13 +22,17 @@
  *
  * Picking: tap an empty plot (or "pick a plot" for one near the middle), then plant. The
  * plots are one tab stop; arrow keys move between them. On narrow screens a wide patch
- * wraps half as many across (narrowCols), so each row shows as two.
+ * wraps half as many across (narrowCols), so each row shows as two. Tapping a flower opens
+ * its card: whose it is, how it's growing, and a button to water it (a neighbour's) or a
+ * link to the garden page (yours). Tabs above the grid switch between the recent seasons'
+ * patches; a closed one shows its flowers pressed.
  *
  * Sign-in is the blog's (src/blog/auth.ts, src/blog/signin.ts): the auth server sends the
  * reader back to /blog, which forwards them here, and the flower they picked is planted in
  * the plot and patch they picked once they're back (a "plant" pending action,
- * src/blog/state.ts, plus KIND_KEY, PLOT_KEY and PATCH_KEY in sessionStorage). The OAuth
- * library only loads once someone plants or digs.
+ * src/blog/state.ts, plus KIND_KEY, PLOT_KEY and PATCH_KEY in sessionStorage). Watering
+ * works the same way, with a "tend" pending action and TEND_KEY. The OAuth library only
+ * loads once someone plants, digs or waters.
  *
  * Fetched text only reaches the DOM through textContent.
  */
@@ -39,7 +43,7 @@ import { el, isBusy, loadMe, mountSignIn, setBusy, type Me, type SignIn } from '
 import { clearPending, localStoreFor, readPending, savePending, sessionStoreFor } from '../blog/state';
 import type { KeyValueStore } from '../poe/storage';
 import { burst, cheer } from './burst';
-import { drawFlower, FLOWER_KINDS, flowerSeed, sampleVariant, stageFor, variantFor, type FlowerKind, type Stage, type Variant } from './flowers';
+import { DAY_MS, drawFlower, FLOWER_KINDS, flowerSeed, GROW_DAYS, sampleVariant, stageFor, variantFor, type FlowerKind, type Stage, type Variant } from './flowers';
 import { readReader, rememberReader } from './reader';
 
 export { FLOWER_KINDS, type FlowerKind } from './flowers';
@@ -63,6 +67,10 @@ export const MAX_PLOTS = MAX_COLS * MAX_ROWS;
 export const KIND_KEY = 'garden:kind';
 export const PLOT_KEY = 'garden:plot';
 export const PATCH_KEY = 'garden:patch';
+/** sessionStorage: the flower being watered before leaving to sign in ({ uri, cid, patch }). */
+export const TEND_KEY = 'garden:tend';
+/** localStorage: the flowers this reader watered today ({ date, uris }), so the button rests. */
+export const WATERED_KEY = 'garden:watered';
 
 export interface Patch {
   rkey: string;
@@ -155,7 +163,81 @@ export const COPY = {
   thirsty: 'thirsty',
   emptyPlot: (n: number, selected: boolean) => `empty plot ${n}${selected ? ', picked' : ''}`,
   flowerPlot: (who: string, kind: FlowerKind, stage: Stage, thirsty = false) => `${who} ${kind}, ${COPY.stage[stage]}${thirsty ? `, ${COPY.thirsty}` : ''}`,
+  tabs: { open: 'growing now', closed: 'pressed', soon: (when: string) => `opens ${when}` },
+  yours: (kind: FlowerKind) => `your ${kind}`,
+  theirs: (handle: string, kind: FlowerKind) => `@${handle}'s ${kind}`,
+  growing: (stage: Stage, day: number) => (stage === 'sprout' ? `just planted · day ${day}` : `budding · day ${day} of ${GROW_DAYS}`),
+  inBloom: (bloom: string, open: boolean) => `${bloom} · ${open ? 'in bloom' : 'pressed'}`,
+  thirstyFor: (days: number) => `looks thirsty: not watered for ${days} ${days === 1 ? 'day' : 'days'}`,
+  water: 'water it',
+  wateredToday: 'watered today',
+  watered: (whose: string) => `watered! ${whose} perked right up (◕‿◕)`,
+  lookAfter: 'look after it',
+  theirGarden: 'their garden',
+  tendLede: 'sign in with your bluesky account to water flowers. each watering is a small record in your own repo.',
+  close: 'close',
 } as const;
+
+/** "a two-tone double daisy with a ladybug", or just "a daisy". */
+export function describeBloom(kind: FlowerKind, v: Pick<Variant, 'twoTone' | 'double' | 'ladybug'>): string {
+  const looks = [v.twoTone ? 'two-tone' : '', v.double ? 'double' : ''].filter(Boolean).join(' ');
+  return `a ${looks ? `${looks} ` : ''}${kind}${v.ladybug ? ' with a ladybug' : ''}`;
+}
+
+/** Which day of its life a flower is on, from 1. */
+export function dayOf(plantedAt: string, now: number): number {
+  const age = now - Date.parse(plantedAt);
+  return Number.isFinite(age) ? Math.max(1, Math.floor(age / DAY_MS) + 1) : 1;
+}
+
+/** Whole days since a flower was last tended (or bloomed, if nobody has tended it since). */
+export function thirstyDays(f: Pick<Flower, 'plantedAt' | 'lastTended'>, now: number): number {
+  const bloomed = Date.parse(f.plantedAt) + GROW_DAYS * DAY_MS;
+  const last = Math.max(f.lastTended ? Date.parse(f.lastTended) : 0, bloomed);
+  return Math.max(1, Math.floor((now - last) / DAY_MS));
+}
+
+const today = (now: number) => new Date(now).toISOString().slice(0, 10);
+
+/** True when this reader already watered `uri` today (UTC). */
+export function wateredToday(local: KeyValueStore, uri: string, now: number): boolean {
+  try {
+    const v = JSON.parse(local.get(WATERED_KEY) ?? 'null') as { date?: unknown; uris?: unknown } | null;
+    return v?.date === today(now) && Array.isArray(v.uris) && v.uris.includes(uri);
+  } catch {
+    return false;
+  }
+}
+
+export function markWatered(local: KeyValueStore, uri: string, now: number): void {
+  let uris: string[] = [];
+  try {
+    const v = JSON.parse(local.get(WATERED_KEY) ?? 'null') as { date?: unknown; uris?: unknown } | null;
+    if (v?.date === today(now) && Array.isArray(v.uris)) uris = v.uris.filter((u): u is string => typeof u === 'string');
+  } catch {
+    // start the day afresh
+  }
+  if (!uris.includes(uri)) uris.push(uri);
+  local.set(WATERED_KEY, JSON.stringify({ date: today(now), uris: uris.slice(-200) }));
+}
+
+/** "dec 1" */
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }).toLowerCase();
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function closeIcon(doc: Document): SVGSVGElement {
+  const svg = doc.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = doc.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', 'M6 6l12 12M18 6L6 18');
+  svg.append(path);
+  return svg;
+}
 
 export function isFlowerKind(value: unknown): value is FlowerKind {
   return typeof value === 'string' && (FLOWER_KINDS as readonly string[]).includes(value);
@@ -360,12 +442,17 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   const tile = doc.querySelector<HTMLElement>('[data-garden]');
   if (!tile || tile.dataset.gardenBound === 'true') return;
   tile.dataset.gardenBound = 'true';
+  const box: HTMLElement = tile;
   const plots = tile.querySelector<HTMLElement>('[data-garden-plots]');
   const count = tile.querySelector<HTMLElement>('[data-garden-count]');
   const status = tile.querySelector<HTMLElement>('[data-garden-status]');
   const plantButton = tile.querySelector<HTMLButtonElement>('[data-garden-plant]');
   const digButton = tile.querySelector<HTMLButtonElement>('[data-garden-dig]');
+  const mineLink = tile.querySelector<HTMLElement>('[data-garden-mine]');
+  const kindsGroup = tile.querySelector<HTMLElement>('[data-garden-kinds]');
   const kindButtons = [...tile.querySelectorAll<HTMLButtonElement>('[data-garden-kinds] [data-kind]')];
+  const tabs = tile.querySelector<HTMLElement>('[data-garden-tabs]');
+  const card = tile.querySelector<HTMLElement>('[data-garden-card]');
   const auth = opts.auth === undefined ? createAuth(win) : opts.auth;
 
   let patch: Patch | null = null;
@@ -376,6 +463,10 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   let fresh: string | null = null;
   let selected: number | null = null;
   let focusAt = 0;
+  /** What signing in is for: the flower being planted, or the one being watered. */
+  let intent: 'plant' | 'tend' = 'plant';
+  /** The flower whose card is open. */
+  let cardFor: string | null = null;
   const storedKind = store.get(KIND_KEY);
   let kind: FlowerKind = isFlowerKind(storedKind) ? storedKind : 'sunflower';
 
@@ -442,8 +533,15 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
       plots.replaceChildren(...Array.from({ length: n }, (_, i) => plotButton(i, at)));
       if (hadFocus) plots.querySelector<HTMLButtonElement>(`[data-plot="${focusAt}"]`)?.focus();
     }
+    plots?.toggleAttribute('data-pressed', Boolean(patch && !patch.open && now() >= Date.parse(patch.closesAt)));
+    renderTabs();
     if (count) count.textContent = patch ? COPY.count(flowers.length, n) : '';
     if (digButton) digButton.hidden = !(patch?.open && flowers.some(isMine));
+    if (mineLink) mineLink.hidden = !(patch?.open && flowers.some(isMine));
+    // A closed or upcoming patch can't be planted in: no picker, no button.
+    const shutAway = Boolean(patch && !patch.open);
+    if (kindsGroup) kindsGroup.hidden = shutAway;
+    if (plantButton) plantButton.hidden = shutAway;
     if (plantButton && !isBusy(plantButton)) {
       plantButton.disabled = shut() !== null;
       plantButton.textContent = selected === null ? COPY.pick : COPY.plantHere(kind);
@@ -474,7 +572,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     b.addEventListener('click', () => pickKind(k));
   }
   // Arrow keys move between the flowers, as in any radio group.
-  tile.querySelector('[data-garden-kinds]')?.addEventListener('keydown', (event) => {
+  kindsGroup?.addEventListener('keydown', (event) => {
     const e = event as KeyboardEvent;
     const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!step) return;
@@ -490,7 +588,12 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     if (!cell) return;
     const i = Number(cell.dataset.plot);
     focusAt = i;
-    if (cell.classList.contains('home-plot--empty') && !shut()) select(selected === i ? null : i);
+    const f = flowers.find((x) => x.plot === i);
+    if (f) openCard(f, cell);
+    else {
+      closeCard(false);
+      if (!shut()) select(selected === i ? null : i);
+    }
   });
   // The plots are one tab stop; arrows, Home and End move between them.
   plots?.addEventListener('keydown', (event) => {
@@ -525,6 +628,10 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
         local,
         now,
         beforeLeave: () => {
+          if (intent === 'tend') {
+            savePending(store, { kind: 'tend', returnTo: '/', at: now() });
+            return;
+          }
           savePending(store, { kind: 'plant', returnTo: '/', at: now() });
           store.set(KIND_KEY, kind);
           if (selected !== null) store.set(PLOT_KEY, String(selected));
@@ -567,6 +674,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
 
   async function plant(): Promise<void> {
     if (!plantButton || isBusy(plantButton)) return;
+    intent = 'plant';
     const why = shut();
     if (why) {
       say(why);
@@ -657,15 +765,212 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     }
   }
 
+  /* ---------- seasons ---------- */
+
+  /** The last two closed patches, the open ones, the next to open, and whichever is shown. */
+  function tabPatches(): PatchSummary[] {
+    const t = now();
+    const closed = patches.filter((p) => !p.open && Date.parse(p.closesAt) <= t).slice(-2);
+    const soon = patches.filter((p) => !p.open && Date.parse(p.opensAt) > t).slice(0, 1);
+    const list = [...closed, ...patches.filter((p) => p.open), ...soon];
+    const shown = patches.find((p) => p.rkey === patch?.rkey);
+    if (shown && !list.includes(shown)) list.push(shown);
+    return list.sort((a, b) => Date.parse(a.opensAt) - Date.parse(b.opensAt));
+  }
+
+  function renderTabs(): void {
+    if (!tabs) return;
+    const t = now();
+    const list = tabPatches();
+    tabs.hidden = list.length < 2;
+    const hadFocus = tabs.contains(doc.activeElement) ? (doc.activeElement as HTMLElement).dataset.patch : undefined;
+    tabs.replaceChildren(
+      ...list.map((p) => {
+        const upcoming = !p.open && Date.parse(p.opensAt) > t;
+        const on = p.rkey === patch?.rkey;
+        const b = el(doc, 'button', { type: 'button', role: 'tab', class: 'home-patch__tab', 'data-patch': p.rkey, 'aria-selected': String(on) });
+        if (plots?.id) b.setAttribute('aria-controls', plots.id);
+        b.tabIndex = on ? 0 : -1;
+        b.disabled = upcoming;
+        b.append(
+          el(doc, 'span', { class: 'home-patch__tab-name' }, p.name),
+          el(doc, 'span', { class: 'home-patch__tab-note' }, p.open ? COPY.tabs.open : upcoming ? COPY.tabs.soon(shortDate(p.opensAt)) : COPY.tabs.closed),
+        );
+        return b;
+      }),
+    );
+    if (hadFocus) tabs.querySelector<HTMLElement>(`[data-patch="${hadFocus}"]`)?.focus();
+  }
+
+  async function showPatch(rkey: string): Promise<void> {
+    closeCard(false);
+    box.dataset.state = 'loading';
+    const garden = await fetchGarden(fetchImpl, rkey);
+    if (garden) {
+      patch = garden.patch;
+      if (garden.patches.length) patches = garden.patches;
+      flowers = garden.flowers;
+      selected = null;
+      focusAt = 0;
+      say(shut() ?? '');
+    } else say(COPY.loadFailed);
+    box.dataset.state = garden ? 'ready' : 'error';
+    render();
+  }
+
+  tabs?.addEventListener('click', (event) => {
+    const b = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-patch]') : null;
+    if (b && !b.disabled && b.dataset.patch && b.dataset.patch !== patch?.rkey) void showPatch(b.dataset.patch);
+  });
+  // Arrow keys move along the tabs; Enter or Space shows that patch.
+  tabs?.addEventListener('keydown', (event) => {
+    const e = event as KeyboardEvent;
+    const all = [...tabs.querySelectorAll<HTMLButtonElement>('[data-patch]:not(:disabled)')];
+    const at = all.indexOf(doc.activeElement as HTMLButtonElement);
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (at + 1) % all.length;
+    else if (e.key === 'ArrowLeft') next = (at - 1 + all.length) % all.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = all.length - 1;
+    if (next < 0 || !all.length) return;
+    e.preventDefault();
+    for (const b of all) b.tabIndex = -1;
+    all[next]!.tabIndex = 0;
+    all[next]!.focus();
+  });
+
+  /* ---------- a flower's card ---------- */
+
+  const cardFlower = () => flowers.find((f) => f.uri === cardFor);
+  const cardSay = (text: string) => {
+    const line = card?.querySelector<HTMLElement>('[data-garden-card-status]');
+    if (line) line.textContent = text;
+  };
+
+  function fillCard(): void {
+    const f = cardFlower();
+    if (!card || !f) return;
+    const open = patch?.open ?? false;
+    const stage = stageFor(f.plantedAt, now(), open);
+    const v = flowerVariant(f);
+    const mine = isMine(f);
+    const close = el(doc, 'button', { type: 'button', class: 'home-card__close', 'aria-label': COPY.close, 'data-garden-card-close': '' });
+    close.append(closeIcon(doc));
+    const bed = el(doc, 'span', { class: 'home-card__bed', 'aria-hidden': 'true' });
+    bed.append(drawFlower(doc, f.kind, stage, v));
+    const words = el(doc, 'div', { class: 'home-card__words' });
+    words.append(
+      el(doc, 'h3', { class: 'home-card__title', id: 'garden-card-title' }, mine ? COPY.yours(f.kind) : COPY.theirs(f.handle, f.kind)),
+      el(doc, 'p', { class: 'home-card__meta' }, stage === 'bloom' ? COPY.inBloom(describeBloom(f.kind, v), open) : COPY.growing(stage, dayOf(f.plantedAt, now()))),
+    );
+    const top = el(doc, 'div', { class: 'home-card__top' });
+    top.append(bed, words);
+    const parts: HTMLElement[] = [top];
+    if (open && f.thirsty) parts.push(el(doc, 'p', { class: 'home-card__note' }, COPY.thirstyFor(thirstyDays(f, now()))));
+    const actions = el(doc, 'div', { class: 'home-card__actions' });
+    if (mine) actions.append(el(doc, 'a', { class: 'btn btn--primary btn--sm', href: '/garden' }, COPY.lookAfter));
+    else {
+      if (open) {
+        const done = wateredToday(local, f.uri, now());
+        const water = el(doc, 'button', { type: 'button', class: 'btn btn--primary btn--sm', 'data-garden-water': '' }, done ? COPY.wateredToday : COPY.water);
+        water.disabled = done;
+        actions.append(water);
+      }
+      actions.append(el(doc, 'a', { class: 'home-card__link', href: `/garden?${new URLSearchParams({ did: f.did })}` }, COPY.theirGarden));
+    }
+    parts.push(actions, el(doc, 'p', { class: 'home-card__status', role: 'status', 'data-garden-card-status': '' }));
+    card.replaceChildren(close, ...parts);
+  }
+
+  function openCard(f: Flower, cell: HTMLElement): void {
+    if (!card) return;
+    cardFor = f.uri;
+    fillCard();
+    const tb = box.getBoundingClientRect();
+    const cb = cell.getBoundingClientRect();
+    // Under the flower, or over it when it's near the bottom of the tile.
+    const above = cb.bottom - tb.top + 260 > tb.height && cb.top - tb.top > 260;
+    card.classList.toggle('is-above', above);
+    card.style.setProperty('--card-x', `${Math.round(cb.left - tb.left + cb.width / 2)}px`);
+    card.style.setProperty('--card-y', `${Math.round(above ? cb.top - tb.top - 10 : cb.bottom - tb.top + 10)}px`);
+    card.hidden = false;
+    card.focus();
+  }
+
+  /** Closes the card, and puts focus back on its flower if it was inside the card. */
+  function closeCard(refocus = true): void {
+    if (!card || card.hidden) return;
+    const f = cardFlower();
+    const inside = card.contains(doc.activeElement);
+    card.hidden = true;
+    cardFor = null;
+    if (refocus && inside && f) plots?.querySelector<HTMLButtonElement>(`[data-plot="${f.plot}"]`)?.focus();
+  }
+
+  async function water(): Promise<void> {
+    const f = cardFlower();
+    const button = card?.querySelector<HTMLButtonElement>('[data-garden-water]');
+    if (!f || !button || isBusy(button)) return;
+    if (!auth || !signIn) {
+      cardSay(COPY.otherHost);
+      return;
+    }
+    intent = 'tend';
+    store.set(TEND_KEY, JSON.stringify({ uri: f.uri, cid: f.cid, patch: patch?.rkey }));
+    setBusy(button, true);
+    try {
+      const s = await ensureSession();
+      if (!s || !me) {
+        signIn.open(COPY.tendLede);
+        return;
+      }
+      await tend(s, { uri: f.uri, cid: f.cid }, 'water', new Date(now()));
+      store.remove(TEND_KEY);
+      markWatered(local, f.uri, now());
+      f.thirsty = false;
+      f.lastTended = new Date(now()).toISOString();
+      render();
+      fillCard();
+      cardSay(COPY.watered(isMine(f) ? COPY.yours(f.kind) : COPY.theirs(f.handle, f.kind)));
+      burst(plots?.querySelector(`[data-plot="${f.plot}"]`) ?? button, 'drops', win);
+    } catch (error) {
+      failed(error);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  card?.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('[data-garden-card-close]')) closeCard();
+    else if (target?.closest('[data-garden-water]')) void water();
+  });
+  card?.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Escape') closeCard();
+  });
+  doc.addEventListener('click', (event) => {
+    const target = event.target instanceof Node ? event.target : null;
+    if (card && !card.hidden && target && !card.contains(target) && !plots?.contains(target)) closeCard(false);
+  });
+
   plantButton?.addEventListener('click', () => void plant());
   digButton?.addEventListener('click', () => void dig());
 
   pickKind(kind);
 
-  // Back from signing in with a flower to plant: that patch, else the one shown by default.
+  // Back from signing in with a flower to plant or water: that patch, else the one shown
+  // by default.
   const pending = readPending(store, now());
   const backToPlant = pending?.kind === 'plant' && pending.returnTo === '/';
-  const storedPatch = backToPlant ? store.get(PATCH_KEY) : null;
+  const backToTend = pending?.kind === 'tend' && pending.returnTo === '/';
+  type ToWater = { uri?: unknown; patch?: unknown } | null;
+  let toWater: ToWater = null;
+  try {
+    toWater = backToTend ? (JSON.parse(store.get(TEND_KEY) ?? 'null') as ToWater) : null;
+  } catch {
+    toWater = null;
+  }
+  const storedPatch = backToPlant ? store.get(PATCH_KEY) : typeof toWater?.patch === 'string' ? toWater.patch : null;
   const loaded = fetchGarden(fetchImpl, storedPatch && RKEY_RE.test(storedPatch) ? storedPatch : undefined).then((garden) => {
     if (garden) {
       patch = garden.patch;
@@ -679,7 +984,17 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     render();
   });
 
-  if (backToPlant) {
+  if (backToTend) {
+    clearPending(store);
+    await loaded;
+    const f = flowers.find((x) => x.uri === toWater?.uri);
+    const cell = f ? plots?.querySelector<HTMLElement>(`[data-plot="${f.plot}"]`) : null;
+    if (f && cell) {
+      tile.scrollIntoView?.({ block: 'center' });
+      openCard(f, cell);
+      await water();
+    } else store.remove(TEND_KEY);
+  } else if (backToPlant) {
     clearPending(store);
     await loaded;
     const stored = store.get(PLOT_KEY);

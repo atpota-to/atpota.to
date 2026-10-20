@@ -8,6 +8,8 @@ import { createStore } from '../src/poe/storage.js';
 import { burst, cheer } from '../src/scripts/burst.js';
 import {
   COPY,
+  describeBloom,
+  flowerVariant,
   freePlotFrom,
   initGarden,
   KIND_KEY,
@@ -17,6 +19,7 @@ import {
   patchUri,
   PLOT_KEY,
   SPROUT_NSID,
+  TEND_KEY,
   TEND_NSID,
   tend,
 } from '../src/scripts/garden.js';
@@ -196,6 +199,7 @@ describe('the flower patch', () => {
     open: true,
   };
   const summer = { ...autumn, rkey: '2026-summer', uri: patchUri('2026-summer'), name: 'summer 2026', season: 'summer', opensAt: '2026-06-01T00:00:00.000Z', closesAt: '2026-09-01T00:00:00.000Z', open: false };
+  const winter = { ...autumn, rkey: '2026-winter', uri: patchUri('2026-winter'), name: 'winter 2026', season: 'winter', opensAt: '2026-12-01T00:00:00.000Z', closesAt: '2027-03-01T00:00:00.000Z', open: false };
   const summary = (p: typeof autumn, planted: number) => ({ rkey: p.rkey, name: p.name, season: p.season, open: p.open, planted, plots: p.cols * p.rows, opensAt: p.opensAt, closesAt: p.closesAt });
   const friendRose = {
     did: FRIEND,
@@ -221,7 +225,7 @@ describe('the flower patch', () => {
     run: () => Promise<void>;
   }
 
-  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: typeof autumn | null } = {}): Rig {
+  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: typeof autumn | null; summerFlowers?: unknown[] } = {}): Rig {
     document.body.innerHTML = section('home-patch') + DIALOG;
     const calls: Rig['calls'] = [];
     const went: Prepared[] = [];
@@ -259,7 +263,14 @@ describe('the flower patch', () => {
       const url = new URL(String(input), 'https://atpota.to');
       if (url.pathname === '/api/garden') {
         asked.push(url.search);
-        return Response.json({ patch, patches: patch ? [summary(summer, 4), summary(autumn, flowers.length)] : [], flowers, total: flowers.length });
+        const pressed = url.searchParams.get('patch') === summer.rkey;
+        const shown = pressed ? opts.summerFlowers ?? [] : flowers;
+        return Response.json({
+          patch: pressed ? summer : patch,
+          patches: patch ? [summary(summer, 4), summary(autumn, flowers.length), summary(winter, 0)] : [],
+          flowers: shown,
+          total: shown.length,
+        });
       }
       if (url.origin === 'https://public.api.bsky.app') return Response.json({ did: ME, handle: 'me.test', displayName: 'Me' });
       if (url.origin === PDS) return Response.json({ records: [...owned].map(([uri, p]) => ({ uri, value: { patch: { uri: p, cid: 'bafy' } } })) });
@@ -493,6 +504,125 @@ describe('the flower patch', () => {
     } as Session;
     expect(await tend(session, { uri: friendRose.uri, cid: friendRose.cid }, 'water', new Date(NOW))).toEqual({ uri: `at://${ME}/${TEND_NSID}/3t`, cid: 'bafytend' });
     expect(calls).toEqual([{ repo: ME, collection: TEND_NSID, record: { $type: TEND_NSID, subject: { uri: friendRose.uri, cid: friendRose.cid }, action: 'water', createdAt: new Date(NOW).toISOString() } }]);
+  });
+
+  it('season tabs: the recent patches, the next to open, and a closed one pressed', async () => {
+    const r = rig({ summerFlowers: [{ ...friendRose, plantedAt: '2026-08-01T00:00:00Z' }] });
+    await r.run();
+    const tabs = () => [...document.querySelectorAll<HTMLButtonElement>('[data-garden-tabs] [role="tab"]')];
+    expect(document.querySelector<HTMLElement>('[data-garden-tabs]')!.hidden).toBe(false);
+    expect(tabs().map((t) => t.textContent)).toEqual([`summer 2026${COPY.tabs.closed}`, `autumn 2026${COPY.tabs.open}`, `winter 2026${COPY.tabs.soon('dec 1')}`]);
+    expect(tabs().map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
+    expect(tabs()[2]!.disabled).toBe(true);
+    expect(tabs()[1]!.getAttribute('aria-controls')).toBe('garden-plots');
+
+    tabs()[0]!.click();
+    await flush();
+    expect(r.asked.at(-1)).toBe('?patch=2026-summer');
+    expect(tabs().map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+    expect(document.querySelector('[data-garden-plots]')!.hasAttribute('data-pressed')).toBe(true);
+    expect(document.querySelector<HTMLElement>('[data-garden-kinds]')!.hidden).toBe(true);
+    expect(plantButton().hidden).toBe(true);
+    expect(statusText()).toBe(COPY.closed('summer 2026'));
+
+    // arrows move along the tabs that can be opened; Enter (a click) shows that patch
+    tabs()[0]!.focus();
+    tabs()[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(document.activeElement).toBe(tabs()[1]);
+    tabs()[1]!.click();
+    await flush();
+    expect(r.asked.at(-1)).toBe('?patch=2026-autumn');
+    expect(document.querySelector('[data-garden-plots]')!.hasAttribute('data-pressed')).toBe(false);
+    expect(plantButton().hidden).toBe(false);
+  });
+
+  it('tapping a flower opens its card; yours links to your garden', async () => {
+    rememberReader('me.test');
+    const mine = { ...friendRose, did: ME, rkey: '3kmine', uri: `at://${ME}/${SPROUT_NSID}/3kmine`, handle: 'me.test', kind: 'violet', plot: 7 };
+    await rig({ flowers: [friendRose, mine] }).run();
+    const card = () => document.querySelector<HTMLElement>('[data-garden-card]')!;
+    expect(card().hidden).toBe(true);
+
+    plot(20).click();
+    expect(card().hidden).toBe(false);
+    expect(document.activeElement).toBe(card());
+    expect(card().querySelector('#garden-card-title')!.textContent).toBe(COPY.theirs('friend.test', 'rose'));
+    expect(card().querySelector('.home-card__meta')!.textContent).toBe(COPY.inBloom(describeBloom('rose', flowerVariant(friendRose as never)), true));
+    expect(card().querySelector('[data-garden-water]')!.textContent).toBe(COPY.water);
+    expect(card().querySelector('a')!.getAttribute('href')).toBe(`/garden?did=${encodeURIComponent(FRIEND)}`);
+    card().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(card().hidden).toBe(true);
+    expect(document.activeElement).toBe(plot(20));
+
+    plot(7).click();
+    expect(card().querySelector('#garden-card-title')!.textContent).toBe(COPY.yours('violet'));
+    expect(card().querySelector('[data-garden-water]')).toBeNull();
+    expect(card().querySelector('a')!.getAttribute('href')).toBe('/garden');
+    expect(document.querySelector<HTMLElement>('[data-garden-mine]')!.hidden).toBe(false);
+
+    // an empty plot closes it, and so does the close button
+    plot(3).click();
+    expect(card().hidden).toBe(true);
+    plot(20).click();
+    card().querySelector<HTMLButtonElement>('[data-garden-card-close]')!.click();
+    expect(card().hidden).toBe(true);
+  });
+
+  it('watering a neighbour’s flower writes a tend record, once a day', async () => {
+    const r = rig({ signedIn: true, flowers: [{ ...friendRose, thirsty: true, lastTended: null }] });
+    await r.run();
+    plot(20).click();
+    const card = () => document.querySelector<HTMLElement>('[data-garden-card]')!;
+    expect(card().querySelector('.home-card__note')!.textContent).toBe(COPY.thirstyFor(3));
+    card().querySelector<HTMLButtonElement>('[data-garden-water]')!.click();
+    await flush();
+    const made = r.calls.find((c) => c.path.endsWith('createRecord'))!.body!;
+    expect(made.collection).toBe(TEND_NSID);
+    expect(made.record).toMatchObject({ $type: TEND_NSID, subject: { uri: friendRose.uri, cid: friendRose.cid }, action: 'water' });
+    expect(card().querySelector('[data-garden-card-status]')!.textContent).toBe(COPY.watered(COPY.theirs('friend.test', 'rose')));
+    expect(card().querySelector('.home-card__note')).toBeNull();
+    expect(plot(20).classList.contains('is-thirsty')).toBe(false);
+    const water = card().querySelector<HTMLButtonElement>('[data-garden-water]')!;
+    expect([water.disabled, water.textContent]).toEqual([true, COPY.wateredToday]);
+    expect(sessionStorage.getItem(TEND_KEY)).toBeNull();
+
+    // still resting on the next visit today
+    await rig({ signedIn: true }).run();
+    plot(20).click();
+    expect(document.querySelector<HTMLButtonElement>('[data-garden-water]')!.disabled).toBe(true);
+  });
+
+  it('signed out: watering asks to sign in, then waters once back', async () => {
+    const r = rig();
+    await r.run();
+    plot(20).click();
+    document.querySelector<HTMLButtonElement>('[data-garden-water]')!.click();
+    await flush();
+    expect(document.querySelector<HTMLDialogElement>('dialog[data-blog-signin]')!.hasAttribute('open')).toBe(true);
+    expect(document.querySelector('[data-blog-signin-lede]')!.textContent).toBe(COPY.tendLede);
+    document.querySelector<HTMLInputElement>('input[name="handle"]')!.value = 'me.test';
+    document.querySelector('form[data-blog-signin-form]')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    document.querySelector<HTMLButtonElement>('[data-blog-signin-go]')!.click();
+    await flush();
+    expect(r.went).toHaveLength(1);
+    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'tend', returnTo: '/' });
+    expect(JSON.parse(sessionStorage.getItem(TEND_KEY)!)).toMatchObject({ uri: friendRose.uri, patch: '2026-autumn' });
+
+    const back = rig({ signedIn: true });
+    await back.run();
+    expect(back.asked[0]).toBe('?patch=2026-autumn');
+    expect(back.calls.find((c) => c.path.endsWith('createRecord'))!.body!.record).toMatchObject({ subject: { uri: friendRose.uri } });
+    expect(sessionStorage.getItem(PENDING_KEY)).toBeNull();
+    expect(sessionStorage.getItem(TEND_KEY)).toBeNull();
+    expect(back.calls.some((c) => (c.body?.collection as string) === SPROUT_NSID)).toBe(false);
+  });
+
+  it('a pressed flower’s card says so, and has nothing to water', async () => {
+    await rig({ patch: summer, flowers: [{ ...friendRose, plantedAt: '2026-08-31T00:00:00Z' }] }).run();
+    plot(20).click();
+    expect(document.querySelector('.home-card__meta')!.textContent).toBe(COPY.inBloom(describeBloom('rose', flowerVariant(friendRose as never)), false));
+    expect(document.querySelector('[data-garden-water]')).toBeNull();
   });
 
   it('elsewhere (previews) it says planting works on atpota.to', async () => {

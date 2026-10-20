@@ -854,6 +854,26 @@ html:has(.blog-signin[open]) {
   background: var(--blush);
 }
 
+.burst--drops {
+  width: 9px;
+  height: 12px;
+  margin: -6px 0 0 -5px;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: var(--drop);
+}
+
+.burst--drops[data-shade="1"] {
+  background: var(--drop-deep);
+}
+
+.burst--petals {
+  width: 10px;
+  height: 14px;
+  margin: -7px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--sun);
+}
+
 @keyframes burst {
   from {
     opacity: 1;

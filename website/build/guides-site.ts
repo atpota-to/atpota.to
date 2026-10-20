@@ -70,11 +70,15 @@ function serveWellKnown(req: IncomingMessage, res: ServerResponse, next: (err?: 
   res.end(publicationUri());
 }
 
-/** Vite's dev and preview servers only find guides/index.html at "/guides/"; Vercel serves it at "/guides". */
+/** Pages that are a folder's index.html (guides/, garden/). */
+const FOLDER_PAGES = new Set(['/guides', '/garden']);
+
+/** Vite's dev and preview servers only find guides/index.html at "/guides/"; Vercel serves it at "/guides". Same for /garden. */
 function devGuidesIndex(req: IncomingMessage, _res: ServerResponse, next: (err?: unknown) => void): void {
   const url = req.url ?? '';
   const at = url.indexOf('?');
-  if ((at === -1 ? url : url.slice(0, at)) === '/guides') req.url = `/guides/${at === -1 ? '' : url.slice(at)}`;
+  const path = at === -1 ? url : url.slice(0, at);
+  if (FOLDER_PAGES.has(path)) req.url = `${path}/${at === -1 ? '' : url.slice(at)}`;
   next();
 }
 
