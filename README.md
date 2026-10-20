@@ -21,8 +21,9 @@ this repo is atpota.to itself, and poe, the potato who lives there.
 | --- | --- |
 | [`website/`](website/) | atpota.to: a Vite multi-page site with Vercel Functions behind it |
 | [`bot/`](bot/) | Poe, an [eve](https://eve.dev) agent on Vercel. Answers on Bluesky as [@poe.atpota.to](https://bsky.app/profile/poe.atpota.to), chats on the website, and writes the weekly dispatch |
-| [`mentions/`](mentions/) | The build brief for the droplet, the always-on service that watches Bluesky for mentions and posts Poe's replies. Its code is not in this repo |
-| [`atmosphere/`](atmosphere/) | The build brief for the weather station, a second service on the droplet that keeps a rolling 60-second count of the firehose (`hook.atpota.to/weather/v1/now`) and writes a minute-by-minute history to Supabase for `/weather` |
+| [`mentions/`](mentions/) | The droplet service that watches Bluesky for mentions, gates them in code, and posts Poe's replies. Holds the only atproto write credential |
+| [`atmosphere/`](atmosphere/) | The weather station, a second droplet service that keeps a rolling 60-second count of the firehose (`hook.atpota.to/weather/v1/now`) and writes a minute-by-minute history to Supabase for `/weather` |
+| [`droplet/`](droplet/) | How those two run on the droplet. Merging to `main` deploys them through GitHub Actions |
 | [`agent-spec/`](agent-spec/) | The planning documents Poe was built from. Historical: where they disagree with `bot/`, `bot/` wins |
 | [`branding/`](branding/) | Avatars, the mascot, the OG image and the brand proposal |
 

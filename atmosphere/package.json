@@ -5,11 +5,11 @@
   "type": "module",
   "main": "src/index.js",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.4"
   },
   "scripts": {
     "start": "/opt/node22/bin/node --env-file=.env src/index.js",
-    "test": "/opt/node22/bin/node --test --test-reporter=spec test/*.test.js"
+    "test": "PATH=/opt/node22/bin:$PATH node --test --test-reporter=spec test/*.test.js"
   },
   "dependencies": {}
 }
