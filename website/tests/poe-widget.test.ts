@@ -10,6 +10,7 @@ import { faceUrl } from '../src/poe/moods.js';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../src/scripts/mascot.js';
 import { PHONE_QUERY, type PoeWidget } from '../src/poe/ui.js';
 import { resetStoresForTests } from '../src/poe/storage.js';
+import { say, type PoeLine } from '../src/poe/say.js';
 
 /* ---------- helpers ---------- */
 
@@ -989,6 +990,113 @@ describe('nudge', () => {
     mount(undefined, { nudgeDelayMs: 10 });
     vi.advanceTimersByTime(100);
     expect($('.poe-nudge').hidden).toBe(true);
+  });
+});
+
+describe("a page's line (say.ts)", () => {
+  const line = (over: Partial<PoeLine> = {}): PoeLine => ({ label: 'weather alert', text: 'teal.fm just blew in', sub: '12 records in the last minute', ms: 9000, ...over });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    delete document.body.dataset.poeNudge;
+  });
+
+  it('says it in a bubble by the potato, with its face, read out politely, then lets it go', () => {
+    mount();
+    const onGone = vi.fn();
+    expect(say(line({ face: 'kawaii', onGone }))).not.toBeNull();
+    const bubble = $('.poe-say');
+    expect(bubble.parentElement).toBe($('#poe-root'));
+    expect($('.poe-say__label').textContent).toBe('weather alert');
+    expect($('.poe-say__text').textContent).toBe('teal.fm just blew in');
+    expect($('.poe-say__sub').textContent).toBe('12 records in the last minute');
+    expect($('.poe-potato img').getAttribute('src')).toBe(MASCOT_URLS.kawaii);
+    vi.advanceTimersByTime(100);
+    expect(widget.live.textContent).toBe('poe said: weather alert: teal.fm just blew in 12 records in the last minute');
+    vi.advanceTimersByTime(9000);
+    expect(onGone).toHaveBeenCalledTimes(1);
+    expect($('.poe-potato img').getAttribute('src')).toBe(faceUrl('resting'));
+    vi.advanceTimersByTime(300);
+    expect(bubble.isConnected).toBe(false);
+  });
+
+  it('winks unless the line asks for another face, and puts words on the page as text', () => {
+    mount();
+    say(line({ text: '<img src=x onerror=alert(1)> is brand new here (◕‿◕)' }));
+    expect($('.poe-potato img').getAttribute('src')).toBe(faceUrl('nudge'));
+    expect($('.poe-say img')).toBeNull();
+    const face = $('.poe-say__text .poe-face');
+    expect(face.getAttribute('aria-hidden')).toBe('true');
+    expect(face.textContent).toBe('(◕‿◕)');
+  });
+
+  it('one line at a time, none while the panel is open, and opening it takes the line away', () => {
+    mount();
+    const onGone = vi.fn();
+    const speech = say(line({ onGone }));
+    expect(say(line({ text: 'another' }))).toBeNull();
+    widget.open({ via: 'keyboard' });
+    expect(onGone).toHaveBeenCalledTimes(1);
+    expect(say(line())).toBeNull();
+    widget.close();
+    expect(say(line())).not.toBeNull();
+    speech!.close(); // an old handle leaves the new line alone
+    expect(document.querySelectorAll('.poe-say.is-visible')).toHaveLength(1);
+  });
+
+  it('waits for the nudge bubble to go first', () => {
+    document.body.dataset.poeNudge = 'psst. ask me what a lexicon is (◕‿◕)';
+    mount(undefined, { nudgeDelayMs: 10 });
+    vi.advanceTimersByTime(20);
+    expect($('.poe-nudge').hidden).toBe(false);
+    expect(say(line())).toBeNull();
+    widget.hideNudge();
+    expect(say(line())).not.toBeNull();
+  });
+
+  it('holds still while it is being read', () => {
+    mount();
+    const onGone = vi.fn();
+    say(line({ onGone }));
+    const bubble = $('.poe-say');
+    vi.advanceTimersByTime(2000);
+    bubble.dispatchEvent(new Event('pointerenter'));
+    vi.advanceTimersByTime(30_000);
+    expect(onGone).not.toHaveBeenCalled();
+    bubble.dispatchEvent(new Event('pointerleave'));
+    vi.advanceTimersByTime(6900);
+    expect(onGone).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(onGone).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes from its close button (focus back to the potato), on Escape, or from its action', () => {
+    mount();
+    say(line());
+    const close = $<HTMLButtonElement>('.poe-say__close');
+    expect(close.getAttribute('aria-label')).toBe('dismiss message');
+    close.focus();
+    close.click();
+    expect(document.querySelector('.poe-say.is-visible')).toBeNull();
+    expect(document.activeElement).toBe($('.poe-potato'));
+
+    say(line());
+    press('Escape');
+    expect(document.querySelector('.poe-say.is-visible')).toBeNull();
+
+    const run = vi.fn();
+    const onGone = vi.fn();
+    say(line({ action: { label: 'hush alerts', run }, onGone }));
+    $<HTMLButtonElement>('.poe-say__action').click();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(onGone).toHaveBeenCalledTimes(1);
+  });
+
+  it('is null with no Poe on the page', () => {
+    expect(say(line())).toBeNull();
+    mount();
+    unmountPoe();
+    expect(say(line())).toBeNull();
   });
 });
 

@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ALERT_MS, ALERTS_KEY, alertsFor, createAlertDesk, GAP_MS, newAppAlert, type WeatherAlert } from '../src/scripts/weather-alerts.js';
+import type { PoeLine, PoeSpeech } from '../src/poe/say.js';
+import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, RETRY_MS, STALE_MS, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
 import { smoothPath } from '../src/scripts/weather-chart.js';
 import { watchNewApps } from '../src/scripts/weather-page.js';
 import { cloudCount, MAX_CLOUDS, renderClouds } from '../src/scripts/weather-sky.js';
@@ -68,18 +69,28 @@ describe('the sky gets cloudier with the diversity index', () => {
 });
 
 describe('what makes a weather alert', () => {
+  const app = (domain: string, count: number) => ({ domain, perSecond: count / 60, count, collections: [`${domain.split('.').reverse().join('.')}.thing`] });
+
   it('the first reading only sets the scene', () => {
     const { alerts, watch } = alertsFor(null, READING);
     expect(alerts).toEqual([]);
     expect([...watch.seen]).toEqual(['tangled.sh', 'delve.town']);
   });
 
-  it('an app this visit has not seen blows in, once', () => {
+  it('an app this visit has not heard blows in, once', () => {
     const first = alertsFor(null, READING).watch;
-    const next: Reading = { ...READING, apps: [...READING.apps!, { domain: 'teal.fm', perSecond: 0.1, count: 1, collections: ['fm.teal.feed.play'] }] };
+    const next: Reading = { ...READING, apps: [...READING.apps!, { domain: 'teal.fm', perSecond: 0.1, count: ARRIVAL_MIN, collections: ['fm.teal.feed.play'] }] };
     const { alerts, watch } = alertsFor(first, next);
-    expect(alerts).toEqual([{ kind: 'arrival', eyebrow: 'weather alert', title: 'teal.fm just blew in', sub: '1 record in the last minute: fm.teal.feed.play' }]);
+    expect(alerts).toEqual([{ kind: 'arrival', label: 'weather alert', text: 'teal.fm just blew in', sub: `${ARRIVAL_MIN} records in the last minute: fm.teal.feed.play` }]);
     expect(alertsFor(watch, next).alerts).toEqual([]);
+  });
+
+  it('a record or two drifting through is not news, nor is an app already about getting busier', () => {
+    const first = alertsFor(null, READING).watch;
+    const drift = alertsFor(first, { ...READING, apps: [...READING.apps!, app('mado.blue', ARRIVAL_MIN - 1)] });
+    expect(drift.alerts).toEqual([]);
+    // mado.blue was heard (quietly), and tangled.sh was here from the start
+    expect(alertsFor(drift.watch, { ...READING, apps: [app('mado.blue', 40), app('tangled.sh', 90)] }).alerts).toEqual([]);
   });
 
   it('a storm rolling in, and the sky getting more mixed', () => {
@@ -87,101 +98,166 @@ describe('what makes a weather alert', () => {
     const { alerts } = alertsFor(calm, { ...READING, diversity: { index: 3.4, level: 'moderate', apps: 9, collections: 30 } });
     expect(alerts.map((a) => a.kind)).toEqual(['storm', 'mixed']);
     expect(alerts[0]!.sub).toBe('450 new records a second. somebody said something.');
-    expect(alerts[1]!.title).toBe("the sky's getting mixed: moderate");
+    expect(alerts[1]!.text).toBe("the sky's getting mixed: moderate");
   });
 
   it('a sampled reading never brings arrivals (it is only a few seconds long)', () => {
     const first = alertsFor(null, { ...READING, source: 'sample' }).watch;
-    expect(alertsFor(first, { ...READING, source: 'sample', apps: [{ domain: 'x.y', perSecond: 1, count: 1, collections: [] }] }).alerts).toEqual([]);
+    expect(alertsFor(first, { ...READING, source: 'sample', apps: [app('x.y', 50)] }).alerts).toEqual([]);
   });
 
   it('apps the station has never heard before get their own alert, after the first look', () => {
     const pushed: WeatherAlert[] = [];
     const watch = watchNewApps({ push: (a) => pushed.push(a), hushed: false, hush() {}, unhush() {}, onHushChange() {} }, 'UTC');
-    const app = (domain: string) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates: 1, collections: [] });
-    const almanac = (apps: ReturnType<typeof app>[]) => ({ tz: 'UTC', newApps: { historyStart: null, readyAt: null, warmingUp: false, heard: 9, apps } });
-    watch(almanac([app('a.app')]));
+    const fresh = (domain: string) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates: 1, collections: [] });
+    const almanac = (apps: ReturnType<typeof fresh>[]) => ({ tz: 'UTC', newApps: { historyStart: null, readyAt: null, warmingUp: false, heard: 9, apps } });
+    watch(almanac([fresh('a.app')]));
     expect(pushed).toEqual([]);
-    watch(almanac([app('b.app'), app('a.app')]));
+    watch(almanac([fresh('b.app'), fresh('a.app')]));
     expect(pushed).toEqual([newAppAlert('b.app', '4:46 pm')]);
+    expect(pushed[0]!.text).toBe('b.app is brand new here (◕‿◕)');
   });
 });
 
-describe('the alert cards', () => {
-  const alert = (title: string, kind: WeatherAlert['kind'] = 'arrival'): WeatherAlert => ({ kind, eyebrow: 'weather alert', title, sub: 'sub' });
-  let region: HTMLElement;
+describe('Poe says the alerts', () => {
+  const alert = (text: string, kind: WeatherAlert['kind'] = 'arrival'): WeatherAlert => ({ kind, label: 'weather alert', text, sub: 'sub' });
+
+  /** A stand-in for the corner Poe: one line at a time, none while busy. */
+  function fakePoe() {
+    const said: PoeLine[] = [];
+    let showing: PoeLine | null = null;
+    const poe = {
+      said,
+      busy: false,
+      get showing() {
+        return showing?.text ?? null;
+      },
+      speak(line: PoeLine): PoeSpeech | null {
+        if (poe.busy || showing) return null;
+        showing = line;
+        said.push(line);
+        return { close: () => poe.done() };
+      },
+      /** The bubble goes (its time is up, or the reader closed it). */
+      done() {
+        const line = showing;
+        showing = null;
+        line?.onGone?.();
+      },
+    };
+    return poe;
+  }
+
+  let poe: ReturnType<typeof fakePoe>;
+  let desk: AlertDesk;
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
-    document.body.innerHTML = '<div data-weather-alerts aria-live="polite"></div>';
-    region = document.querySelector('[data-weather-alerts]')!;
+    poe = fakePoe();
+    desk = createAlertDesk(window, poe.speak);
   });
   const advance = (ms: number) => vi.advanceTimersByTime(ms);
 
-  it('shows one at a time, then goes after a while', () => {
-    const desk = createAlertDesk(region, window);
+  it('says one at a time, a minute apart at least, with a face for each', () => {
     desk.push(alert('tangled.sh just blew in'));
-    expect(region.querySelectorAll('.weather-alert')).toHaveLength(1);
-    expect(region.querySelector('.weather-alert__title')!.textContent).toBe('tangled.sh just blew in');
+    expect(poe.showing).toBe('tangled.sh just blew in');
+    expect(poe.said[0]).toMatchObject({ label: 'weather alert', sub: 'sub', face: 'kawaii', ms: ALERT_MS });
     desk.push(alert('teal.fm just blew in'));
-    expect(region.querySelectorAll('.weather-alert:not(.is-leaving)')).toHaveLength(1);
-    advance(ALERT_MS + 400);
-    // the next waits for the gap after the first one showed
-    expect(region.querySelectorAll('.weather-alert')).toHaveLength(0);
-    advance(GAP_MS - ALERT_MS - 400 + 50);
-    expect(region.querySelector('.weather-alert__title')!.textContent).toBe('teal.fm just blew in');
+    advance(ALERT_MS);
+    poe.done();
+    expect(poe.showing).toBeNull();
+    advance(GAP_MS - ALERT_MS - 50);
+    expect(poe.showing).toBeNull();
+    advance(50);
+    expect(poe.showing).toBe('teal.fm just blew in');
   });
 
   it('keeps the most important ones when lots happen at once', () => {
-    const desk = createAlertDesk(region, window);
     desk.push(alert('first'));
+    advance(GAP_MS - 20_000);
     desk.push(alert('a.app'));
     desk.push(alert('b.app'));
     desk.push(alert('storm', 'storm'));
-    const titles: string[] = [];
     for (let i = 0; i < 3; i++) {
+      poe.done();
       advance(GAP_MS);
-      const shown = region.querySelector('.weather-alert:not(.is-leaving) .weather-alert__title');
-      if (shown) titles.push(shown.textContent!);
     }
-    expect(titles).toEqual(['storm', 'b.app']);
+    expect(poe.said.map((l) => l.text)).toEqual(['first', 'storm', 'b.app']);
+    expect(poe.said[1]!.face).toBe('wow');
   });
 
-  it('can be dismissed, and puts names on the page as text', () => {
-    const desk = createAlertDesk(region, window);
-    desk.push(alert('<img src=x onerror=alert(1)>'));
-    expect(region.querySelector('img')).toBeNull();
-    region.querySelector<HTMLButtonElement>('.weather-alert__close')!.click();
-    advance(300);
-    expect(region.querySelectorAll('.weather-alert')).toHaveLength(0);
+  it('lets go of what has waited too long to still be news', () => {
+    desk.push(alert('first'));
+    desk.push(alert('a.app'));
+    desk.push(alert('b.app'));
+    for (let i = 0; i < 3; i++) {
+      poe.done();
+      advance(GAP_MS);
+    }
+    // b.app would be two minutes late by its turn
+    expect(poe.said.map((l) => l.text)).toEqual(['first', 'a.app']);
   });
 
-  it('can be hushed, and stays hushed in this browser', () => {
-    const desk = createAlertDesk(region, window);
+  it('a storm or a more mixed sky only once every so often', () => {
+    desk.push(alert('storm', 'storm'));
+    poe.done();
+    advance(GAP_MS);
+    desk.push(alert('storm again', 'storm'));
+    desk.push(alert('mixed', 'mixed'));
+    expect(poe.showing).toBe('mixed');
+    poe.done();
+    advance(COOLDOWN_MS);
+    desk.push(alert('a real new storm', 'storm'));
+    expect(poe.said.map((l) => l.text)).toEqual(['storm', 'mixed', 'a real new storm']);
+  });
+
+  it('a brand new app gets leaves and a happy Poe', () => {
+    desk.push(newAppAlert('b.app', '4:46 pm'));
+    expect(poe.said[0]).toMatchObject({ face: 'happy', burst: 'leaves' });
+  });
+
+  it('waits while Poe is busy or the tab is hidden, and lets go of old news', () => {
+    poe.busy = true;
     desk.push(alert('one'));
-    region.querySelector<HTMLButtonElement>('.weather-alert__hush')!.click();
+    advance(RETRY_MS * 3);
+    expect(poe.said).toEqual([]);
+    poe.busy = false;
+    advance(RETRY_MS);
+    expect(poe.showing).toBe('one');
+    poe.done();
+
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    advance(GAP_MS);
+    desk.push(alert('two'));
+    advance(RETRY_MS * 2);
+    expect(poe.showing).toBeNull();
+    advance(STALE_MS);
+    hidden.mockRestore();
+    advance(RETRY_MS);
+    expect(poe.said.map((l) => l.text)).toEqual(['one']);
+  });
+
+  it('can be hushed from the bubble, and stays hushed in this browser', () => {
+    desk.push(alert('one'));
+    poe.said[0]!.action!.run();
     expect(desk.hushed).toBe(true);
+    expect(poe.showing).toBeNull();
     expect(localStorage.getItem(ALERTS_KEY)).toBe('off');
-    advance(300);
-    expect(region.querySelectorAll('.weather-alert')).toHaveLength(0);
-    const again = createAlertDesk(region, window);
+    const again = createAlertDesk(window, poe.speak);
     again.push(alert('two'));
-    expect(region.querySelectorAll('.weather-alert')).toHaveLength(0);
+    advance(GAP_MS);
+    expect(poe.said).toHaveLength(1);
     again.unhush();
     expect(localStorage.getItem(ALERTS_KEY)).toBeNull();
   });
 
-  it('holds still while it is being read', () => {
-    const desk = createAlertDesk(region, window);
+  it('hushing from the page takes the line away too', () => {
     desk.push(alert('one'));
-    const card = region.querySelector<HTMLElement>('.weather-alert')!;
-    advance(2000);
-    card.dispatchEvent(new Event('pointerenter'));
-    advance(ALERT_MS * 2);
-    expect(card.isConnected).toBe(true);
-    card.dispatchEvent(new Event('pointerleave'));
-    advance(ALERT_MS);
-    expect(card.classList.contains('is-leaving')).toBe(true);
+    desk.push(alert('two'));
+    desk.hush();
+    expect(poe.showing).toBeNull();
+    advance(GAP_MS * 2);
+    expect(poe.said).toHaveLength(1);
   });
 });
 

@@ -3,7 +3,8 @@
  *
  *   resting  -> normal     corner potato, nothing going on (blinks and waves now and then, idle.ts)
  *   curious  -> kawaii     hover/focus on the corner potato; the open panel while idle
- *   nudge    -> wink       while the nudge bubble shows
+ *   nudge    -> wink       while the nudge bubble shows, or a page's line (say.ts, which
+ *                          can ask for another face)
  *   digging  -> sleepy     a turn is in flight
  *   found    -> happy      an answer just landed (a few seconds)
  *   error    -> scawy      something went wrong

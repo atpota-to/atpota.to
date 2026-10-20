@@ -1,6 +1,7 @@
 /**
  * The Poe widget (SPEC 4.6): corner potato, nudge bubble, panel (desktop dialog /
- * phone bottom sheet), and the highlight-to-ask pill.
+ * phone bottom sheet), the highlight-to-ask pill, and the lines pages ask Poe to say
+ * (say.ts: the weather report's alerts).
  *
  * DOM is built with createElement/textContent only. Answer text goes through
  * render.ts; nothing else from the network is rendered except status labels
@@ -8,6 +9,7 @@
  */
 
 import { sharedAuth } from '../blog/auth';
+import { burst } from '../scripts/burst';
 import { isTouchFirst } from '../scripts/typing-focus';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../scripts/mascot';
 import { askPoe, buildRequest, resetConversation, type PoeError } from './client';
@@ -17,6 +19,7 @@ import { PoeIdentity, readWho, saveWho, type Who } from './identity';
 import { BLINK_GAP_MS, BLINK_MS, CHEER_MS, GLANCE_MS, WAKE_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from './idle';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
 import { renderAnswer, splitTrailingFace } from './render';
+import { SAY_MS, setSpeaker, type PoeLine, type PoeSpeech } from './say';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
 import { isSlashShortcut, isTypingTarget, otherModalOpen } from './shortcuts';
 import {
@@ -38,6 +41,9 @@ const NUDGE_AUTO_HIDE_MS = 25_000;
 const NUDGE_SCROLL_HIDE_PX = 40;
 const HOME_NUDGE_MIN_WIDTH = 420;
 const CLOSE_ANIMATION_MS = 220;
+/** A said line never goes sooner than this after the pointer or focus leaves it. */
+const SAY_LINGER_MS = 1500;
+const SAY_LEAVE_MS = 260;
 const PILL_SETTLE_MS = 180;
 const SWIPE_CLOSE_PX = 90;
 const QUOTE_DISPLAY_MAX = 140;
@@ -87,6 +93,16 @@ function lastNonEmptyIndex(blocks: Array<string | undefined>): number {
 function lastNonEmpty(blocks: Array<string | undefined>): string {
   const i = lastNonEmptyIndex(blocks);
   return i === -1 ? '' : (blocks[i] as string);
+}
+
+/** A page's line while its bubble is up (say.ts). */
+interface Saying {
+  line: PoeLine;
+  bubble: HTMLDivElement;
+  /** Time left before it goes, and when that last started running down. */
+  left: number;
+  started: number;
+  timer: number | undefined;
 }
 
 function toRect(r: DOMRect | { top: number; left: number; bottom: number; right: number; width: number; height: number }): Rect {
@@ -159,6 +175,7 @@ export class PoeWidget {
   private pillPressed = false;
   private pointerDown = false;
   private nudgeScrollY = 0;
+  private saying: Saying | null = null;
 
   // timers
   private moodTimer: number | undefined;
@@ -419,6 +436,7 @@ export class PoeWidget {
     this.on(win, 'resize', () => this.hidePill(), { passive: true });
     this.on(win, 'poe:open', () => this.open({ opener: doc.activeElement, via: 'event' }));
     this.on(win, 'poe:cheer', () => this.cheer());
+    this.cleanups.push(setSpeaker((line) => this.say(line)));
     if (this.identity) {
       const off = this.identity.onChange(() => this.renderAccount());
       this.cleanups.push(off);
@@ -444,6 +462,8 @@ export class PoeWidget {
 
   destroy(): void {
     for (const fn of this.cleanups.splice(0)) fn();
+    if (this.saying) this.win.clearTimeout(this.saying.timer);
+    this.saying = null;
     for (const t of [this.moodTimer, this.nudgeTimer, this.nudgeHideTimer, this.hideTimer, this.pillTimer, this.announceTimer, this.idleTimer, this.idleFrameTimer, this.wakeTimer]) {
       if (t !== undefined) this.win.clearTimeout(t);
     }
@@ -502,6 +522,7 @@ export class PoeWidget {
     this.nudgeDone = true;
     this.win.clearTimeout(this.nudgeTimer);
     this.hideNudge();
+    this.unsay();
     this.hidePill();
     this.ensureRendered();
 
@@ -708,7 +729,8 @@ export class PoeWidget {
   /* --------------------------------------------------------------- moods */
 
   private moodState(): MoodState {
-    return { turn: this.turnMood, open: this.isOpen, nudging: this.nudging, hovered: this.hoverPointer || this.hoverFocus };
+    // A page's line wears the nudge's face unless it asks for another (updateMoods).
+    return { turn: this.turnMood, open: this.isOpen, nudging: this.nudging || this.saying !== null, hovered: this.hoverPointer || this.hoverFocus };
   }
 
   private setTurnMood(mood: Mood | null, ms?: number): void {
@@ -729,7 +751,8 @@ export class PoeWidget {
     const perched = perchedMood(state);
     if (corner !== 'resting' || this.isOpen) this.stopIdleBeat();
     this.root.dataset.mood = this.isOpen ? perched : corner;
-    const cornerSrc = this.idleSrc ?? faceUrl(corner);
+    const talking = corner === 'nudge' && this.saying?.line.face ? MASCOT_URLS[this.saying.line.face] : null;
+    const cornerSrc = this.idleSrc ?? talking ?? faceUrl(corner);
     const perchedSrc = faceUrl(perched);
     if (this.potatoImg.getAttribute('src') !== cornerSrc) this.potatoImg.src = cornerSrc;
     if (this.perchedImg.getAttribute('src') !== perchedSrc) this.perchedImg.src = perchedSrc;
@@ -1261,6 +1284,95 @@ export class PoeWidget {
     if (hadFocus && !this.isOpen) this.potato.focus({ preventScroll: true });
   }
 
+  /* ----------------------------------------------------------------- say */
+
+  /**
+   * A page's line in a chat bubble by the potato (say.ts). Null while the panel is open,
+   * the nudge is up, or another line is still showing: the page tries again later.
+   */
+  say(line: PoeLine): PoeSpeech | null {
+    if (this.isOpen || this.nudging || this.saying || !line.text.trim()) return null;
+    const d = this.doc;
+    const bubble = el(d, 'div', { class: 'poe-say' });
+    if (line.label) bubble.append(el(d, 'p', { class: 'poe-say__label' }, line.label));
+    const split = splitTrailingFace(line.text);
+    const text = el(d, 'p', { class: 'poe-say__text' }, split ? split[0] : line.text);
+    if (split) text.append(el(d, 'span', { class: 'poe-face', 'aria-hidden': 'true' }, split[1]));
+    bubble.append(text);
+    if (line.sub) bubble.append(el(d, 'p', { class: 'poe-say__sub' }, line.sub));
+    if (line.action) {
+      const { label, run } = line.action;
+      const action = el(d, 'button', { class: 'poe-say__action', type: 'button' }, label);
+      action.addEventListener('click', () => {
+        try {
+          run();
+        } finally {
+          this.unsay();
+        }
+      });
+      bubble.append(action);
+    }
+    const close = el(d, 'button', { class: 'poe-say__close', type: 'button', 'aria-label': COPY.dismissSay });
+    close.appendChild(icon(d, 'close'));
+    close.addEventListener('click', () => this.unsay());
+    bubble.append(close);
+
+    const saying: Saying = { line, bubble, left: line.ms ?? SAY_MS, started: Date.now(), timer: undefined };
+    const resume = () => {
+      if (this.saying !== saying || saying.timer !== undefined) return;
+      saying.started = Date.now();
+      saying.timer = this.win.setTimeout(() => this.unsay(), Math.max(SAY_LINGER_MS, saying.left));
+    };
+    // Not while someone's reading it.
+    const hold = () => {
+      if (saying.timer === undefined) return;
+      this.win.clearTimeout(saying.timer);
+      saying.timer = undefined;
+      saying.left -= Date.now() - saying.started;
+    };
+    bubble.addEventListener('pointerenter', hold);
+    bubble.addEventListener('pointerleave', resume);
+    bubble.addEventListener('focusin', hold);
+    bubble.addEventListener('focusout', (e) => {
+      if (!bubble.contains(e.relatedTarget as Node | null)) resume();
+    });
+
+    this.saying = saying;
+    this.root.insertBefore(bubble, this.potato);
+    void bubble.offsetWidth;
+    bubble.classList.add('is-visible');
+    this.updateMoods();
+    saying.timer = this.win.setTimeout(() => this.unsay(), saying.left);
+    this.announce([COPY.poeSaid, line.label ? `${line.label}:` : '', text.firstChild?.textContent ?? '', line.sub ?? ''].filter(Boolean).join(' '));
+    if (line.burst) burst(bubble, line.burst, this.win);
+    return {
+      close: () => {
+        if (this.saying === saying) this.unsay();
+      },
+    };
+  }
+
+  /** Sends the page's line away, however it went, and tells the page. */
+  unsay(): void {
+    const saying = this.saying;
+    if (!saying) return;
+    this.saying = null;
+    this.win.clearTimeout(saying.timer);
+    const { bubble } = saying;
+    const hadFocus = bubble.contains(this.doc.activeElement);
+    bubble.classList.remove('is-visible');
+    if (this.reducedMotion()) bubble.remove();
+    else this.win.setTimeout(() => bubble.remove(), SAY_LEAVE_MS);
+    this.updateMoods();
+    // The bubble's buttons had focus and are going: hand it to the potato it belonged to.
+    if (hadFocus && !this.isOpen) this.potato.focus({ preventScroll: true });
+    try {
+      saying.line.onGone?.();
+    } catch {
+      // the page's business
+    }
+  }
+
   /* ---------------------------------------------------- highlight-to-ask */
 
   private onSelectionChange(): void {
@@ -1362,6 +1474,7 @@ export class PoeWidget {
         }
       }
       if (this.nudging) this.hideNudge();
+      if (this.saying) this.unsay();
       if (this.pillText && !event.defaultPrevented) this.hidePill();
       return;
     }

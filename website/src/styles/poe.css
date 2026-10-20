@@ -1,6 +1,6 @@
 /*
- * Poe widget (src/poe/**): corner potato, nudge bubble, panel (desktop dialog,
- * phone bottom sheet), highlight-to-ask pill. Uses the shared tokens
+ * Poe widget (src/poe/**): corner potato, nudge bubble, the lines pages have Poe say
+ * (say.ts), panel (desktop dialog, phone bottom sheet), highlight-to-ask pill. Uses the shared tokens
  * only, so both themes come for free; the one widget-specific colour is the
  * quoted-selection text inside the brown "you" bubble (--poe-quote), checked in
  * tests/poe-styles.test.ts.
@@ -344,6 +344,114 @@ html[data-theme="dark"] {
 }
 
 .poe-nudge__close .poe-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- a page's line (say.ts): a chat bubble where the nudge sits ---------- */
+
+.poe-say {
+  position: fixed;
+  right: 156px;
+  bottom: 78px;
+  z-index: var(--z-poe);
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 172px));
+  padding: 10px 40px 10px 16px;
+  border: 2px solid var(--line);
+  border-radius: 20px 20px 4px 20px;
+  background: var(--card);
+  box-shadow: var(--poe-shadow-bubble);
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(10px) scale(0.94);
+  transform-origin: 100% 100%;
+  transition:
+    opacity var(--dur) ease,
+    transform var(--dur-spring) var(--ease-spring);
+}
+
+.poe-say.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* on its way out: taps go through to the page */
+.poe-say:not(.is-visible) {
+  pointer-events: none;
+}
+
+.poe-say p {
+  margin: 0;
+}
+
+.poe-say__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.poe-say__text {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.poe-say__sub {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.poe-say__action {
+  justify-self: start;
+  min-height: 32px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.poe-say__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.poe-say__close::before {
+  /* 44px target around the 32px circle */
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.poe-say__close:hover {
+  background: var(--bg);
+}
+
+.poe-say__close .poe-icon {
   width: 14px;
   height: 14px;
 }
@@ -965,6 +1073,18 @@ html[data-theme="dark"] .poe-msg--poe:not(.poe-msg--note) {
     font-size: 14px;
   }
 
+  .poe-say {
+    right: 108px;
+    bottom: 74px;
+    max-width: min(240px, calc(100vw - 124px));
+    padding: 8px 36px 8px 14px;
+    border-radius: 18px 18px 4px 18px;
+  }
+
+  .poe-say__text {
+    font-size: 14px;
+  }
+
   .poe-panel {
     /* --poe-kb: on-screen keyboard height, set by ui.ts from visualViewport */
     left: 0;
@@ -1073,6 +1193,7 @@ html.poe-locked body {
   .poe-potato,
   .poe-potato__label,
   .poe-nudge,
+  .poe-say,
   .poe-panel,
   .poe-scrim,
   .poe-pill {
@@ -1084,6 +1205,7 @@ html.poe-locked body {
   .poe[data-open] .poe-potato,
   .poe-potato__label,
   .poe-nudge,
+  .poe-say,
   .poe-pill,
   .poe-panel {
     transform: none !important;
@@ -1104,6 +1226,7 @@ html.poe-locked body {
 @media (forced-colors: active) {
   .poe-panel,
   .poe-nudge,
+  .poe-say,
   .poe-pill,
   .poe-chip,
   .poe-send,
