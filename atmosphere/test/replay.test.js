@@ -95,3 +95,17 @@ test('rewriting a minute replaces its app rows, then re-sums the roll-up', async
     'POST rpc/atmosphere_roll_up_day_apps',
   ]);
 });
+
+test('a replayed minute carries its active accounts, so rewriting its app rows keeps them', async () => {
+  const { minuteRows } = await import('../src/writer.js');
+  const msgs = [];
+  for (let t = T0 - 6; t <= T0 + 130; t += 0.5) {
+    const i = Math.round(t * 2);
+    msgs.push(JSON.stringify({ did: `did:plc:r${i % 9}`, time_us: Math.round(t * 1e6), kind: 'commit', commit: { operation: 'create', collection: i % 3 ? 'app.bsky.feed.like' : 'sh.tangled.feed.star', rkey: 'x' } }));
+  }
+  const rows = [];
+  await replayWindow({ host: 'wss://js.example/subscribe', fromSec: T0, toSec: T0 + 60, open: fakeJetstream(msgs).open, onMinute: (m, tally, seconds, accounts) => rows.push(minuteRows(m, tally, seconds, accounts)) });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].minute.dids, 9);
+  assert.deepEqual(rows[0].apps.map((a) => [a.domain, a.dids]), [['tangled.sh', 3]]);
+});

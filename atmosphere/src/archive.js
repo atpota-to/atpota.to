@@ -24,7 +24,14 @@
 // periodically rewrites older segments to remove records deleted since (a like taken
 // back, an account deleted), so as far as the archive knows those were never made. So
 // minutes already in Supabase are left alone unless --overwrite (the station's own
-// minutes are exact), which also makes a stopped run safe to start again.
+// minutes are exact), which also makes a stopped run safe to start again: from 00:00Z
+// of the day it got to, so that day's account sketch comes out whole.
+//
+// Active accounts (accounts.js) are counted too: on the minute and app rows, as the
+// station writes them, and as hour and day sketches (rollup.js's rows) for the trends.
+// A sketch is only written for an hour or day wholly inside --from..--to that has no row
+// yet, so the backfill never touches one the station keeps rewriting (today's, this
+// month's), and hours older than the 8 days hour sketches are kept aren't written at all.
 //
 // Needs JETSTREAM_API_KEY in .env (free, from https://bsky.network/account) and the
 // official SDK, @bsky/jetstream, installed once outside the release, since deploys copy
@@ -36,9 +43,12 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { accountOf } from './accounts.js';
 import { eventOfMessage } from './atmosphere.js';
 import { happenedUs, MAX_EARLIER_S } from './clock.js';
+import { Sketch } from './hll.js';
 import { LEAD_S, minuteCounter, parseArgs as parseReplayArgs, supabaseReplace } from './replay.js';
+import { mergeMinute, periodEnd, periodStart, sketchRows } from './rollup.js';
 import { minuteRows, REQUEST_TIMEOUT_MS } from './writer.js';
 
 export const DEFAULT_HOST = 'https://jetstream.us-east.bsky.network';
@@ -55,6 +65,8 @@ export const LIVE_MAX_RATE = 5000;
  * archive caught up on, and rev placement (clock.js) puts its records back.
  */
 export const MAX_SILENCE_S = MAX_EARLIER_S;
+/** Hour sketches older than this are pruned (atmosphere_prune_sketches), so they aren't written. */
+export const HOUR_SKETCHES_KEPT_S = 8 * 86400;
 /** Tries per Supabase request before giving up on the run. */
 export const WRITE_TRIES = 5;
 
@@ -68,10 +80,10 @@ export function timeUsOf(time) {
   return Date.parse(`${m[1]}Z`) * 1000 + Number((m[2] ?? '').padEnd(6, '0'));
 }
 
-/** An SDK event as the v1 message the station's counting reads (eventOfMessage, happenedUs). */
+/** An SDK event as the v1 message the station's counting reads (eventOfMessage, happenedUs, accountOf). */
 export function messageOf(evt) {
   const c = evt?.kind === 'commit' ? evt.commit : null;
-  return { kind: evt?.kind, time_us: timeUsOf(evt?.time), commit: c ? { operation: c.operation, collection: c.collection, rev: c.rev } : undefined };
+  return { did: evt?.did, kind: evt?.kind, time_us: timeUsOf(evt?.time), commit: c ? { operation: c.operation, collection: c.collection, rev: c.rev } : undefined };
 }
 
 /** Every sealed segment the archive lists, in order. */
@@ -123,14 +135,14 @@ export function planRange(segments, fromSec, toSec) {
 
 /**
  * Counts archive events (the SDK's, in seq order) into minutes [fromSec, toSec), handing
- * them to `onMinutes(list)` an hour at a time ({ minuteSec, tally, seconds } each), and
+ * them to `onMinutes(list)` an hour at a time ({ minuteSec, tally, seconds, accounts } each), and
  * waiting for it, so a slow write holds back the download rather than piling up. Stops
  * reading once the last minute is out. Resolves with what it read; `done` false means the
  * events ran out first, and `holes` lists any silence longer than MAX_SILENCE_S.
  */
 export async function archiveWindow({ events, fromSec, toSec, onMinutes }) {
   let ready = [];
-  const counter = minuteCounter({ fromSec, toSec, onMinute: (minuteSec, tally, seconds) => ready.push({ minuteSec, tally, seconds }) });
+  const counter = minuteCounter({ fromSec, toSec, onMinute: (minuteSec, tally, seconds, accounts) => ready.push({ minuteSec, tally, seconds, accounts }) });
   const startUs = (fromSec - LEAD_S) * 1e6;
   const read = { events: 0, firstUs: null, lastUs: null, done: false, holes: [] };
   const hand = async () => {
@@ -150,7 +162,7 @@ export async function archiveWindow({ events, fromSec, toSec, onMinutes }) {
       counter.station.beginSession();
     }
     read.lastUs = Math.max(read.lastUs ?? m.time_us, m.time_us);
-    const done = counter.push(m.time_us, eventOfMessage(m), happenedUs(m));
+    const done = counter.push(m.time_us, eventOfMessage(m), happenedUs(m), accountOf(m));
     if (done || ready.some((r) => (r.minuteSec + 60) % 3600 === 0)) await hand();
     if (done) {
       read.done = true;
@@ -171,6 +183,30 @@ export async function loadSdk(dir = SDK_DIR) {
   mkdir -p ${dir} && cp /root/atpota-live/atmosphere/archive-sdk/package*.json ${dir}/ && (cd ${dir} && PATH=/opt/node22/bin:$PATH npm ci --ignore-scripts)`);
   }
   return import(pathToFileURL(entry).href);
+}
+
+/** Hour and day sketch rows, inserted only where there are none (PostgREST, the service key). */
+export function sketchStore({ url, key, fetch = globalThis.fetch }) {
+  const base = url.replace(/\/+$/, '');
+  const headers = { apikey: key, authorization: `Bearer ${key}` };
+  async function call(path, init = {}) {
+    const res = await fetch(`${base}/rest/v1/${path}`, { ...init, headers: { ...headers, ...init.headers }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS * 3) });
+    if (!res.ok) throw new Error(`${path.split('?')[0]}: HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    return res;
+  }
+  const insert = (table, conflict, rows) =>
+    call(`${table}?on_conflict=${conflict}`, { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify(rows) });
+  return {
+    async sketchExists(period, tIso) {
+      const rows = await (await call(`atmosphere_account_sketch?select=t&period=eq.${period}&t=eq.${encodeURIComponent(tIso)}&limit=1`)).json();
+      return Array.isArray(rows) && rows.length > 0;
+    },
+    /** A period's rows from sketchRows: apps first, so a period with a main row is always whole. */
+    async insertSketches({ main, apps }) {
+      for (let i = 0; i < apps.length; i += 200) await insert('atmosphere_account_app_sketch', 'period,t,domain', apps.slice(i, i + 200));
+      await insert('atmosphere_account_sketch', 'period,t', [main]);
+    },
+  };
 }
 
 export function parseArgs(argv, nowMs = Date.now()) {
@@ -196,18 +232,41 @@ async function tries(what, fn) {
  * that already have a row are left alone unless args.overwrite. Each UTC day's app
  * roll-up is re-summed once the day is written.
  */
-export async function backfill({ args, host, apiKey, db, Jetstream, fetch = globalThis.fetch, log = console.log, warn = console.warn }) {
+export async function backfill({ args, host, apiKey, db, Jetstream, fetch = globalThis.fetch, log = console.log, warn = console.warn, now = () => Date.now() }) {
   const plan = planRange(await listSegments({ host, key: apiKey, fetch }), args.fromSec, args.toSec);
   log(`backfilling ${iso(args.fromSec)} to ${iso(args.toSec)} from ${host}: ${plan.segments} segments, about ${(plan.bytes / 1e9).toFixed(1)} GB to download${db ? '' : ' (dry run: nothing is written)'}`);
-  log('if it stops, run it again with --from at the last hour it printed: minutes already written are left alone');
+  log('if it stops, run it again with --from at 00:00Z of the last day it printed: minutes already written are left alone, and that day comes out whole');
 
   const retried = { n: 0, ms: 0 };
-  const sum = { written: 0, kept: 0, partial: [] };
+  const sum = { written: 0, kept: 0, partial: [], sketches: { hour: 0, day: 0, there: 0 } };
   let rollFrom = null;
   const started = Date.now();
 
+  // The hour and the day whose accounts are being merged, kept as rollup.js keeps them.
+  const periods = { hour: null, day: null };
+  async function finish(e) {
+    if (!db || e.t < args.fromSec || periodEnd(e.period, e.t) > args.toSec) return;
+    if (e.period === 'hour' && e.t < now() / 1000 - HOUR_SKETCHES_KEPT_S) return;
+    if (await tries(`reading the ${e.period} sketch for ${iso(e.t)}`, () => db.sketchExists(e.period, iso(e.t)))) {
+      sum.sketches.there++;
+      return;
+    }
+    await tries(`writing the ${e.period} sketch for ${iso(e.t)}`, () => db.insertSketches(sketchRows(e.period, e.t, e)));
+    sum.sketches[e.period]++;
+  }
+  async function addAccounts(m) {
+    for (const period of ['hour', 'day']) {
+      const t = periodStart(period, m.minute);
+      if (periods[period]?.t !== t) {
+        if (periods[period]) await finish(periods[period]);
+        periods[period] = { period, t, through: null, seconds: 0, bluesky: new Sketch(), elsewhere: new Sketch(), apps: new Map(), dirty: false, dirtyApps: new Set() };
+      }
+      mergeMinute(periods[period], m);
+    }
+  }
+
   async function onMinutes(list) {
-    const rows = list.map((m) => minuteRows(m.minuteSec, m.tally, m.seconds));
+    const rows = list.map((m) => minuteRows(m.minuteSec, m.tally, m.seconds, m.accounts));
     const whole = rows.filter((r) => r.minute.seconds_covered === 60);
     for (const r of rows) if (r.minute.seconds_covered !== 60) sum.partial.push(r.minute.minute);
     const first = list[0].minuteSec;
@@ -221,6 +280,8 @@ export async function backfill({ args, host, apiKey, db, Jetstream, fetch = glob
       sum.written += fresh.length;
       if (fresh.length) rollFrom ??= iso(Math.floor(first / 86400) * 86400);
     }
+    // Accounts of whole minutes only, as only those are written.
+    for (const m of list) if (m.seconds === 60 && m.accounts) await addAccounts({ minute: m.minuteSec, seconds: m.seconds, bluesky: m.accounts.bluesky, elsewhere: m.accounts.elsewhere, apps: m.accounts.apps });
     // A UTC day is done: re-sum its apps (and anything after it, which is little).
     if (db && rollFrom && (last + 60) % 86400 === 0) {
       await tries('re-summing the daily roll-up', () => db.rollUp(rollFrom));
@@ -257,9 +318,11 @@ export async function backfill({ args, host, apiKey, db, Jetstream, fetch = glob
     onMinutes,
   });
   if (db && rollFrom) await tries('re-summing the daily roll-up', () => db.rollUp(rollFrom));
+  for (const e of Object.values(periods)) if (e) await finish(e);
 
   log(`read ${read.events.toLocaleString('en-US')} events in ${Math.round((Date.now() - started) / 60_000)} min${read.firstUs ? `, ${isoUs(read.firstUs)} to ${isoUs(read.lastUs)}` : ''}`);
   if (db) log(`wrote ${sum.written} minute(s); ${sum.kept} already in Supabase were left alone${args.overwrite ? '' : ' (--overwrite replaces them)'}`);
+  if (db) log(`wrote account sketches for ${sum.sketches.hour} hour(s) and ${sum.sketches.day} day(s)${sum.sketches.there ? `; ${sum.sketches.there} already had one and were left alone` : ''}`);
   if (read.holes.length) log(`the archive has ${read.holes.length} hole(s) longer than ${MAX_SILENCE_S} s: ${read.holes.slice(0, 10).map(([a, b]) => `${isoUs(a)} to ${isoUs(b)}`).join(', ')}${read.holes.length > 10 ? ', …' : ''}`);
   if (sum.partial.length) log(`${sum.partial.length} minute(s) not heard whole, left alone: ${sum.partial.slice(0, 20).join(', ')}${sum.partial.length > 20 ? ', …' : ''}`);
   if (!read.done) throw new Error('the archive ran out before the window was read');
@@ -274,7 +337,8 @@ async function main(argv) {
   if (!apiKey) throw new Error('JETSTREAM_API_KEY must be set (make one at https://bsky.network/account)');
   if (!args.dryRun && !(url && key)) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (or pass --dry-run)');
   const { Jetstream } = await loadSdk(process.env.JETSTREAM_SDK_DIR?.trim() || SDK_DIR);
-  await backfill({ args, host: args.host ?? DEFAULT_HOST, apiKey, db: args.dryRun ? null : supabaseReplace({ url, key }), Jetstream });
+  const db = args.dryRun ? null : { ...supabaseReplace({ url, key }), ...sketchStore({ url, key }) };
+  await backfill({ args, host: args.host ?? DEFAULT_HOST, apiKey, db, Jetstream });
 }
 
 /** Run as a command (not imported by a test). Real paths: the droplet runs it through a symlink. */

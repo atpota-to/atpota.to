@@ -138,6 +138,12 @@ html[data-theme="dark"] {
   color: var(--weather-sky-mono);
 }
 
+.weather-hero__accounts {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--weather-sky-mono);
+}
+
 /* The station's last 60 seconds, under the reading (weather-page.ts renderSparkline). */
 .weather-spark {
   display: grid;
@@ -386,6 +392,12 @@ html[data-theme="dark"] {
   color: var(--text-soft);
 }
 
+.weather-diversity__accounts {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
 .weather-diversity__about {
   margin-top: auto;
   font-size: 13px;
@@ -566,6 +578,17 @@ html[data-theme="dark"] {
 .weather-range__btn:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* Records or accounts (weather-page.ts createMeasure), beside the range on the trends and on the apps elsewhere. */
+.weather-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.weather-apps .weather-tile__aside {
+  margin-right: auto;
 }
 
 .weather-trends__summary {

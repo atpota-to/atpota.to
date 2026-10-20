@@ -247,6 +247,10 @@ come from read-only functions (applied):
   heard" stay quick as the minute rows grow. On top of it: `atmosphere_today(tz)`,
   `atmosphere_normal()`, `atmosphere_new_apps(since)`, `atmosphere_app_trends(...)`,
   `atmosphere_apps_over_time(since, bucket)` and `atmosphere_heatmap(tz, since)`.
+- [`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql): active accounts (added
+  after this brief; see README.md). Each minute's counts on its rows, and HyperLogLog
+  sketches by minute, hour, day and month, merged by the station and the website, not
+  by Postgres.
 
 **Size.** `atmosphere_minute` is 1440 rows a day (about 0.5M a year, which is
 fine to keep forever). `atmosphere_minute_app` is the long tail: expect tens of

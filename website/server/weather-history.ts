@@ -8,7 +8,7 @@
  *                                ?range=day    the last 24 hours, a point an hour
  *                                ?range=month  the last 30 days, a point a day
  *                                ?range=year   the last 12 months, a point a month
- *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime? }
+ *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts? }
  *
  * Points are raw counts with the seconds they cover, never rates: a rate is
  * count / seconds and the diversity index is 100 * elsewhere / creates, worked out in the
@@ -23,8 +23,11 @@
  *                 the page compares rates, not counts
  *   appsOverTime  how many apps outside Bluesky were heard each minute, hour, day or
  *                 month (atmosphere_apps_over_time)
+ *   accounts      active accounts (different DIDs) over the range and in each bucket, and
+ *                 the apps with the most, from the station's sketches (weather-accounts.ts)
  */
 
+import { readAccounts } from './weather-accounts.js';
 import { collectionsOf, counts, DOMAIN_RE, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch } from './supabase-public.js';
 
 export { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-public.js';
@@ -173,6 +176,10 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       });
       return { bucket, points };
     });
+    const accounts = extra('accounts', () => {
+      const { since, until, prev_since, prev_until } = trendArgs(range, at);
+      return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS });
+    });
     let rows: unknown;
     try {
       rows = await db.get(queryPath(range, at));
@@ -187,7 +194,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     return json(
       request,
       200,
-      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: await appsOverTime },
+      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: await appsOverTime, accounts: await accounts },
       cache,
     );
   }

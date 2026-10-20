@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { addEvent, emptyTally, summarize } from '../src/atmosphere.js';
+import { registerOf } from '../src/hll.js';
 import { MIN_COVERED, RETAIN_SECONDS, Station } from '../src/station.js';
 
 const T0 = 1_792_512_000; // 2026-10-20T16:00:00Z, a minute boundary
@@ -156,12 +157,13 @@ test('the reading is summarize() of the same events, plus window and series', ()
     if (second >= T0 - 60 && second < T0) addEvent(reference, e);
   }
   const r = s.reading();
-  const { window, series, ...rest } = r;
+  const { window, series, accounts, ...rest } = r;
   assert.deepEqual(rest, summarize(reference, 60, '2026-10-20T16:00:00.000Z'));
+  assert.deepEqual(accounts, { active: 0, bluesky: 0, elsewhere: 0, index: 0, apps: [] }, 'these events have no DIDs');
   assert.deepEqual(window, { from: '2026-10-20T15:59:00.000Z', to: '2026-10-20T16:00:00.000Z' });
   assert.equal(series.length, 60);
   // snapshot of the shape the website reads
-  assert.deepEqual(Object.keys(r), ['measuredAt', 'seconds', 'perSecond', 'condition', 'records', 'diversity', 'apps', 'bluesky', 'events', 'window', 'series']);
+  assert.deepEqual(Object.keys(r), ['measuredAt', 'seconds', 'perSecond', 'condition', 'records', 'diversity', 'apps', 'bluesky', 'events', 'accounts', 'window', 'series']);
   assert.deepEqual(r.apps.map((a) => a.domain).sort(), ['tangled.sh', 'unravel.fyi']);
   assert.equal(r.perSecond.likes, round1(r.bluesky.find((b) => b.nsid === 'app.bsky.feed.like').count / 60));
 });
@@ -205,4 +207,39 @@ test('counts a record in the second it was made, up to a minute before Jetstream
   assert.equal(s.counts.maxMovedMs, 28_000);
   // coverage still follows the stream: nothing past T0 + 89 is covered yet
   assert.equal(s.coveredThrough, T0 + 89);
+});
+
+test('accounts: who committed in the window, by the same coverage and replay rules', () => {
+  const c = clock(T0 + 2.5);
+  const s = new Station({ now: c.now });
+  // (names picked so no two of the forty share a register: 4096 registers, 40 accounts)
+  const who = (i) => ({ register: registerOf(`did:plc:u${i % 40}`), app: i % 10 === 0 ? 'tangled.sh' : null });
+  s.beginSession();
+  let i = 0;
+  for (let t = T0 - 80; t <= T0 - 30.05; t += 0.05) s.ingest(us(t), POST, undefined, who(i++));
+  s.endSession();
+  // the replay overlaps; nobody new in it, and nothing is counted twice anyway
+  const lastUs = s.lastUs;
+  s.beginSession({ dropThroughUs: lastUs });
+  for (let t = T0 - 32; t <= T0 + 0.95; t += 0.05) s.ingest(us(t), POST, undefined, who(i++));
+  const r = s.reading();
+  assert.equal(r.accounts.active, 40);
+  assert.equal(r.accounts.bluesky, 36);
+  assert.equal(r.accounts.elsewhere, 4);
+  assert.equal(r.accounts.index, 10);
+  assert.deepEqual(r.accounts.apps, [{ domain: 'tangled.sh', accounts: 4, collections: [] }]);
+  // a minute's accounts come with its tally
+  const m = s.minute(T0 - 60);
+  assert.equal(m.accounts.all.estimate(), 40);
+  assert.equal(m.seconds, 60);
+});
+
+test('accounts in seconds that were not covered do not count', () => {
+  const c = clock(T0 + 2.5);
+  const s = new Station({ now: c.now });
+  s.beginSession();
+  for (let t = T0 - 60.5; t <= T0 + 0.95; t += 0.1) s.ingest(us(t), POST, undefined, { register: registerOf('did:plc:steady'), app: null });
+  // the second at T0 is not covered yet: someone new in it is not in the window
+  s.ingest(us(T0 + 0.99), POST, { register: registerOf('did:plc:late'), app: null });
+  assert.equal(s.reading().accounts.active, 1);
 });

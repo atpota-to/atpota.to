@@ -18,6 +18,10 @@
  *
  *   GET /api/atmosphere  ->  Reading (below), with source "station" or "sample"
  *
+ * The station's reading also says how many different accounts (DIDs) wrote anything in
+ * its 60 seconds (`accounts`, counted with HyperLogLog sketches; see atmosphere/src/
+ * accounts.js). The sample doesn't: a few seconds of accounts don't add up to a minute's.
+ *
  * If neither can be read, the answer is 503 and the tile says so.
  */
 
@@ -100,6 +104,24 @@ export interface App extends Rate {
   collections: string[];
 }
 
+export interface AccountApp {
+  domain: string;
+  /** Different accounts that wrote to it. */
+  accounts: number;
+  collections: string[];
+}
+
+export interface Accounts {
+  /** Different accounts that wrote anything. */
+  active: number;
+  bluesky: number;
+  elsewhere: number;
+  /** The share of active accounts that wrote outside Bluesky, percent, two decimals. */
+  index: number;
+  /** The apps outside Bluesky with the most accounts. */
+  apps: AccountApp[];
+}
+
 export interface Reading {
   measuredAt: string;
   /** Seconds actually counted. */
@@ -126,6 +148,8 @@ export interface Reading {
   events: { creates: number; updates: number; deletes: number; identity: number; account: number };
   /** "station": a rolling 60 seconds from the weather station; "sample": a few seconds sampled here. */
   source: 'station' | 'sample';
+  /** Who wrote, from the station only. */
+  accounts?: Accounts;
   /** The station's window. */
   window?: { from: string; to: string };
   /** The station's window second by second, oldest first; null for a second it missed. */
@@ -347,6 +371,21 @@ export function fromStation(body: unknown): Reading | null {
     events,
     source: 'station',
   };
+  const a = counts(body.accounts, ['active', 'bluesky', 'elsewhere', 'index'] as const);
+  if (a && isRecord(body.accounts) && Array.isArray(body.accounts.apps)) {
+    reading.accounts = {
+      ...a,
+      index: Math.min(a.index, 100),
+      apps: body.accounts.apps
+        .filter((x): x is Record<string, unknown> => isRecord(x) && typeof x.domain === 'string' && DOMAIN_RE.test(x.domain) && isCount(x.accounts))
+        .slice(0, TOP_APPS)
+        .map((x) => ({
+          domain: x.domain as string,
+          accounts: x.accounts as number,
+          collections: (Array.isArray(x.collections) ? x.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
+        })),
+    };
+  }
   const w = isRecord(body.window) ? { from: isoOrNull(body.window.from), to: isoOrNull(body.window.to) } : null;
   if (w?.from && w.to) reading.window = { from: w.from, to: w.to };
   if (Array.isArray(body.series)) {

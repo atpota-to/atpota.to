@@ -3,7 +3,9 @@
 The atpotato weather station. It counts the whole AT Protocol firehose one second
 at a time and answers "what has the atmosphere looked like for the last 60
 seconds?" for atpota.to's home page tile and `/weather`. Every minute it also
-writes one summary row to Supabase for the trend charts.
+writes one summary row to Supabase for the trend charts. It also counts **active
+accounts**: how many different DIDs wrote anything, with HyperLogLog sketches, so
+no DID is ever kept.
 
 The brief is [`SPEC.md`](SPEC.md). The counting rules in `src/atmosphere.js` are
 copied from [`website/server/atmosphere.ts`](../website/server/atmosphere.ts), and
@@ -21,7 +23,7 @@ Public, through nginx on `hook.atpota.to`:
 
 | URL | Auth | Answer |
 |---|---|---|
-| `GET https://hook.atpota.to/weather/v1/now` | header `x-atpotato-weather-secret: $WEATHER_SECRET` | `200` the website's `Reading` plus `window` and `series` (one entry per second; `null` means missing); `503 {"error":"unavailable"}` under 30 covered seconds; `401` without the right secret |
+| `GET https://hook.atpota.to/weather/v1/now` | header `x-atpotato-weather-secret: $WEATHER_SECRET` | `200` the website's `Reading` plus `accounts`, `window` and `series` (one entry per second; `null` means missing); `503 {"error":"unavailable"}` under 30 covered seconds; `401` without the right secret |
 | `GET https://hook.atpota.to/weather/healthz` | none | `{"ok","connected","lagSeconds","covered60"}`: `200` when connected, lag is under 10 s and at least 30 of the last 60 s are covered; otherwise `503` |
 
 The process listens on `127.0.0.1:8790` and serves `/v1/now` and `/healthz`.
@@ -67,14 +69,52 @@ curl -s -H "x-atpotato-weather-secret: $(grep ^WEATHER_SECRET= /root/atpotato-we
 - **The rolling window** is the 60 seconds ending 2 s ago. The buckets are merged
   into one tally and passed through the reference's `summarize`.
 
+## Active accounts
+
+Records say how much was written; active accounts say by how many. A bot writing a
+thousand records a minute is a thousand records and one account.
+
+- **Who counts:** the DID of every commit (create, update or delete) whose collection
+  is an NSID. Identity and account events don't. A commit counts for **Bluesky** in
+  `app.bsky.*` / `chat.bsky.*` and otherwise for **elsewhere** and its app (the same
+  rules as records). Someone who likes a post and stars a repo is one active account,
+  on both sides, so bluesky + elsewhere can be more than active.
+- **How:** [`src/hll.js`](src/hll.js) is a HyperLogLog sketch with 4096 registers:
+  4 KB however many accounts it holds, within about 1.6% (2% to be safe in copy),
+  counted with Ertl's improved estimator. Each DID is hashed with SHA-256 and only
+  the register update is kept. Sketches merge by taking each register's maximum, so
+  minutes add up to hours, days and months, and merging the same minute twice changes
+  nothing. Each second keeps its commits' register updates (about 7 MB an hour).
+- **Live:** `/v1/now` has `accounts: { active, bluesky, elsewhere, index, apps }`
+  for its 60 seconds. `index` is the share of active accounts that wrote elsewhere,
+  and `apps` is the 10 apps with the most accounts. The website's fallback sampler
+  has no accounts: a few seconds of accounts don't add up to a minute's.
+- **Stored:** see "Minute rows" below and
+  [`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql). The website merges
+  and counts the stored sketches itself (`website/server/hll.ts`,
+  `weather-accounts.ts`). Postgres can't do it: on this project, merging takes about
+  70 ms a sketch in PL/pgSQL.
+
 ## Minute rows
 
 About a minute and a quarter after a minute ends, the station sums the minute's
 covered seconds and upserts it. It waits until the stream is 60 s past the minute,
 because a backlog after a pause can still add records to it. The rows:
 
-- `atmosphere_minute`: one row of raw counts, plus `seconds_covered`
-- `atmosphere_minute_app`: one row per app outside Bluesky
+- `atmosphere_minute`: one row of raw counts, plus `seconds_covered`, plus the
+  minute's active accounts (`dids`, `dids_bluesky`, `dids_elsewhere`)
+- `atmosphere_minute_app`: one row per app outside Bluesky, with its `dids`
+- `atmosphere_account_sketch` / `atmosphere_account_app_sketch`, period `minute`:
+  the minute's sketches (Bluesky and elsewhere, and one per app), as bytea
+
+[`src/rollup.js`](src/rollup.js) also merges each minute into its UTC hour, day and
+month, in memory, and rewrites those rows every 5 minutes and when they end. Each
+row's `through` is the last minute merged into it. After a restart, the first minute
+of each period reloads that period's row, then merges the minute rows after its
+`through`. So a restart loses nothing, and a retry never counts a minute twice.
+pg_cron (`atmosphere-prune-sketches`, hourly at :17) keeps minute sketches for 2 hours
+(26 for apps: the last hour is compared with the same hour yesterday) and hour
+sketches for 8 days. Days and months stay.
 
 A partly covered minute is written with its real `seconds_covered`. A minute with
 no coverage isn't written. Failed writes wait in memory and are retried oldest
@@ -89,7 +129,11 @@ with 60/60 seconds.
 
 The data is in the Supabase project **atpota.to** (`zdzjtziydmwkxbzlkwxv`). The
 migration is in [`supabase/atmosphere_weather_station.sql`](supabase/atmosphere_weather_station.sql),
-applied 2026-10-20. Besides the two tables, it adds views `atmosphere_hour` and
+applied 2026-10-20. The accounts tables are in
+[`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql), also applied 2026-10-20.
+[`sql/atmosphere_accounts_cleanup.sql`](sql/atmosphere_accounts_cleanup.sql) drops a
+first try at them that was never used. It has **not** been run yet: the Supabase
+connector holds DROPs for confirmation. Besides the two tables, it adds views `atmosphere_hour` and
 `atmosphere_day` (security_invoker). Anyone can read; only the service role
 writes (RLS). For any range:
 
@@ -142,8 +186,8 @@ while those minutes are still inside Jetstream's lookback (before about
 `src/archive.js` fills minutes from Jetstream v2's archive
 (<https://bsky.network/docs/jetstream-replay>): history older than the day and a
 half `replay.js` can reach. It counts with the same code as the station and
-`replay.js`, and writes the same rows an hour at a time, so the website can't tell
-the difference except in one way, below.
+`replay.js`, active accounts included, and writes the same rows an hour at a time,
+so the website can't tell the difference except in one way, below.
 
 **What the archive holds.** On 2026-10-20, Bluesky's us-east instance listed 7,542
 segments, about 2 TB. Almost all of that (about 1.9 TB, 2026-10-02 to 2026-10-06
@@ -205,7 +249,22 @@ cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
 It takes up to 31 days in one run, re-sums each UTC day's app roll-up
 (`atmosphere_day_app`) as it finishes it, and ends with a summary: minutes written,
 minutes left alone because they already existed, and any it didn't hear whole. If it
-stops, run it again with `--from` at the last hour it printed.
+stops, run it again with `--from` at 00:00Z of the last day it printed, so that day's
+account sketch comes out whole.
+
+**Active accounts.** Archive minutes carry their `dids` counts like the station's.
+For the trends it also writes hour and day sketches (`atmosphere_account_sketch`,
+`atmosphere_account_app_sketch`), but only for an hour or day wholly inside
+`--from`..`--to` that has no row yet: the station keeps rewriting today's and this
+month's from memory, so the backfill never touches those, nor any the station wrote.
+Hours older than the 8 days hour sketches are kept aren't written. So with the run
+above, the days Oct 7 to 19 and the last 8 days' hours get sketches; Oct 6 (a partial
+day), Oct 20 and October as a month count only what the station heard.
+
+**What it adds to Supabase.** For the 14 days above: about 20,000 minute rows
+(6 MB), 320,000 app rows (75–80 MB), a few thousand `atmosphere_day_app` rows, and a
+few MB of sketches. No schema changes. Everything before 2026-10-20T16:50Z came from
+the archive, so it can be taken out by time if ever needed.
 
 `--host` picks another v2 instance (default `https://jetstream.us-east.bsky.network`),
 and `JETSTREAM_SDK_DIR` another SDK folder.
@@ -227,7 +286,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 55 tests, about a second, no network
+npm test                                         # node:test, 80 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -244,14 +303,19 @@ and CPUQuota=50%. Measured on 2026-10-20: ~7% of one core and 30–70 MB.
 
 ```
 src/atmosphere.js  counting rules (copy of the reference) + mergeTally
+src/accounts.js    who counts as an active account, per-second lists, the reading's `accounts`
+src/hll.js         HyperLogLog sketches: hashing, merging, counting, bytes
 src/station.js     per-second buckets, coverage, rolling window, minute sums
 src/jetstream.js   the connection: cursor, replay dedupe, fallback, backoff, stall watchdog
 src/clock.js       when a record was made: its rev, within limits, else time_us
 src/writer.js      minute rows, Supabase upserts, retries
+src/rollup.js      accounts by hour, day and month: merged in memory, written every 5 minutes
+src/supabase.js    PostgREST upserts and paged reads
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line
 supabase/          the migration as applied
+sql/               the later ones (almanac, accounts)
 ```

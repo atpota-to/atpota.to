@@ -269,6 +269,30 @@ describe('reading the weather station', () => {
     expect(r.bluesky).toEqual([]);
   });
 
+  it('passes the station\'s active accounts through, checked, and does without them when they are off', () => {
+    const accounts = {
+      active: 21000,
+      bluesky: 20800,
+      elsewhere: 610,
+      index: 2.9,
+      apps: [
+        { domain: 'tangled.sh', accounts: 120, collections: ['sh.tangled.feed.star', '<b>'] },
+        { domain: '<script>', accounts: 9, collections: [] },
+        { domain: 'whtwnd.com', accounts: -1, collections: [] },
+      ],
+    };
+    expect(fromStation({ ...STATION, accounts })!.accounts).toEqual({
+      active: 21000,
+      bluesky: 20800,
+      elsewhere: 610,
+      index: 2.9,
+      apps: [{ domain: 'tangled.sh', accounts: 120, collections: ['sh.tangled.feed.star'] }],
+    });
+    expect(fromStation(STATION)!.accounts).toBeUndefined();
+    expect(fromStation({ ...STATION, accounts: { ...accounts, active: 'lots' } })!.accounts).toBeUndefined();
+    expect(fromStation({ ...STATION, accounts: { ...accounts, apps: null } })!.accounts).toBeUndefined();
+  });
+
   it('refuses a reading missing its numbers', () => {
     expect(fromStation(null)).toBeNull();
     expect(fromStation({ ...STATION, seconds: 0 })).toBeNull();

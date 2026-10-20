@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { eventOfMessage } from '../src/atmosphere.js';
-import { archiveWindow, backfill, listSegments, loadSdk, messageOf, parseArgs, planRange, timeUsOf } from '../src/archive.js';
+import { accountOf } from '../src/accounts.js';
+import { archiveWindow, backfill, listSegments, loadSdk, messageOf, parseArgs, planRange, sketchStore, timeUsOf } from '../src/archive.js';
 
 const DAY = 1_791_331_200; // 2026-10-07T00:00:00Z
 const ALPHABET = '234567abcdefghijklmnopqrstuvwxyz';
@@ -63,6 +64,7 @@ test('an archive event counts as the same thing a live one does', () => {
   assert.deepEqual(eventOfMessage(messageOf(event(DAY * 1e6, { kind: 'identity' }))), { kind: 'identity' });
   assert.deepEqual(eventOfMessage(messageOf(event(DAY * 1e6, { kind: 'account' }))), { kind: 'account' });
   assert.equal(eventOfMessage(messageOf(event(DAY * 1e6, { kind: 'sync' }))), null, 'sync is not counted, as the live station never hears it');
+  assert.equal(accountOf(messageOf(event(DAY * 1e6, { collection: 'fm.teal.feed.play' }))).app, 'teal.fm', 'and whose it is, the same way');
 });
 
 // The archive as listSegments shows it: a crawl at a furious rate, then the live stream.
@@ -205,14 +207,22 @@ test('a run writes new minutes only, and re-sums each day once it is written', a
     async minutes(rows) {
       calls.push(['minutes', rows.length, rows[0]?.minute.minute]);
       assert.ok(rows.every((r) => r.minute.seconds_covered === 60 && r.minute.creates === 120 && r.minute.minute !== stationMinute));
+      assert.ok(rows.every((r) => r.minute.dids === 1 && r.minute.dids_bluesky === 1 && r.minute.dids_elsewhere === 0), 'with their active accounts');
     },
     async rollUp(since) {
       calls.push(['rollUp', since]);
     },
+    async sketchExists(period, t) {
+      calls.push(['sketchExists', period, t]);
+      return t === '2026-10-07T00:00:00.000Z';
+    },
+    async insertSketches({ main, apps }) {
+      calls.push(['insertSketches', main.period, main.t, main.seconds, main.dids, apps.length]);
+    },
   };
   const lines = [];
   const args = parseArgs(['--from', new Date((DAY - 3600) * 1000).toISOString(), '--to', new Date((DAY + 3600) * 1000).toISOString()], (DAY + 86400) * 1000);
-  const out = await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch, log: (l) => lines.push(l), warn: () => {} });
+  const out = await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch, log: (l) => lines.push(l), warn: () => {}, now: () => (DAY + 86400) * 1000 });
 
   assert.equal(FakeJetstream.opts.apiKey, 'k');
   assert.equal(FakeJetstream.asked.raw, true);
@@ -222,10 +232,48 @@ test('a run writes new minutes only, and re-sums each day once it is written', a
     ['rollUp', '2026-10-06T00:00:00.000Z'],
     ['existing', '2026-10-07T00:00:00.000Z', '2026-10-07T01:00:00.000Z'],
     ['minutes', 59, '2026-10-07T00:00:00.000Z'],
+    // the hour before is over: its sketch, the station's minute's accounts in it too
+    ['sketchExists', 'hour', '2026-10-06T23:00:00.000Z'],
+    ['insertSketches', 'hour', '2026-10-06T23:00:00.000Z', 3600, 1, 0],
     ['rollUp', '2026-10-07T00:00:00.000Z'],
+    // already has one: left alone. Neither day is wholly inside the run, so neither is written.
+    ['sketchExists', 'hour', '2026-10-07T00:00:00.000Z'],
   ]);
-  assert.deepEqual([out.written, out.kept, out.partial.length], [119, 1, 0]);
+  assert.deepEqual([out.written, out.kept, out.partial.length, out.sketches], [119, 1, 0, { hour: 1, day: 0, there: 1 }]);
   assert.match(lines.find((l) => l.startsWith('2026-10-07T00:00Z')), /60\/60 min +2\.0 records\/s .* 59 written +100\.0%/);
+});
+
+test('hour sketches older than the 8 days they are kept are not written', async () => {
+  const list = steady(DAY - 100, DAY + 3600 + 200, 1);
+  const segs = [{ ...segment(0, 0, 0, list.length, list[0].seq), minWitnessedAt: timeUsOf(list[0].time), maxWitnessedAt: timeUsOf(list.at(-1).time) }];
+  class FakeJetstream {
+    async *snapshot() {
+      yield* list;
+    }
+  }
+  const calls = [];
+  const db = { existing: async () => new Set(), minutes: async () => {}, rollUp: async () => {}, sketchExists: async (...a) => calls.push(a) && false, insertSketches: async () => {} };
+  const args = parseArgs(['--from', new Date(DAY * 1000).toISOString(), '--to', new Date((DAY + 3600) * 1000).toISOString()], (DAY + 86400) * 1000);
+  await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch: async () => new Response(JSON.stringify({ segments: segs })), log: () => {}, now: () => (DAY + 9 * 86400) * 1000 });
+  assert.deepEqual(calls, []);
+});
+
+test('sketch rows go in apps first, and never over a row that is there', async () => {
+  const asked = [];
+  const fetch = async (url, init) => {
+    asked.push([init.method ?? 'GET', url.replace('https://db.example/rest/v1/', ''), init.headers.prefer ?? null, init.body ? JSON.parse(init.body).length : null]);
+    return new Response(init.method === 'POST' ? null : '[{"t":"2026-10-07T00:00:00+00:00"}]', { status: init.method === 'POST' ? 201 : 200 });
+  };
+  const store = sketchStore({ url: 'https://db.example', key: 'k', fetch });
+  assert.equal(await store.sketchExists('day', '2026-10-07T00:00:00.000Z'), true);
+  await store.insertSketches({ main: { period: 'day' }, apps: Array.from({ length: 450 }, (_, i) => ({ domain: `app${i}.example` })) });
+  assert.deepEqual(asked, [
+    ['GET', 'atmosphere_account_sketch?select=t&period=eq.day&t=eq.2026-10-07T00%3A00%3A00.000Z&limit=1', null, null],
+    ['POST', 'atmosphere_account_app_sketch?on_conflict=period,t,domain', 'resolution=ignore-duplicates,return=minimal', 200],
+    ['POST', 'atmosphere_account_app_sketch?on_conflict=period,t,domain', 'resolution=ignore-duplicates,return=minimal', 200],
+    ['POST', 'atmosphere_account_app_sketch?on_conflict=period,t,domain', 'resolution=ignore-duplicates,return=minimal', 50],
+    ['POST', 'atmosphere_account_sketch?on_conflict=period,t', 'resolution=ignore-duplicates,return=minimal', 1],
+  ]);
 });
 
 test('a dry run writes nothing', async () => {
