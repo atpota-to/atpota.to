@@ -23,7 +23,8 @@ this repo is atpota.to itself, and poe, the potato who lives there.
 | [`bot/`](bot/) | Poe, an [eve](https://eve.dev) agent on Vercel. Answers on Bluesky as [@poe.atpota.to](https://bsky.app/profile/poe.atpota.to), chats on the website, and writes the weekly dispatch |
 | [`mentions/`](mentions/) | The droplet service that watches Bluesky for mentions, gates them in code, and posts Poe's replies. Holds the only atproto write credential |
 | [`atmosphere/`](atmosphere/) | The weather station, a second droplet service that keeps a rolling 60-second count of the firehose (`hook.atpota.to/weather/v1/now`) and writes a minute-by-minute history to Supabase for `/weather` |
-| [`droplet/`](droplet/) | How those two run on the droplet. Merging to `main` deploys them through GitHub Actions |
+| [`garden/`](garden/) | The garden's index, a third droplet service that follows the garden records on Jetstream, keeps them in Supabase, and settles what each mystery seed grows into from the network weather |
+| [`droplet/`](droplet/) | How those three run on the droplet. Merging to `main` deploys them through GitHub Actions |
 | [`agent-spec/`](agent-spec/) | The planning documents Poe was built from. Historical: where they disagree with `bot/`, `bot/` wins |
 | [`branding/`](branding/) | Avatars, the mascot, the OG image and the brand proposal |
 
@@ -45,11 +46,14 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
   the last minute, today against usual, or the past week with an outlook. It writes
   the dispatch's weather section from the week
   ([`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md)).
-- **The website keeps no database.** The blog, gardens, comments and
+- **The website writes no database.** The blog, gardens, comments and
   subscriptions are records in people's own repos, read through public
   infrastructure: plc.directory, the Bluesky AppView, Jetstream,
   [Constellation](https://constellation.microcosm.blue) and
-  [Slingshot](https://slingshot.microcosm.blue).
+  [Slingshot](https://slingshot.microcosm.blue). Two droplet services keep
+  public copies in Supabase that the website reads with the publishable key: the
+  weather station's history, and the garden's index (`GARDEN_SOURCE`; it falls
+  back to Constellation and Slingshot whenever the index is behind).
 - **Signing in** uses atproto OAuth in the browser
   ([`public/oauth-client-metadata.json`](website/public/oauth-client-metadata.json)).
   To tell Poe who is chatting, the browser asks the visitor's PDS for a
