@@ -61,7 +61,7 @@
                         <p class="weather-hero__big"><span data-r-records>&ndash;</span> <span class="weather-hero__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
                         <!-- new records a second over the station's 60 seconds, when it's live; the number above says it in words -->
-                        <div class="weather-spark" data-r-spark aria-hidden="true" hidden></div>
+                        <div class="weather-spark" data-r-spark aria-hidden="true"></div>
                     </div>
                 </div>
                 <p class="visually-hidden" role="status" data-r-status></p>
@@ -85,7 +85,10 @@
                     <p class="weather-tile__aside" data-a-new-count></p>
                 </div>
                 <p class="weather-new__lede" data-a-new-lede>listening for new arrivals…</p>
+                <!-- a word cloud, each app a link to its lexicons in aturi; the card is for the mouse, the links say the same in words -->
                 <ul class="weather-new__list" role="list" data-a-new-list></ul>
+                <div class="weather-new__tip" data-a-new-tip aria-hidden="true" hidden></div>
+                <p class="weather-tile__note" data-a-new-note hidden>bigger names have written more records. pick one to explore its lexicons in aturi.</p>
             </section>
 
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">

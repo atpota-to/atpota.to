@@ -1522,6 +1522,13 @@ html[data-theme="dark"] .site-footer__sprout {
   flex: 1 1 0;
   min-width: 4px;
   border-radius: 4px;
+  transition: flex-grow 0.8s var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-ratio > span {
+    transition: none;
+  }
 }
 
 .weather-ratio > span[hidden] {
@@ -1544,6 +1551,64 @@ html[data-theme="dark"] .site-footer__sprout {
 
   .weather-ratio__else {
     background: Highlight;
+  }
+}
+
+/* ---------- rolling numbers (src/scripts/roll.ts) ---------- */
+
+/* The number is visually hidden text; beside it, one empty cell per character
+   (aria-hidden). A cell's ::before is its character, invisible for a digit, which gives it
+   its width and baseline; a digit's ::after is a reel of 0–9 three times over, turned to
+   --n. The cell reaches 0.2em above and below its line (padding, given back by the
+   negative margin) and fades out there, so digits roll in and out softly. The reel's lines
+   are that much taller than the text's, so its digit sits just where the text's would and
+   its neighbours stay out of sight even in a tight line-height. */
+.roll {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll__c {
+  position: relative;
+  display: inline-block;
+  padding-block: 0.2em;
+  margin-block: -0.2em;
+  -webkit-mask-image: linear-gradient(transparent, #000 0.2em, #000 calc(100% - 0.2em), transparent);
+  mask-image: linear-gradient(transparent, #000 0.2em, #000 calc(100% - 0.2em), transparent);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.roll__c::before {
+  content: attr(data-c);
+}
+
+.roll__c--d::before {
+  visibility: hidden;
+}
+
+.roll__c--d::after {
+  content: "0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9\A 0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9\A 0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  line-height: calc(1lh + 0.4em);
+  text-align: center;
+  white-space: pre;
+  transform: translateY(calc(var(--n, 10) * -100% / 30));
+  /* a gentle spring: it settles with a hint of give (roll.ts ROLL_MS) */
+  transition: transform 0.8s var(--ease-out);
+  transition: transform 0.8s linear(0, 0.017 2%, 0.061 4%, 0.162 7%, 0.285 10%, 0.457 14%, 0.616 18%, 0.78 23%, 0.898 28%, 0.985 34%, 1.026 40%, 1.038 47%, 1.031 55%, 1.015 65%, 1.002 78%, 1);
+}
+
+.roll__cells.is-snapping .roll__c--d::after {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roll__c--d::after {
+    transition: none;
   }
 }
 
