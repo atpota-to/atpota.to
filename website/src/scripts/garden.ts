@@ -47,6 +47,7 @@ import { DAY_MS, drawFlower, FLOWER_KINDS, GROW_DAYS, sampleVariant, stageFor, t
 import {
   fetchGarden,
   flowerVariant,
+  GARDEN_SUBJECT,
   isFlowerKind,
   isPlot,
   patchUri,
@@ -54,6 +55,8 @@ import {
   sproutRecord,
   tend,
   type Flower,
+  type GardenView,
+  type Owner,
   type Patch,
   type PatchSummary,
 } from './garden-api';
@@ -203,12 +206,36 @@ export function freePlotFrom(plot: number, taken: ReadonlySet<number>, plots: nu
 }
 
 const RKEY_RE = /^[A-Za-z0-9._:~-]{1,512}$/;
+const HANDLE_RE = /^(?=.{3,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+
+/** Someone's garden page (/garden/dame.is), or their flowers (…/flowers). */
+export function gardenPath(actor: string, level: 'garden' | 'flowers' = 'garden'): string {
+  return `/garden/${actor}${level === 'flowers' ? '/flowers' : ''}`;
+}
+
+/** The address segment for someone: their handle, or their DID when the handle is broken. */
+export function actorOf(p: { did: string; handle: string }): string {
+  return HANDLE_RE.test(p.handle) && p.handle !== 'handle.invalid' ? p.handle : p.did;
+}
 
 export interface GardenOptions {
   doc?: Document;
   win?: Window;
+  /** The patch's markup ([data-garden]); defaults to the first on the page (the home tile). */
+  root?: HTMLElement;
+  /** Whose garden: a DID or handle. Defaults to atpotato's community garden. */
+  owner?: string;
+  /** Where signing in comes back to (a path safeReturnTo accepts). Defaults to the home page. */
+  returnTo?: string;
   /** Defaults to createAuth(win); null means planting isn't offered on this host. */
   auth?: Auth | null;
+  /**
+   * Opens a sign-in dialog the page already has, running `beforeLeave` if the reader goes
+   * to sign in. Without it the garden mounts its own (the home page).
+   */
+  openSignIn?: (lede: string, beforeLeave: () => void) => void;
+  /** Called whenever what the garden shows changes (loaded, a tab, planting, digging). */
+  onView?: (view: GardenView) => void;
   fetchImpl?: typeof fetch;
   now?: () => number;
   sessionStore?: KeyValueStore;
@@ -216,7 +243,12 @@ export interface GardenOptions {
   random?: () => number;
 }
 
-export async function initGarden(opts: GardenOptions = {}): Promise<void> {
+export interface GardenController {
+  /** Loads the garden again (after its keeper changed it). */
+  reload(): Promise<void>;
+}
+
+export async function initGarden(opts: GardenOptions = {}): Promise<GardenController | null> {
   const doc = opts.doc ?? document;
   const win = opts.win ?? window;
   const fetchImpl = opts.fetchImpl ?? ((input, init) => win.fetch(input, init));
@@ -224,10 +256,13 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   const random = opts.random ?? Math.random;
   const store = opts.sessionStore ?? sessionStoreFor(win);
   const local = opts.localStore ?? localStoreFor(win);
-  const tile = doc.querySelector<HTMLElement>('[data-garden]');
-  if (!tile || tile.dataset.gardenBound === 'true') return;
+  const tile = opts.root ?? doc.querySelector<HTMLElement>('[data-garden]');
+  if (!tile || tile.dataset.gardenBound === 'true') return null;
   tile.dataset.gardenBound = 'true';
   const box: HTMLElement = tile;
+  const returnTo = opts.returnTo ?? '/';
+  const nameEl = tile.querySelector<HTMLElement>('[data-garden-name]');
+  const noteEl = tile.querySelector<HTMLElement>('[data-garden-note]');
   const plots = tile.querySelector<HTMLElement>('[data-garden-plots]');
   const count = tile.querySelector<HTMLElement>('[data-garden-count]');
   const status = tile.querySelector<HTMLElement>('[data-garden-status]');
@@ -240,6 +275,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   const card = tile.querySelector<HTMLElement>('[data-garden-card]');
   const auth = opts.auth === undefined ? createAuth(win) : opts.auth;
 
+  let owner: Owner | null = null;
   let patch: Patch | null = null;
   let patches: PatchSummary[] = [];
   let flowers: Flower[] = [];
@@ -320,9 +356,15 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     }
     plots?.toggleAttribute('data-pressed', Boolean(patch && !patch.open && patch.closesAt !== null && now() >= Date.parse(patch.closesAt)));
     renderTabs();
+    if (nameEl && patch) nameEl.textContent = patch.name;
+    if (noteEl) noteEl.textContent = patch?.note ?? '';
     if (count) count.textContent = patch ? COPY.count(flowers.length, n) : '';
     if (digButton) digButton.hidden = !(patch?.open && flowers.some(isMine));
-    if (mineLink) mineLink.hidden = !(patch?.open && flowers.some(isMine));
+    const mine = patch?.open ? flowers.find(isMine) : undefined;
+    if (mineLink) {
+      mineLink.hidden = !mine;
+      if (mine) mineLink.setAttribute('href', gardenPath(actorOf(mine), 'flowers'));
+    }
     // A closed or upcoming patch can't be planted in: no picker, no button.
     const shutAway = Boolean(patch && !patch.open);
     if (kindsGroup) kindsGroup.hidden = shutAway;
@@ -403,27 +445,25 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     focusAt = next;
   });
 
-  const signIn: SignIn | null = auth
-    ? mountSignIn({
-        doc,
-        win,
-        dialog: doc.querySelector<HTMLDialogElement>('dialog[data-blog-signin]'),
-        auth,
-        fetchImpl,
-        local,
-        now,
-        beforeLeave: () => {
-          if (intent === 'tend') {
-            savePending(store, { kind: 'tend', returnTo: '/', at: now() });
-            return;
-          }
-          savePending(store, { kind: 'plant', returnTo: '/', at: now() });
-          store.set(KIND_KEY, kind);
-          if (selected !== null) store.set(PLOT_KEY, String(selected));
-          if (patch) store.set(PATCH_KEY, patch.rkey);
-        },
-      })
-    : null;
+  /** Before leaving to sign in: what to finish once the reader is back. */
+  function beforeLeave(): void {
+    if (intent === 'tend') {
+      savePending(store, { kind: 'tend', returnTo, at: now() });
+      return;
+    }
+    savePending(store, { kind: 'plant', returnTo, at: now() });
+    store.set(KIND_KEY, kind);
+    if (selected !== null) store.set(PLOT_KEY, String(selected));
+    if (patch) store.set(PATCH_KEY, patch.rkey);
+  }
+  // The page's own sign-in dialog when it has one (garden pages), else this garden's.
+  const signIn: Pick<SignIn, 'open'> | null = !auth
+    ? null
+    : opts.openSignIn
+      ? { open: (lede: string) => opts.openSignIn!(lede, beforeLeave) }
+      : mountSignIn({ doc, win, dialog: doc.querySelector<HTMLDialogElement>('dialog[data-blog-signin]'), auth, fetchImpl, local, now, beforeLeave });
+  const ownerDid = () => owner?.did ?? (opts.owner?.startsWith('did:') ? opts.owner : GARDEN_SUBJECT);
+  const emit = () => opts.onView?.({ owner, patch, patches, flowers });
 
   async function ensureSession(): Promise<Session | null> {
     if (session || !auth?.eager) return session;
@@ -452,7 +492,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
 
   /** The reader's flowers in open patches (the ones planting again or digging replaces). */
   function openFlowers(s: Session): Promise<string[]> {
-    const open = new Set(patches.filter((p) => p.open).map((p) => patchUri(p.rkey)));
+    const open = new Set(patches.filter((p) => p.open).map((p) => patchUri(p.rkey, ownerDid())));
     if (patch?.open) open.add(patch.uri);
     return findOwnWhere(s, SPROUT_NSID, (v) => open.has((v.patch as { uri?: unknown } | undefined)?.uri as string), fetchImpl);
   }
@@ -519,6 +559,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
       focusAt = plot;
       render();
       say(existing.length ? COPY.moved(kind) : COPY.planted(kind));
+      emit();
       const cell = plots?.querySelector(`[data-plot="${plot}"]`);
       burst(cell ?? plantButton, 'leaves', win);
       cheer(win);
@@ -543,6 +584,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
       flowers = flowers.filter((f) => f.did !== me!.did);
       render();
       say(COPY.dug);
+      emit();
     } catch (error) {
       failed(error);
     } finally {
@@ -589,11 +631,12 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     if (hadFocus) tabs.querySelector<HTMLElement>(`[data-patch="${hadFocus}"]`)?.focus();
   }
 
-  async function showPatch(rkey: string): Promise<void> {
+  async function showPatch(rkey?: string): Promise<void> {
     closeCard(false);
     box.dataset.state = 'loading';
-    const garden = await fetchGarden(fetchImpl, rkey);
+    const garden = await fetchGarden(fetchImpl, { owner: opts.owner, rkey });
     if (garden) {
+      owner = garden.owner ?? owner;
       patch = garden.patch;
       if (garden.patches.length) patches = garden.patches;
       flowers = garden.flowers;
@@ -603,6 +646,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     } else say(COPY.loadFailed);
     box.dataset.state = garden ? 'ready' : 'error';
     render();
+    if (garden) emit();
   }
 
   tabs?.addEventListener('click', (event) => {
@@ -655,7 +699,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     const parts: HTMLElement[] = [top];
     if (open && f.thirsty) parts.push(el(doc, 'p', { class: 'home-card__note' }, COPY.thirstyFor(thirstyDays(f, now()))));
     const actions = el(doc, 'div', { class: 'home-card__actions' });
-    if (mine) actions.append(el(doc, 'a', { class: 'btn btn--primary btn--sm', href: '/garden' }, COPY.lookAfter));
+    if (mine) actions.append(el(doc, 'a', { class: 'btn btn--primary btn--sm', href: gardenPath(actorOf(f), 'flowers') }, COPY.lookAfter));
     else {
       if (open) {
         const done = wateredToday(local, f.uri, now());
@@ -663,7 +707,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
         water.disabled = done;
         actions.append(water);
       }
-      actions.append(el(doc, 'a', { class: 'home-card__link', href: `/garden?${new URLSearchParams({ did: f.did })}` }, COPY.theirGarden));
+      actions.append(el(doc, 'a', { class: 'home-card__link', href: gardenPath(actorOf(f)) }, COPY.theirGarden));
     }
     parts.push(actions, el(doc, 'p', { class: 'home-card__status', role: 'status', 'data-garden-card-status': '' }));
     card.replaceChildren(close, ...parts);
@@ -748,8 +792,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   // Back from signing in with a flower to plant or water: that patch, else the one shown
   // by default.
   const pending = readPending(store, now());
-  const backToPlant = pending?.kind === 'plant' && pending.returnTo === '/';
-  const backToTend = pending?.kind === 'tend' && pending.returnTo === '/';
+  const backToPlant = pending?.kind === 'plant' && pending.returnTo === returnTo;
+  const backToTend = pending?.kind === 'tend' && pending.returnTo === returnTo;
   type ToWater = { uri?: unknown; patch?: unknown } | null;
   let toWater: ToWater = null;
   try {
@@ -758,8 +802,9 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     toWater = null;
   }
   const storedPatch = backToPlant ? store.get(PATCH_KEY) : typeof toWater?.patch === 'string' ? toWater.patch : null;
-  const loaded = fetchGarden(fetchImpl, storedPatch && RKEY_RE.test(storedPatch) ? storedPatch : undefined).then((garden) => {
+  const loaded = fetchGarden(fetchImpl, { owner: opts.owner, rkey: storedPatch && RKEY_RE.test(storedPatch) ? storedPatch : undefined }).then((garden) => {
     if (garden) {
+      owner = garden.owner ?? owner;
       patch = garden.patch;
       patches = garden.patches;
       // A flower planted while this was loading stays.
@@ -769,6 +814,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
     } else say(COPY.loadFailed);
     tile.dataset.state = garden ? 'ready' : 'error';
     render();
+    if (garden) emit();
   });
 
   if (backToTend) {
@@ -793,4 +839,5 @@ export async function initGarden(opts: GardenOptions = {}): Promise<void> {
   } else {
     await loaded;
   }
+  return { reload: () => showPatch(patch?.rkey) };
 }

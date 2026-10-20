@@ -222,7 +222,7 @@ describe('the flower patch', () => {
     /** The reader's sprout records, by URI, with the patch each points at. */
     owned: Map<string, string>;
     asked: string[];
-    run: () => Promise<void>;
+    run: () => Promise<unknown>;
   }
 
   function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: typeof autumn | null; summerFlowers?: unknown[] } = {}): Rig {
@@ -549,7 +549,7 @@ describe('the flower patch', () => {
     expect(card().querySelector('#garden-card-title')!.textContent).toBe(COPY.theirs('friend.test', 'rose'));
     expect(card().querySelector('.home-card__meta')!.textContent).toBe(COPY.inBloom(describeBloom('rose', flowerVariant(friendRose as never)), true));
     expect(card().querySelector('[data-garden-water]')!.textContent).toBe(COPY.water);
-    expect(card().querySelector('a')!.getAttribute('href')).toBe(`/garden?did=${encodeURIComponent(FRIEND)}`);
+    expect(card().querySelector('a')!.getAttribute('href')).toBe('/garden/friend.test');
     card().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(card().hidden).toBe(true);
     expect(document.activeElement).toBe(plot(20));
@@ -557,8 +557,9 @@ describe('the flower patch', () => {
     plot(7).click();
     expect(card().querySelector('#garden-card-title')!.textContent).toBe(COPY.yours('violet'));
     expect(card().querySelector('[data-garden-water]')).toBeNull();
-    expect(card().querySelector('a')!.getAttribute('href')).toBe('/garden');
+    expect(card().querySelector('a')!.getAttribute('href')).toBe('/garden/me.test/flowers');
     expect(document.querySelector<HTMLElement>('[data-garden-mine]')!.hidden).toBe(false);
+    expect(document.querySelector('[data-garden-mine]')!.getAttribute('href')).toBe('/garden/me.test/flowers');
 
     // an empty plot closes it, and so does the close button
     plot(3).click();

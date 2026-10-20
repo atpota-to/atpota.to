@@ -72,13 +72,16 @@ function serveWellKnown(req: IncomingMessage, res: ServerResponse, next: (err?: 
 
 /** Pages that are a folder's index.html (guides/, garden/). */
 const FOLDER_PAGES = new Set(['/guides', '/garden']);
+/** Someone's garden (/garden/dame.is, /garden/dame.is/flowers): garden/index.html, as vercel.json rewrites it. */
+const GARDEN_PAGE_RE = /^\/garden\/(?!index\.html$)[^/]+(?:\/flowers)?\/?$/;
 
-/** Vite's dev and preview servers only find guides/index.html at "/guides/"; Vercel serves it at "/guides". Same for /garden. */
+/** Vite's dev and preview servers only find guides/index.html at "/guides/"; Vercel serves it at "/guides". Same for /garden and the garden pages under it. */
 function devGuidesIndex(req: IncomingMessage, _res: ServerResponse, next: (err?: unknown) => void): void {
   const url = req.url ?? '';
   const at = url.indexOf('?');
   const path = at === -1 ? url : url.slice(0, at);
   if (FOLDER_PAGES.has(path)) req.url = `${path}/${at === -1 ? '' : url.slice(at)}`;
+  else if (GARDEN_PAGE_RE.test(path)) req.url = `/garden/${at === -1 ? '' : url.slice(at)}`;
   next();
 }
 

@@ -61,12 +61,14 @@ export function resetBlogStoresForTests(): void {
 }
 
 const RETURN_RE = /^\/blog(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*$/;
+/** /garden, someone's garden (/garden/dame.is, /garden/did:plc:…) and their flowers (…/flowers). */
+const GARDEN_RE = /^\/garden(?:\/[A-Za-z0-9._:%-]{1,253}(?:\/flowers)?)?\/?$/;
 
-/** The home page, the garden page, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
+/** The home page, a garden page, or a path under /blog, to send the reader back to; null otherwise (no open redirects, no "..") */
 export function safeReturnTo(path: unknown): string | null {
-  if (path === '/' || path === '/garden' || path === '/garden/') return path;
+  if (path === '/') return path;
   if (typeof path !== 'string' || path.length > 600) return null;
-  if (!RETURN_RE.test(path) || path.split('/').some((segment) => segment === '.' || segment === '..')) return null;
+  if (!(RETURN_RE.test(path) || GARDEN_RE.test(path)) || path.split('/').some((segment) => segment === '.' || segment === '..')) return null;
   return path;
 }
 

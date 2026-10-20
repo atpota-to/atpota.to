@@ -195,7 +195,9 @@ describe('state', () => {
     expect(safeReturnTo('/')).toBe('/');
     expect(safeReturnTo('/garden/')).toBe('/garden/');
     expect(safeReturnTo('/garden')).toBe('/garden');
-    for (const bad of ['//evil.com', '/gardens', '/garden/x', '/garden?x=1', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
+    expect(safeReturnTo('/garden/dame.is')).toBe('/garden/dame.is');
+    expect(safeReturnTo('/garden/did:plc:qntsxa2i4sb24noi45fx4np2/flowers')).toBe('/garden/did:plc:qntsxa2i4sb24noi45fx4np2/flowers');
+    for (const bad of ['//evil.com', '/gardens', '/garden/a/b', '/garden/../blog', '/garden/x/flowers/y', '/garden?x=1', '/garden/a b', '/blog//evil.com', 'https://evil.com/blog', '/blog/../admin', '/blogx', '/guides', '/?x=1', '/blog/a?x=1', '/blog/a#b', 7]) {
       expect(safeReturnTo(bad), String(bad)).toBeNull();
     }
   });

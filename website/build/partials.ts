@@ -36,6 +36,7 @@ export const NAV_FOR_PAGE: Record<string, string> = {
   guide: 'guides',
   guides: 'guides',
   blog: 'blog',
+  garden: 'garden',
 };
 
 function insideDir(dir: string, file: string): boolean {

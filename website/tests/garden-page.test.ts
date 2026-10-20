@@ -6,8 +6,19 @@ import type { Auth, Prepared, Session } from '../src/blog/auth.js';
 import { PENDING_KEY } from '../src/blog/state.js';
 import { createStore } from '../src/poe/storage.js';
 import { DAY_MS, GROW_DAYS } from '../src/scripts/flowers.js';
-import { careFrom, COPY, initGardenPage, markSeen, SEEN_KEY, seenBloom, VISIT_KEY } from '../src/scripts/garden-page.js';
-import { describeBloom, flowerVariant, patchUri, SPROUT_NSID, TEND_NSID } from '../src/scripts/garden.js';
+import {
+  actorOf,
+  careFrom,
+  COPY,
+  featuredFlower,
+  gardenPath,
+  initGardenPage,
+  markSeen,
+  numbersFor,
+  parseGardenPath,
+  seenBloom,
+} from '../src/scripts/garden-page.js';
+import { describeBloom, flowerVariant, GARDEN_SUBJECT, PATCH_NSID, patchUri, SPROUT_NSID, TEND_NSID, type FlowerPatch, type GardenerFlower } from '../src/scripts/garden.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const PAGE = read('../garden/index.html');
@@ -23,38 +34,50 @@ const BO = 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb';
 const MO = 'did:plc:dddddddddddddddddddddddd';
 const PDS = 'https://pds.me.test';
 const NOW = Date.parse('2026-10-20T12:00:00Z');
-const autumn = { rkey: '2026-autumn', uri: patchUri('2026-autumn'), name: 'autumn 2026', season: 'autumn', open: true, cols: 12, rows: 8 };
-const summer = { ...autumn, rkey: '2026-summer', uri: patchUri('2026-summer'), name: 'summer 2026', season: 'summer', open: false };
+const handles: Record<string, string> = { [ME]: 'me.test', [CY]: 'cy.example', [BO]: 'bo.example', [MO]: 'mo.example', [GARDEN_SUBJECT]: 'atpota.to' };
 
-function flowerOf(did: string, handle: string, opts: { daysOld?: number; rkey?: string; patch?: typeof autumn; kind?: string; plot?: number; care?: number } = {}) {
+const community = { rkey: '2026-autumn', uri: patchUri('2026-autumn'), name: 'autumn 2026', season: 'autumn' as const, open: true, cols: 12, rows: 8, owner: { did: GARDEN_SUBJECT, handle: 'atpota.to' } };
+const summer = { ...community, rkey: '2026-summer', uri: patchUri('2026-summer'), name: 'summer 2026', season: 'summer' as const, open: false };
+const boGarden = { rkey: 'self', uri: patchUri('self', BO), name: "bo's garden", season: null, open: true, cols: 8, rows: 6, owner: { did: BO, handle: 'bo.example' } };
+
+type FP = FlowerPatch;
+
+function flowerOf(did: string, opts: { daysOld?: number; rkey?: string; patch?: FP; kind?: string; plot?: number; care?: number; thirsty?: boolean } = {}): GardenerFlower {
   const rkey = opts.rkey ?? '3kmine';
   const planted = NOW - (opts.daysOld ?? 4.5) * DAY_MS;
   const at = (days: number) => new Date(planted + days * DAY_MS + 3600_000).toISOString();
+  const handle = handles[did]!;
   return {
     did,
     rkey,
     uri: `at://${did}/${SPROUT_NSID}/${rkey}`,
     cid: `bafy${rkey}`,
     handle,
-    kind: opts.kind ?? 'violet',
+    kind: (opts.kind ?? 'violet') as never,
     plot: opts.plot ?? 31,
     plantedAt: new Date(planted).toISOString(),
     care: opts.care ?? 0.71,
     helpers: 2,
     lastTended: at(3),
-    thirsty: false,
-    patch: opts.patch ?? autumn,
+    thirsty: opts.thirsty ?? false,
+    patch: opts.patch ?? community,
     tends: [
-      { did: MO, handle: 'mo.example', action: 'sun' as const, at: at(3) },
-      { did, handle, action: 'water' as const, at: at(3) },
-      { did: BO, handle: 'bo.example', action: 'water' as const, at: at(2) },
-      { did, handle, action: 'sun' as const, at: at(1) },
-      { did, handle, action: 'water' as const, at: at(0) },
+      { did: MO, handle: 'mo.example', action: 'sun', at: at(3) },
+      { did, handle, action: 'water', at: at(3) },
+      { did: BO, handle: 'bo.example', action: 'water', at: at(2) },
+      { did, handle, action: 'sun', at: at(1) },
+      { did, handle, action: 'water', at: at(0) },
     ],
-  };
+  } as GardenerFlower;
 }
 
-const pressedOf = (did: string, handle: string, rkey: string, kind: string) => ({ ...flowerOf(did, handle, { rkey, kind, patch: summer, daysOld: 120, care: 1 }), tends: [] });
+const pressedOf = (did: string, rkey: string, kind: string): GardenerFlower => ({ ...flowerOf(did, { rkey, kind, patch: summer, daysOld: 120, care: 1 }), tends: [] });
+
+interface PersonOpts {
+  flowers?: GardenerFlower[];
+  garden?: boolean;
+  displayName?: string | null;
+}
 
 interface Rig {
   calls: Array<{ path: string; body: Record<string, unknown> | null }>;
@@ -63,12 +86,22 @@ interface Rig {
   run: () => Promise<void>;
 }
 
-function rig(opts: { signedIn?: boolean; auth?: null; flowers?: unknown[]; gardenerDown?: boolean; path?: string } = {}): Rig {
+/** A network where each person may keep a garden (rkey "self"), and the reader may sign in as ME. */
+function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Record<string, PersonOpts>; gardenerDown?: boolean } = {}): Rig {
   document.body.innerHTML = MAIN + DIALOG;
   window.history.replaceState(null, '', opts.path ?? '/garden');
   const calls: Rig['calls'] = [];
   const went: Prepared[] = [];
   const asked: string[] = [];
+  const people: Record<string, PersonOpts> = {
+    [ME]: { flowers: [flowerOf(ME), flowerOf(ME, { rkey: '3kbo', patch: boGarden, kind: 'tulip', plot: 4, daysOld: 9, care: 0.43, thirsty: true }), pressedOf(ME, '3kold1', 'daisy')], garden: true },
+    [CY]: { flowers: [flowerOf(CY), pressedOf(CY, '3kold1', 'daisy')], garden: true, displayName: 'Cy' },
+    ...opts.people,
+  };
+  const gardens: Record<string, Record<string, unknown> | null> = {};
+  for (const [did, p] of Object.entries(people)) {
+    gardens[did] = p.garden ? { name: `${handles[did]!.split('.')[0]}'s garden`, note: 'plant something cheerful', cols: 8, rows: 6, createdAt: '2026-10-01T00:00:00Z' } : null;
+  }
   let n = 0;
   const session: Session = {
     did: ME,
@@ -76,7 +109,11 @@ function rig(opts: { signedIn?: boolean; auth?: null; flowers?: unknown[]; garde
     fetch: async (path, init) => {
       const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
       calls.push({ path, body });
-      return Response.json({ uri: `at://${ME}/${TEND_NSID}/3t${++n}`, cid: 'bafytend' });
+      if (path.endsWith('putRecord')) {
+        gardens[ME] = body!.record as Record<string, unknown>;
+        return Response.json({ uri: `at://${ME}/${PATCH_NSID}/self`, cid: `bafypatch${++n}` });
+      }
+      return Response.json({ uri: `at://${ME}/${String(body?.collection)}/3t${++n}`, cid: 'bafytend' });
     },
     signOut: async () => undefined,
   };
@@ -88,23 +125,37 @@ function rig(opts: { signedIn?: boolean; auth?: null; flowers?: unknown[]; garde
     prepare: async () => ({ url: 'https://bsky.social/oauth/authorize?x', host: 'bsky.social', account: { did: ME, handle: 'me.test' }, at: Date.now() }),
     go: (p) => went.push(p),
   };
+  const didFor = (actor: string) => (actor.startsWith('did:') ? actor : Object.keys(handles).find((d) => handles[d] === actor));
   const fetchImpl = (async (input: RequestInfo | URL) => {
     const url = new URL(String(input), 'https://atpota.to');
     if (url.pathname === '/api/gardener') {
-      const did = url.searchParams.get('did')!;
-      asked.push(did);
+      const actor = url.searchParams.get('actor') ?? url.searchParams.get('did') ?? '';
+      asked.push(actor);
       if (opts.gardenerDown) return new Response('down', { status: 503 });
-      const handle = did === ME ? 'me.test' : 'cy.example';
-      return Response.json({ did, handle, flowers: opts.flowers ?? [flowerOf(did, handle), pressedOf(did, handle, '3kold1', 'daisy'), pressedOf(did, handle, '3kold2', 'tulip')] });
+      const did = didFor(actor);
+      const p = did ? people[did] : undefined;
+      if (!did || !p) return Response.json({ error: 'not_found' }, { status: 404 });
+      const g = gardens[did];
+      return Response.json({
+        did,
+        handle: handles[did],
+        displayName: p.displayName ?? null,
+        avatar: null,
+        garden: g ? { rkey: 'self', uri: patchUri('self', did), name: g.name, note: g.note ?? null, open: !g.closesAt, plots: Number(g.cols) * Number(g.rows), planted: 2 } : null,
+        flowers: p.flowers ?? [],
+        given: { total: 7, helped: 2, recent: [{ at: '2026-10-19T10:00:00Z', action: 'water', flower: { uri: `at://${BO}/${SPROUT_NSID}/3kx`, owner: { did: BO, handle: 'bo.example' } } }] },
+      });
     }
     if (url.pathname === '/api/garden') {
-      const near = (d: string, handle: string, plot: number, thirsty: boolean) => ({ ...flowerOf(d, handle, { rkey: `3k${plot}`, plot, kind: 'daisy', daysOld: 12 }), thirsty, tends: undefined, patch: undefined });
-      return Response.json({
-        patch: { ...autumn, cid: 'bafypatch', opensAt: '2026-09-01T00:00:00Z', closesAt: '2026-12-01T00:00:00Z' },
-        patches: [],
-        flowers: [near(BO, 'jo.example', 32, true), near(MO, 'sam.example', 30, false), { ...flowerOf(ME, 'me.test'), tends: undefined, patch: undefined }],
-        total: 3,
-      });
+      const did = didFor(url.searchParams.get('owner') ?? GARDEN_SUBJECT)!;
+      const g = gardens[did];
+      const owner = { did, handle: handles[did], displayName: null, avatar: null };
+      if (!g) return Response.json({ owner, patch: null, patches: [], flowers: [], total: 0 });
+      const open = !g.closesAt;
+      const patch = { rkey: 'self', uri: patchUri('self', did), cid: 'bafypatch', name: g.name, note: g.note ?? null, season: null, cols: g.cols, rows: g.rows, opensAt: null, closesAt: g.closesAt ?? null, createdAt: g.createdAt, open };
+      const visitor = (who: string, plot: number) => ({ did: who, rkey: `3k${plot}`, uri: `at://${who}/${SPROUT_NSID}/3k${plot}`, cid: 'bafyv', handle: handles[who], kind: 'daisy', plot, plantedAt: '2026-10-12T00:00:00Z', care: 0.5, helpers: 0, lastTended: null, thirsty: false });
+      const flowers = [visitor(BO, 3), visitor(MO, 9)];
+      return Response.json({ owner, patch, patches: [{ rkey: 'self', name: g.name, season: null, open, planted: flowers.length, plots: Number(g.cols) * Number(g.rows), opensAt: null, closesAt: g.closesAt ?? null }], flowers, total: flowers.length });
     }
     if (url.origin === 'https://public.api.bsky.app') return Response.json({ did: ME, handle: 'me.test', displayName: 'Me' });
     return new Response('unexpected', { status: 599 });
@@ -118,6 +169,7 @@ function rig(opts: { signedIn?: boolean; auth?: null; flowers?: unknown[]; garde
         auth: opts.auth === null ? null : auth,
         fetchImpl,
         now: () => NOW,
+        random: () => 0,
         sessionStore: createStore(() => window.sessionStorage),
         localStore: createStore(() => window.localStorage),
       }),
@@ -125,10 +177,11 @@ function rig(opts: { signedIn?: boolean; auth?: null; flowers?: unknown[]; garde
 }
 
 const flush = async () => {
-  for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
 };
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const text = (sel: string) => $(sel).textContent;
+const shown = (sel: string) => !$(sel).hidden;
 const visible = (sel: string) => [...document.querySelectorAll<HTMLElement>(sel)].filter((e) => !e.hidden);
 
 beforeEach(() => {
@@ -140,138 +193,227 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
+describe('garden addresses', () => {
+  it('reads /garden, someone by handle or DID, and their flowers', () => {
+    expect(parseGardenPath('/garden')).toEqual({ actor: null, level: 'garden' });
+    expect(parseGardenPath('/garden/')).toEqual({ actor: null, level: 'garden' });
+    expect(parseGardenPath('/garden/Dame.Is')).toEqual({ actor: 'dame.is', level: 'garden' });
+    expect(parseGardenPath(`/garden/${CY}/flowers`)).toEqual({ actor: CY, level: 'flowers' });
+    expect(parseGardenPath('/garden/did%3Aplc%3Acccccccccccccccccccccccc')).toEqual({ actor: CY, level: 'garden' });
+    for (const bad of ['/gardens', '/garden/a/b', '/garden/nodot', '/garden/x.y/z', '/garden/%E0%A4%A']) expect(parseGardenPath(bad), bad).toBeNull();
+    expect(gardenPath('dame.is', 'flowers')).toBe('/garden/dame.is/flowers');
+    expect(actorOf({ did: CY, handle: 'handle.invalid' })).toBe(CY);
+    expect(actorOf({ did: CY, handle: 'cy.example' })).toBe('cy.example');
+  });
+
+  it('vercel.json serves garden/index.html for every garden address', () => {
+    const vercel = JSON.parse(read('../vercel.json')) as { rewrites: Array<{ source: string; destination: string }> };
+    const garden = vercel.rewrites.filter((r) => r.source.startsWith('/garden'));
+    expect(garden).toEqual([
+      { source: '/garden/:actor', destination: '/garden/index.html' },
+      { source: '/garden/:actor/flowers', destination: '/garden/index.html' },
+    ]);
+  });
+});
+
 describe('the garden page', () => {
-  it('signed out: asks to sign in, and shows how it grows', async () => {
+  it('/garden signed out: a welcome, a way in, and how it grows', async () => {
     await rig().run();
-    expect($('[data-garden-page]').dataset.state).toBe('signed-out');
-    expect(text('[data-garden-title]')).toBe(COPY.signedOut.title);
-    expect(document.querySelectorAll('[data-garden-how] svg.home-flower')).toHaveLength(4);
-    expect($('[data-garden-how]').hidden).toBe(false);
-    $('[data-garden-signin]').click();
+    expect($('[data-garden-page]').dataset.state).toBe('landing');
+    expect(text('[data-head-title]')).toBe(COPY.landing.title);
+    expect(shown('[data-how]')).toBe(true);
+    expect($('[data-head-actions] a').getAttribute('href')).toBe('/garden/atpota.to');
+    $('[data-landing-signin]').click();
     await flush();
     expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
     expect(text('[data-blog-signin-lede]')).toBe(COPY.tendLede);
   });
 
-  it('elsewhere (previews) it says the garden works on atpota.to', async () => {
-    await rig({ auth: null }).run();
-    expect(text('[data-garden-lede]')).toBe(COPY.otherHost);
-    expect(document.querySelector('[data-garden-signin]')).toBeNull();
-  });
-
-  it('your growing flower: its week, the odds, who helped, the neighbours and the herbarium', async () => {
-    await rig({ signedIn: true }).run();
-    const planted = NOW - 4.5 * DAY_MS;
-    expect($('[data-garden-page]').dataset.state).toBe('ready');
-    expect(text('[data-garden-eyebrow]')).toBe(COPY.eyebrow('autumn 2026', 32));
-    expect(text('[data-garden-title]')).toBe(COPY.growing('a', 'violet', 'bud'));
-    const weekday = new Date(planted + GROW_DAYS * DAY_MS).toLocaleDateString('en', { weekday: 'long' }).toLowerCase();
-    expect(text('[data-garden-lede]')).toBe(COPY.growingLede(5, weekday));
-    const days = [...document.querySelectorAll('.garden-week__day')].map((d) => d.className.replace('garden-week__day is-', ''));
-    expect(days).toEqual(['tended', 'tended', 'missed', 'tended', 'today', 'ahead', 'ahead']);
-    expect($('.garden-week__bloom').classList.contains('is-done')).toBe(false);
-    expect(text('[data-garden-care]')).toBe(`${COPY.care(5)} · ${COPY.odds.twoTone} 24% · ${COPY.odds.ladybug} 6.4%`);
-    expect(visible('[data-tend]').map((b) => b.dataset.tend)).toEqual(['water', 'sun', 'talk']);
-    expect([...document.querySelectorAll('.garden-helpers__item')].map((li) => li.textContent)).toEqual([
-      `@mo.example ${COPY.helped.sun}${COPY.yesterday}`,
-      `@bo.example ${COPY.helped.water}${new Date(planted + 2 * DAY_MS + 3600_000).toLocaleDateString('en', { weekday: 'long' }).toLowerCase()}`,
-    ]);
-    expect(text('[data-garden-herbarium-title]')).toBe(COPY.herbarium(2));
-    expect(document.querySelectorAll('.garden-herbarium__sheet')).toHaveLength(2);
-    expect(document.querySelector('.garden-herbarium__name')!.textContent).toBe(describeBloom('daisy', flowerVariant(pressedOf(ME, 'me.test', '3kold1', 'daisy') as never)));
-    // neighbours: a window of the patch around your plot, and the thirsty ones to water
-    expect($('[data-garden-near]').hidden).toBe(false);
-    expect(document.querySelectorAll('.garden-near__plot')).toHaveLength(15);
-    expect(document.querySelectorAll('.garden-near__plot.is-yours')).toHaveLength(1);
-    expect(document.querySelectorAll('.garden-near__plot.is-thirsty')).toHaveLength(1);
-    expect(text('.garden-near__item span')).toBe(COPY.nearThirsty('jo.example', 'daisy'));
-  });
-
-  it('tending your flower: a tend record, once a day, and the odds go up', async () => {
+  it('/garden signed in becomes your own page, at your address', async () => {
     const r = rig({ signedIn: true });
     await r.run();
-    $('[data-tend="sun"]').click();
-    await flush();
-    const made = r.calls[0]!.body!;
-    expect(made.collection).toBe(TEND_NSID);
-    expect(made.record).toMatchObject({ $type: TEND_NSID, subject: { uri: `at://${ME}/${SPROUT_NSID}/3kmine`, cid: 'bafy3kmine' }, action: 'sun' });
-    expect(text('[data-garden-status]')).toBe(COPY.tended.sun);
-    expect(visible('[data-tend]').every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
-    expect(text('[data-garden-care]')?.startsWith(COPY.care(6))).toBe(true);
-    expect([...document.querySelectorAll('.garden-week__day')].map((d) => d.className.replace('garden-week__day is-', ''))[4]).toBe('tended');
+    expect(window.location.pathname).toBe('/garden/me.test');
+    expect(r.asked).toEqual(['me.test']);
+    expect(text('[data-head-eyebrow]')).toBe(COPY.eyebrow(true));
+    expect(document.title).toBe(COPY.docTitle(null));
+  });
 
-    // watering a thirsty neighbour
-    const water = $<HTMLButtonElement>('[data-near-water]');
-    water.click();
-    await flush();
-    expect(r.calls[1]!.body!.record).toMatchObject({ subject: { uri: `at://${BO}/${SPROUT_NSID}/3k32` }, action: 'water' });
-    expect([water.disabled, water.textContent]).toEqual([true, COPY.nearWatered]);
+  it("someone's page: who they are, their numbers, and their garden to plant in", async () => {
+    await rig({ path: '/garden/cy.example' }).run();
+    expect($('[data-garden-page]').dataset.state).toBe('ready');
+    expect(text('[data-head-title]')).toBe('Cy');
+    expect(text('[data-head-lede]')).toBe(COPY.lede('cy.example', false));
+    expect(document.title).toBe(COPY.docTitle('Cy'));
+    const stats = [...document.querySelectorAll('.garden-stats__item')].map((li) => li.textContent);
+    const rare = numbersFor({ did: CY, flowers: [flowerOf(CY), pressedOf(CY, '3kold1', 'daisy')] }, NOW).rare;
+    expect(stats).toEqual([`2${COPY.stats.planted(2)}`, `1${COPY.stats.gardens(1)}`, `2${COPY.stats.visitors(2)}`, `7${COPY.stats.tended(7)}`, `${rare}${COPY.stats.rare(rare)}`]);
+    // the garden level, with their patch from the home tile's own code
+    expect($('[data-level-link="garden"]').getAttribute('aria-current')).toBe('page');
+    expect($('[data-level-link="flowers"]').getAttribute('href')).toBe('/garden/cy.example/flowers');
+    expect(shown('[data-level="garden"]')).toBe(true);
+    expect(shown('[data-level="flowers"]')).toBe(false);
+    expect(shown('[data-garden]')).toBe(true);
+    expect(text('[data-garden-name]')).toBe("cy's garden");
+    expect(text('[data-garden-note]')).toBe('plant something cheerful');
+    expect(document.querySelectorAll('[data-garden] [data-plot]')).toHaveLength(48);
+    expect(text('[data-visitors-title]')).toBe(COPY.visitors(2));
+    expect([...document.querySelectorAll('[data-visitors-list] a')].map((a) => a.getAttribute('href'))).toEqual(['/garden/mo.example', '/garden/bo.example']);
+    expect(shown('[data-setup]')).toBe(false);
+    expect(shown('[data-settings]')).toBe(false);
+  });
 
-    // the next visit today remembers
-    await rig({ signedIn: true }).run();
-    expect(visible('[data-tend]').every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+  it('switching levels changes the address, and back goes back', async () => {
+    await rig({ path: '/garden/cy.example' }).run();
+    $('[data-level-link="flowers"]').click();
+    expect(window.location.pathname).toBe('/garden/cy.example/flowers');
+    expect(shown('[data-level="flowers"]')).toBe(true);
+    expect(shown('[data-level="garden"]')).toBe(false);
+    window.history.replaceState(null, '', '/garden/cy.example');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    expect(shown('[data-level="garden"]')).toBe(true);
+  });
+
+  it('your flowers: the one that needs you up close, all of them with quick tending', async () => {
+    markSeen(createStore(() => window.localStorage), `at://${ME}/${SPROUT_NSID}/3kbo`);
+    const r = rig({ signedIn: true, path: '/garden/me.test/flowers' });
+    await r.run();
+    expect(shown('[data-level="flowers"]')).toBe(true);
+    // up close: the one still growing and not looked after today
+    expect(text('[data-featured-title]')).toBe(COPY.growing('a', 'violet', 'bud'));
+    expect(text('[data-featured-eyebrow]')).toBe(COPY.featuredEyebrow('the autumn 2026 patch', 32));
+    expect(visible('[data-featured-tend] [data-tend]').map((b) => b.dataset.tend)).toEqual(['water', 'sun', 'talk']);
+    expect(text('[data-featured-care]')).toBe(`${COPY.care(5)} · ${COPY.odds.twoTone} 24% · ${COPY.odds.ladybug} 6.4%`);
+    expect([...document.querySelectorAll('.garden-week__day')].map((d) => d.className.replace('garden-week__day is-', ''))).toEqual(['tended', 'tended', 'missed', 'tended', 'today', 'ahead', 'ahead']);
+    // all of them
+    expect(text('[data-flowers-title]')).toBe(COPY.flowersTitle(true, 3));
+    expect([...document.querySelectorAll('.garden-filters__btn')].map((b) => b.textContent)).toEqual([COPY.filterLabel('all', 3), COPY.filterLabel('growing', 1), COPY.filterLabel('bloom', 1), COPY.filterLabel('pressed', 1)]);
+    const items = [...document.querySelectorAll<HTMLElement>('.garden-flower')];
+    expect(items).toHaveLength(3);
+    expect(items[0]!.classList.contains('is-featured')).toBe(true);
+    expect(items[1]!.querySelector('.garden-flower__meta')!.textContent).toBe(COPY.meta.thirsty("bo's garden"));
+    expect(items[2]!.classList.contains('is-pressed')).toBe(true);
+    expect(items[2]!.querySelectorAll('.garden-flower__tool')).toHaveLength(0);
+    expect(items[0]!.querySelectorAll('.garden-flower__tool')).toHaveLength(3);
+    // a quick tend from the list
+    items[1]!.querySelector<HTMLButtonElement>('.garden-flower__tool.is-water')!.click();
+    await flush();
+    expect(r.calls[0]!.body!.collection).toBe(TEND_NSID);
+    expect(r.calls[0]!.body!.record).toMatchObject({ subject: { uri: `at://${ME}/${SPROUT_NSID}/3kbo` }, action: 'water' });
+    expect(text('[data-flowers-status]')).toBe(COPY.tended.water);
+    expect([...document.querySelectorAll<HTMLButtonElement>('.garden-flower')[1]!.querySelectorAll<HTMLButtonElement>('.garden-flower__tool')].every((b) => b.disabled)).toBe(true);
+    // water them all: only the ones still due
+    expect(text('[data-water-all]')).toBe(COPY.waterAll(1));
+    $('[data-water-all]').click();
+    await flush();
+    expect(r.calls).toHaveLength(2);
+    expect(r.calls[1]!.body!.record).toMatchObject({ subject: { uri: `at://${ME}/${SPROUT_NSID}/3kmine` } });
+    expect(text('[data-flowers-status]')).toBe(COPY.wateredAll(1));
+    expect(shown('[data-water-all]')).toBe(false);
+  });
+
+  it('your numbers, connections and field guide', async () => {
+    await rig({ signedIn: true, path: '/garden/me.test/flowers' }).run();
+    const numbers = Object.fromEntries([...document.querySelectorAll('.garden-numbers__item')].map((d) => [d.querySelector('dt')!.textContent, d.querySelector('dd')!.textContent]));
+    expect(numbers).toMatchObject({ [COPY.numbers.planted]: '3', [COPY.numbers.growing]: '1', [COPY.numbers.bloom]: '1', [COPY.numbers.pressed]: '1', [COPY.numbers.tended]: '7', [COPY.numbers.helped]: '2', [COPY.numbers.helpers]: '2', [COPY.numbers.visitors]: '2' });
+    const groups = Object.fromEntries([...document.querySelectorAll('.garden-people__group')].map((g) => [g.querySelector('h3')!.textContent, [...g.querySelectorAll('.garden-chip__name')].map((c) => c.textContent)]));
+    expect(groups[COPY.people.gardens(true)]).toEqual(['@atpota.to', '@bo.example']);
+    expect(groups[COPY.people.visitors(true)]).toEqual(['@mo.example', '@bo.example']);
+    expect(groups[COPY.people.helpers(true)]).toEqual(['@mo.example', '@bo.example']);
+    expect(groups[COPY.people.helped(true)]).toEqual(['@bo.example']);
+    expect(text('[data-guide-count]')).toMatch(/^\d+ of 20 found$/);
+    expect(document.querySelectorAll('.garden-guide__cell.is-found').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('picking another flower brings it up close', async () => {
+    await rig({ signedIn: true, path: '/garden/me.test/flowers' }).run();
+    const items = [...document.querySelectorAll<HTMLElement>('.garden-flower')];
+    items[2]!.querySelector<HTMLButtonElement>('.garden-flower__name')!.click();
+    const pressed = pressedOf(ME, '3kold1', 'daisy');
+    expect(text('[data-featured-title]')).toBe(describeBloom('daisy', flowerVariant(pressed)));
+    expect($('[data-featured-bed]').classList.contains('is-pressed')).toBe(true);
+    expect(shown('[data-featured-tend]')).toBe(false);
+    expect(document.activeElement).toBe($('[data-featured-title]'));
   });
 
   it('on the day it blooms, the bud waits for you to take a look', async () => {
-    const bloomed = { ...flowerOf(ME, 'me.test', { daysOld: 7.5, care: 1 }) };
-    await rig({ signedIn: true, flowers: [bloomed] }).run();
-    expect(text('[data-garden-title]')).toBe(COPY.waiting);
-    expect($('[data-garden-tend]').hidden).toBe(true);
-    $('[data-garden-reveal]').click();
-    const v = flowerVariant(bloomed as never);
-    expect(text('[data-garden-title]')).toBe(describeBloom('violet', v));
+    const bloomed = flowerOf(ME, { daysOld: 7.5, care: 1 });
+    await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [bloomed], garden: true } } }).run();
+    expect(text('[data-featured-title]')).toBe(COPY.waiting);
+    expect(text('.garden-flower__name')).toBe(COPY.somethingBlooming);
+    $('[data-reveal]').click();
+    const v = flowerVariant(bloomed);
+    expect(text('[data-featured-title]')).toBe(describeBloom('violet', v));
     expect(document.querySelector('.garden-hero__ribbon')).not.toBeNull();
-    expect($('[data-garden-bed]').classList.contains('is-revealing')).toBe(true);
-    expect(text('[data-garden-status]')).toBe(COPY.bloomed('violet', describeBloom('violet', v)));
-    expect(document.activeElement).toBe($('[data-garden-title]'));
+    expect(text('[data-featured-status]')).toBe(COPY.bloomed('violet', describeBloom('violet', v)));
     expect(seenBloom(createStore(() => window.localStorage), bloomed.uri)).toBe(true);
-    expect($('.garden-week__bloom').classList.contains('is-done')).toBe(true);
-
-    // seen: straight to the bloom next time
-    await rig({ signedIn: true, flowers: [bloomed] }).run();
-    expect(text('[data-garden-title]')).toBe(describeBloom('violet', v));
-    expect(document.querySelector('[data-garden-reveal]')).toBeNull();
+    expect(text('.garden-flower__name')).toBe(describeBloom('violet', v));
   });
 
-  it('a thirsty bloom asks for a drink', async () => {
-    const f = { ...flowerOf(ME, 'me.test', { daysOld: 14 }), thirsty: true, lastTended: null };
-    markSeen(createStore(() => window.localStorage), f.uri);
-    await rig({ signedIn: true, flowers: [f] }).run();
-    expect(text('[data-garden-title]')).toBe(COPY.thirsty('your', 'violet'));
-    expect(text('[data-garden-lede]')).toBe(COPY.thirstyLede(7));
-  });
-
-  it('after the season: your flower was pressed; with nothing at all: how to start', async () => {
-    await rig({ signedIn: true, flowers: [pressedOf(ME, 'me.test', '3kold1', 'daisy')] }).run();
-    expect(text('[data-garden-title]')).toBe(COPY.pressedTitle('daisy'));
-    expect($('[data-garden-bed]').classList.contains('is-pressed')).toBe(true);
-    expect($('[data-garden-actions] a').getAttribute('href')).toBe('/#garden-plots');
-
-    await rig({ signedIn: true, flowers: [] }).run();
-    expect(text('[data-garden-title]')).toBe(COPY.empty.title);
-    expect($('[data-garden-how]').hidden).toBe(false);
-    expect($('[data-garden-herbarium]').hidden).toBe(true);
-  });
-
-  it('someone else’s garden: their flower, and a button to water it', async () => {
-    const r = rig({ signedIn: true, path: `/garden?did=${encodeURIComponent(CY)}` });
+  it("setting up your garden writes a patch record in your repo, then it's ready to plant in", async () => {
+    const r = rig({ signedIn: true, path: '/garden/me.test', people: { [ME]: { flowers: [], garden: false } } });
     await r.run();
-    expect(r.asked).toEqual([CY]);
-    expect(document.title).toBe(COPY.title('cy.example'));
-    expect(text('[data-garden-title]')).toBe(COPY.growing("@cy.example's", 'violet', 'bud'));
-    expect(visible('[data-tend]').map((b) => b.dataset.tend)).toEqual(['water']);
-    expect($('[data-garden-near]').hidden).toBe(true);
-    expect(text('[data-garden-herbarium-title]')).toBe(COPY.herbariumTheirs('cy.example', 2));
-    $('[data-tend="water"]').click();
+    expect(shown('[data-setup]')).toBe(true);
+    expect(shown('[data-garden]')).toBe(false);
+    const form = $<HTMLFormElement>('[data-setup-form]');
+    expect((form.elements.namedItem('name') as HTMLInputElement).value).toBe("me's garden");
+    (form.elements.namedItem('note') as HTMLTextAreaElement).value = 'come say hi';
+    form.querySelector<HTMLInputElement>('input[value="small"]')!.checked = true;
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
+    expect(put).toMatchObject({ repo: ME, collection: PATCH_NSID, rkey: 'self' });
+    expect(put.record).toMatchObject({ $type: PATCH_NSID, name: "me's garden", note: 'come say hi', cols: 6, rows: 4 });
+    expect(shown('[data-setup]')).toBe(false);
+    expect(shown('[data-garden]')).toBe(true);
+    expect(document.querySelectorAll('[data-garden] [data-plot]')).toHaveLength(24);
+    expect(text('[data-head-status]')).toBe(COPY.setup.done);
+    expect(shown('[data-settings]')).toBe(true);
+    expect(shown('[data-how]')).toBe(true);
+  });
+
+  it('your garden settings: rename, resize, or close it', async () => {
+    const r = rig({ signedIn: true, path: '/garden/me.test' });
+    await r.run();
+    expect(shown('[data-settings]')).toBe(true);
+    const form = $<HTMLFormElement>('[data-settings-form]');
+    expect((form.elements.namedItem('name') as HTMLInputElement).value).toBe("me's garden");
+    expect(form.querySelector<HTMLInputElement>('input[value="medium"]')!.checked).toBe(true);
+    (form.elements.namedItem('name') as HTMLInputElement).value = 'the back yard';
+    form.querySelector<HTMLInputElement>('input[value="large"]')!.checked = true;
+    (form.elements.namedItem('open') as HTMLInputElement).checked = false;
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
+    expect(put.record).toMatchObject({ name: 'the back yard', cols: 12, rows: 8, createdAt: '2026-10-01T00:00:00Z', closesAt: new Date(NOW).toISOString() });
+    expect(text('[data-settings-status]')).toBe(COPY.setup.saved);
+    expect(text('[data-garden-name]')).toBe('the back yard');
+    expect(document.querySelector('[data-garden] [data-garden-plots]')!.hasAttribute('data-pressed')).toBe(true);
+  });
+
+  it("someone without a garden: says so, and their flowers are a tap away", async () => {
+    await rig({ path: '/garden/cy.example', people: { [CY]: { flowers: [flowerOf(CY)], garden: false } } }).run();
+    expect(shown('[data-none]')).toBe(true);
+    expect(text('[data-none-text]')).toBe(COPY.none('cy.example'));
+    expect(shown('[data-garden]')).toBe(false);
+    expect(shown('[data-setup]')).toBe(false);
+  });
+
+  it("a visitor waters someone's flower from their flowers", async () => {
+    const r = rig({ signedIn: true, path: '/garden/cy.example/flowers' });
+    await r.run();
+    expect(visible('[data-featured-tend] [data-tend]').map((b) => b.dataset.tend)).toEqual(['water']);
+    expect(text('[data-featured-title]')).toBe(COPY.growing("@cy.example's", 'violet', 'bud'));
+    expect(shown('[data-water-all]')).toBe(false);
+    $('[data-featured-tend] [data-tend="water"]').click();
     await flush();
     expect(r.calls[0]!.body!.record).toMatchObject({ subject: { uri: `at://${CY}/${SPROUT_NSID}/3kmine` }, action: 'water' });
-    expect(text('[data-garden-status]')).toBe(COPY.visitorWatered);
+    expect(text('[data-featured-status]')).toBe(COPY.visitorWatered);
   });
 
-  it('signed out on someone’s garden: watering asks to sign in, and brings you back to theirs', async () => {
-    const r = rig({ path: `/garden?did=${encodeURIComponent(CY)}` });
+  it('signed out, tending asks to sign in and comes back to the same page', async () => {
+    const r = rig({ path: '/garden/cy.example/flowers' });
     await r.run();
-    $('[data-tend="water"]').click();
+    $('[data-featured-tend] [data-tend="water"]').click();
     await flush();
     expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
     $<HTMLInputElement>('input[name="handle"]').value = 'me.test';
@@ -280,30 +422,51 @@ describe('the garden page', () => {
     $('[data-blog-signin-go]').click();
     await flush();
     expect(r.went).toHaveLength(1);
-    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'tend', returnTo: '/garden' });
-    expect(sessionStorage.getItem(VISIT_KEY)).toBe(CY);
-
-    // back from the auth server (the blog forwards to /garden, without the ?did=)
-    const back = rig({ signedIn: true });
-    await back.run();
-    expect(back.asked).toEqual([CY]);
+    expect(JSON.parse(sessionStorage.getItem(PENDING_KEY)!)).toMatchObject({ kind: 'tend', returnTo: '/garden/cy.example/flowers' });
+    await rig({ signedIn: true, path: '/garden/cy.example/flowers' }).run();
     expect(sessionStorage.getItem(PENDING_KEY)).toBeNull();
-    expect(sessionStorage.getItem(VISIT_KEY)).toBeNull();
   });
 
-  it('says so when the garden does not load', async () => {
-    await rig({ signedIn: true, gardenerDown: true }).run();
+  it("back from signing in to water a flower in someone's garden, it waters it", async () => {
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ kind: 'tend', returnTo: '/garden/cy.example', at: NOW }));
+    sessionStorage.setItem('garden:tend', JSON.stringify({ uri: `at://${BO}/${SPROUT_NSID}/3k3`, cid: 'bafyv', patch: 'self' }));
+    const r = rig({ signedIn: true, path: '/garden/cy.example' });
+    await r.run();
+    expect(r.calls.find((c) => c.path.endsWith('createRecord'))!.body!.record).toMatchObject({ subject: { uri: `at://${BO}/${SPROUT_NSID}/3k3` }, action: 'water' });
+    expect(sessionStorage.getItem(PENDING_KEY)).toBeNull();
+    expect(sessionStorage.getItem('garden:tend')).toBeNull();
+  });
+
+  it('says so for someone who isn’t there, and when it doesn’t load', async () => {
+    await rig({ path: '/garden/nobody.example' }).run();
+    expect($('[data-garden-page]').dataset.state).toBe('missing');
+    expect(text('[data-head-lede]')).toBe(COPY.missing.lede('nobody.example'));
+    await rig({ path: '/garden/a/b' }).run();
+    expect($('[data-garden-page]').dataset.state).toBe('missing');
+    await rig({ path: '/garden/cy.example', gardenerDown: true }).run();
     expect($('[data-garden-page]').dataset.state).toBe('error');
-    expect(text('[data-garden-lede]')).toBe(COPY.loadFailed);
+    expect(text('[data-head-lede]')).toBe(COPY.loadFailed);
   });
+});
 
+describe('garden sums', () => {
   it('counts care like the server: days its owner tended it while it grew, plus up to three helpers', () => {
-    const f = flowerOf(ME, 'me.test');
+    const f = flowerOf(ME);
     expect(careFrom(f)).toBe(Math.round((5 / 7) * 100) / 100);
-    const late = { ...f, tends: [...f.tends, { did: ME, handle: 'me.test', action: 'water' as const, at: new Date(Date.parse(f.plantedAt) + 8 * DAY_MS).toISOString() }] };
-    expect(careFrom(late)).toBe(careFrom(f));
     const crowd = { ...f, tends: ['e', 'f', 'g', 'h', 'i'].map((c) => ({ did: `did:plc:${c.repeat(24)}`, handle: 'x', action: 'water' as const, at: f.tends[0]!.at })) };
     expect(careFrom(crowd)).toBe(Math.round((3 / 7) * 100) / 100);
-    expect(localStorage.getItem(SEEN_KEY)).toBeNull();
+  });
+
+  it('adds up numbers and picks the flower to show up close', () => {
+    const flowers = [flowerOf(ME), pressedOf(ME, '3kold1', 'daisy')];
+    expect(numbersFor({ did: ME, flowers }, NOW)).toMatchObject({ planted: 2, growing: 1, pressed: 1, gardens: 1, helpers: 2 });
+    const pick = (owner: boolean, seen: boolean, tended: boolean) => featuredFlower(flowers, { owner, now: NOW, seen: () => seen, tendedToday: () => tended });
+    expect(pick(true, true, false)).toBe(flowers[0]);
+    expect(pick(true, true, true)).toBe(flowers[0]);
+    const bloom = flowerOf(ME, { rkey: '3kb', daysOld: 8 });
+    expect(featuredFlower([flowers[0]!, bloom], { owner: true, now: NOW, seen: () => false, tendedToday: () => true })).toBe(bloom);
+    markSeen(createStore(() => window.localStorage), bloom.uri);
+    expect(seenBloom(createStore(() => window.localStorage), bloom.uri)).toBe(true);
+    expect(GROW_DAYS).toBe(7);
   });
 });

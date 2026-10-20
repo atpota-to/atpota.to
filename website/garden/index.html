@@ -5,9 +5,9 @@
     <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
     <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>your garden · atpotato</title>
-    <meta name="title" content="your garden · atpotato">
-    <meta name="description" content="look after the flower you planted in the atpotato flower patch: water it, give it sun, talk to it, and see what it blooms into.">
+    <title>gardens · atpotato</title>
+    <meta name="title" content="gardens · atpotato">
+    <meta name="description" content="grow a garden on atpota.to: keep your own patch, invite friends to plant in it, and look after the flowers you plant in theirs.">
     <link rel="canonical" href="https://atpota.to/garden">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#F4EEDF">
@@ -17,8 +17,8 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="atpotato">
     <meta property="og:url" content="https://atpota.to/garden">
-    <meta property="og:title" content="your garden · atpotato">
-    <meta property="og:description" content="look after the flower you planted in the atpotato flower patch: water it, give it sun, talk to it, and see what it blooms into.">
+    <meta property="og:title" content="gardens · atpotato">
+    <meta property="og:description" content="grow a garden on atpota.to: keep your own patch, invite friends to plant in it, and look after the flowers you plant in theirs.">
     <meta property="og:image" content="https://atpota.to/og/home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -32,6 +32,7 @@
     <link rel="stylesheet" href="/src/styles/tokens.css">
     <link rel="stylesheet" href="/src/styles/base.css">
     <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/patch.css">
     <link rel="stylesheet" href="/src/styles/garden.css">
 
     <!-- Vercel Web Analytics -->
@@ -41,20 +42,124 @@
     <script defer src="/_vercel/insights/script.js" vite-ignore></script>
     <script type="module" src="/src/scripts/main.ts"></script>
 </head>
-<body data-page="garden" data-poe-nudge="your flower likes a chat too, you know (◕‿◕)">
+<body data-page="garden" data-poe-nudge="psst. flowers like a chat too (◕‿◕)">
     <a class="skip-link" href="#main">skip to content</a>
     <!-- @partial header -->
 
     <main id="main" class="garden-page" tabindex="-1">
         <div class="garden" data-garden-page data-state="loading">
-            <section class="tile garden-hero" aria-labelledby="garden-title">
-                <div class="garden-hero__bed" data-garden-bed><span class="garden-hero__seed"></span></div>
-                <div class="garden-hero__words">
-                    <p class="eyebrow garden-hero__eyebrow" data-garden-eyebrow>your garden</p>
-                    <h1 class="garden-hero__title" id="garden-title" tabindex="-1" data-garden-title>your garden</h1>
-                    <p class="garden-hero__lede" data-garden-lede>digging up your flowers…</p>
-                    <ol class="garden-week" aria-label="its first week" data-garden-week hidden></ol>
-                    <div class="garden-tend" data-garden-tend hidden>
+            <header class="tile garden-head" aria-labelledby="garden-title">
+                <span class="garden-head__avatar" aria-hidden="true" data-head-avatar></span>
+                <div class="garden-head__words">
+                    <p class="eyebrow" data-head-eyebrow>gardens</p>
+                    <h1 class="garden-head__title" id="garden-title" tabindex="-1" data-head-title>gardens</h1>
+                    <p class="garden-head__lede" data-head-lede>digging up the garden…</p>
+                </div>
+                <ul class="garden-stats" role="list" data-head-stats hidden></ul>
+                <div class="garden-head__actions" data-head-actions></div>
+                <p class="garden-head__status" role="status" data-head-status></p>
+            </header>
+
+            <nav class="garden-levels" aria-label="this garden" data-levels hidden>
+                <a class="garden-levels__link" href="/garden" data-level-link="garden">garden</a>
+                <a class="garden-levels__link" href="/garden" data-level-link="flowers">flowers</a>
+            </nav>
+
+            <div class="garden-level" data-level="garden" hidden>
+                <section class="tile home-patch garden-patch" aria-labelledby="garden-patch-title" data-garden data-state="loading" hidden>
+                    <div class="home-patch__head">
+                        <h2 class="eyebrow home-patch__title" id="garden-patch-title" data-garden-name>the garden</h2>
+                        <p class="home-patch__count" data-garden-count></p>
+                    </div>
+                    <div class="home-patch__tabs" role="tablist" aria-label="patches" data-garden-tabs hidden></div>
+                    <p class="home-patch__text" data-garden-note></p>
+                    <div class="home-plots" id="garden-plots" role="group" aria-label="the plots" data-garden-plots></div>
+                    <div class="home-card" role="dialog" aria-labelledby="garden-card-title" tabindex="-1" data-garden-card hidden></div>
+        <div class="home-patch__controls">
+                <div class="home-patch__kinds" role="radiogroup" aria-label="pick a flower" data-garden-kinds>
+                  <button type="button" class="home-patch__kind" role="radio" aria-checked="true" data-kind="sunflower"><span class="visually-hidden">sunflower</span></button>
+                  <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="rose"><span class="visually-hidden">rose</span></button>
+                  <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="daisy"><span class="visually-hidden">daisy</span></button>
+                  <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="violet"><span class="visually-hidden">violet</span></button>
+                  <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="poppy"><span class="visually-hidden">poppy</span></button>
+                  <button type="button" class="home-patch__kind" role="radio" aria-checked="false" data-kind="tulip"><span class="visually-hidden">tulip</span></button>
+                </div>
+                <button type="button" class="btn btn--primary btn--sm home-patch__plant" data-garden-plant>pick a plot</button>
+                <a class="home-patch__mine" href="/garden" data-garden-mine hidden>look after yours</a>
+                <button type="button" class="home-patch__dig" data-garden-dig hidden>dig mine up</button>
+              </div>
+                    <p class="home-patch__status" role="status" data-garden-status></p>
+                </section>
+
+                <section class="tile garden-card garden-setup" aria-labelledby="garden-setup-title" data-setup hidden>
+                    <h2 class="garden-setup__title" id="garden-setup-title">set up your garden</h2>
+                    <p class="garden-card__text">a patch on your page where anyone can come and plant a flower. it's a record in your own repo, and you can change it any time.</p>
+                    <form class="garden-form" data-setup-form>
+                        <label class="garden-form__field">
+                            <span>what it's called</span>
+                            <input type="text" name="name" maxlength="40" required autocomplete="off">
+                        </label>
+                        <fieldset class="garden-form__sizes">
+                            <legend>how big</legend>
+                            <label class="garden-form__size"><input type="radio" name="size" value="small"> <span><strong>small</strong> 6 × 4, 24 plots</span></label>
+                            <label class="garden-form__size"><input type="radio" name="size" value="medium" checked> <span><strong>medium</strong> 8 × 6, 48 plots</span></label>
+                            <label class="garden-form__size"><input type="radio" name="size" value="large"> <span><strong>large</strong> 12 × 8, 96 plots</span></label>
+                        </fieldset>
+                        <label class="garden-form__field">
+                            <span>a few words for visitors <em>(optional)</em></span>
+                            <textarea name="note" maxlength="140" rows="2"></textarea>
+                        </label>
+                        <button type="submit" class="btn btn--primary garden-form__save">plant my garden</button>
+                        <p class="garden-form__status" role="status" data-setup-status></p>
+                    </form>
+                </section>
+
+                <details class="tile garden-card garden-settings" data-settings hidden>
+                    <summary class="garden-settings__summary">garden settings</summary>
+                    <form class="garden-form" data-settings-form>
+                        <label class="garden-form__field">
+                            <span>what it's called</span>
+                            <input type="text" name="name" maxlength="40" required autocomplete="off">
+                        </label>
+                        <fieldset class="garden-form__sizes">
+                            <legend>how big</legend>
+                            <label class="garden-form__size"><input type="radio" name="size" value="small"> <span><strong>small</strong> 6 × 4, 24 plots</span></label>
+                            <label class="garden-form__size"><input type="radio" name="size" value="medium" checked> <span><strong>medium</strong> 8 × 6, 48 plots</span></label>
+                            <label class="garden-form__size"><input type="radio" name="size" value="large"> <span><strong>large</strong> 12 × 8, 96 plots</span></label>
+                        </fieldset>
+                        <label class="garden-form__field">
+                            <span>a few words for visitors <em>(optional)</em></span>
+                            <textarea name="note" maxlength="140" rows="2"></textarea>
+                        </label>
+                        <label class="garden-form__check">
+                            <input type="checkbox" name="open" checked>
+                            <span>open for planting. <em>closing it presses every flower in it, just as they are.</em></span>
+                        </label>
+                        <p class="garden-card__note">making it smaller moves flowers that no longer fit to a free plot, or leaves them out if there's no room.</p>
+                        <button type="submit" class="btn btn--primary garden-form__save">save changes</button>
+                        <p class="garden-form__status" role="status" data-settings-status></p>
+                    </form>
+                </details>
+
+                <section class="tile garden-card garden-visitors" aria-labelledby="garden-visitors-title" data-visitors hidden>
+                    <h2 class="eyebrow" id="garden-visitors-title" data-visitors-title>who's planted here</h2>
+                    <ul class="garden-chips" role="list" data-visitors-list></ul>
+                </section>
+
+                <section class="tile garden-card garden-none" data-none hidden>
+                    <p class="garden-none__text" data-none-text></p>
+                </section>
+            </div>
+
+            <div class="garden-level" data-level="flowers" hidden>
+                <section class="tile garden-hero" aria-labelledby="featured-title" data-featured hidden>
+                    <div class="garden-hero__bed" data-featured-bed></div>
+                    <div class="garden-hero__words">
+                        <p class="eyebrow garden-hero__eyebrow" data-featured-eyebrow></p>
+                        <h2 class="garden-hero__title" id="featured-title" tabindex="-1" data-featured-title></h2>
+                        <p class="garden-hero__lede" data-featured-lede></p>
+                        <ol class="garden-week" aria-label="its first week" data-featured-week hidden></ol>
+                        <div class="garden-tend" data-featured-tend hidden>
                         <button type="button" class="btn btn--primary garden-tend__btn" data-tend="water">
                             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3c3.5 4.2 6 7.4 6 10.5A6 6 0 0 1 6 13.5C6 10.4 8.5 7.2 12 3z"/></svg>
                             water it
@@ -68,57 +173,65 @@
                             talk to it
                         </button>
                     </div>
-                    <p class="garden-hero__care" data-garden-care hidden></p>
-                    <div class="garden-hero__actions" data-garden-actions></div>
-                    <p class="garden-hero__status" role="status" data-garden-status></p>
-                </div>
-            </section>
-
-            <div class="garden-row">
-                <section class="tile garden-card garden-helpers" aria-labelledby="garden-helpers-title" data-garden-helpers hidden>
-                    <h2 class="eyebrow" id="garden-helpers-title">who's helped</h2>
-                    <ul class="garden-helpers__list" role="list" data-garden-helpers-list></ul>
-                    <p class="garden-card__note">help from up to three neighbours counts towards its care.</p>
+                        <p class="garden-hero__care" data-featured-care hidden></p>
+                        <div class="garden-hero__actions" data-featured-actions></div>
+                        <p class="garden-hero__status" role="status" data-featured-status></p>
+                    </div>
                 </section>
-                <section class="tile garden-card garden-near" aria-labelledby="garden-near-title" data-garden-near hidden>
+
+                <section class="tile garden-card garden-all" aria-labelledby="flowers-title" data-flowers hidden>
                     <div class="garden-card__head">
-                        <h2 class="eyebrow" id="garden-near-title">your neighbours</h2>
-                        <a class="garden-card__link" href="/#garden-plots">see the whole patch</a>
+                        <h2 class="eyebrow" id="flowers-title" data-flowers-title>their flowers</h2>
+                        <button type="button" class="btn btn--primary btn--sm garden-all__water" data-water-all hidden>water them all</button>
                     </div>
-                    <div class="garden-near__body">
-                        <div class="garden-near__plots" aria-hidden="true" data-garden-near-plots></div>
-                        <ul class="garden-near__list" role="list" data-garden-near-list></ul>
+                    <div class="garden-filters" role="group" aria-label="show" data-flowers-filters></div>
+                    <ul class="garden-flowers" role="list" data-flowers-list></ul>
+                    <p class="garden-card__note" data-flowers-status role="status"></p>
+                </section>
+
+                <div class="garden-row">
+                    <section class="tile garden-card garden-numbers" aria-labelledby="numbers-title" data-numbers hidden>
+                        <h2 class="eyebrow" id="numbers-title">by the numbers</h2>
+                        <dl class="garden-numbers__list" data-numbers-list></dl>
+                    </section>
+                    <section class="tile garden-card garden-people" aria-labelledby="people-title" data-people hidden>
+                        <h2 class="eyebrow" id="people-title">connections</h2>
+                        <div class="garden-people__groups" data-people-groups></div>
+                    </section>
+                </div>
+
+                <section class="tile garden-card garden-guide" aria-labelledby="guide-title" data-guide hidden>
+                    <div class="garden-card__head">
+                        <h2 class="eyebrow" id="guide-title">field guide</h2>
+                        <p class="garden-guide__count" data-guide-count></p>
                     </div>
+                    <p class="garden-card__text">every kind and rare look grown so far. the gaps are still out there.</p>
+                    <div class="garden-guide__wrap"><table class="garden-guide__table" data-guide-table></table></div>
                 </section>
             </div>
 
-            <section class="tile garden-card garden-herbarium" aria-labelledby="garden-herbarium-title" data-garden-herbarium hidden>
-                <h2 class="eyebrow" id="garden-herbarium-title" data-garden-herbarium-title>your herbarium</h2>
-                <ul class="garden-herbarium__list" role="list" data-garden-herbarium-list></ul>
-            </section>
-
-            <section class="tile garden-card garden-how" aria-labelledby="garden-how-title" data-garden-how hidden>
+            <section class="tile garden-card garden-how" aria-labelledby="garden-how-title" data-how hidden>
                 <h2 class="eyebrow" id="garden-how-title">how it grows</h2>
                 <ol class="garden-how__steps" role="list">
                     <li class="garden-how__step">
-                        <span class="garden-how__bed" data-garden-how="sprout"></span>
+                        <span class="garden-how__bed" data-how="sprout"></span>
                         <strong>plant one</strong>
-                        <span>pick a plot in this season's patch on the home page. it's saved in your own bluesky repo.</span>
+                        <span>in a friend's garden, atpotato's, or your own. it's saved in your own bluesky repo.</span>
                     </li>
                     <li class="garden-how__step">
-                        <span class="garden-how__bed" data-garden-how="bud"></span>
+                        <span class="garden-how__bed" data-how="bud"></span>
                         <strong>look after it</strong>
-                        <span>water it, give it sun or talk to it once a day for its first week. neighbours can help.</span>
+                        <span>water it, give it sun or talk to it once a day for its first week. friends can help.</span>
                     </li>
                     <li class="garden-how__step">
-                        <span class="garden-how__bed" data-garden-how="bloom"></span>
+                        <span class="garden-how__bed" data-how="bloom"></span>
                         <strong>watch it bloom</strong>
                         <span>on day 7 it opens. the more care, the fuller it grows, and the likelier something rare.</span>
                     </li>
                     <li class="garden-how__step">
-                        <span class="garden-how__bed garden-how__bed--pressed" data-garden-how="pressed"></span>
+                        <span class="garden-how__bed garden-how__bed--pressed" data-how="pressed"></span>
                         <strong>keep it forever</strong>
-                        <span>when the season ends it's pressed into your herbarium, and a new patch opens.</span>
+                        <span>when a garden closes, its flowers are pressed, and stay on your page for good.</span>
                     </li>
                 </ol>
             </section>
