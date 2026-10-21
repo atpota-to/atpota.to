@@ -130,9 +130,9 @@ month, in memory, and rewrites those rows every 5 minutes and when they end. Eac
 row's `through` is the last minute merged into it. After a restart, the first minute
 of each period reloads that period's row, then merges the minute rows after its
 `through`. So a restart loses nothing, and a retry never counts a minute twice.
-pg_cron (`atmosphere-prune-sketches`, hourly at :17) keeps minute sketches for 2 hours
-(26 for apps: the last hour is compared with the same hour yesterday) and apps' hour
-sketches for 30 days. Everyone's hours, days and months stay.
+pg_cron (`atmosphere-prune-sketches`, hourly at :17) keeps minute sketches for 26 hours
+(the last hour's apps and diversity index are compared with the same hour yesterday)
+and apps' hour sketches for 30 days. Everyone's hours, days and months stay.
 
 A partly covered minute is written with its real `seconds_covered`. A minute with
 no coverage isn't written. Failed writes wait in memory and are retried oldest

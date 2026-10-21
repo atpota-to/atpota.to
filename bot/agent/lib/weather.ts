@@ -292,16 +292,20 @@ export function parseHistory(body: unknown) {
     : null;
   let accounts: {
     seconds: number; prevSeconds: number; total: AccountTotals;
+    /** Everyone in the earlier window, when the station kept their sketches, with the seconds those cover. */
+    prev?: { seconds: number } & AccountTotals;
     points: ({ t: string; seconds: number } & AccountTotals)[];
     apps: { domain: string; active: number; prevActive: number; collections: string[] }[];
   } | null = null;
   const acc = isRecord(body.accounts) ? body.accounts : null;
   const accCover = counts(acc, ["seconds", "prevSeconds"] as const);
   const accTotal = counts(acc?.total, ["active", "bluesky", "elsewhere"] as const);
+  const accPrev = counts(acc?.prev, ["seconds", "active", "bluesky", "elsewhere"] as const);
   if (acc && accCover && accTotal) {
     accounts = {
       ...accCover,
       total: withIndex(acc?.total, accTotal),
+      ...(accPrev ? { prev: withIndex(acc.prev, accPrev) } : {}),
       points: list(acc.points).flatMap((p) => {
         const t = isRecord(p) ? iso(p.t) : null;
         const c = counts(p, ["seconds", "active", "bluesky", "elsewhere"] as const);
@@ -338,6 +342,19 @@ function weatherOf(p: { seconds: number; creates: number }) {
 /** The diversity index over a range, with its level, from the range's accounts (none without them). */
 function diversityOf(a: { index?: number } | undefined) {
   return a?.index === undefined ? {} : { diversityIndex: a.index, diversityLevel: diversityLevel(a.index) };
+}
+
+/**
+ * The diversity index against the earlier window's, as the weather page words it: only when
+ * the station heard both about as well, like the apps' accounts.
+ */
+function mixOf(h: History, earlier: string) {
+  const a = h.accounts;
+  const was = a?.prev;
+  if (!a || a.total.index === undefined || was?.index === undefined || a.seconds <= 0) return {};
+  if (was.seconds < a.seconds * 0.9 || was.seconds > a.seconds * 1.1) return {};
+  const mix = mixWords(a.total.index, was.index, earlier);
+  return mix ? { diversityIndexBefore: was.index, mix } : {};
 }
 
 /** The busiest apps outside Bluesky over a range, each against the window before it. */
@@ -561,6 +578,7 @@ export function todayReport(parts: Parts, now: number, tz: string) {
       heardPercent: heardPercent(total.seconds, DAY),
       ...weatherOf(total),
       ...diversityOf(day.accounts?.total),
+      ...mixOf(day, "the 24 hours before"),
       apps: appsOf(day, total, "the 24 hours before"),
       ...(accounts ? { accounts } : {}),
     };
@@ -676,6 +694,7 @@ export function weekReport(parts: Parts, now: number, tz: string) {
       ...weatherOf(m),
       // over the station's last 30 days
       ...diversityOf(month.accounts?.total),
+      ...mixOf(month, "the 30 days before"),
       ...(wholeDays.length >= 2 ? { busiestDay: day(wholeDays[0]!), quietestDay: day(wholeDays[wholeDays.length - 1]!) } : {}),
     };
     const perDay = (month.appsOverTime ?? []).filter((p) => Date.parse(p.t) >= thisFrom);

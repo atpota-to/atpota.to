@@ -13,7 +13,8 @@ export default defineTool({
     "Bluesky by who's writing, not how much: the percent of active accounts that wrote with other apps, " +
     "times the square root of how many apps' worth they're spread across, so one account writing a " +
     "thousand records counts once. It has a level like the UV index (low under 3, moderate, high from " +
-    "6, very high from 8, extreme from 11). Apps are named by their namespace as a domain: " +
+    "6, very high from 8, extreme from 11); `mix` says how it compares with the window before " +
+    "(diversityIndexBefore, when that window was heard live). Apps are named by their namespace as a domain: " +
     "sh.tangled.* is tangled.sh. report \"now\" is the last 60 seconds. \"today\" is today so far in " +
     "timeZone: the busiest and quietest minute, the last hour against usual, apps the station heard " +
     "for the first time, and the last 24 hours' busiest apps. \"week\" is the past 7 days for your " +

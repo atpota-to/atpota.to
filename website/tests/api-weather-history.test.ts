@@ -172,6 +172,7 @@ describe('active accounts in the trends', () => {
       const table = url.pathname.split('/').pop();
       const q = url.searchParams;
       const earlier = (q.get('t') ?? q.get('minute') ?? '').startsWith('gte.2026-10-19');
+      if (table === 'atmosphere_account_sketch' && earlier) return Response.json([{ t: '2026-10-19T16:30:00+00:00', seconds: 60, bluesky: sk(1, 6), elsewhere: sk(7) }]);
       if (table === 'atmosphere_account_sketch')
         return Response.json([
           { t: '2026-10-20T16:58:00+00:00', seconds: 60, dids: 3, dids_bluesky: 2, dids_elsewhere: 1, bluesky: sk(1, 2), elsewhere: sk(3) },
@@ -199,7 +200,7 @@ describe('active accounts in the trends', () => {
 
   it('merges the buckets\' sketches for the range, counts each bucket, and ranks apps by accounts', async () => {
     const db = stationDb();
-    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: 0 });
     const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { accounts: unknown };
     expect(body.accounts).toEqual({
       seconds: 120,
@@ -207,6 +208,8 @@ describe('active accounts in the trends', () => {
       // registers 1, 2, 4 on Bluesky and 3, 5 elsewhere: a union, not 2 + 2 or 3 + 4;
       // over the hour, tangled.sh had both accounts elsewhere and whtwnd.com one of them
       total: { active: 5, bluesky: 3, elsewhere: 2, share: 40, spread: 1.89, index: 54.99 },
+      // the same hour yesterday, from the minute sketches still kept: one of three accounts elsewhere, all tangled.sh's
+      prev: { seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
       points: [
         { t: '2026-10-20T16:58:00.000Z', seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
         { t: '2026-10-20T16:59:00.000Z', seconds: 60, active: 4, bluesky: 2, elsewhere: 2, share: 50, spread: 1.89, index: 68.74 },
@@ -220,10 +223,43 @@ describe('active accounts in the trends', () => {
     const [now, earlier] = asked('atmosphere_account_app_sketch');
     expect(now!.searchParams.get('period')).toBe('eq.minute');
     expect(now!.searchParams.getAll('t')).toEqual(['gte.2026-10-20T16:00:00.000Z', 'lt.2026-10-20T17:00:00.000Z']);
-    expect(earlier!.searchParams.get('domain')).toBe('in.(tangled.sh,whtwnd.com)');
+    expect(earlier!.searchParams.get('domain')).toBeNull();
     expect(earlier!.searchParams.getAll('t')).toEqual(['gte.2026-10-19T16:00:00.000Z', 'lt.2026-10-19T17:00:00.000Z']);
     // the earlier hour's coverage from the minute rows, since minute sketches don't last a day
     expect(asked('atmosphere_minute').some((u) => u.searchParams.get('dids') === 'not.is.null')).toBe(true);
+  });
+
+  it('gives a longer range the earlier window\'s everyone and diversity index, over every app', async () => {
+    const urls: URL[] = [];
+    const fetch = (async (input: string) => {
+      const url = new URL(input);
+      urls.push(url);
+      const table = url.pathname.split('/').pop();
+      const earlier = (url.searchParams.get('t') ?? '').startsWith('gte.2026-10-18');
+      if (table === 'atmosphere_account_sketch')
+        return Response.json(
+          earlier
+            ? [{ t: '2026-10-18T18:00:00+00:00', seconds: 3600, bluesky: sk(1, 2, 3), elsewhere: sk(4) }]
+            : [{ t: '2026-10-19T18:00:00+00:00', seconds: 3600, dids: 4, dids_bluesky: 2, dids_elsewhere: 2, bluesky: sk(1, 2), elsewhere: sk(3, 5) }],
+        );
+      if (table === 'atmosphere_account_app_sketch')
+        return Response.json(earlier ? [{ domain: 'whtwnd.com', sketch: sk(4) }] : [{ t: '2026-10-19T18:00:00+00:00', domain: 'tangled.sh', dids: 2, sketch: sk(3, 5) }]);
+      if (url.pathname.includes('/rpc/')) return new Response('no', { status: 404 });
+      return Response.json([]);
+    }) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: 0 });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=day'))).json()) as { accounts: { prev: unknown } };
+    // registers 1-3 on Bluesky and 4 elsewhere, all of it whtwnd.com's, which isn't in the top apps now
+    expect(body.accounts.prev).toEqual({ seconds: 3600, active: 4, bluesky: 3, elsewhere: 1, share: 25, spread: 1, index: 25 });
+    const earlier = urls.filter((u) => u.pathname.endsWith('/atmosphere_account_app_sketch') && u.searchParams.get('t')?.startsWith('gte.2026-10-18'));
+    expect(earlier[0]!.searchParams.get('domain')).toBeNull();
+  });
+
+  it('leaves the earlier window\'s diversity index out when the station heard it from the archive, not live', async () => {
+    const db = stationDb();
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: Date.parse('2026-10-20T16:50:00Z') });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { accounts: object };
+    expect('prev' in body.accounts).toBe(false);
   });
 
   it('reads longer ranges from hour, day and month sketches, and pages through them', async () => {

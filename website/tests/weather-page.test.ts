@@ -9,6 +9,9 @@ import {
   LIST_TOP,
   topBars,
   accountChange,
+  indexChange,
+  renderHeadlineChange,
+  renderSky,
   accountSummary,
   bigAmount,
   bindExplainers,
@@ -383,6 +386,48 @@ describe('records or accounts', () => {
     expect(accountChange({ ...app, active: 100 }, acct, 'yesterday')!.trend).toBe('down');
     expect(accountChange(app, { ...acct, prevSeconds: 90 }, 'yesterday')).toBeNull();
     expect(accountChange(app, { ...acct, prevSeconds: 400 }, 'yesterday')).toBeNull();
+  });
+
+  it('compares the diversity index with the earlier window\'s only when both were heard about as well', () => {
+    const withPrev = { ...acct, total: { ...acct.total, index: 6.6 }, prev: { seconds: 180, active: 38_000, bluesky: 37_600, elsewhere: 700, index: 6 } };
+    expect(indexChange(withPrev, 'the day before')).toEqual({ text: '↑ 10%', words: 'up 10% on the day before', trend: 'up' });
+    expect(indexChange({ ...withPrev, total: { ...withPrev.total, index: 4.5 } }, 'x')!.text).toBe('↓ 25%');
+    expect(indexChange(acct, 'x')).toBeNull();
+    expect(indexChange({ ...withPrev, prev: { ...withPrev.prev, seconds: 90 } }, 'x')).toBeNull();
+    expect(indexChange({ ...withPrev, prev: { ...withPrev.prev, index: undefined } }, 'x')).toBeNull();
+  });
+
+  it('puts the diversity index\'s chip in its tile, says what it compares with, and keeps small moves steady', () => {
+    const prev = { seconds: 180, active: 38_000, bluesky: 37_600, elsewhere: 700, index: 6 };
+    renderSky(report, skyOfHistory({ ...HISTORY, accounts: { ...acct, total: { ...acct.total, index: 6.6 }, prev } }), lens({ window: 'hour', measure: 'accounts' }));
+    const chipEl = report.querySelector<HTMLElement>('[data-r-index-change]')!;
+    expect(chipEl.dataset.trend).toBe('up');
+    expect(chipEl.textContent).toBe('↑ 10%up 10% on the same hour yesterday');
+    expect(chipEl.title).toBe('up 10% on the same hour yesterday');
+    const note = report.querySelector<HTMLElement>('[data-r-index-note]')!;
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe('the arrow compares with the same hour yesterday.');
+    expect(indexChange({ ...acct, total: { ...acct.total, index: 6.2 }, prev }, 'x')).toEqual({ text: '→', words: 'about the same as x', trend: 'steady' });
+    // no earlier window to compare with: no chip, no note
+    renderSky(report, skyOfHistory(HISTORY), lens({ window: 'hour', measure: 'accounts' }));
+    expect(chipEl.dataset.trend).toBeUndefined();
+    expect(chipEl.hasAttribute('title')).toBe(false);
+    expect(note.hidden).toBe(true);
+  });
+
+  it('gives the header the chip the "last hour" tile has for what it shows: records, or accounts', () => {
+    const up = { text: '↑ 4%', words: 'up 4% on the hour before', trend: 'up' as const };
+    const down = { text: '↓ 2%', words: 'down 2% on the hour before', trend: 'down' as const };
+    const changes = { creates: up, active: down } as unknown as Parameters<typeof renderHeadlineChange>[1];
+    renderSky(report, skyOfHistory(HISTORY), lens({ window: 'hour', measure: 'records' }));
+    renderHeadlineChange(report, changes);
+    const el = report.querySelector<HTMLElement>('[data-r-headline-change]')!;
+    expect(el.dataset.trend).toBe('up');
+    renderSky(report, skyOfHistory(HISTORY), lens({ window: 'hour', measure: 'accounts' }));
+    expect(el.dataset.trend).toBe('down');
+    expect(el.title).toBe('down 2% on the hour before');
+    renderHeadlineChange(report, null);
+    expect(el.dataset.trend).toBeUndefined();
   });
 
   it('only accepts well-formed accounts in a history', async () => {

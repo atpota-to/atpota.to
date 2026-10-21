@@ -498,6 +498,16 @@ html[data-theme="dark"] .weather-hero {
   color: var(--weather-sky-mono);
 }
 
+.weather-hero__change {
+  width: fit-content;
+  margin-top: 10px;
+}
+
+/* No pill when steady, so it takes the sky's text color, day or night. */
+.weather-hero .weather-hero__change[data-trend="steady"] {
+  color: var(--weather-sky-text);
+}
+
 .weather-hero__cond {
   max-width: 26ch;
   /* every forecast is two lines at this width; holding two (and the padding and rule above
@@ -1326,6 +1336,11 @@ html[data-theme="dark"] .weather-hero {
 .weather-diversity__level {
   font-size: 20px;
   font-weight: 700;
+}
+
+.weather-diversity__change {
+  width: fit-content;
+  margin-block: 4px;
 }
 
 .weather-diversity__blurb {

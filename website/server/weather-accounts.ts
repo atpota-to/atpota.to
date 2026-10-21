@@ -15,7 +15,8 @@
  * Coverage works as it does for records: `seconds` is how much of the range the station
  * heard while counting accounts, and the page says when that's short. Unlike records,
  * accounts don't scale with time (an hour has far fewer than 60 times a minute's), so
- * the page compares apps' counts only when both windows were heard about as well.
+ * the page compares apps' counts, and the diversity index with the earlier window's
+ * (`prev`), only when both windows were heard about as well.
  */
 
 import { diversityOf } from './atmosphere.js';
@@ -57,6 +58,8 @@ export interface Accounts {
   /** How much of the earlier window the station heard, counting accounts. */
   prevSeconds: number;
   total: AccountCounts & Diversity;
+  /** Everyone active in the earlier window, with the seconds its sketches cover, when the station kept them. */
+  prev?: AccountCounts & Diversity & { seconds: number };
   points: AccountPoint[];
   apps: AccountApp[];
 }
@@ -68,6 +71,9 @@ export interface AccountWindow {
   prev_until: string;
   period: Period;
   maxApps: number;
+  /** When the station started listening live: an earlier window from before then is the archive's, which hears
+   * fewer accounts outside Bluesky, so its diversity index isn't one to compare with (weather-almanac.ts LIVE_SINCE). */
+  liveSince?: number;
 }
 
 /** Supabase answers at most this many rows at a time. */
@@ -102,6 +108,24 @@ function mergeApps(rows: unknown[]): Map<string, Registers> {
   return apps;
 }
 
+/** Everyone in a window's sketch rows, the seconds they cover, and the diversity index they make over `apps`. */
+function everyoneOf(rows: unknown[], apps: Map<string, Registers>): AccountCounts & Diversity & { seconds: number } {
+  const bluesky = emptySketch();
+  const elsewhere = emptySketch();
+  let seconds = 0;
+  for (const r of rows) {
+    const b = isRecord(r) ? fromBytea(r.bluesky) : null;
+    const e = isRecord(r) ? fromBytea(r.elsewhere) : null;
+    const s = isRecord(r) ? num(r.seconds) : NaN;
+    if (!b || !e || !Number.isFinite(s) || s < 0) continue;
+    mergeSketch(bluesky, b);
+    mergeSketch(elsewhere, e);
+    seconds += s;
+  }
+  const everyone = { active: countSketch(mergeSketch(mergeSketch(emptySketch(), bluesky), elsewhere)), bluesky: countSketch(bluesky), elsewhere: countSketch(elsewhere) };
+  return { seconds, ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: [...apps.values()].map(countSketch) }) };
+}
+
 export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Accounts> {
   const { since, until, prev_since, prev_until, period } = w;
   const [main, appRows] = await Promise.all([
@@ -119,37 +143,35 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     else bucketApps.set(t, [num(r.dids)]);
   }
 
-  const bluesky = emptySketch();
-  const elsewhere = emptySketch();
   const points: AccountPoint[] = [];
+  const kept: unknown[] = [];
   let seconds = 0;
   for (const r of main) {
     const t = isRecord(r) ? iso(r.t) : null;
     const c = counts(r, ['seconds', 'dids', 'dids_bluesky', 'dids_elsewhere'] as const);
-    const b = isRecord(r) ? fromBytea(r.bluesky) : null;
-    const e = isRecord(r) ? fromBytea(r.elsewhere) : null;
-    if (!t || !c || !b || !e) continue;
-    mergeSketch(bluesky, b);
-    mergeSketch(elsewhere, e);
+    if (!t || !c || !isRecord(r) || !fromBytea(r.bluesky) || !fromBytea(r.elsewhere)) continue;
+    kept.push(r);
     seconds += c.seconds;
     const diversity = diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: bucketApps.get(t) ?? [] });
     points.push({ t, seconds: c.seconds, active: c.dids, bluesky: c.dids_bluesky, elsewhere: c.dids_elsewhere, ...diversity });
   }
-  const everyone = { active: countSketch(mergeSketch(mergeSketch(emptySketch(), bluesky), elsewhere)), bluesky: countSketch(bluesky), elsewhere: countSketch(elsewhere) };
-  const apps = [...mergeApps(appRows)].map(([domain, s]) => ({ domain, active: countSketch(s) }));
-  const total = { ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: apps.map((a) => a.active) }) };
+  const appSketches = mergeApps(appRows);
+  const apps = [...appSketches].map(([domain, s]) => ({ domain, active: countSketch(s) }));
+  const { seconds: _, ...total } = everyoneOf(kept, appSketches);
 
   const top = apps
     .sort((a, b) => b.active - a.active || (a.domain < b.domain ? -1 : 1))
     .slice(0, w.maxApps);
-  const domains = top.map((a) => a.domain).join(',');
 
-  const [prevRows, prevCoverage, collections] = await Promise.all([
-    top.length ? getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.${period}&${range(prev_since, prev_until)}&domain=in.(${domains})&order=t.asc,domain.asc`) : [],
-    // minute sketches are only kept a couple of hours, so the earlier window's minutes come from the minute rows
+  // the earlier window's diversity index spreads its accounts over every app, not only the top ones
+  const [prevRows, prevCoverage, prevSketches, collections] = await Promise.all([
+    getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc,domain.asc`),
+    // minute sketches of everyone may not reach back to the earlier window (they're kept 26 hours), so its coverage
+    // comes from the minute rows, and the seconds its sketches cover go with its diversity index
     period === 'minute'
       ? getAll(db, `atmosphere_minute?select=seconds:seconds_covered&minute=gte.${prev_since}&minute=lt.${prev_until}&dids=not.is.null&order=minute.asc`)
-      : getAll(db, `atmosphere_account_sketch?select=seconds&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
+      : null,
+    getAll(db, `atmosphere_account_sketch?select=seconds,bluesky,elsewhere&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
     // each app's busiest collections lately, as the records' apps have them
     Promise.all(
       top.map(async (a) => {
@@ -159,12 +181,14 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     ),
   ]);
   const prev = mergeApps(prevRows);
-  const prevSeconds = prevCoverage.reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
+  const prevTotal = everyoneOf(prevSketches, prev);
+  const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
 
   return {
     seconds,
     prevSeconds,
     total,
+    ...(prevTotal.seconds > 0 && Date.parse(prev_since) >= (w.liveSince ?? -Infinity) ? { prev: prevTotal } : {}),
     points,
     apps: top.map((a, i) => {
       const p = prev.get(a.domain);

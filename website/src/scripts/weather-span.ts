@@ -246,13 +246,16 @@ function show(tile: HTMLElement, sel: string, v: number | null | undefined, form
   } else countTo(el, v, format);
 }
 
-function chip(el: HTMLElement, c: Change | null): void {
+/** A number's chip: the arrow and percent on screen, in words for screen readers and on hover; nothing without a change. */
+export function chip(el: HTMLElement, c: Change | null): void {
   if (!c) {
     delete el.dataset.trend;
+    el.removeAttribute('title');
     el.replaceChildren();
     return;
   }
   el.dataset.trend = c.trend;
+  el.title = c.words;
   const shown = document.createElement('span');
   shown.setAttribute('aria-hidden', 'true');
   shown.textContent = c.text;
@@ -270,8 +273,8 @@ export function unitWords(unit: Unit): { posts: string; gust: string } {
   };
 }
 
-/** The tile for a span: its readouts and counts, each with its chip, and the note. null while it loads. */
-export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null, before: Figures | null, failed = false, unit: Unit = 'second'): void {
+/** The tile for a span: its readouts and counts, each with its chip, and the note; the chips it drew, null while it loads. */
+export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null, before: Figures | null, failed = false, unit: Unit = 'second'): Record<ChangeKey, Change | null> | null {
   tile.dataset.span = span;
   const words = unitWords(unit);
   const postsUnit = $(tile, '[data-s-unit="posts"]');
@@ -286,7 +289,7 @@ export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null
   const changes = now ? changesOf(now, before, span) : null;
   for (const el of tile.querySelectorAll<HTMLElement>('[data-s-change]')) chip(el, changes?.[el.dataset.sChange as ChangeKey] ?? null);
   // loading: the last numbers stay, dimmed, until the span's come
-  if (!now && !failed) return;
+  if (!now && !failed) return changes;
   const rate = unit === 'total' ? 'second' : unit;
   show(tile, '[data-r-feels]', now ? (unit === 'total' ? now.posts * now.seconds : perUnit(now.posts, unit)) : undefined, formatAmount);
   const gusts = $(tile, '[data-r-gusts-wrap]');
@@ -301,6 +304,7 @@ export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null
   if (accounts) accounts.hidden = now?.active === null;
   show(tile, '[data-r-active]', now?.active, tileCount);
   for (const k of EVENTS) show(tile, `[data-r-event="${k}"]`, now?.events?.[k], tileCount);
+  return changes;
 }
 
 interface TileState {
@@ -309,6 +313,8 @@ interface TileState {
   live: Figures | null;
   answers: Partial<Record<Span, SpanAnswer>>;
   failed: Partial<Record<Span, boolean>>;
+  /** Told the chips each time the tile draws, so the header can have one too (weather-page.ts). */
+  onChanges?: (changes: Record<ChangeKey, Change | null> | null) => void;
 }
 
 const states = new WeakMap<HTMLElement, TileState>();
@@ -323,7 +329,8 @@ function draw(tile: HTMLElement, s: TileState): void {
   const answer = s.answers[s.span];
   const now = s.span === 'minute' ? s.live : answer?.now ? figuresOf(answer.now) : null;
   const before = answer?.before ? figuresOf(answer.before) : null;
-  renderFigures(tile, s.span, now, before, s.span !== 'minute' && !answer && !!s.failed[s.span], s.unit);
+  const changes = renderFigures(tile, s.span, now, before, s.span !== 'minute' && !answer && !!s.failed[s.span], s.unit);
+  s.onChanges?.(changes);
 }
 
 /** A live reading for the tile: drawn when it's on the minute, kept for when it comes back. */
@@ -340,8 +347,9 @@ export interface SpanTile {
 }
 
 /** The tile's first load and a refresh while the tab is visible (SPAN_INFO's refreshMs); the lens moves it on (weather-page.ts). */
-export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch, start: { span?: Span; unit?: Unit } = {}): SpanTile {
+export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch, start: { span?: Span; unit?: Unit; onChanges?: TileState['onChanges'] } = {}): SpanTile {
   const s = stateOf(tile);
+  s.onChanges = start.onChanges;
   const word = $(tile, '[data-s-word]');
   const status = $(tile, '[data-s-status]');
   if (start.unit) s.unit = start.unit;
