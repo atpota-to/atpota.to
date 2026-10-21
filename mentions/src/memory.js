@@ -157,14 +157,13 @@ async function publishLatest(did, { api, didResolves }) {
       db.markMemoryPublished(did, doc.held_back ? 'every note held back, so no record' : 'no notes, so no record');
       return false;
     }
-    // notedAt[i] is when notes[i] was saved. A separate list, so readers of
-    // notes as plain strings (the website's garden) keep working.
+    // Each note carries when it was saved (website/lexicons/to/atpota/poe/memory.json).
+    // Records from before 2026-10-21 held plain strings; the sweep rewrites them.
     const dates = doc.noted_at ? JSON.parse(doc.noted_at) : {};
     await api.putRecord(MEMORY_COLLECTION, did, {
       $type: MEMORY_COLLECTION,
       subject: did,
-      notes,
-      notedAt: notes.map((note) => dates[note] ?? doc.updated_at),
+      notes: notes.map((text) => ({ text, createdAt: dates[text] ?? doc.updated_at })),
       updatedAt: doc.updated_at,
     });
     db.markMemoryPublished(did, doc.held_back ? `${doc.held_back} held back by the publish rules` : null);

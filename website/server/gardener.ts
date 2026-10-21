@@ -161,11 +161,17 @@ export function toPets(value: unknown): number {
   return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 && count <= MAX_PETS ? count : 0;
 }
 
-/** How many notes a memory record holds about `did`; 0 when it's about someone else. */
+/**
+ * How many notes a memory record holds about `did`; 0 when it's about someone else.
+ * A note is `{ text, createdAt }`; records published before 2026-10-21 hold plain strings.
+ */
 export function toNotes(value: unknown, did: string): number {
   const v = value as { subject?: unknown; notes?: unknown } | null;
   if (v?.subject !== did || !Array.isArray(v.notes)) return 0;
-  return v.notes.filter((n) => typeof n === 'string' && n.trim() !== '').length;
+  return v.notes.filter((n) => {
+    const text = typeof n === 'string' ? n : (n as { text?: unknown } | null)?.text;
+    return typeof text === 'string' && text.trim() !== '';
+  }).length;
 }
 
 class Missing extends Error {}

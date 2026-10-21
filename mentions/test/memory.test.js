@@ -58,7 +58,7 @@ test('a saved version is kept, then published as one record per person, keyed by
   assert.deepEqual([kind, collection, rkey], ['put', MEMORY_COLLECTION, did]);
   assert.equal(record.$type, MEMORY_COLLECTION);
   assert.equal(record.subject, did);
-  assert.deepEqual(record.notes, ['builds a labeler']);
+  assert.deepEqual(record.notes.map((note) => note.text), ['builds a labeler']);
   assert.ok(db.getMemoryDoc(did).published_at);
 });
 
@@ -72,8 +72,10 @@ test('each published note carries the date it was first saved, which a later sav
   storeMemory(did, doc('builds a labeler', 'their blog is https://example.com/me', 'likes short answers'));
   await publishMemory(did, { api, didResolves: resolves });
   const record = api.calls.at(-1)[3];
-  assert.deepEqual(record.notes, ['builds a labeler', 'likes short answers']);
-  assert.deepEqual(record.notedAt, ['2026-10-01T10:00:00.000Z', '2026-10-21T09:00:00.000Z']);
+  assert.deepEqual(record.notes, [
+    { text: 'builds a labeler', createdAt: '2026-10-01T10:00:00.000Z' },
+    { text: 'likes short answers', createdAt: '2026-10-21T09:00:00.000Z' },
+  ]);
   assert.equal(record.updatedAt, '2026-10-21T09:00:00.000Z');
 });
 
@@ -103,7 +105,7 @@ test('notes that fail the publish rules stay private, and are counted', async ()
   const api = fakeApi();
   storeMemory(did, doc('builds a labeler', 'their blog is https://example.com/me'));
   await publishMemory(did, { api, didResolves: resolves });
-  assert.deepEqual(api.calls[0][3].notes, ['builds a labeler']);
+  assert.deepEqual(api.calls[0][3].notes.map((note) => note.text), ['builds a labeler']);
   assert.equal(db.getMemoryDoc(did).held_back, 1);
 });
 
