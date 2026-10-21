@@ -1303,38 +1303,13 @@ html[data-theme="dark"] .post__body h2::after {
   }
 }
 
-.blog-account {
+/* "subscribed!", "sign-in was cancelled" and the like (server/blog/pages.ts NOTICE_LINE). */
+.blog-notice {
   margin: 14px 0 0;
-  color: var(--text-soft);
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-.blog-account__who {
-  font-weight: 700;
-}
-
-.blog-account__out {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--link);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-.blog-account__notice {
-  display: block;
   color: var(--ink);
+  font-size: 15px;
   font-weight: 700;
-}
-
-.blog-account__who + .blog-account__notice,
-.blog-account__out + .blog-account__notice {
-  margin-top: 4px;
+  line-height: 1.5;
 }
 
 /* ---------- comments ---------- */
@@ -1618,7 +1593,7 @@ a.comment__time:hover {
   .post-end,
   .post-embed,
   .blog-email,
-  .blog-account {
+  .blog-notice {
     display: none !important;
   }
 }

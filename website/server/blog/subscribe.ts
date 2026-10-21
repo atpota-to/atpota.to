@@ -10,7 +10,8 @@
  *                by src/blog/ after a Bluesky sign-in. Hidden until that code runs.
  *
  * src/blog/ui.ts adds an "also subscribe with bluesky" box to the email form for a signed-in
- * reader who hasn't subscribed there yet, so one submit does both.
+ * reader who hasn't subscribed there yet, so one submit does both (or just bluesky, with the
+ * email left empty). While the box is there, the bluesky link under that form steps aside.
  */
 
 import { escapeAttr, escapeHtml } from './html.js';
@@ -49,7 +50,7 @@ export function feedLinkHtml(path: string, url: string): string {
  * The quieter ways to keep up, as one line of text links under the email form:
  * "or subscribe with bluesky, follow poe, rss" ("or" only when a form is above it).
  * `items` are links or buttons with the blog-alt__link class; a hidden one (bluesky,
- * until src/blog/ runs) takes no space.
+ * until src/blog/ runs, and while the form's own bluesky box stands in for it) takes no space.
  */
 export function altLinksHtml(items: readonly string[], afterForm = true): string {
   return `<p class="blog-alt">${afterForm ? '<span class="blog-alt__or">or</span>' : ''}${items.filter(Boolean).join('')}</p>`;
