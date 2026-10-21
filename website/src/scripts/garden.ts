@@ -59,6 +59,7 @@ import { DAY_MS, drawFlower, drawSeed, FLOWER_KINDS, GROW_DAYS, kindName, sample
 import {
   fetchGarden,
   flowerVariant,
+  GARDEN_SIZE,
   GARDEN_SUBJECT,
   isFlowerKind,
   isPlot,
@@ -359,6 +360,15 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   const card = tile.querySelector<HTMLElement>('[data-garden-card]');
   const auth = opts.auth === undefined ? createAuth(win) : opts.auth;
 
+  // Bare mounds where the plots will be, until the patch is in (render() replaces them).
+  if (plots && !plots.childElementCount) {
+    plots.style.setProperty('--plot-cols', String(GARDEN_SIZE.cols));
+    plots.style.setProperty('--plot-cols-narrow', String(narrowCols(GARDEN_SIZE.cols)));
+    plots.replaceChildren(
+      ...Array.from({ length: GARDEN_SIZE.cols * GARDEN_SIZE.rows }, () => el(doc, 'span', { class: 'home-plot home-plot--skeleton', 'aria-hidden': 'true' })),
+    );
+  }
+
   let owner: Owner | null = null;
   let patch: Patch | null = null;
   let patches: PatchSummary[] = [];
@@ -441,7 +451,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   function render(): void {
     const n = total();
     focusAt = Math.max(0, Math.min(focusAt, n - 1));
-    if (plots) {
+    // Until the first patch is in, the bare mounds stay.
+    if (plots && (patch || box.dataset.state !== 'loading')) {
       const hadFocus = plots.contains(doc.activeElement);
       const at = new Map(flowers.map((f) => [f.plot, f]));
       plots.style.setProperty('--plot-cols', String(cols() || 1));
@@ -462,8 +473,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       if (yours) mineLink.setAttribute('href', gardenPath(actorOf(yours), 'flowers'));
     }
     // A closed or upcoming patch can't be planted in, and nor can one where the reader has
-    // their one flower: no picker, no button.
-    const shutAway = Boolean(patch && (!patch.open || doneHere()));
+    // their one flower: no picker, no button. Nor can one that hasn't loaded (or isn't there).
+    const shutAway = !patch || !patch.open || doneHere();
     // With seeds there's nothing to pick.
     if (kindsGroup) kindsGroup.hidden = shutAway || seeds;
     if (plantButton) plantButton.hidden = shutAway;

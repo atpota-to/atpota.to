@@ -134,6 +134,32 @@ html[data-theme="dark"] {
   opacity: 0.5;
 }
 
+/* Bare mounds while the patch loads (garden.ts), breathing gently; switching patches
+   fades the old one until the next is in. */
+.home-plot--skeleton {
+  cursor: default;
+}
+
+.home-patch[data-state="loading"] .home-plot:not(.home-plot--skeleton) {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-plot:not(.home-plot--skeleton) {
+    transition: opacity var(--dur-fast) ease;
+  }
+
+  .home-plots:has(> .home-plot--skeleton) {
+    animation: patch-breathe 1.4s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes patch-breathe {
+  to {
+    opacity: 0.6;
+  }
+}
+
 /* A closed patch: its flowers pressed, on paper. */
 .home-plots[data-pressed] {
   background: var(--patch-press-paper);

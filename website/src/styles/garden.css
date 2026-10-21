@@ -192,6 +192,109 @@ html[data-theme="dark"] {
   }
 }
 
+/* ---------- loading: the shape of what's coming ---------- */
+
+/* Bars in place of the header's words and numbers, and a patch (or a flower, on someone's
+   flowers) under it, until garden-page.ts has the person. The lede keeps its words. Only
+   with JS: without it there's nothing coming. */
+.garden-skeleton,
+html:not(.js) .garden-stats__item--skeleton {
+  display: none;
+}
+
+html.js .garden[data-state="loading"] .garden-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.garden-skeleton .garden-skeleton__hero,
+.garden-skeleton[data-level="flowers"] .garden-skeleton__patch {
+  display: none;
+}
+
+.garden-skeleton[data-level="flowers"] .garden-skeleton__hero {
+  display: flex;
+}
+
+html.js .garden[data-state="loading"] :is([data-head-eyebrow], [data-head-title]),
+.garden-stats__item--skeleton,
+.garden-skeleton__bar,
+.garden-patch:has(.home-plot--skeleton) :is(.home-patch__title, .home-patch__count) {
+  border-radius: 8px;
+  background: var(--line);
+  color: transparent;
+}
+
+html.js .garden[data-state="loading"] [data-head-eyebrow],
+.garden-patch:has(.home-plot--skeleton) .home-patch__title {
+  justify-self: start;
+  width: 7em;
+}
+
+html.js .garden[data-state="loading"] [data-head-title] {
+  justify-self: start;
+  width: min(9em, 100%);
+}
+
+.garden-patch:has(.home-plot--skeleton) .home-patch__count {
+  width: 9em;
+  min-height: 1.3em;
+}
+
+.garden-stats__item--skeleton {
+  width: 132px;
+  height: 42px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+}
+
+.garden-stats__item--skeleton:nth-child(2) {
+  width: 104px;
+}
+
+.garden-stats__item--skeleton:nth-child(3) {
+  width: 118px;
+}
+
+.garden-skeleton__bar {
+  display: block;
+  height: 14px;
+}
+
+.garden-skeleton__bar--eyebrow {
+  width: 7em;
+}
+
+.garden-skeleton__bar--title {
+  width: min(12em, 80%);
+  height: 30px;
+}
+
+.garden-skeleton__bar--short {
+  width: 60%;
+}
+
+.garden-skeleton__bar--button {
+  width: 140px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+}
+
+.garden-skeleton__plots > i {
+  aspect-ratio: 1;
+  border-radius: 20%;
+  background: var(--patch-mound);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.js .garden[data-state="loading"] :is([data-head-eyebrow], [data-head-title], .garden-head__avatar),
+  .garden-stats__item--skeleton,
+  .garden-skeleton :is(.garden-skeleton__bar, .garden-skeleton__plots, .garden-hero__bed),
+  .garden-patch:has(.home-plot--skeleton) :is(.home-patch__title, .home-patch__count) {
+    animation: patch-breathe 1.4s ease-in-out infinite alternate;
+  }
+}
+
 /* ---------- levels: garden | flowers ---------- */
 
 .garden-levels {
