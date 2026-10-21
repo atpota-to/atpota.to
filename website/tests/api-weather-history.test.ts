@@ -200,7 +200,7 @@ describe('active accounts in the trends', () => {
 
   it('merges the buckets\' sketches for the range, counts each bucket, and ranks apps by accounts', async () => {
     const db = stationDb();
-    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: 0 });
     const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { accounts: unknown };
     expect(body.accounts).toEqual({
       seconds: 120,
@@ -247,12 +247,19 @@ describe('active accounts in the trends', () => {
       if (url.pathname.includes('/rpc/')) return new Response('no', { status: 404 });
       return Response.json([]);
     }) as typeof globalThis.fetch;
-    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: 0 });
     const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=day'))).json()) as { accounts: { prev: unknown } };
     // registers 1-3 on Bluesky and 4 elsewhere, all of it whtwnd.com's, which isn't in the top apps now
     expect(body.accounts.prev).toEqual({ seconds: 3600, active: 4, bluesky: 3, elsewhere: 1, share: 25, spread: 1, index: 25 });
     const earlier = urls.filter((u) => u.pathname.endsWith('/atmosphere_account_app_sketch') && u.searchParams.get('t')?.startsWith('gte.2026-10-18'));
     expect(earlier[0]!.searchParams.get('domain')).toBeNull();
+  });
+
+  it('leaves the earlier window\'s diversity index out when the station heard it from the archive, not live', async () => {
+    const db = stationDb();
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: Date.parse('2026-10-20T16:50:00Z') });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { accounts: object };
+    expect('prev' in body.accounts).toBe(false);
   });
 
   it('reads longer ranges from hour, day and month sketches, and pages through them', async () => {

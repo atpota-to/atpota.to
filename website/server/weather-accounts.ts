@@ -71,6 +71,9 @@ export interface AccountWindow {
   prev_until: string;
   period: Period;
   maxApps: number;
+  /** When the station started listening live: an earlier window from before then is the archive's, which hears
+   * fewer accounts outside Bluesky, so its diversity index isn't one to compare with (weather-almanac.ts LIVE_SINCE). */
+  liveSince?: number;
 }
 
 /** Supabase answers at most this many rows at a time. */
@@ -105,8 +108,8 @@ function mergeApps(rows: unknown[]): Map<string, Registers> {
   return apps;
 }
 
-/** Everyone in a window's sketch rows, and the diversity index they make over `apps`; null when no sketch came. */
-function everyoneOf(rows: unknown[], apps: Map<string, Registers>): Accounts['prev'] | null {
+/** Everyone in a window's sketch rows, the seconds they cover, and the diversity index they make over `apps`. */
+function everyoneOf(rows: unknown[], apps: Map<string, Registers>): AccountCounts & Diversity & { seconds: number } {
   const bluesky = emptySketch();
   const elsewhere = emptySketch();
   let seconds = 0;
@@ -119,7 +122,6 @@ function everyoneOf(rows: unknown[], apps: Map<string, Registers>): Accounts['pr
     mergeSketch(elsewhere, e);
     seconds += s;
   }
-  if (seconds <= 0) return null;
   const everyone = { active: countSketch(mergeSketch(mergeSketch(emptySketch(), bluesky), elsewhere)), bluesky: countSketch(bluesky), elsewhere: countSketch(elsewhere) };
   return { seconds, ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: [...apps.values()].map(countSketch) }) };
 }
@@ -141,25 +143,21 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     else bucketApps.set(t, [num(r.dids)]);
   }
 
-  const bluesky = emptySketch();
-  const elsewhere = emptySketch();
   const points: AccountPoint[] = [];
+  const kept: unknown[] = [];
   let seconds = 0;
   for (const r of main) {
     const t = isRecord(r) ? iso(r.t) : null;
     const c = counts(r, ['seconds', 'dids', 'dids_bluesky', 'dids_elsewhere'] as const);
-    const b = isRecord(r) ? fromBytea(r.bluesky) : null;
-    const e = isRecord(r) ? fromBytea(r.elsewhere) : null;
-    if (!t || !c || !b || !e) continue;
-    mergeSketch(bluesky, b);
-    mergeSketch(elsewhere, e);
+    if (!t || !c || !isRecord(r) || !fromBytea(r.bluesky) || !fromBytea(r.elsewhere)) continue;
+    kept.push(r);
     seconds += c.seconds;
     const diversity = diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: bucketApps.get(t) ?? [] });
     points.push({ t, seconds: c.seconds, active: c.dids, bluesky: c.dids_bluesky, elsewhere: c.dids_elsewhere, ...diversity });
   }
-  const everyone = { active: countSketch(mergeSketch(mergeSketch(emptySketch(), bluesky), elsewhere)), bluesky: countSketch(bluesky), elsewhere: countSketch(elsewhere) };
-  const apps = [...mergeApps(appRows)].map(([domain, s]) => ({ domain, active: countSketch(s) }));
-  const total = { ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: apps.map((a) => a.active) }) };
+  const appSketches = mergeApps(appRows);
+  const apps = [...appSketches].map(([domain, s]) => ({ domain, active: countSketch(s) }));
+  const { seconds: _, ...total } = everyoneOf(kept, appSketches);
 
   const top = apps
     .sort((a, b) => b.active - a.active || (a.domain < b.domain ? -1 : 1))
@@ -183,14 +181,14 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     ),
   ]);
   const prev = mergeApps(prevRows);
-  const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
   const prevTotal = everyoneOf(prevSketches, prev);
+  const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
 
   return {
     seconds,
     prevSeconds,
     total,
-    ...(prevTotal ? { prev: prevTotal } : {}),
+    ...(prevTotal.seconds > 0 && Date.parse(prev_since) >= (w.liveSince ?? -Infinity) ? { prev: prevTotal } : {}),
     points,
     apps: top.map((a, i) => {
       const p = prev.get(a.domain);

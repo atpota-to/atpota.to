@@ -389,3 +389,23 @@ test("read_weather: a bad time zone or an unreachable station is an answer, not 
     globalThis.fetch = realFetch;
   }
 });
+
+test("the last 24 hours' and the month's diversity index against the window before, when the website sent it", async () => {
+  const accounts = (index, prev) => ({ seconds: 86_400, prevSeconds: 86_400, total: { active: 1000, bluesky: 990, elsewhere: 20, index }, ...(prev ? { prev } : {}), points: [], apps: [] });
+  const day = { ...DAY_HISTORY, accounts: accounts(3.9, { seconds: 86_000, active: 900, bluesky: 890, elsewhere: 15, index: 2.8 }) };
+  const today = await lib.readWeather("today", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=day": day }).impl, NOW);
+  assert.equal(today.last24Hours.diversityIndex, 3.9);
+  assert.equal(today.last24Hours.diversityIndexBefore, 2.8);
+  assert.equal(today.last24Hours.mix, "a more mixed sky than the 24 hours before");
+  // heard much less of the day before, or not at all: no comparison
+  const thin = { ...DAY_HISTORY, accounts: accounts(3.9, { seconds: 40_000, active: 900, bluesky: 890, elsewhere: 15, index: 2.8 }) };
+  const thinReport = await lib.readWeather("today", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=day": thin }).impl, NOW);
+  assert.equal("mix" in thinReport.last24Hours, false);
+  const none = await lib.readWeather("today", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=day": { ...DAY_HISTORY, accounts: accounts(3.9) } }).impl, NOW);
+  assert.equal("mix" in none.last24Hours, false);
+
+  const month = { ...MONTH_HISTORY, accounts: { ...MONTH_HISTORY.accounts, prev: { seconds: 2_000_000, active: 9, bluesky: 9, elsewhere: 0, index: 2.1 } } };
+  const week = await lib.readWeather("week", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=month": month }).impl, NOW);
+  assert.equal(week.month.mix, "about as mixed as the 30 days before");
+  assert.equal("mix" in week.diversity, false, "the week's mix is the week before's, by its days");
+});

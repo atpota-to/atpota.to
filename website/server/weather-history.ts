@@ -27,13 +27,15 @@
  *                 month (atmosphere_apps_over_time)
  *   accounts      active accounts (different DIDs) over the range and in each bucket, the
  *                 diversity index they make, and the apps with the most, from the
- *                 station's sketches (weather-accounts.ts)
+ *                 station's sketches (weather-accounts.ts); and everyone in the earlier
+ *                 window with its diversity index (prev), when that was all heard live
  *
  * An answer missing any of these is only cached briefly (PARTIAL_CACHE), so one slow
  * read doesn't leave a chart blank for as long as the range's cache lasts.
  */
 
 import { readAccounts } from './weather-accounts.js';
+import { LIVE_SINCE } from './weather-almanac.js';
 import { collectionsOf, counts, DOMAIN_RE, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch } from './supabase-public.js';
 
 export { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-public.js';
@@ -146,11 +148,14 @@ export interface HistoryDeps {
   now?: () => number;
   env?: () => Env;
   log?: (fields: { event: string; [k: string]: unknown }) => void;
+  /** When the station started listening live (LIVE_SINCE): earlier diversity indexes before it aren't compared with. */
+  liveSince?: number;
 }
 
 export function createHistoryHandlers(deps: HistoryDeps = {}) {
   const fetchImpl: Fetch = deps.fetch ?? ((input, init) => fetch(input, init));
   const now = deps.now ?? (() => Date.now());
+  const liveSince = deps.liveSince ?? LIVE_SINCE;
   const env = deps.env ?? (() => process.env);
   const log = deps.log ?? ((fields) => console.warn(JSON.stringify({ src: 'weather-history', ...fields })));
 
@@ -190,7 +195,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     });
     const accounts = extra('accounts', () => {
       const { since, until, prev_since, prev_until } = trendArgs(range, at);
-      return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS });
+      return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS, liveSince });
     });
     let rows: unknown;
     try {

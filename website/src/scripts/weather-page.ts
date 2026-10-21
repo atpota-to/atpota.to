@@ -48,7 +48,7 @@
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initForecast } from './weather-forecast';
-import { chip, initSpan, percentChange, showLive, spanFor, type Change } from './weather-span';
+import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
 import {
   bindLens,
   createLens,
@@ -389,6 +389,8 @@ function tag(tile: Element | null, counts: Measure, lens: LensState): void {
 function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   const words = WINDOW_INFO[sky.window].words;
   const byAcct = lens.measure === 'accounts' && sky.accounts !== null;
+  report.dataset.headline = byAcct ? 'active' : 'creates';
+  renderHeadlineChange(report);
   const value = byAcct ? sky.accounts!.active : sky.records ? amountIn(sky.records.perSecond, lens.unit, sky.seconds) : sky.reading ? amountIn(recordsPerSecond(sky.reading), lens.unit, sky.seconds) : undefined;
   if (value === undefined) setText(report, '[data-r-records]', '–');
   // accounts are counted, not measured: every one of them while it fits
@@ -418,6 +420,18 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   if (!spark.hidden) renderSparkline(spark, values);
 }
 
+/** The last chips the "last hour" tile drew, for the header's (initSpan's onChanges). */
+const headlineChanges = new WeakMap<HTMLElement, Record<ChangeKey, Change | null> | null>();
+
+/** The header's chip: its number against the span before, as the "last hour" tile has it. */
+export function renderHeadlineChange(report: HTMLElement, changes?: Record<ChangeKey, Change | null> | null): void {
+  if (changes !== undefined) headlineChanges.set(report, changes);
+  const el = $(report, '[data-r-headline-change]');
+  if (!el) return;
+  const key = report.dataset.headline === 'active' ? 'active' : 'creates';
+  chip(el, headlineChanges.get(report)?.[key] ?? null);
+}
+
 function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
   const tile = $(report, '.weather-diversity');
   tag(tile, 'accounts', lens);
@@ -429,6 +443,11 @@ function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
     setText(report, '[data-r-level-text]', LEVEL_TEXT[d.level]);
     const change = $(report, '[data-r-index-change]');
     if (change) chip(change, d.change ?? null);
+    const note = $(report, '[data-r-index-note]');
+    if (note) {
+      note.hidden = !d.change || !sky.earlier;
+      note.textContent = sky.earlier ? `the arrow compares with ${sky.earlier}.` : '';
+    }
     if (marker) {
       marker.hidden = false;
       marker.style.left = `${(Math.min(d.index, SCALE_MAX) / SCALE_MAX) * 100}%`;
@@ -443,6 +462,8 @@ function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
     setText(report, '[data-r-level-text]', `no account counts for ${WINDOW_INFO[sky.window].words} yet.`);
     const change = $(report, '[data-r-index-change]');
     if (change) chip(change, null);
+    const note = $(report, '[data-r-index-note]');
+    if (note) note.hidden = true;
     if (marker) marker.hidden = true;
   }
   const parts = $(report, '[data-r-acct-index]');
@@ -809,6 +830,9 @@ export function accountChange(app: HistoryAccounts['apps'][number], a: HistoryAc
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
 
+/** A diversity index within this of the earlier one reads as about the same. */
+export const INDEX_STEADY = 0.05;
+
 /**
  * The diversity index against the earlier window's, in percent. Like accounts, only when
  * the station heard both windows about as well; null otherwise.
@@ -817,7 +841,9 @@ export function indexChange(a: HistoryAccounts, earlier: string): Change | null 
   const p = a.prev;
   if (!p || a.total.index === undefined || p.index === undefined) return null;
   if (a.seconds <= 0 || p.seconds < a.seconds * 0.9 || p.seconds > a.seconds * 1.1) return null;
-  return percentChange(a.total.index, p.index, earlier);
+  const c = percentChange(a.total.index, p.index, earlier);
+  // the index wanders a few percent on its own, so that much is the same sky
+  return c && Math.abs(a.total.index / p.index - 1) < INDEX_STEADY ? { text: '→', words: `about the same as ${earlier}`, trend: 'steady' } : c;
 }
 
 /**
@@ -1110,7 +1136,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     }
   };
   const minute = $(report, '[data-s-tile]');
-  const span = minute ? initSpan(minute, fetchImpl, { span: spanFor(lens.get().window), unit: lens.get().unit }) : null;
+  const span = minute ? initSpan(minute, fetchImpl, { span: spanFor(lens.get().window), unit: lens.get().unit, onChanges: (c) => renderHeadlineChange(report, c) }) : null;
   lens.onChange((l, was) => {
     span?.setSpan(spanFor(l.window));
     span?.setUnit(l.unit);
