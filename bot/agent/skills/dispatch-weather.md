@@ -30,7 +30,8 @@ Three short paragraphs at most. Pick what was interesting this week; you don't
 need all of it.
 
 - **The headline.** The week's new records a second and its condition, against the
-  week before (`weekBefore.changePercent`), and the diversity index with its level.
+  week before (`weekBefore.changePercent`), and the diversity index with its level
+  (and `weekBefore.mix`, how mixed a sky it was against the week before, when it's there).
   Round the way a person would: "about 450 new records a second", "an index of 1.7".
 - **What moved the sky.** The busiest apps outside Bluesky (`apps`) and how each did
   against the week before (`change`), especially one that is new or way up.

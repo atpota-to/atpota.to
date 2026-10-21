@@ -100,7 +100,13 @@ thousand records a minute is a thousand records and one account.
   records share, minutes where one account wrote over a thousand records
   (titlegraph.org, techne.app) read 6 to 7; by accounts they read 2.4 to 2.7, in line
   with the minutes around them. The trends work it out bucket by
-  bucket from the sketches' `dids` (`website/server/weather-accounts.ts`).
+  bucket from the sketches' `dids` (`website/server/weather-accounts.ts`). The almanac's
+  "a more mixed sky than usual" compares the last whole hour's index with the same hour
+  on the days or weeks before (`weather-almanac.ts` `readDiversity`), and Poe's week
+  against the week before compares each week's daily indexes, averaged. Both leave out
+  what came from the archive (before 2026-10-20T16:50Z): it keeps about a fifth of the
+  edits the station hears, so its hours read 0.29% of accounts elsewhere against the
+  station's 0.48%, and would make every live hour look more mixed than usual.
 - **Stored:** see "Minute rows" below and
   [`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql). The website merges
   and counts the stored sketches itself (`website/server/hll.ts`,

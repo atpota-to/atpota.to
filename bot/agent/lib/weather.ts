@@ -35,6 +35,13 @@ const WEEK = 7 * DAY;
 /** How long the station listens before an outlook means anything: one of every hour of the week. */
 const OUTLOOK_MIN_SECONDS = 6 * 86_400;
 const TOP = 10;
+/**
+ * The station has listened live since this; before, its days came from Jetstream's
+ * archive, which keeps few edits and so hears fewer accounts outside Bluesky. Their
+ * diversity index isn't comparable with a live day's (website/server/weather-almanac.ts
+ * LIVE_SINCE, the same date).
+ */
+const LIVE_SINCE = Date.parse("2026-10-20T16:50:00Z");
 
 /**
  * The weather words, as the website and the station have them (website/server/atmosphere.ts
@@ -159,14 +166,16 @@ function percentWords(pct: number, earlier: string): string {
   return `about the same as ${earlier}`;
 }
 
-/** The share of new records from other apps against an earlier window, as the weather page words it (records, not the diversity index). */
-function mixWords(now: { elsewhere: number; creates: number }, before: { elsewhere: number; creates: number }, earlier: string): string | null {
-  if (now.elsewhere < 50 || before.elsewhere < 50 || now.creates <= 0 || before.creates <= 0) return null;
-  const mix = now.elsewhere / now.creates / (before.elsewhere / before.creates);
-  if (mix >= 1.3) return `more of the new records from other apps than ${earlier}`;
-  if (mix <= 0.77) return `fewer of the new records from other apps than ${earlier}`;
-  return `about the same share of new records from other apps as ${earlier}`;
+/** A diversity index against an earlier one, as the weather page words it. */
+function mixWords(index: number, before: number, earlier: string): string | null {
+  if (before <= 0) return null;
+  const mix = index / before;
+  if (mix >= 1.3) return `a more mixed sky than ${earlier}`;
+  if (mix <= 0.77) return `a little less mixed than ${earlier}`;
+  return `about as mixed as ${earlier}`;
 }
+
+const mean = (xs: number[]) => round2(xs.reduce((sum, x) => sum + x, 0) / xs.length);
 
 // ---------- fetching ----------
 
@@ -397,7 +406,15 @@ export function parseAlmanac(body: unknown) {
     const now = counts(n.now, SUMS);
     const days = counts(n.days, [...SUMS, "windows"] as const);
     const weeks = counts(n.weeks, [...SUMS, "windows"] as const);
-    return now && days && weeks ? { historyStart: iso(n.historyStart), now, days, weeks } : null;
+    if (!now || !days || !weeks) return null;
+    // the diversity index of the last whole hour, and on average of the same hour on the days and weeks before
+    const d = isRecord(n.diversity) ? n.diversity : null;
+    const dNow = counts(d?.now, ["index", "elsewhere"] as const);
+    const dDays = counts(d?.days, ["windows", "index"] as const);
+    const dWeeks = counts(d?.weeks, ["windows", "index"] as const);
+    const hour = d ? iso(d.hour) : null;
+    const diversity = hour && dNow && dDays && dWeeks ? { hour, now: dNow, days: dDays, weeks: dWeeks } : null;
+    return { historyStart: iso(n.historyStart), now, days, weeks, diversity };
   })();
   const newApps = (() => {
     const n = body.newApps;
@@ -444,8 +461,13 @@ function usualOf(normal: NonNullable<Almanac["normal"]>, now: number, tz: string
   const comparedWith = basis === "weeks"
     ? base.windows === 1 ? `this hour last ${weekday}` : `this hour on the last ${base.windows} ${weekday}s`
     : base.windows === 1 ? "this hour yesterday" : `this hour on the last ${base.windows} days`;
-  const mix = mixWords(normal.now, base, "usual");
-  return { ready: true as const, words: how, lastHourPerSecond: lastHour, usualPerSecond: usual, comparedWith, ...(mix ? { mix } : {}) };
+  // the diversity index goes by the hour (the last whole one), against the same hours as the records
+  const d = normal.diversity;
+  const was = d?.[basis];
+  const diversity = d && was && was.windows > 0 && d.now.elsewhere >= 50
+    ? { hour: hourAt(d.hour, tz), index: d.now.index, usualIndex: was.index, mix: mixWords(d.now.index, was.index, "usual") }
+    : null;
+  return { ready: true as const, words: how, lastHourPerSecond: lastHour, usualPerSecond: usual, comparedWith, ...(diversity ? { diversity } : {}) };
 }
 
 function newAppsOf(n: NonNullable<Almanac["newApps"]>) {
@@ -623,7 +645,14 @@ export function weekReport(parts: Parts, now: number, tz: string) {
     const beforeHeard = heardPercent(before.seconds, WEEK);
     if (thisHeard >= 50 && beforeHeard >= 50) {
       const b = weatherOf(before);
-      const mix = mixWords(thisWeek, before, "the week before");
+      // the mix by each week's days heard live and at least half, their diversity indexes
+      // averaged: a week's accounts would spread over more apps than any day's, and only days come back
+      const daily = (from: number, to: number) => inside(from, to).flatMap((p) => {
+        const index = accountsOn.get(p.t)?.index;
+        return Date.parse(p.t) >= LIVE_SINCE && p.seconds >= 43_200 && index !== undefined ? [index] : [];
+      });
+      const [thisDays, beforeDays] = [daily(thisFrom, now), daily(beforeFrom, thisFrom)];
+      const mix = thisDays.length >= 4 && beforeDays.length >= 4 ? mixWords(mean(thisDays), mean(beforeDays), "the week before") : null;
       out.weekBefore = {
         from: new Date(beforeFrom).toISOString(),
         to: new Date(thisFrom).toISOString(),

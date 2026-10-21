@@ -45,9 +45,17 @@ interface Sums {
 export interface Almanac {
   tz: string;
   today?: Sums & { start: string; high: Extreme | null; low: Extreme | null };
-  normal?: { historyStart: string | null; now: Sums; days: Sums & { windows: number }; weeks: Sums & { windows: number } };
+  normal?: { historyStart: string | null; now: Sums; days: Sums & { windows: number }; weeks: Sums & { windows: number }; diversity?: NormalDiversity };
   newApps?: { historyStart: string | null; readyAt: string | null; warmingUp: boolean; heard: number; apps: NewApp[] };
   heatmap?: { seconds: number; cells: HeatCell[] };
+}
+
+/** The diversity index of the last whole hour, and on average of the same hour on the days and weeks before (server/weather-almanac.ts readDiversity). */
+export interface NormalDiversity {
+  hour: string;
+  now: { index: number; share: number; spread: number; elsewhere: number };
+  days: { windows: number; index: number };
+  weeks: { windows: number; index: number };
 }
 
 export interface Extreme {
@@ -92,6 +100,12 @@ export function readAlmanac(body: unknown): Almanac | null {
   const windows = (x: unknown): x is Sums & { windows: number } => sums(x) && n((x as unknown as Record<string, unknown>).windows);
   if (obj(nm) && sums(nm.now) && windows(nm.days) && windows(nm.weeks)) {
     out.normal = { historyStart: date(nm.historyStart) ? nm.historyStart : null, now: nm.now, days: nm.days, weeks: nm.weeks };
+    const d = nm.diversity;
+    const usual = (x: unknown): x is { windows: number; index: number } => obj(x) && n(x.windows) && n(x.index);
+    if (obj(d) && date(d.hour) && obj(d.now) && n(d.now.index) && n(d.now.share) && n(d.now.spread) && n(d.now.elsewhere) && usual(d.days) && usual(d.weeks)) {
+      const now = { index: d.now.index, share: d.now.share, spread: d.now.spread, elsewhere: d.now.elsewhere };
+      out.normal.diversity = { hour: d.hour, now, days: { windows: d.days.windows, index: d.days.index }, weeks: { windows: d.weeks.windows, index: d.weeks.index } };
+    }
   }
   const na = body.newApps;
   if (obj(na) && typeof na.warmingUp === 'boolean' && n(na.heard) && Array.isArray(na.apps)) {
@@ -225,12 +239,13 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
   const over =
     basis === 'weeks' ? (base.windows === 1 ? `last ${weekday}` : `the last ${base.windows} ${weekday}s`) : base.windows === 1 ? 'yesterday' : `the last ${base.windows} days`;
   let detail = `${Math.round(rate)} new records a second over the last hour; usually about ${Math.round(usual)} at this hour (${over}).`;
-  // The share of records from other apps against usual, when both sides have enough to
-  // say. Records, not the diversity index: one busy account can move this on its own.
-  if (now.elsewhere >= 50 && base.elsewhere >= 50 && now.creates > 0 && base.creates > 0) {
-    const mix = now.elsewhere / now.creates / (base.elsewhere / base.creates);
-    if (mix >= 1.3) detail += ' more of them from other apps than usual, too.';
-    else if (mix <= 0.77) detail += ' fewer of them from other apps than usual.';
+  // The diversity index against usual, by the hour, when both sides have enough to say.
+  const d = normal.diversity;
+  const was = d?.[basis];
+  if (d && was && was.windows > 0 && was.index > 0 && d.now.elsewhere >= 50) {
+    const mix = d.now.index / was.index;
+    if (mix >= 1.3) detail += ' a more mixed sky than usual, too.';
+    else if (mix <= 0.77) detail += ' a little less mixed than usual.';
   }
   if (basis === 'days') detail += ` in a week it'll compare with ${weekday}s.`;
   return { headline: `${how} ${when}`, detail, ratio };

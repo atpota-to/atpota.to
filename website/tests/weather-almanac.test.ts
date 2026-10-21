@@ -257,11 +257,31 @@ describe('rising and falling apps', () => {
 });
 
 describe('the mix against usual', () => {
-  it('mentions more (or fewer) records from other apps when both sides have enough to say', () => {
-    const base = { ...S(158_400 * 2, 7200), windows: 2 };
-    const mixed = usualText({ ...ALMANAC.normal!, now: { ...S(187_200), elsewhere: 15_000 }, weeks: base }, NOW, TZ);
-    expect(mixed.detail).toMatch(/ more of them from other apps than usual, too\.$/);
-    const plain = usualText({ ...ALMANAC.normal!, now: { ...S(187_200), elsewhere: 2000 }, weeks: base }, NOW, TZ);
-    expect(plain.detail).toMatch(/ fewer of them from other apps than usual\.$/);
+  const diversity = (now: number, weeks: number, windows = 2, elsewhere = 700) => ({
+    hour: '2026-11-03T16:00:00.000Z',
+    now: { index: now, share: 0.5, spread: 14, elsewhere },
+    days: { windows: 6, index: 1.9 },
+    weeks: { windows, index: weeks },
+  });
+
+  it('compares the last hour\'s diversity index with the same hour on the weeks before', () => {
+    expect(usualText({ ...ALMANAC.normal!, diversity: diversity(2.8, 2) }, NOW, TZ).detail).toMatch(/\)\. a more mixed sky than usual, too\.$/);
+    expect(usualText({ ...ALMANAC.normal!, diversity: diversity(1.4, 2) }, NOW, TZ).detail).toMatch(/\)\. a little less mixed than usual\.$/);
+    expect(usualText({ ...ALMANAC.normal!, diversity: diversity(2.1, 2) }, NOW, TZ).detail).toMatch(/\)\.$/);
+  });
+
+  it('says nothing about the mix without accounts to go by, however the records went', () => {
+    // a heap of records from other apps (one busy account can do that) is no more mixed a sky
+    const records = { ...ALMANAC.normal!, now: { ...S(187_200), elsewhere: 15_000 } };
+    expect(usualText(records, NOW, TZ).detail).toMatch(/\)\.$/);
+    // no earlier hour heard on the same weekday, or too few accounts elsewhere to say
+    expect(usualText({ ...records, diversity: diversity(9, 2, 0) }, NOW, TZ).detail).toMatch(/\)\.$/);
+    expect(usualText({ ...records, diversity: diversity(9, 2, 2, 10) }, NOW, TZ).detail).toMatch(/\)\.$/);
+  });
+
+  it('only reads a well-formed diversity part', () => {
+    const body = { ...ALMANAC, normal: { ...ALMANAC.normal, diversity: diversity(2.8, 2) } };
+    expect(readAlmanac(body)!.normal!.diversity).toEqual(diversity(2.8, 2));
+    expect(readAlmanac({ ...body, normal: { ...body.normal, diversity: { ...diversity(2.8, 2), weeks: null } } })!.normal!.diversity).toBeUndefined();
   });
 });

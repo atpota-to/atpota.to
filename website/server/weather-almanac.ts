@@ -9,7 +9,9 @@
  *            whole minute by new records a second, every app (atmosphere_today's
  *            recordsHigh / recordsLow)
  *   normal   the last hour against the same hour on the days before and on the same
- *            weekday in the weeks before (atmosphere_normal); the page words it
+ *            weekday in the weeks before (atmosphere_normal); the page words it. With
+ *            it, when they can be read, the diversity index of the last whole hour and
+ *            of the same hour on those days and weeks (readDiversity)
  *   newApps  apps outside Bluesky heard in the last 24 hours that the station had never
  *            heard before (atmosphere_new_apps). Until the station has listened for
  *            WARMUP_MS, every app is new to it, so it says it's warming up instead
@@ -20,10 +22,24 @@
  * Cached at the CDN for a minute per zone.
  */
 
-import { collectionsOf, counts, DOMAIN_RE, isRecord, iso, json, methodNotAllowed, supabase, type Env, type Fetch } from './supabase-public.js';
+import { diversityOf } from './atmosphere.js';
+import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
+import { getAll } from './weather-accounts.js';
 
 export const CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
-const DAY = 86_400_000;
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+/** How many days back atmosphere_normal looks for "usual": each of the 6 days before, and the same weekday in each of the 8 weeks before. */
+export const USUAL_DAYS = [1, 2, 3, 4, 5, 6] as const;
+export const USUAL_WEEKS = [7, 14, 21, 28, 35, 42, 49, 56] as const;
+/**
+ * The station has listened live since this. Everything before came from Jetstream's
+ * archive (atmosphere/README.md), which keeps about a fifth of the edits the station hears
+ * (0.5 a second against 2.7), and other apps lean on edits, so it hears fewer accounts
+ * outside Bluesky: 0.29% of an hour's active accounts on average, against the station's
+ * 0.48%. Its hours' diversity index isn't comparable, so "usual" leaves them out.
+ */
+export const LIVE_SINCE = Date.parse('2026-10-20T16:50:00Z');
 /** How long the station listens before an app it hasn't heard counts as new. */
 export const WARMUP_MS = 7 * DAY;
 export const HEATMAP_MS = 8 * 7 * DAY;
@@ -64,6 +80,20 @@ export interface Normal {
   days: Sums & { windows: number };
   /** The same hour and weekday in each of the 8 weeks before. */
   weeks: Sums & { windows: number };
+  diversity?: NormalDiversity;
+}
+
+/**
+ * The diversity index by the hour: the last whole one, and on average the same hour on
+ * the days and weeks atmosphere_normal looks at, wherever the station heard at least half
+ * of it and still has each app's accounts (it keeps those by the hour for 30 days).
+ */
+export interface NormalDiversity {
+  /** The start of the hour. */
+  hour: string;
+  now: { index: number; share: number; spread: number; elsewhere: number };
+  days: { windows: number; index: number };
+  weeks: { windows: number; index: number };
 }
 
 export interface NewApp {
@@ -152,6 +182,46 @@ export function toHeatmap(body: unknown): Heatmap | null {
   return { seconds: total.seconds, cells };
 }
 
+/**
+ * The diversity index of the last whole hour and of the same hour on the days and weeks
+ * before, from the station's hourly account counts (atmosphere_account_sketch and
+ * _app_sketch, their `dids`: no sketch needs merging). Clock hours, not the last 60
+ * minutes, since that's how the station keeps accounts. Each earlier hour's index on its
+ * own, then their mean: adding the hours' accounts up first would spread them over more
+ * apps than any one hour has. Hours from before the station listened live (LIVE_SINCE)
+ * are left out. null when the last whole hour wasn't heard well enough.
+ */
+export async function readDiversity(db: Supabase, at: number): Promise<NormalDiversity | null> {
+  const hour = Math.floor(at / HOUR) * HOUR - HOUR;
+  const ago = [0, ...USUAL_DAYS, ...USUAL_WEEKS];
+  const list = `(${ago.map((k) => new Date(hour - k * DAY).toISOString()).join(',')})`;
+  const [main, appRows] = await Promise.all([
+    getAll(db, `atmosphere_account_sketch?select=t,seconds,dids,dids_elsewhere&period=eq.hour&t=in.${list}&order=t.asc`),
+    getAll(db, `atmosphere_account_app_sketch?select=t,dids&period=eq.hour&t=in.${list}&order=t.asc,domain.asc`),
+  ]);
+  const apps = new Map<string, number[]>();
+  for (const r of appRows) {
+    const t = isRecord(r) ? iso(r.t) : null;
+    if (!t || !isRecord(r) || !isCount(r.dids)) continue;
+    apps.set(t, [...(apps.get(t) ?? []), num(r.dids)]);
+  }
+  const byHour = new Map<string, NormalDiversity['now']>();
+  for (const r of main) {
+    const t = isRecord(r) ? iso(r.t) : null;
+    const c = counts(r, ['seconds', 'dids', 'dids_elsewhere'] as const);
+    // heard live and at least half, and its apps still kept if anyone wrote elsewhere
+    if (!t || Date.parse(t) < LIVE_SINCE || !c || c.seconds < 1800 || c.dids <= 0 || (c.dids_elsewhere > 0 && !apps.has(t))) continue;
+    byHour.set(t, { ...diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: apps.get(t) ?? [] }), elsewhere: c.dids_elsewhere });
+  }
+  const now = byHour.get(new Date(hour).toISOString());
+  if (!now) return null;
+  const usual = (ks: readonly number[]) => {
+    const heard = ks.flatMap((k) => byHour.get(new Date(hour - k * DAY).toISOString()) ?? []);
+    return { windows: heard.length, index: heard.length ? Math.round((heard.reduce((sum, h) => sum + h.index, 0) / heard.length) * 100) / 100 : 0 };
+  };
+  return { hour: new Date(hour).toISOString(), now, days: usual(USUAL_DAYS), weeks: usual(USUAL_WEEKS) };
+}
+
 export interface AlmanacDeps {
   fetch?: Fetch;
   now?: () => number;
@@ -182,7 +252,15 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
     };
     const [today, normal, newApps, heatmap] = await Promise.all([
       part('today', async () => toToday(await db.rpc('atmosphere_today', { tz }))),
-      part('normal', async () => toNormal(await db.rpc('atmosphere_normal', {}))),
+      part('normal', async () => {
+        const diversity = readDiversity(db, at).catch((error) => {
+          log({ event: 'almanac_diversity_error', tz, error: (error as Error)?.message ?? 'Error' });
+          return null;
+        });
+        const normal = toNormal(await db.rpc('atmosphere_normal', {}));
+        const d = await diversity;
+        return normal && d ? { ...normal, diversity: d } : normal;
+      }),
       part('new_apps', async () => toNewApps(await db.rpc('atmosphere_new_apps', { since: new Date(at - DAY).toISOString(), max_apps: 50 }), at)),
       part('heatmap', async () => toHeatmap(await db.rpc('atmosphere_heatmap', { tz, since: new Date(at - HEATMAP_MS).toISOString() }))),
     ]);

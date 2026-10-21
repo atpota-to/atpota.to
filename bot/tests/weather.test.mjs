@@ -118,6 +118,8 @@ const ALMANAC = {
   normal: {
     historyStart: "2026-09-01T00:00:00.000Z",
     now: { seconds: 3600, posts: 180_000, creates: 1_800_000, elsewhere: 18_000 },
+    diversity: { hour: isoAt(Math.floor(NOW / HOUR) * HOUR - HOUR), now: { index: 2.8, share: 0.6, spread: 21.8, elsewhere: 700 },
+      days: { windows: 6, index: 2.6 }, weeks: { windows: 2, index: 2 } },
     days: { seconds: 21_600, posts: 1, creates: 9_000_000, elsewhere: 45_000, windows: 6 },
     weeks: { seconds: 7200, posts: 1, creates: 3_168_000, elsewhere: 15_840, windows: 2 },
   },
@@ -252,7 +254,8 @@ test("week: each UTC day, the week before and the month come from the station's 
   assert.equal(r.days[0].diversityIndex, 3.3);
   assert.equal(r.weekBefore.perSecond, 400);
   assert.equal(r.weekBefore.changePercent, 15);
-  assert.equal(r.weekBefore.mix, "more of the new records from other apps than the week before");
+  // the week before is from before the station listened live (the archive's days hear fewer accounts elsewhere)
+  assert.equal("mix" in r.weekBefore, false);
   assert.equal("diversityIndex" in r.weekBefore, false, "the week before's accounts can't be put together from its days");
   assert.equal(r.month.diversityIndex, 2.2);
   assert.equal(r.month.diversityLevel, "low");
@@ -315,6 +318,23 @@ test("week: a part that can't be read is named, and the rest still comes back", 
   await assert.rejects(lib.readWeather("week", "UTC", fakeFetch({}).impl, NOW));
 });
 
+test("the mix against usual and the week before goes by the diversity index, never by records", () => {
+  const usual = (diversity) => lib.todayReport({ almanac: { ...ALMANAC, normal: { ...ALMANAC.normal, diversity } } }, NOW, "UTC").lastHour;
+  // far more records from other apps than usual (one busy account can do that) says nothing about the mix
+  assert.equal("diversity" in usual(undefined), false);
+  assert.equal(usual({ ...ALMANAC.normal.diversity, now: { index: 1.5, elsewhere: 700 } }).diversity.mix, "a little less mixed than usual");
+  assert.equal("diversity" in usual({ ...ALMANAC.normal.diversity, weeks: { windows: 0, index: 0 } }), false, "no same weekday heard by the hour yet");
+  // three weeks on, when both weeks were heard live: each week's days' indexes, averaged
+  const later = 21 * DAY;
+  const shift = (p) => ({ ...p, t: isoAt(Date.parse(p.t) + later) });
+  const week = (points, now = NOW + later) => lib.weekReport({ week: WEEK_HISTORY,
+    month: { ...MONTH_HISTORY, points: MONTH_HISTORY.points.map(shift), accounts: { ...MONTH_HISTORY.accounts, points: points.map(shift) } } }, now, "UTC").weekBefore;
+  const days = MONTH_HISTORY.accounts.points;
+  assert.equal(week(days).mix, "about as mixed as the week before", "3.3 to 3.9 this week, 2.6 to 3.2 the week before");
+  assert.equal(week(days.map((p, k) => ({ ...p, index: k >= 23 ? 3 : 2 }))).mix, "a more mixed sky than the week before");
+  assert.equal("mix" in week(days.map(({ index, ...p }) => p)), false, "no days' indexes, no mix");
+});
+
 test("today: the high and low in the reader's zone, and the last hour against usual", async () => {
   const { impl, calls } = fakeFetch({ ...FULL, "/api/weather-almanac?tz=America%2FNew_York": ALMANAC });
   const r = await lib.readWeather("today", "America/New_York", impl, NOW);
@@ -325,7 +345,8 @@ test("today: the high and low in the reader's zone, and the last hour against us
   assert.equal(r.lastHour.ready, true);
   assert.equal(r.lastHour.words, "busier than usual");
   assert.equal(r.lastHour.comparedWith, "this hour on the last 2 tuesdays");
-  assert.equal(r.lastHour.mix, "more of the new records from other apps than usual");
+  // by the diversity index, against the same weekday (the records' basis too)
+  assert.deepEqual(r.lastHour.diversity, { hour: "tuesday, oct 27, 13:00", index: 2.8, usualIndex: 2, mix: "a more mixed sky than usual" });
   assert.equal(r.today.recordsElsewherePercent, 1);
   assert.equal("diversityIndex" in r.today, false);
   assert.equal("diversityIndex" in r.last24Hours, false, "the day's history came without accounts");
