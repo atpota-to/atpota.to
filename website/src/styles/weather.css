@@ -986,6 +986,17 @@ html[data-theme="dark"] .weather-hero {
 
 .weather-forecast__icon .wf-moon {
   fill: var(--weather-moon, #FFE7A3);
+  stroke: none;
+}
+
+/* the moon's dark side, under its lit part, and its rim over both */
+.weather-forecast__icon .wf-moon-dark {
+  fill: var(--weather-moon, #FFE7A3);
+  stroke: none;
+  opacity: 0.22;
+}
+
+.weather-forecast__icon .wf-moon-rim {
   stroke: var(--weather-sun-ring, #F2AE3A);
 }
 

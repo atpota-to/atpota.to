@@ -16,6 +16,7 @@
  * numbers it checks here first; the drawings are static.
  */
 
+import { litPath, pageMoon, type MoonPhase } from './moon';
 import { rollText } from './roll';
 import { timeOfDay } from './sky-clock';
 import type { Condition } from './weather';
@@ -146,24 +147,28 @@ export function skillWords(f: Forecast): string {
 // ---------- drawing ----------
 
 const SUN = '<circle cx="12" cy="12" r="4.4" class="wf-sun"/><path d="M12 2.6v2.3M12 19.1v2.3M2.6 12h2.3M19.1 12h2.3M5.4 5.4 7 7M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/>';
-const MOON = '<path d="M14.6 3.4a8.4 8.4 0 1 0 6 11.1 6.6 6.6 0 0 1-6-11.1z" class="wf-moon"/>';
 const SMALL_SUN = '<circle cx="8" cy="8" r="3.4" class="wf-sun"/><path d="M8 1.6v1.6M1.6 8h1.6M3.5 3.5l1.1 1.1M12.5 3.5l-1.1 1.1"/>';
-const SMALL_MOON = '<path d="M9.6 2.4a5.6 5.6 0 1 0 4 7.4 4.4 4.4 0 0 1-4-7.4z" class="wf-moon"/>';
 const BREEZE = '<path d="M8 15.5h9a2.2 2.2 0 1 0-2.2-2.2"/>';
 const WIND = '<path d="M3 9h10.5a2.6 2.6 0 1 0-2.6-2.6M3 13.5h14a2.6 2.6 0 1 1-2.6 2.6M3 18h6"/>';
 const STORM = '<path d="M7 15.5h10a3.9 3.9 0 0 0 .4-7.8 5.4 5.4 0 0 0-10.4 1.2A3.3 3.3 0 0 0 7 15.5z" class="wf-cloud"/><path d="M9 18.5l-1 2.4M13 18.5l-1 2.4M17 18.5l-1 2.4" class="wf-rain"/>';
 
-/** A drawing of an hour's weather (static markup), by night with the moon. */
-export function iconFor(condition: Condition, night: boolean): string {
+/** A moon in the phase it's in (moon.ts): its dark side, the lit part, and a rim over both. */
+function moonAt(cx: number, cy: number, r: number, m: MoonPhase): string {
+  const lit = litPath(cx, cy, r, m);
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" class="wf-moon-dark"/>${lit ? `<path d="${lit}" class="wf-moon"/>` : ''}<circle cx="${cx}" cy="${cy}" r="${r}" class="wf-moon-rim"/>`;
+}
+
+/** A drawing of an hour's weather (static markup), by night with the moon in its phase. */
+export function iconFor(condition: Condition, night: boolean, moon: MoonPhase = pageMoon()): string {
   const body =
     condition === 'calm'
       ? night
-        ? MOON
+        ? moonAt(12, 12, 8, moon)
         : SUN
       : condition === 'light'
-        ? `${night ? SMALL_MOON : SMALL_SUN}${BREEZE}`
+        ? `${night ? moonAt(8, 8, 5.4, moon) : SMALL_SUN}${BREEZE}`
         : condition === 'breezy'
-          ? `${night ? SMALL_MOON : SMALL_SUN}${WIND}`
+          ? `${night ? moonAt(8, 8, 5.4, moon) : SMALL_SUN}${WIND}`
           : condition === 'gusty'
             ? WIND
             : STORM;

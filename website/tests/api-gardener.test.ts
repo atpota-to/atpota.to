@@ -178,6 +178,7 @@ describe('/api/gardener', () => {
     for (const count of [-1, 1.5, '108', 10_000_001, null]) expect(toPets({ count }), String(count)).toBe(0);
     expect(toPets(null)).toBe(0);
     expect(toNotes({ subject: did(1), notes: ['a', 'b', '', 3] }, did(1))).toBe(2);
+    expect(toNotes({ subject: did(1), notes: [{ text: 'a', createdAt: '2026-10-21T09:00:00Z' }, { text: ' ' }, {}, null] }, did(1))).toBe(1);
     expect(toNotes({ subject: did(2), notes: ['a'] }, did(1))).toBe(0);
     expect(toNotes({ subject: did(1), notes: 'a' }, did(1))).toBe(0);
     expect([CLIENT_POE_DID, CLIENT_MEMORY_NSID]).toEqual([POE_DID, MEMORY_NSID]);

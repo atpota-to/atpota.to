@@ -21,6 +21,7 @@
 import { fetchForecast, FORECAST_REFRESH_MS, type Forecast } from '../scripts/weather-forecast';
 import { alertsFor, type Watch } from '../scripts/weather-alerts';
 import { preloadFaces } from '../scripts/mascot';
+import { paintMoons } from '../scripts/moon';
 import { fetchReading, LIVE_REFRESH_MS, recordsPerSecond, REFRESH_MS, type Reading } from '../scripts/weather';
 import { createNames, listen, NOBODY, resolveActor, type StreamEvent, type Who } from './chat';
 import { DEFAULT_CONFIG, fromRecord, withOverrides, type OverlayConfig } from './config';
@@ -64,6 +65,8 @@ async function start(): Promise<void> {
   const corner = document.querySelector<HTMLElement>('[data-ov-poe]')!;
   const poe = mountOverlayPoe(corner);
   preloadFaces();
+  // the weather suns turn into tonight's moon in the dark theme, as everywhere on the site
+  paintMoons();
   const visitors = createVisitors({ corner, react: (face, ms) => poe.react(face, ms), side: 'right', scale: 1, demo: params.demo });
   const gate = createGate();
 

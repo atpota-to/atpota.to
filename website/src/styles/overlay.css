@@ -506,6 +506,17 @@ body[data-poe="on"][data-side="left"] .ov-slot--bottom-center:has(> .ov-strip:no
 
 .ov-fc__icon .wf-moon {
   fill: var(--weather-moon, #FFE7A3);
+  stroke: none;
+}
+
+/* the moon in tonight's phase (weather-forecast.ts moonAt): its dark side, then a rim */
+.ov-fc__icon .wf-moon-dark {
+  fill: var(--weather-moon, #FFE7A3);
+  stroke: none;
+  opacity: 0.22;
+}
+
+.ov-fc__icon .wf-moon-rim {
   stroke: var(--weather-sun-ring, #F2AE3A);
 }
 
