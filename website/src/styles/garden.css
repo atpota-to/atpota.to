@@ -1135,7 +1135,7 @@ html[data-theme="dark"] {
   gap: 8px;
   padding: 20px;
   border-radius: 20px;
-  background: var(--paper);
+  background: var(--inset);
   font-size: 15px;
   line-height: 1.45;
   color: var(--text-soft);

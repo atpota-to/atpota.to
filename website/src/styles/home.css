@@ -11,7 +11,6 @@
   --home-sky-text: #2C3A3E;
   --home-sky-mono: #34505B;
   --home-icon-bg: #FFFFFF;
-  --home-inset: #F7F2E5;
   --home-sheet: #FFFFFF;
   --home-sheet-bar: var(--line);
   --home-sheet-title: var(--flesh);
@@ -37,7 +36,6 @@ html[data-theme="dark"] {
   --home-sky-text: var(--text-soft);
   --home-sky-mono: var(--muted);
   --home-icon-bg: rgba(255, 253, 247, 0.1);
-  --home-inset: #221B12;
   --home-sheet: #4A3D2B;
   --home-sheet-bar: #625237;
   --home-sheet-title: #B89E64;
@@ -3049,7 +3047,7 @@ html:not(.js) .home-weather {
 .home-post {
   padding: 18px;
   border-radius: 22px;
-  background: var(--home-inset);
+  background: var(--inset);
 }
 
 .home-latest[data-state="ready"] .home-post {
@@ -3130,7 +3128,7 @@ html.js .home-latest[data-state="loading"] .home-post__fallback {
   position: relative;
   padding: 14px 18px;
   border-radius: 20px;
-  background: var(--home-inset);
+  background: var(--inset);
 }
 
 .home-feed__meta {

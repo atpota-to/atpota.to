@@ -12,6 +12,8 @@
   --bg: #F4EEDF;
   --paper: #FFFDF7;
   --card: #FFFFFF;
+  /* a panel set into a card: dark enough to read as its own area on --card */
+  --inset: #F2EBDA;
 
   /* text */
   --ink: #3D2F1B;
@@ -132,6 +134,7 @@ html[data-theme="dark"] {
   --bg: #1C160E;
   --paper: #271F15;
   --card: #2E2519;
+  --inset: #1E170F;
 
   --ink: #F3EAD6;
   --text: #F3EAD6;
