@@ -502,10 +502,20 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     pop.style.setProperty('--card-y', `${Math.round(above ? cb.top - tb.top - 10 : cb.bottom - tb.top + 10)}px`);
   }
 
+  /** On a narrow screen a popover is a sheet over the bottom of the screen: scrolls its plot clear of it. */
+  function keepClear(pop: HTMLElement, cell: Element): void {
+    if (win.getComputedStyle(pop).position !== 'fixed') return;
+    // Its height, not its top: it may still be sliding up.
+    const over = cell.getBoundingClientRect().bottom + 12 - (win.innerHeight - pop.offsetHeight);
+    if (over > 0) win.scrollBy({ top: over, behavior: 'smooth' });
+  }
+
   function select(plot: number | null): void {
     selected = plot;
     if (plot !== null) focusAt = plot;
     render();
+    const cell = plot !== null ? plots?.querySelector(`[data-plot="${plot}"]`) : null;
+    if (controls && cell) keepClear(controls, cell);
     say(plot !== null ? COPY.choose(planting_()) : (shut() ?? ''));
   }
 
@@ -871,7 +881,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     fillCard();
     placeBeside(card, cell, 260);
     card.hidden = false;
-    card.focus();
+    card.focus({ preventScroll: true });
+    keepClear(card, cell);
   }
 
   /** Closes the card, and puts focus back on its flower if it was inside the card. */
@@ -908,6 +919,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       f.lastTended = new Date(now()).toISOString();
       render();
       fillCard();
+      // Filling it again took the focused button away: keep focus in the card, where it was.
+      card?.focus({ preventScroll: true });
       cardSay(COPY.watered(isMine(f) ? COPY.yours(nameOf(f)) : COPY.theirs(f.handle, nameOf(f))));
       burst(plots?.querySelector(`[data-plot="${f.plot}"]`) ?? button, 'drops', win);
     } catch (error) {

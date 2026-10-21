@@ -291,7 +291,8 @@ html[data-theme="dark"] {
 }
 
 /* A flower's card: under the flower that opened it (garden.ts sets --card-x and --card-y),
-   or in the flow under the patch on a narrow screen. */
+   or a sheet up from the bottom of a narrow screen, so opening it (or watering) doesn't
+   scroll the page down past the plots to find it. */
 .home-card {
   position: absolute;
   z-index: 5;
@@ -326,12 +327,18 @@ html[data-theme="dark"] {
 }
 
 @container patch (max-width: 480px) {
-  .home-card {
-    position: static;
+  .home-card,
+  .home-card.is-above {
+    position: fixed;
+    z-index: calc(var(--z-poe) + 1);
+    inset: auto 0 0;
     width: auto;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    border-radius: 28px 28px 0 0;
     transform: none;
-    border: 2px solid var(--line);
-    box-shadow: none;
+    box-shadow: 0 -12px 40px rgba(28, 22, 14, 0.28);
   }
 }
 
@@ -455,8 +462,7 @@ html[data-theme="dark"] {
 }
 
 /* With a plot picked, the picker and the button pop up beside it (garden.ts sets --card-x
-   and --card-y, as for a flower's card), and stay in the flow under the patch on a narrow
-   screen. */
+   and --card-y, as for a flower's card), or come up as a sheet on a narrow screen. */
 .home-patch__controls.is-floating {
   position: absolute;
   z-index: 5;
@@ -481,12 +487,31 @@ html[data-theme="dark"] {
 }
 
 @container patch (max-width: 480px) {
-  .home-patch__controls.is-floating {
-    position: static;
+  .home-patch__controls.is-floating,
+  .home-patch__controls.is-floating.is-above {
+    position: fixed;
+    z-index: calc(var(--z-poe) + 1);
+    inset: auto 0 0;
     width: auto;
+    padding: 20px 18px max(20px, env(safe-area-inset-bottom));
+    border-radius: 28px 28px 0 0;
     transform: none;
-    border: 2px solid var(--line);
-    box-shadow: none;
+    box-shadow: 0 -12px 40px rgba(28, 22, 14, 0.28);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @container patch (max-width: 480px) {
+    .home-card:not([hidden]),
+    .home-patch__controls.is-floating {
+      animation: home-sheet-up 240ms ease-out;
+    }
+  }
+}
+
+@keyframes home-sheet-up {
+  from {
+    transform: translateY(100%);
   }
 }
 
