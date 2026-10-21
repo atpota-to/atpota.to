@@ -41,6 +41,7 @@ import { alertsFor, createAlertDesk, newAppAlert, type AlertDesk, type Watch } f
 import { clock, initAlmanac, readerTimeZone, type Almanac } from './weather-almanac';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { renderChart, type ChartPoint } from './weather-chart';
+import { explain, type PoeExplanation } from '../poe/say';
 import { cloudCount, renderClouds } from './weather-sky';
 import { renderSpark } from './weather-spark';
 import {
@@ -340,12 +341,47 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   report.dataset.state = 'ready';
 }
 
-/** What a diversity index is made of, in words: its share of accounts, and how spread out they are. */
+/** What a diversity index is made of, in a line: its share of accounts, and how spread out they are (Poe has the rest, EXPLAINERS). */
 export function diversityParts(share: number, spread: number, active?: number): string {
-  const who = active ? `of the ${formatCount(active)} accounts active just now` : 'of the accounts heard just now';
-  if (share <= 0) return `none ${who} wrote somewhere other than bluesky.`;
+  const who = active ? `of ${formatCount(active)} active accounts` : 'of the accounts heard just now';
+  if (share <= 0) return `none ${who} wrote outside bluesky.`;
   const apps = Math.max(1, Math.round(spread));
-  return `${formatIndex(share)}% ${who} wrote somewhere other than bluesky, ${apps === 1 ? 'all in about one app' : `spread across about ${apps} apps' worth`}.`;
+  return `${formatIndex(share)}% ${who} wrote outside bluesky, ${apps === 1 ? 'all in about one app' : `across about ${apps} apps`}.`;
+}
+
+/**
+ * What the tiles' "what's this?" buttons ask Poe ([data-poe-explain]), and its answers,
+ * written ahead of time in its voice: the chat opens on them (src/poe/say.ts explain).
+ * They're Poe's own words, so they follow its copy rules (src/poe/copy.ts): lowercase, no
+ * em dashes, no emoji; a kaomoji only at the very end.
+ */
+export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answer'>> = {
+  diversity: {
+    question: "what's the diversity index?",
+    answer: [
+      "it's how much of the atmosphere isn't bluesky, going by who's writing rather than how much. one account dumping a thousand records still only counts once.",
+      '',
+      'i multiply two things:',
+      '- the percent of accounts active in the last minute that wrote with lexicons outside `app.bsky.*` and `chat.bsky.*`',
+      '- the square root of how many apps they\'re spread across. ten apps with the same number of people each count as ten, and one app with nearly everyone counts as about one',
+      '',
+      'so a crowd spread over lots of apps scores higher than the same crowd piled into one.',
+      '',
+      "it reads like the uv index: 0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme. a usual minute sits around 2 right now, so it's mostly bluesky out there. for now (◕‿◕)",
+    ].join('\n'),
+  },
+};
+
+/** The tiles' "what's this?" buttons: Poe opens its chat on the answer. A button with no answer here stays hidden. */
+export function bindExplainers(root: ParentNode): void {
+  for (const button of Array.from(root.querySelectorAll<HTMLElement>('[data-poe-explain]'))) {
+    const answer = EXPLAINERS[button.dataset.poeExplain ?? ''];
+    button.hidden = !answer;
+    if (!answer) continue;
+    button.addEventListener('click', (event) => {
+      explain({ ...answer, opener: button, via: event.detail === 0 ? 'keyboard' : 'pointer' });
+    });
+  }
 }
 
 // ---------- trends ----------
@@ -757,6 +793,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   let every = REFRESH_MS;
   const desk = createAlertDesk();
   bindHush(root, desk);
+  bindExplainers(root);
   let watch: Watch | null = null;
   const measure = createMeasure(root);
   let shown: Reading | null = null;

@@ -177,3 +177,10 @@ describe('transcript', () => {
     expect(restored).toEqual({ role: 'poe', text, links: ['https://aturi.to/x'] });
   });
 });
+
+describe('answers written ahead of time', () => {
+  it('keeps the canned flag, and only a real one', () => {
+    expect(parseEntry({ role: 'poe', text: 'hi', links: [], canned: true })).toEqual({ role: 'poe', text: 'hi', links: [], canned: true });
+    expect(parseEntry({ role: 'poe', text: 'hi', links: [], canned: 'yes' })).toEqual({ role: 'poe', text: 'hi', links: [] });
+  });
+});
