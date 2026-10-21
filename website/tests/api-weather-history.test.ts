@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-history.js';
-import { byMonth, createHistoryHandlers, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Point } from '../server/weather-history.js';
+import { byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Point } from '../server/weather-history.js';
 
 // /api/weather-history against a scripted Supabase.
 
@@ -131,6 +131,8 @@ describe('weather history', () => {
     const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
     const res = await h.GET(new Request('https://atpota.to/api/weather-history?range=day'));
     expect(res.status).toBe(200);
+    // missing pieces are only cached briefly, so they come back soon
+    expect(res.headers.get('cache-control')).toBe(PARTIAL_CACHE);
     const body = (await res.json()) as object;
     expect('apps' in body || 'compare' in body || 'appsOverTime' in body).toBe(false);
   });
@@ -251,6 +253,7 @@ describe('active accounts in the trends', () => {
     const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
     const res = await h.GET(new Request('https://atpota.to/api/weather-history?range=day'));
     expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(PARTIAL_CACHE);
     expect('accounts' in ((await res.json()) as object)).toBe(false);
   });
 });

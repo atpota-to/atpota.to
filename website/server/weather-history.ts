@@ -28,6 +28,9 @@
  *   accounts      active accounts (different DIDs) over the range and in each bucket, the
  *                 diversity index they make, and the apps with the most, from the
  *                 station's sketches (weather-accounts.ts)
+ *
+ * An answer missing any of these is only cached briefly (PARTIAL_CACHE), so one slow
+ * read doesn't leave a chart blank for as long as the range's cache lasts.
  */
 
 import { readAccounts } from './weather-accounts.js';
@@ -69,6 +72,9 @@ export const RANGES = {
 } as const satisfies Record<string, { table: string; key: string; spanMs: number; lagMs: number; bucket: Bucket; cache: string }>;
 
 export type Range = keyof typeof RANGES;
+
+/** The cache for an answer that left an extra out: short, so the next asks try again soon. */
+export const PARTIAL_CACHE = 'public, max-age=0, s-maxage=15';
 
 export function isRange(v: string | null): v is Range {
   return v !== null && Object.hasOwn(RANGES, v);
@@ -154,11 +160,13 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const db = supabase(env(), fetchImpl);
     const at = now();
     const { key: column, cache, lagMs, bucket } = RANGES[range];
+    let partial = false;
     /** An extra: asked alongside the points, and left out if it doesn't come. */
     const extra = async <T>(what: string, run: () => Promise<T>): Promise<T | undefined> => {
       try {
         return await run();
       } catch (error) {
+        partial = true;
         log({ event: `history_${what}_error`, range, error: (error as Error)?.message ?? 'Error' });
         return undefined;
       }
@@ -194,12 +202,12 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     }
     const points = (rows as unknown[]).map((r) => toPoint(r, column)).filter((p): p is Point => p !== null);
     const shaped = range === 'year' ? byMonth(points) : points;
-    const t = await trends;
+    const [t, overTime, acct] = await Promise.all([trends, appsOverTime, accounts]);
     return json(
       request,
       200,
-      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: await appsOverTime, accounts: await accounts },
-      cache,
+      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: overTime, accounts: acct },
+      partial ? PARTIAL_CACHE : cache,
     );
   }
 
