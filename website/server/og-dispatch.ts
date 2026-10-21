@@ -12,7 +12,7 @@
  * The post is found the way its page finds it (createBlogData, findDocument), so only a real
  * post's title is ever drawn on an atpota.to card. Drawn with the weather card's satori and
  * resvg kit (server/og-weather.ts), in the same tiles as the blog's card (og/blog.png): the
- * text on paper, and Poe on a dirt mound under green rays.
+ * text on paper, and Poe on the home page's meadow under green rays.
  */
 
 import { createBlogData, type BlogDeps } from './blog/handler.js';
@@ -21,7 +21,7 @@ import { readBlogConfig } from './blog/config.js';
 import { clip, DEFAULT_OG_IMAGE, siteInfo } from './blog/pages.js';
 import { findDocument } from './blog/records.js';
 import { asset, cardArt, renderPng } from './og-weather.js';
-import { C, CARD_HEIGHT, chip, h, img, page, tile, wordmark, type Art, type El } from './og-weather-cards.js';
+import { C, CARD_HEIGHT, chip, h, img, mixColor, page, tile, wordmark, type Art, type El } from './og-weather-cards.js';
 
 export const CACHE_OK = 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400';
 export const CACHE_MISSING = 'public, max-age=0, s-maxage=60';
@@ -55,7 +55,13 @@ const SAGE_DEEP = '#CFE7C1';
 /** The rays' centre, as in og-cards.html (.og-rays: at 50% 76%). */
 const RAYS_AT = { x: ART_W / 2, y: Math.round(ART_H * 0.76) };
 
-/** The green rays and the dirt mound behind Poe. Shapes only. */
+/** The home hero's meadow, out of season (src/styles/home.css --ground, its shade and tufts). */
+const MEADOW = { ground: '#B9DE93', shade: mixColor('#4C7A33', '#B9DE93', 0.26), tuft: mixColor('#2F5A22', '#B9DE93', 0.5) };
+const MOUND_H = 160;
+/** Where Poe's feet are, from the bottom of the tile. */
+export const FEET = 112;
+
+/** The green rays, and the meadow Poe stands on: its darker band, grass tufts and a soft shadow. Shapes only. */
 export function backdropSvg(): string {
   const r = 1000;
   const wedges: string[] = [];
@@ -66,12 +72,25 @@ export function backdropSvg(): string {
     };
     wedges.push(`M${RAYS_AT.x} ${RAYS_AT.y} L${p(a)} L${p(a + 8)} Z`);
   }
-  const mound = { cx: ART_W / 2, rx: ART_W * 0.6, top: ART_H - 160 + 12 };
+  // As og-cards.html's .og-mound: 10% wider than the tile each side, 160px tall, sunk 12px.
+  const cx = ART_W / 2;
+  const rx = ART_W * 0.6;
+  const cy = ART_H + 12;
+  const crest = (x: number) => cy - MOUND_H * Math.sqrt(Math.max(0, 1 - ((x - cx) / rx) ** 2));
+  const tuft = (x: number, y: number) =>
+    `<path transform="translate(${(x - 13).toFixed(1)} ${(y - 24).toFixed(1)}) scale(1.1)" d="M12,23 q-2,-8 -8,-12 M12,23 q0,-11 1,-20 M12,23 q3,-7 9,-10" fill="none" stroke="${MEADOW.tuft}" stroke-width="3" stroke-linecap="round"/>`;
+  const feetY = ART_H - FEET;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ART_W} ${ART_H}">` +
+    `<defs><clipPath id="mound"><ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${MOUND_H}"/></clipPath>` +
+    `<radialGradient id="shadow"><stop offset="0" stop-color="#2A1E10" stop-opacity="0.2"/><stop offset="1" stop-color="#2A1E10" stop-opacity="0"/></radialGradient></defs>` +
     `<rect width="${ART_W}" height="${ART_H}" fill="${SAGE_DEEP}"/>` +
     `<path fill="${SAGE}" d="${wedges.join(' ')}"/>` +
-    `<ellipse cx="${mound.cx}" cy="${mound.top + 160}" rx="${mound.rx}" ry="160" fill="${C.skin}"/>` +
+    `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${MOUND_H}" fill="${MEADOW.ground}"/>` +
+    // home.css: radial-gradient(56.6% 94% at 50% 136%, shade 99%, transparent 100%)
+    `<ellipse clip-path="url(#mound)" cx="${cx}" cy="${cy - MOUND_H + MOUND_H * 1.36}" rx="${(rx * 2 * 0.566).toFixed(1)}" ry="${(MOUND_H * 0.94).toFixed(1)}" fill="${MEADOW.shade}"/>` +
+    [0.05, 0.27, 0.73, 0.95].map((p) => tuft(ART_W * p, crest(ART_W * p) + 20)).join('') +
+    `<ellipse cx="${cx - 4}" cy="${feetY}" rx="110" ry="13" fill="url(#shadow)"/>` +
     '</svg>'
   );
 }
@@ -113,7 +132,7 @@ export function drawIssue(issue: Issue, art: Art, sprout: string): El {
     img(sprout, 70, Math.round(70 * SPROUT_H), { position: 'absolute', left: 28, bottom: 114 }),
     img(sprout, 44, Math.round(44 * SPROUT_H), { position: 'absolute', left: 92, bottom: 126 }),
     img(sprout, 58, Math.round(58 * SPROUT_H), { position: 'absolute', right: 22, bottom: 112 }),
-    img(art.mascot('happy'), potatoW, Math.round((potatoW * 419) / 515), { position: 'absolute', left: ART_W / 2 - 180, bottom: 112 }),
+    img(art.mascot('happy'), potatoW, Math.round((potatoW * 419) / 515), { position: 'absolute', left: ART_W / 2 - 180, bottom: FEET }),
   );
   return page(text, pic);
 }

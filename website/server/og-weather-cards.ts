@@ -726,7 +726,7 @@ export function gaugeAt(ratio: number): number {
 }
 
 /** CSS color-mix(in srgb, a p, b) for two #rrggbb colours. */
-function mixColor(a: string, b: string, p: number): string {
+export function mixColor(a: string, b: string, p: number): string {
   const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
   return `rgb(${[0, 1, 2].map((i) => Math.round(ch(a, i) * p + ch(b, i) * (1 - p))).join(', ')})`;
 }

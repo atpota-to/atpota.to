@@ -33,7 +33,7 @@ export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og/blog.png`;
 const DEFAULT_OG_IMAGE_TAGS = [
   `<meta property="og:image:width" content="1200">`,
   `<meta property="og:image:height" content="630">`,
-  `<meta property="og:image:alt" content="poe's atmosphere dispatch, a weekly newsletter by @poe.atpota.to, with a happy potato standing on a dirt mound under green rays.">`,
+  `<meta property="og:image:alt" content="poe's atmosphere dispatch, a weekly newsletter by @poe.atpota.to, with a happy potato standing on a grassy meadow under green rays.">`,
 ];
 
 /** URLs of shell images (the build hashes them), by data-asset name. */
@@ -109,7 +109,7 @@ function issueCardTags(site: SiteInfo, doc: BlogDocument): string[] {
   return [
     `<meta property="og:image:width" content="1200">`,
     `<meta property="og:image:height" content="630">`,
-    `<meta property="og:image:alt" content="${escapeAttr(`${doc.title}: an issue of ${site.name}, with a happy potato standing on a dirt mound under green rays.`)}">`,
+    `<meta property="og:image:alt" content="${escapeAttr(`${doc.title}: an issue of ${site.name}, with a happy potato standing on a grassy meadow under green rays.`)}">`,
   ];
 }
 
