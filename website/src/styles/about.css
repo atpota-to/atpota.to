@@ -47,18 +47,32 @@
   letter-spacing: -0.03em;
 }
 
+/* Poe is a button: a pat bursts leaves out of the grass (about.ts), and mascot.ts swaps the face. */
 .about-surface__poe {
   position: relative;
   z-index: 1;
   justify-self: center;
   width: 250px;
-  height: auto;
   margin-bottom: -8px;
+  padding: 0;
+  border: 0;
+  border-radius: 40%;
+  background: none;
+  cursor: pointer;
+  transform-origin: 50% 100%;
+  transition: rotate var(--dur-spring) var(--ease-spring);
+}
+
+.about-surface__poe img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .about-surface__sprout {
   position: absolute;
   bottom: -4px;
+  transform-origin: 50% 100%;
   width: 54px;
   height: 50px;
   background: url("../assets/sprout.svg") center bottom / contain no-repeat;
@@ -231,6 +245,7 @@
   color: var(--on-sun);
   box-shadow: inset -8px -10px 0 rgb(165 134 80 / 0.35), 0 8px 0 rgb(0 0 0 / 0.12);
   transform: rotate(-1.2deg);
+  transition: transform var(--dur-spring) var(--ease-spring);
 }
 
 .moment:nth-child(even) {
@@ -309,6 +324,7 @@
 
 .moment__stat strong {
   font-size: 44px;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   letter-spacing: -0.03em;
 }
@@ -326,6 +342,154 @@
 .moment a,
 .moment a:hover {
   color: inherit;
+}
+
+/* ---------- motion ---------- */
+
+/* The surface on arrival: the words rise in one after another, Poe pops up out of the
+   ground and breathes, and the sprouts grow, then sway. translate/scale/rotate rather
+   than transform, so nothing fights the hover tilts. */
+@media (prefers-reduced-motion: no-preference) {
+  .about-surface__words > * {
+    animation: about-rise 640ms var(--ease-out) both;
+  }
+
+  .about-surface__words > :nth-child(2) {
+    animation-delay: 70ms;
+  }
+
+  .about-surface__words > :nth-child(3) {
+    animation-delay: 160ms;
+  }
+
+  .about-surface__words > :nth-child(4) {
+    animation-delay: 240ms;
+  }
+
+  .about-surface__poe {
+    animation:
+      about-poe-up 900ms var(--ease-spring) 260ms both,
+      about-breathe 3.2s ease-in-out 1.3s infinite alternate;
+  }
+
+  .about-surface__sprout {
+    animation:
+      about-grow 700ms var(--ease-spring) 520ms both,
+      about-sway 2.8s ease-in-out 1.2s infinite alternate;
+  }
+
+  .about-surface__sprout--2 {
+    animation-delay: 640ms, 0.2s;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .about-surface__poe:hover {
+      rotate: -5deg;
+    }
+
+    /* a potato you point at sits up straight and lifts, and its sticker wiggles */
+    .about-story .moment:hover {
+      transform: rotate(0deg) translateY(-6px);
+    }
+
+    .moment:hover .moment__icon {
+      animation: about-wiggle 0.5s ease-in-out;
+    }
+  }
+
+  .about-surface__poe:active {
+    rotate: 4deg;
+    transition-duration: var(--dur-fast);
+  }
+}
+
+/* Digging down: each potato comes up out of its layer as it scrolls into view, and the
+   year's label slides in ahead of it. Scroll-driven, so it plays back on the way up;
+   browsers without animation-timeline just show everything. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .moment {
+      animation: about-unearth linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+
+    .timeline__label {
+      animation: about-slide linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 80%;
+    }
+  }
+}
+
+@keyframes about-rise {
+  from {
+    opacity: 0;
+    translate: 0 18px;
+  }
+}
+
+@keyframes about-poe-up {
+  from {
+    opacity: 0;
+    translate: 0 70%;
+    scale: 0.8;
+  }
+
+  30% {
+    opacity: 1;
+  }
+}
+
+@keyframes about-breathe {
+  from {
+    scale: 1;
+  }
+
+  to {
+    scale: 1.015 1.035;
+  }
+}
+
+@keyframes about-grow {
+  from {
+    scale: 0;
+  }
+}
+
+@keyframes about-sway {
+  from {
+    rotate: -4deg;
+  }
+
+  to {
+    rotate: 5deg;
+  }
+}
+
+@keyframes about-wiggle {
+  25% {
+    rotate: -8deg;
+  }
+
+  60% {
+    rotate: 6deg;
+  }
+}
+
+@keyframes about-unearth {
+  from {
+    opacity: 0;
+    translate: 0 36px;
+    scale: 0.9;
+  }
+}
+
+@keyframes about-slide {
+  from {
+    opacity: 0;
+    translate: -24px 0;
+  }
 }
 
 /* ---------- the bottom ---------- */
