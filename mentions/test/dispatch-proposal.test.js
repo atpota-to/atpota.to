@@ -108,12 +108,12 @@ test('without text the endpoint only looks the issue up; nothing is proposed', a
   assert.equal(res.body.accepted, false);
   assert.match(res.body.reason, /nothing proposed yet/);
   assert.equal(res.body.issue.title, 'attie sites, spaces near beta, and a brand new cow');
-  assert.equal(res.body.issue.url, `https://poe.leaflet.pub/${RKEY}`);
+  assert.equal(res.body.issue.url, `https://atpota.to/blog/${RKEY}`);
   assert.ok(graphemeLength(res.body.issue.excerpt) <= 1200);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM dispatch_proposal WHERE dm_message_id = ?').get(ask.id).n, 0);
 
   // A link or a bare rkey works as well as "latest"; anything else does not.
-  assert.equal((await propose(ask.id, { issue: `https://atpota.to/blog/${RKEY}` }, deps)).body.issue.url, `https://poe.leaflet.pub/${RKEY}`);
+  assert.equal((await propose(ask.id, { issue: `https://poe.leaflet.pub/${RKEY}` }, deps)).body.issue.url, `https://atpota.to/blog/${RKEY}`);
   assert.match((await propose(ask.id, { issue: 'https://evil.example/x' }, deps)).body.reason, /not a dispatch issue/);
   await c.reply(ask.id, 'here is what is in it');
 });
@@ -161,7 +161,7 @@ test('ask in plain words, see the exact post, say yes, and that exact post goes 
   assert.equal(c.sent.length, 1);
   const shown = c.sent[0].text;
   assert.ok(shown.startsWith("ooh yes! here's what i'd say:\n\nhere's the post, with a card for \"attie sites"));
-  assert.ok(shown.includes(`(https://poe.leaflet.pub/${RKEY}):\n\n${text}\n\n`));
+  assert.ok(shown.includes(`(https://atpota.to/blog/${RKEY}):\n\n${text}\n\n`));
   assert.match(shown, /reply "yes" to post it from poe, or "no" to drop it\.$/);
   assert.equal(s.created.length, 0, 'nothing posts on a proposal');
 
@@ -170,7 +170,7 @@ test('ask in plain words, see the exact post, say yes, and that exact post goes 
   assert.equal(c.toAgent.length, 1, 'the yes is not sent to Poe');
   assert.equal(s.created.length, 1);
   assert.equal(s.created[0].record.text, text);
-  assert.equal(s.created[0].record.embed.external.uri, `https://poe.leaflet.pub/${RKEY}`);
+  assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${RKEY}`);
   assert.match(c.sent[1].text, /^announced ⸜\(｡˃ ᵕ ˂ \)⸝ https:\/\/bsky\.app\/profile\/poe\.atpota\.to\/post\//);
   assert.equal(c.sent[1].replyTo, yes.id);
 

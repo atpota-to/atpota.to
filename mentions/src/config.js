@@ -273,7 +273,7 @@ function parseDispatch() {
   const pub = /^at:\/\/(did:(?:plc|web):[a-zA-Z0-9._:%-]+)\/site\.standard\.publication\/([a-zA-Z0-9._:~-]{1,512})$/
     .exec(publicationUri);
   if (!pub) throw new Error(`DISPATCH_PUBLICATION_URI is not a site.standard.publication at-uri: ${publicationUri}`);
-  const announceUrlBase = opt('DISPATCH_ANNOUNCE_URL_BASE', DISPATCH_PAGE_BASES[0]).replace(/\/+$/, '');
+  const announceUrlBase = opt('DISPATCH_ANNOUNCE_URL_BASE', 'https://atpota.to/blog').replace(/\/+$/, '');
   if (!DISPATCH_PAGE_BASES.includes(announceUrlBase)) {
     throw new Error(`DISPATCH_ANNOUNCE_URL_BASE must be one of ${DISPATCH_PAGE_BASES.join(', ')}`);
   }

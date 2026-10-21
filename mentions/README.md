@@ -609,7 +609,7 @@ agent. `src/dispatch.js` then:
 1. reads the document (public `getRecord`), refuses it unless it is in the
    dispatch publication, and stops with the existing post's link if the
    document already has `bskyPostRef` or `dispatch_document` already has a post;
-2. polls the page at `DISPATCH_ANNOUNCE_URL_BASE/<rkey>` every 20 s for up to
+2. polls the page at `DISPATCH_ANNOUNCE_URL_BASE/<rkey>` (`https://atpota.to/blog` by default) every 20 s for up to
    10 minutes until it answers 200 with
    `<link rel="site.standard.document" href="<at-uri>">`, and gives up without
    posting otherwise;

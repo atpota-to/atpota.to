@@ -103,7 +103,7 @@ const web = {
   fetchPage: async (url) => ({
     status: 200,
     html: `<link rel="site.standard.document" href="at://${PUBLISHER}/site.standard.document/${url.split('/').pop()}">` +
-      '<meta property="og:image" content="https://leaflet.pub/og.png">',
+      '<meta property="og:image" content="https://atpota.to/og/blog.png">',
   }),
   fetchImage: async () => ({ bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]), mimeType: 'image/png' }),
   sleep: async () => {},
