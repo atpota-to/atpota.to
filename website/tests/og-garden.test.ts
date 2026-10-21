@@ -9,6 +9,7 @@ import {
   actorOf,
   addressOf,
   avatarThumb,
+  cardText,
   CACHE_MISSING,
   CACHE_OK,
   createOgGardenHandlers,
@@ -96,11 +97,17 @@ describe('og garden: the patch', () => {
 
 describe('og garden: the words', () => {
   it("names a garden by its own name, or its owner's", () => {
-    expect(gardenWords(FULL)).toMatchObject({ chip: 'a garden on atpota.to', title: "dame's garden" });
+    expect(gardenWords(FULL)).toMatchObject({ chip: null, title: "dame's garden", note: null });
     expect(gardenWords(garden({}, { name: '' })).title).toBe("dame's garden");
-    expect(gardenWords(garden({}, { note: 'come plant!' })).lede).toBe('come plant!');
+    expect(gardenWords(garden({}, { note: 'come plant!' }))).toMatchObject({ lede: 'come plant!', note: 'come plant!' });
     expect(gardenWords(garden({ patch: null })).lede).toBe("@dame.is hasn't set up a garden yet.");
     expect(gardenWords(garden({ owner: { did: ATPOTATO_DID, handle: 'atpota.to', displayName: 'atpotato', avatar: null } })).title).toBe('the community garden');
+  });
+
+  it("drops what the card's font can't draw", () => {
+    expect(cardText('dame 🌻 (he/him)')).toBe('dame (he/him)');
+    expect(cardText("🌷 tulip 🏳️‍🌈's garden 👋🏽")).toBe("tulip's garden");
+    expect(cardText('🌻')).toBe('');
   });
 
   it("counts what's growing and what's in bloom", () => {
@@ -119,7 +126,9 @@ describe('og garden: the words', () => {
 describe('og garden: the card', () => {
   it('draws 1200x630, empty or full, with an avatar or without', async () => {
     const art = await cardArt();
-    for (const g of [garden(), FULL, garden({ patch: null })]) {
+    const long = 'Bartholomew Featherstonehaugh-Cholmondeley of the Long Name';
+    const wordy = garden({ owner: { did: 'did:plc:x', handle: 'a.very.long.handle.bsky.social', displayName: long, avatar: null } }, { name: '', note: 'x '.repeat(70) });
+    for (const g of [garden(), FULL, garden({ patch: null }), wordy]) {
       expect(pngSize(await renderPng(drawGarden(g, art, null, NOW)))).toEqual({ width: 1200, height: 630 });
     }
   });
