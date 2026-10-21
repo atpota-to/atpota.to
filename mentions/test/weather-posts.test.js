@@ -6,7 +6,7 @@ import {
   WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, pickMoment, postGate,
 } from '../src/gates/weather.js';
 import {
-  parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft, freshCardUrl,
+  parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft, freshCardUrl, CARD_WAIT_MS,
 } from '../src/weather-posts.js';
 
 const POE = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
@@ -199,7 +199,7 @@ test('the draft gates: one post, no handles, no link but the weather page', () =
 // --- end to end: tick, draft, post -------------------------------------------------
 
 function fakeWorld({ atmosphereBody = atmosphere(), almanacBodyValue = almanacBody({ newApps: [] }), agentStatus = 202 } = {}) {
-  const w = { dispatched: [], posts: [], uploads: [], fetched: [] };
+  const w = { dispatched: [], posts: [], uploads: [], fetched: [], cards: [], cardDown: false };
   w.deps = {
     fetcher: async (url, init) => {
       const u = String(url);
@@ -212,14 +212,19 @@ function fakeWorld({ atmosphereBody = atmosphere(), almanacBodyValue = almanacBo
       if (u.includes('/weather-almanac')) return Response.json(almanacBodyValue);
       return new Response('nope', { status: 404 });
     },
+    // A page mid-deploy, still naming the home page's card: what the first post went out under.
     fetchPage: async (url) => ({
       status: 200,
       html: `<meta property="og:title" content="the atmosphere weather report · atpotato">
         <meta property="og:description" content="how busy bluesky is">
-        <meta property="og:image" content="https://atpota.to/og/weather.png">`,
+        <meta property="og:image" content="https://atpota.to/og/home.png">`,
       url,
     }),
-    fetchImage: async (url) => { w.fetched.push(url); return { bytes: Buffer.from('png'), mimeType: 'image/png' }; },
+    fetchCard: async (url) => {
+      w.cards.push(url);
+      if (w.cardDown) throw new Error('the weather card answered 404 text/html');
+      return { bytes: Buffer.from('png'), mimeType: 'image/png' };
+    },
     uploadBlob: async (bytes, mimeType) => { w.uploads.push(mimeType); return { $type: 'blob', ref: { $link: 'bafythumb' }, mimeType, size: bytes.length }; },
     createPost: async (record, rkey) => {
       assert.ok(rkey, 'posts under a stored key');
@@ -265,10 +270,14 @@ test('a due daily report goes to Poe, comes back as a post, and is posted with t
   assert.equal(record.embed.external.uri, WEATHER_PAGE);
   assert.equal(record.embed.external.title, 'the atmosphere weather report · atpotato');
   assert.equal(record.embed.external.thumb.ref.$link, 'bafythumb');
-  // The card as of this minute, in the daily report's design, not the CDN's copy from minutes ago.
-  const card = new URL(w.fetched.find((u) => u.startsWith('https://atpota.to/og/weather.png')));
+  // The weather card by its own address, never the page's og:image (the home page's card,
+  // mid-deploy), as of this minute and in the daily report's design.
+  assert.equal(w.cards.length, 1);
+  const card = new URL(w.cards[0]);
+  assert.equal(`${card.origin}${card.pathname}`, 'https://atpota.to/og/weather.png');
   assert.equal(card.searchParams.get('card'), 'trend');
   assert.match(card.searchParams.get('v'), /^\d+$/);
+  assert.deepEqual(w.uploads, ['image/png']);
   const stored = db.prepare('SELECT * FROM weather_post WHERE id = ?').get(asked.id);
   assert.equal(stored.status, 'posted');
   assert.equal(stored.post_uri, `at://${POE}/app.bsky.feed.post/${w.posts[0].rkey}`);
@@ -427,4 +436,37 @@ test('a weather draft comes back on the reply callback URL, told apart by its mo
     config.weather.mode = 'post';
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('without the weather card a post waits for it, a tick at a time, and is dropped after CARD_WAIT_MS', async () => {
+  clear();
+  const w = fakeWorld();
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  receiveWeatherDraft({ key: 'card:1', momentId: `wx-${asked.id}`, text: 'breezy skies today' });
+  w.cardDown = true;   // the website mid-deploy
+  await handleWeatherDraft(asked.id, w.deps);
+  assert.equal(w.posts.length, 0, 'never posted without the card');
+  assert.equal(w.uploads.length, 0);
+  assert.equal(db.prepare('SELECT status FROM weather_post WHERE id = ?').get(asked.id).status, 'drafted', 'still waiting');
+
+  // The next tick's settle tries again (drafted over a minute), and the card is there now.
+  db.prepare('UPDATE weather_post SET updated_at = ? WHERE id = ?').run(new Date(Date.now() - 5 * 60_000).toISOString(), asked.id);
+  w.cardDown = false;
+  await weatherTick({ nowMs: Date.now(), deps: w.deps });
+  assert.equal(w.posts.length, 1);
+  assert.equal(w.posts[0].record.embed.external.thumb.ref.$link, 'bafythumb');
+  assert.equal(db.prepare('SELECT status FROM weather_post WHERE id = ?').get(asked.id).status, 'posted');
+
+  // A card that never comes: dropped once the draft is CARD_WAIT_MS old, not posted bare.
+  clear();
+  const late = fakeWorld();
+  const again = (await weatherTick({ nowMs: NOW, deps: late.deps })).asked;
+  receiveWeatherDraft({ key: 'card:2', momentId: `wx-${again.id}`, text: 'breezy skies today' });
+  db.prepare('UPDATE weather_post SET updated_at = ? WHERE id = ?').run(new Date(Date.now() - CARD_WAIT_MS - 60_000).toISOString(), again.id);
+  late.cardDown = true;
+  await handleWeatherDraft(again.id, late.deps);
+  const dropped = db.prepare('SELECT * FROM weather_post WHERE id = ?').get(again.id);
+  assert.equal(dropped.status, 'rejected');
+  assert.equal(dropped.gate, 'no_card');
+  assert.equal(late.posts.length, 0);
 });

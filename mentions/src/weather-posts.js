@@ -21,7 +21,7 @@ import { db, nowIso } from './db.js';
 import { logger } from './logger.js';
 import { isNapping } from './nap.js';
 import { faceRules } from './richtext.js';
-import { buildAnnouncement, cardThumb, defaultDeps as dispatchDeps, nextTid, ogContent, postUrl } from './dispatch.js';
+import { buildAnnouncement, defaultDeps as dispatchDeps, nextTid, ogContent, postUrl } from './dispatch.js';
 import {
   WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
 } from './gates/weather.js';
@@ -60,6 +60,18 @@ const POSTING_STUCK_MS = 10 * 60_000;
 const DAY = 86_400_000;
 
 /**
+ * The weather report's live card (website/server/og-weather.ts). Every weather post
+ * goes out under it or not at all, fetched here by its own address: the page's
+ * og:image is not trusted for it. On 2026-10-21 the droplet deployed a few minutes
+ * before the website, and the first post went out under the home page's card,
+ * which the page still named.
+ */
+export const WEATHER_CARD = 'https://atpota.to/og/weather.png';
+/** How long a draft waits for the card (the website mid-deploy, say) before it is dropped. */
+export const CARD_WAIT_MS = 30 * 60_000;
+const CARD_MAX_BYTES = 1_000_000;   // app.bsky.embed.external#external.thumb maxSize
+
+/**
  * Which of the weather card's designs (website/server/og-weather-cards.ts) goes
  * under each kind of post: the sky for a storm, the barometer for an hour off
  * usual, the other apps for a mixed sky or a new one, the day's chart for the
@@ -68,9 +80,9 @@ const DAY = 86_400_000;
 export const CARD_FOR = { daily: 'trend', storm: 'forecast', unusual: 'today', mixed: 'mix', new_app: 'mix' };
 
 /**
- * The page's card as of this minute, in the design for this kind of post. The
- * CDN keeps the bare URL for several minutes, and a storm post under a card from
- * before the storm would say the opposite of the post.
+ * The card as of this minute, in the design for this kind of post. The CDN keeps
+ * the bare URL for several minutes, and a storm post under a card from before the
+ * storm would say the opposite of the post.
  */
 export function freshCardUrl(url, kind, nowMs = Date.now()) {
   const u = new URL(url);
@@ -250,10 +262,27 @@ function recentPosts() {
     WHERE status = 'posted' ORDER BY posted_at DESC LIMIT 5`).all();
 }
 
+/**
+ * The weather card, or a throw. Redirects are refused, not followed: when the card
+ * can't be drawn at all, the website redirects to the home page's card, and that is
+ * the one card a weather post must never carry.
+ */
+async function fetchCard(url) {
+  const res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) });
+  const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (res.status !== 200 || type !== 'image/png' || Number(res.headers.get('content-length')) > CARD_MAX_BYTES) {
+    await res.body?.cancel?.().catch(() => undefined);
+    throw new Error(`the weather card answered ${res.status} ${type || 'untyped'}`);
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > CARD_MAX_BYTES) throw new Error('the weather card is over 1 MB');
+  return { bytes, mimeType: 'image/png' };
+}
+
 export const defaultDeps = {
   fetcher: (...args) => fetch(...args),
   fetchPage: dispatchDeps.fetchPage,
-  fetchImage: dispatchDeps.fetchImage,
+  fetchCard,
   uploadBlob: dispatchDeps.uploadBlob,
   createPost: dispatchDeps.createPost,
   getOwnPost: dispatchDeps.getOwnPost,
@@ -405,11 +434,29 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
     return;
   }
 
+  // The card before anything is claimed: without it the draft stays drafted, and the
+  // next tick (settle) tries again, until CARD_WAIT_MS has passed since it came in.
+  let thumb;
+  try {
+    const card = await deps.fetchCard(freshCardUrl(WEATHER_CARD, row.kind));
+    thumb = await deps.uploadBlob(card.bytes, card.mimeType);
+  } catch (err) {
+    if (Date.now() - Date.parse(row.updated_at) < CARD_WAIT_MS) {
+      logger.warn('weather card not ready; the post waits for it', { ...log, error: err.message });
+      return;
+    }
+    if (finish(id, 'rejected', { gate: 'no_card', detail: err.message, post_text: text }, 'drafted')) {
+      logger.warn('weather post dropped: no weather card', { ...log, error: err.message });
+    }
+    return;
+  }
+
   // The key first, so a post whose fate a crash leaves unknown is found, not repeated.
   const rkey = nextTid();
   if (!db.prepare(`UPDATE weather_post SET status = 'posting', post_rkey = ?, post_text = ?, updated_at = ?
     WHERE id = ? AND status = 'drafted'`).run(rkey, text, nowIso(), id).changes) return;
 
+  // The page only for the card's words; its image is never used (WEATHER_CARD).
   let page = null;
   try {
     const res = await deps.fetchPage(WEATHER_PAGE);
@@ -417,8 +464,6 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
   } catch (err) {
     logger.warn('weather page unreachable for the card', { error: err.message });
   }
-  const fresh = { ...deps, fetchImage: (url) => deps.fetchImage(freshCardUrl(url, row.kind)) };
-  const { thumb, note } = page ? await cardThumb(page, WEATHER_PAGE, fresh) : { thumb: null, note: 'the page did not answer' };
   const record = buildAnnouncement({
     text,
     pageUrl: WEATHER_PAGE,
@@ -429,7 +474,7 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
   try {
     const res = await deps.createPost(record, rkey);
     finish(id, 'posted', { post_uri: res.uri, post_cid: res.cid, posted_at: nowIso() }, 'posting');
-    logger.info('weather post posted', { ...log, uri: res.uri, url: postUrl(res.uri), thumb: !!thumb, thumbNote: note });
+    logger.info('weather post posted', { ...log, uri: res.uri, url: postUrl(res.uri) });
   } catch (err) {
     finish(id, 'post_failed', { detail: err.message }, 'posting');
     logger.error('weather post failed', { ...log, rkey, error: err.message });

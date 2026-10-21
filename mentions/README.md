@@ -719,10 +719,16 @@ the reply gates as a single post (length, markdown, non-answers, `@handles`), wi
 no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
 same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
 posted with an `app.bsky.embed.external` card for the weather page, and the caps
-are checked again first. The card's image is the page's live weather card
-(`/og/weather.png`), fetched fresh to the minute in the design that suits the post
-(`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
-apps for a mixed sky or a new one, the day's chart for the daily report.
+are checked again first. The card's image is always the live weather card,
+`https://atpota.to/og/weather.png` (`WEATHER_CARD`), fetched by that address rather
+than from the page's og:image, fresh to the minute and in the design that suits the
+post (`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
+apps for a mixed sky or a new one, the day's chart for the daily report. A redirect
+(the website's fallback to the home page's card) counts as no card. Without the card
+a post isn't posted bare: the draft waits, and each tick tries again, for up to 30
+minutes (`CARD_WAIT_MS`), then it is dropped as `rejected` (`no_card`). The first
+weather post, on 2026-10-21, went out under the home page's card because the droplet
+deployed a few minutes before the website and read the page's old og:image.
 With `WEATHER_POSTS=draft` it stops there as `held`, and counts against the caps
 as the post it would have been, so draft mode shows the cadence posting would have.
 
