@@ -481,7 +481,9 @@ describe('email subscribe form', () => {
     const { JSDOM } = await import('jsdom');
     const d = new JSDOM(`<body>${emailFormHtml({ publication: DEFAULT_PUBLICATION_URI, redirect: 'https://atpota.to/blog' }, 'subscribe')}</body>`).window;
     const form = d.document.querySelector('form')!;
-    expect(form.getAttribute('action')).toBe('https://leaflet.pub/api/auth/email-login');
+    // On the button, so Safari doesn't take the form for a sign-in (see subscribe.ts).
+    expect(form.hasAttribute('action')).toBe(false);
+    expect(form.querySelector('button[type="submit"]')!.getAttribute('formaction')).toBe('https://leaflet.pub/api/auth/email-login');
     expect(form.getAttribute('method')).toBe('get');
     expect(form.id).toBe('subscribe');
     expect(form.querySelector<HTMLInputElement>('input[name="action"]')!.value).toBe(SNIPPET_ACTION);

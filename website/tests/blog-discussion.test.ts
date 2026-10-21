@@ -414,10 +414,10 @@ describe('/api/blog with reader actions', () => {
     expect((await page(off, 'view=post&path=3doc')).querySelector('form[data-blog-email]')).toBeNull();
   });
 
-  it('puts a subscribe button and an account line on the index', async () => {
+  it('puts a subscribe button and a notice line on the index', async () => {
     const d = await page(h(), 'view=index');
     expect(d.querySelector('.blog')!.getAttribute('data-blog-publication')).toBe(PUB);
     expect(d.querySelector('.blog-hero .blog-alt button[data-blog-subscribe]')).not.toBeNull();
-    expect(d.querySelector('.blog-hero [data-blog-account]')!.hasAttribute('hidden')).toBe(true);
+    expect(d.querySelector('.blog-hero [data-blog-notice]')!.hasAttribute('hidden')).toBe(true);
   });
 });

@@ -31,7 +31,7 @@ import {
   safeReturnTo,
 } from '../src/blog/state.js';
 import { COPY, EMAIL_RETURN, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY, PREPARED_TTL_MS } from '../src/blog/ui.js';
-import { EMAIL_RETURN_PARAM, EMAIL_RETURN_VALUE, emailFormHtml, SUBSCRIBE_COPY } from '../server/blog/subscribe.js';
+import { altLinksHtml, blueskySubscribeHtml, EMAIL_RETURN_PARAM, EMAIL_RETURN_VALUE, emailFormHtml, SUBSCRIBE_COPY } from '../server/blog/subscribe.js';
 import { createStore, type KeyValueStore } from '../src/poe/storage.js';
 
 // The blog's reader actions in the browser (src/blog/). The OAuth library is never
@@ -244,11 +244,22 @@ function postPage(opts: { email?: boolean } = {}): string {
     `<div class="post-end__actions">` +
     `<button type="button" data-blog-subscribe aria-pressed="false" hidden><span data-blog-subscribe-label>subscribe</span></button>` +
     `<button type="button" data-blog-recommend data-recommend-count="2" aria-pressed="false" hidden><span data-blog-recommend-label>recommend</span><span data-blog-recommend-count>2</span></button>` +
-    `</div><p data-blog-account hidden></p>` +
+    `</div><p data-blog-notice hidden></p>` +
     `<section data-blog-comments><span data-comment-count="2">2 comments</span><div data-comment-compose hidden></div>` +
     `<ol class="comment-list" data-comment-list>` +
     comment(OTHER, '3o1', 1, `<ol class="comment-list comment-list--replies" role="list">${comment(ME, '3m1', 2)}</ol>`) +
     `</ol></section></div>` +
+    SHELL_DIALOG
+  );
+}
+
+/** The index hero's subscribe area: the email form, then "or subscribe with bluesky, follow poe". */
+function heroPage(): string {
+  return (
+    `<div class="blog" data-blog-publication="${PUB}">` +
+    emailFormHtml({ publication: PUB, redirect: 'https://atpota.to/blog' }, 'subscribe') +
+    altLinksHtml([blueskySubscribeHtml('blog-alt__link'), '<a class="blog-alt__link" href="https://bsky.app/profile/poe">follow poe</a>']) +
+    `<p data-blog-notice hidden></p></div>` +
     SHELL_DIALOG
   );
 }
@@ -382,7 +393,7 @@ describe('mountBlog', () => {
     await h.mounted;
     expect($('button[data-blog-subscribe]').hidden).toBe(false);
     expect($('button[data-blog-recommend]').hidden).toBe(false);
-    expect($('[data-blog-account]').hidden).toBe(true);
+    expect($('[data-blog-notice]').hidden).toBe(true);
     expect($('[data-comment-compose] button').textContent).toBe(COPY.signInToComment);
     expect(document.querySelectorAll('.comment__action')).toHaveLength(0);
   });
@@ -484,11 +495,11 @@ describe('mountBlog', () => {
     expect(h.went[0]!.url).toContain('request_uri=urn:2');
   });
 
-  it('signed in: shows who, reads subscription state from the repo, and toggles it', async () => {
+  it('signed in: reads subscription state from the repo, and toggles it', async () => {
     const h = setup({ owned: { subscription: [`at://${ME}/site.standard.graph.subscription/3old`], recommend: [] } });
     await h.mounted;
-    expect($('[data-blog-account]').hidden).toBe(false);
-    expect($('[data-blog-account] .blog-account__who').textContent).toBe('@me.test');
+    // who's signed in is the header's to say (src/scripts/account.ts)
+    expect($('[data-blog-notice]').hidden).toBe(true);
     const sub = $<HTMLButtonElement>('button[data-blog-subscribe]');
     expect(sub.getAttribute('aria-pressed')).toBe('true');
     expect(sub.textContent).toBe(COPY.subscribed);
@@ -505,7 +516,7 @@ describe('mountBlog', () => {
       path: '/xrpc/com.atproto.repo.createRecord',
       body: { repo: ME, collection: 'site.standard.graph.subscription', record: { $type: 'site.standard.graph.subscription', publication: PUB, createdAt: '2026-10-19T12:00:00.000Z' } },
     });
-    expect($('[data-blog-account] .blog-account__notice').textContent).toBe(COPY.notices.subscribed);
+    expect($('[data-blog-notice]').textContent).toBe(COPY.notices.subscribed);
   });
 
   it('never writes a duplicate when the page is stale', async () => {
@@ -648,7 +659,7 @@ describe('mountBlog', () => {
     document.body.innerHTML = postPage();
     const back = setup({ store, start: null });
     await back.mounted;
-    expect($('[data-blog-account]').textContent).toBe(COPY.notices.cancelled);
+    expect($('[data-blog-notice]').textContent).toBe(COPY.notices.cancelled);
     expect(back.calls).toEqual([]);
   });
 
@@ -656,19 +667,9 @@ describe('mountBlog', () => {
     const h = setup({ failWrites: 401 });
     await h.mounted;
     $('button[data-blog-recommend]').click();
-    await vi.waitFor(() => expect($('[data-blog-account]').textContent).toBe(COPY.notices.expired));
+    await vi.waitFor(() => expect($('[data-blog-notice]').textContent).toBe(COPY.notices.expired));
     expect($('[data-comment-compose] button').textContent).toBe(COPY.signInToComment);
     expect(document.querySelectorAll('.comment__action')).toHaveLength(0);
-  });
-
-  it('signs out in place', async () => {
-    const h = setup();
-    await h.mounted;
-    $('.blog-account__out').click();
-    await flush();
-    expect($('[data-blog-account]').textContent).toBe(COPY.notices.signedOut);
-    expect($('button[data-blog-subscribe]').getAttribute('aria-pressed')).toBe('false');
-    expect(h.calls).toEqual([]);
   });
 
   it("opens the sign-in dialog for Poe's panel from /blog#sign-in", async () => {
@@ -695,13 +696,13 @@ describe('mountBlog', () => {
   it('tells the page when the reader signs in or out, so Poe follows', async () => {
     const seen: Array<string | null> = [];
     document.body.innerHTML = postPage();
-    const h = setup();
+    const h = setup({ failWrites: 401 });
     h.win.addEventListener(SESSION_EVENT, (e) => seen.push((e as CustomEvent<{ did: string | null }>).detail.did));
     await h.mounted;
     expect(seen).toEqual([ME]);
-    $('.blog-account__out').click();
-    await flush();
-    expect(seen).toEqual([ME, null]);
+    // an expired sign-in ends the session here too
+    $('button[data-blog-recommend]').click();
+    await vi.waitFor(() => expect(seen).toEqual([ME, null]));
   });
 
   it('on hosts without sign-in, points comments at atpota.to and keeps the buttons hidden', async () => {
@@ -745,9 +746,12 @@ describe('email subscribe forms', () => {
     expect(also().hidden).toBe(false);
     expect(also().textContent).toBe(COPY.email.also('me.test'));
     expect(box().checked).toBe(true);
+    form().querySelector<HTMLInputElement>('input[type="email"]')!.value = 'me@example.com';
     const sent = vi.spyOn(form(), 'submit').mockImplementation(() => undefined);
     expect(submit().defaultPrevented).toBe(true);
     await vi.waitFor(() => expect(sent).toHaveBeenCalledTimes(1));
+    // submit() goes by the form's action, so the button's Leaflet address is copied over first
+    expect(form().getAttribute('action')).toBe('https://leaflet.pub/api/auth/email-login');
     expect(h.calls).toEqual([
       {
         path: '/xrpc/com.atproto.repo.createRecord',
@@ -789,13 +793,73 @@ describe('email subscribe forms', () => {
     const h = setup();
     await h.mounted;
     $('button[data-blog-subscribe]').click();
-    await vi.waitFor(() => expect($('[data-blog-account] .blog-account__notice').textContent).toBe(COPY.notices.subscribedAddEmail));
+    await vi.waitFor(() => expect($('[data-blog-notice]').textContent).toBe(COPY.notices.subscribedAddEmail));
+  });
+
+  describe('in the index hero, where the bluesky link sits right under the form', () => {
+    beforeEach(() => {
+      document.body.innerHTML = heroPage();
+    });
+    const link = () => $<HTMLButtonElement>('.blog-alt button[data-blog-subscribe]');
+    const or = () => $('.blog-alt__or');
+
+    it('signed out: "or subscribe with bluesky" under the form, and no box', async () => {
+      const h = setup({ start: null, path: '/blog' });
+      await h.mounted;
+      expect(link().hidden).toBe(false);
+      expect(or().hidden).toBe(false);
+      expect(also().hidden).toBe(true);
+    });
+
+    it('signed in and not subscribed there: the box stands in for the link, which stays out of the way while loading', async () => {
+      const h = setup({ path: '/blog' });
+      // still finding out who's here
+      expect(link().hidden).toBe(true);
+      await h.mounted;
+      expect(link().hidden).toBe(true);
+      expect(also().hidden).toBe(false);
+      // "or follow poe"
+      expect(or().hidden).toBe(false);
+    });
+
+    it('signed in and subscribed: the link says so (and undoes it), without the "or"', async () => {
+      const h = setup({ path: '/blog', owned: SUBSCRIBED });
+      await h.mounted;
+      expect(also().hidden).toBe(true);
+      expect(link().hidden).toBe(false);
+      expect(link().textContent).toBe(COPY.subscribed);
+      expect(or().hidden).toBe(true);
+    });
+
+    it('with the box ticked the email is optional, and an empty one subscribes on bluesky alone', async () => {
+      const h = setup({ path: '/blog' });
+      await h.mounted;
+      const input = form().querySelector<HTMLInputElement>('input[type="email"]')!;
+      expect(input.required).toBe(false);
+      box().checked = false;
+      box().dispatchEvent(new Event('change'));
+      expect(input.required).toBe(true);
+      box().checked = true;
+      box().dispatchEvent(new Event('change'));
+      expect(input.required).toBe(false);
+
+      const sent = vi.spyOn(form(), 'submit').mockImplementation(() => undefined);
+      expect(submit().defaultPrevented).toBe(true);
+      await vi.waitFor(() => expect($('[data-blog-notice]').textContent).toBe(COPY.notices.subscribedAddEmail));
+      expect(h.calls.map((c) => c.path)).toEqual(['/xrpc/com.atproto.repo.createRecord']);
+      expect(sent).not.toHaveBeenCalled();
+      expect(form().querySelector('button[type="submit"]')!.hasAttribute('aria-busy')).toBe(false);
+      // subscribed now: the email is back to required for the form's own job
+      expect(also().hidden).toBe(true);
+      expect(input.required).toBe(true);
+      expect(link().textContent).toBe(COPY.subscribed);
+    });
   });
 
   it('back from Leaflet: says so, and takes the marker off the address', async () => {
     const h = setup({ start: null, search: '?subscribed=email', hash: '#subscribe' });
     await h.mounted;
-    expect($('[data-blog-account]').textContent).toBe(COPY.notices.emailSubscribed);
+    expect($('[data-blog-notice]').textContent).toBe(COPY.notices.emailSubscribed);
     expect(h.win.history.replaceState).toHaveBeenCalledWith(null, '', '/blog/3doc#subscribe');
   });
 });
