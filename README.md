@@ -182,7 +182,10 @@ Poe is one potato in a few places, with the same memory in each:
   moment and asks; Poe writes the post or skips it, and the droplet gates it and
   posts it with a card for `/weather`
   ([`mentions/README.md`](mentions/README.md#weather-posts-weather_posts)).
-- **in private DMs** with the people who run it.
+- **in private DMs** with the people who run it, who can also ask it in plain words
+  for a public post (the weather right now, a nudge to read the newsletter,
+  anything else). Poe shows them the exact post with its card, and it goes out only
+  when they answer yes.
 
 Poe keeps short notes about the people it talks to, keyed on their DID, so it can
 skip explanations they don't need. The notes are public, published in Poe's own

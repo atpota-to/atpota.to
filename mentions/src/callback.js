@@ -28,6 +28,7 @@ import { searchPostsV2 } from './atproto.js';
 import { handleAnnounceProposal } from './dispatch.js';
 import { receiveLikeProposal } from './likes.js';
 import { receiveWeatherDraft, handleWeatherDraft } from './weather-posts.js';
+import { handlePostProposal } from './operator-posts.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -436,6 +437,18 @@ export function startCallbackServer({ stats }) {
           logger.error('weather draft handling failed', { id: result.id, error: err.message }));
       }
       return;
+    }
+
+    // A post Poe proposes in an operator DM (operator-posts.js) also comes on this
+    // URL, told apart by its proposal; it is only stored and shown, never posted here.
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.hasOwn(parsed, 'proposal')) {
+      let result;
+      try { result = handlePostProposal(parsed); }
+      catch (err) {
+        logger.error('post proposal failed', { error: err.message });
+        return send(res, 500, { error: 'InternalError' });
+      }
+      return send(res, result.status, result.body);
     }
 
     const v = validateCallback(parsed);
