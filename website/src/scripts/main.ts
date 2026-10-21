@@ -6,7 +6,7 @@
  *    header's account button (./account.ts, which also opens sign-in for Poe's panel)
  * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
  *    "blog" -> ./blog.ts, "garden" -> ./garden-page.ts, "settings" -> ./settings.ts,
- *    "weather" -> ./weather-page.ts (dynamic import; each page module
+ *    "weather" -> ./weather-page.ts, "about" -> ./about.ts (dynamic import; each page module
  *    exports `init()`, called once)
  * 3. mountPoe() from src/poe/index.ts (the corner widget, on every page)
  * 4. the weather in the sky behind the header's wordmark (./nav-weather.ts), loaded once
@@ -33,6 +33,7 @@ const PAGE_MODULES: Record<string, () => Promise<PageModule>> = {
   garden: () => import('./garden-page'),
   weather: () => import('./weather-page'),
   settings: () => import('./settings'),
+  about: () => import('./about'),
 };
 
 function safely(label: string, fn: () => void): void {
