@@ -12,6 +12,7 @@ import { processMatch } from './pipeline.js';
 import { startNotificationSweep } from './notifications.js';
 import { startReconcile } from './reconcile.js';
 import { startOperatorDmPoll } from './operator-dm.js';
+import { startWeatherWatch } from './weather-posts.js';
 
 // node:sqlite and a stable Intl.Segmenter mean this needs Node 22. The default
 // `node` on this droplet is 18, where the import fails with an opaque
@@ -108,6 +109,7 @@ async function main() {
   const sweepTimer = startNotificationSweep(stats);
   const reconcileTimer = startReconcile(stats);
   const dmTimer = startOperatorDmPoll();
+  const weatherTimer = startWeatherWatch();
   const stream = connectJetstream({ onEvent, stats });
 
   const statsTimer = setInterval(() => {
@@ -150,6 +152,7 @@ async function main() {
     if (sweepTimer) clearInterval(sweepTimer);
     if (reconcileTimer) clearInterval(reconcileTimer);
     if (dmTimer) clearInterval(dmTimer);
+    if (weatherTimer) clearInterval(weatherTimer);
     stream.close();                       // flushes the cursor watermark
     callbackServer?.close();
 

@@ -274,12 +274,17 @@ export function pageHasDocument(html, documentUri) {
   return false;
 }
 
-export function ogImageUrl(html) {
+/** The content of a page's <meta property="..."> (og:image, og:title...), or null. */
+export function ogContent(html, property) {
   for (const m of String(html).matchAll(/<meta\b[^>]*>/gi)) {
     const a = tagAttributes(m[0]);
-    if (a.property === 'og:image' && a.content) return a.content;
+    if (a.property === property && a.content) return a.content;
   }
   return null;
+}
+
+export function ogImageUrl(html) {
+  return ogContent(html, 'og:image');
 }
 
 async function fetchCapped(url, { maxBytes, timeoutMs = 15000 }) {
@@ -346,7 +351,7 @@ export async function waitForPage(pageUrl, documentUri, deps) {
 const siteOf = (host) => host.toLowerCase().split('.').slice(-2).join('.');
 
 /** The page's Open Graph image as a blob in Poe's repo. Best effort. */
-async function cardThumb(html, pageUrl, deps) {
+export async function cardThumb(html, pageUrl, deps) {
   const src = ogImageUrl(html);
   if (!src) return { thumb: null, note: 'the page has no og:image' };
   let url;

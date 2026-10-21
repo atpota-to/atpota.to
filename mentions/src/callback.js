@@ -27,6 +27,7 @@ import { requestScanApproval } from './scan-approval.js';
 import { searchPostsV2 } from './atproto.js';
 import { handleAnnounceProposal } from './dispatch.js';
 import { receiveLikeProposal } from './likes.js';
+import { receiveWeatherDraft, handleWeatherDraft } from './weather-posts.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -384,6 +385,24 @@ export function startCallbackServer({ stats }) {
         logger.error('announce proposal failed', { error: err.message });
         return send(res, 502, { error: 'UpstreamError' });
       }
+    }
+    if (req.url === '/weather-draft') {
+      let body;
+      try { body = JSON.parse(await readBody(req)); }
+      catch (err) { return send(res, err.tooLarge ? 413 : 400, { error: 'BadRequest' }); }
+      let result;
+      try { result = receiveWeatherDraft(body); }
+      catch (err) {
+        logger.error('weather draft persistence failed', { error: err.message });
+        return send(res, 500, { error: 'InternalError' });
+      }
+      // Durable first, then the answer, then the gates and the post.
+      send(res, result.status, result.body);
+      if (result.id) {
+        handleWeatherDraft(result.id).catch((err) =>
+          logger.error('weather draft handling failed', { id: result.id, error: err.message }));
+      }
+      return;
     }
     if (req.url === '/dm-draft') {
       let draft;

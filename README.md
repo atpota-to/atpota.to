@@ -32,6 +32,7 @@ this repo is atpota.to itself, and poe, the potato who lives there.
 ```
 bluesky mention ──► droplet ──► bot  POST /bluesky/mention ──► draft ──► droplet ──► reply on bluesky
 site chat       ──► website  /api/poe ──► bot  POST /website/chat ──► streamed answer ──► the chat panel
+weather moment  ──► droplet ──► bot  POST /weather/moment ──► draft or skip ──► droplet ──► post on bluesky
 ```
 
 - **Poe can't post.** The bot has no atproto credential and no write tool. It
@@ -168,6 +169,12 @@ Poe is one potato in a few places, with the same memory in each:
   Poe knows from Bluesky.
 - **in poe's atmosphere dispatch**, the weekly roundup at
   [atpota.to/blog](https://atpota.to/blog).
+- **in the weather, now and then**, on its own Bluesky account: the day's report
+  from the weather station, and a post when it catches a storm, an hour well off
+  usual, a sky getting more mixed, or a new app blowing in. The droplet spots the
+  moment and asks; Poe writes the post or skips it, and the droplet gates it and
+  posts it with a card for `/weather`
+  ([`mentions/README.md`](mentions/README.md#weather-posts-weather_posts)).
 - **in private DMs** with the people who run it.
 
 Poe keeps short notes about the people it talks to, keyed on their DID, so it can
@@ -181,6 +188,7 @@ repo, and anyone can clear theirs at [atpota.to/settings](https://atpota.to/sett
 | `POST /bluesky/mention` | The droplet, for each mention it decides to answer |
 | `POST /api/scan-approval/respond` | The droplet, relaying an operator's yes or no to a collection scan that needs more than the default 10 pages |
 | `POST /operator/dm` | The droplet, for private DMs from operators |
+| `POST /weather/moment` | The droplet's weather watcher, when the weather station catches something worth a post |
 | `POST /website/chat`, `POST /website/forget` | atpota.to's `/api/poe` |
 
 Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
@@ -190,6 +198,7 @@ Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
 - [`bot/agent/instructions.md`](bot/agent/instructions.md): who Poe is, its rules, and its voice
 - [`bot/agent/skills/bluesky-reply.md`](bot/agent/skills/bluesky-reply.md): the Bluesky format and sample replies
 - [`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md): the dispatch's weather section and outlook
+- [`bot/agent/skills/weather-post.md`](bot/agent/skills/weather-post.md): its own weather posts on Bluesky, and when to skip one
 - [`bot/agent/instructions/operator-dm.ts`](bot/agent/instructions/operator-dm.ts): private DMs
 
 ### running it
