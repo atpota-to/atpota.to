@@ -448,7 +448,10 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
       cheer(win);
       return;
     }
-    // submit() skips the submit event (and validation, which already passed to get here).
+    // submit() skips the submit event (and validation, which already passed to get here), and
+    // the button's formaction with it: Leaflet's address lives there (server/blog/subscribe.ts).
+    const to = x.send?.getAttribute('formaction');
+    if (to) x.form.setAttribute('action', to);
     x.form.submit();
   }
 

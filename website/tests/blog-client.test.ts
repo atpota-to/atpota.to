@@ -750,6 +750,8 @@ describe('email subscribe forms', () => {
     const sent = vi.spyOn(form(), 'submit').mockImplementation(() => undefined);
     expect(submit().defaultPrevented).toBe(true);
     await vi.waitFor(() => expect(sent).toHaveBeenCalledTimes(1));
+    // submit() goes by the form's action, so the button's Leaflet address is copied over first
+    expect(form().getAttribute('action')).toBe('https://leaflet.pub/api/auth/email-login');
     expect(h.calls).toEqual([
       {
         path: '/xrpc/com.atproto.repo.createRecord',
