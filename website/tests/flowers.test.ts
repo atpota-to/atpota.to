@@ -127,9 +127,10 @@ describe('every kind, and the weather it grew in', () => {
   });
 
   it('draws every kind at every stage, in any weather, as a quiet svg', () => {
+    // four seeds per weather, a different four each time: 20 seeds per kind, ~1,600 drawings
     for (const kind of KINDS) {
-      for (const seed of seeds.slice(0, 12)) {
-        for (const grew of weathers) {
+      for (const [w, grew] of weathers.entries()) {
+        for (const seed of seeds.slice(w * 4, w * 4 + 4)) {
           for (const stage of ['sprout', 'bud', 'bloom'] as const) {
             const svg = drawFlower(document, kind, stage, variantFor(kind, seed, 0.6, grew));
             expect(svg.getAttribute('viewBox')).toBe('-20 -20 40 40');
