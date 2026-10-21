@@ -18,7 +18,8 @@ export default defineTool({
     "timeZone: the busiest and quietest minute, the last hour against usual, apps the station heard " +
     "for the first time, and the last 24 hours' busiest apps. \"week\" is the past 7 days for your " +
     "dispatch: the week's weather, the week before, the busiest and quietest hour, each day, the " +
-    "busiest apps against the week before, the month, and an outlook from the station's usual week. " +
+    "busiest apps against the week before, the month, and an outlook from the station's usual week; " +
+    "`archive` says how much of it came from Jetstream's archive, before the station listened live. " +
     "Every report says how much of its window the station heard (heardPercent); its numbers cover " +
     "only that. A comparison it leaves out could not be made. `page` is the weather report's link.",
   inputSchema: z.object({

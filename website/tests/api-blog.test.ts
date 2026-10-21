@@ -268,7 +268,9 @@ describe('/api/blog post', () => {
     expect(article.querySelector('.post__body h2')!.textContent).toBe('This week');
     expect(article.querySelector('.post__body p')!.textContent).toBe('hello <b>world</b>');
     expect(article.querySelector('.post-bsky__text')!.textContent).toBe('a post worth reading');
-    expect(article.querySelector('.post__tags li')!.textContent).toBe('roundup');
+    // tags stay in the head for feeds and search, not on the page
+    expect(article.querySelector('[aria-label="tags"]')).toBeNull();
+    expect(d.querySelector('meta[property="article:tag"]')!.getAttribute('content')).toBe('roundup');
     // reply link points at the announcement post; pager links the older post
     expect(d.querySelector('.post-end a[href^="https://bsky.app/profile/did:plc:6qw63oash3jfnpykvpbwnq5z/post/3ann"]')).not.toBeNull();
     expect(d.querySelector('.post-pager__link--older')!.getAttribute('href')).toBe('/blog/3old');
