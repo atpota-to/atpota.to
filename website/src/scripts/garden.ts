@@ -31,8 +31,10 @@
  * flower's card deletes that one). None of it touches flowers in patches that have closed:
  * those are pressed, and stay.
  *
- * Picking: tap an empty plot (or "pick a plot" for one near the middle), then plant. The
- * plots are one tab stop; arrow keys move between them. On narrow screens a wide patch
+ * Picking: tap an empty plot (or "pick a plot" for one near the middle) and the flower picker
+ * and plant button pop up beside it; tap the plot again (or the button) to plant there, or
+ * Escape or a tap elsewhere to put it back. The plots are one tab stop; arrow keys move
+ * between them. On narrow screens a wide patch
  * wraps half as many across (narrowCols), so each row shows as two. Tapping a flower opens
  * its card: whose it is, how it's growing, and a button to water it (a neighbour's) or a
  * link to the garden page (yours). Tabs above the grid switch between the recent seasons'
@@ -97,7 +99,7 @@ export const COPY = {
   pick: 'pick a plot',
   plantHere: (kind: string) => `plant a ${kind} here`,
   planting: 'planting…',
-  choose: (kind: string) => `tap an empty plot to plant your ${kind} there, or plant it here.`,
+  choose: (kind: string) => `tap the plot again to plant your ${kind} there, or tap another one.`,
   planted: (kind: string) => `planted! your ${kind} is a sprout for now, and it blooms in a week. tend it to help it grow (◕‿◕)`,
   plantedSeed: "planted! nobody knows what your seed will grow into, not even you. tend it, and in a week it blooms and you'll see (◕‿◕)",
   moved: (kind: string) => `moved! a new ${kind} is growing in your new plot (◕‿◕)`,
@@ -354,6 +356,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   const plantButton = tile.querySelector<HTMLButtonElement>('[data-garden-plant]');
   const digButton = tile.querySelector<HTMLButtonElement>('[data-garden-dig]');
   const mineLink = tile.querySelector<HTMLElement>('[data-garden-mine]');
+  const controls = tile.querySelector<HTMLElement>('[data-garden-controls]');
   const kindsGroup = tile.querySelector<HTMLElement>('[data-garden-kinds]');
   const kindButtons = [...tile.querySelectorAll<HTMLButtonElement>('[data-garden-kinds] [data-kind]')];
   const tabs = tile.querySelector<HTMLElement>('[data-garden-tabs]');
@@ -482,13 +485,28 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       plantButton.disabled = shut() !== null;
       plantButton.textContent = selected === null ? COPY.pick : COPY.plantHere(planting_());
     }
+    // A picked plot brings the picker and the button up beside it.
+    const floating = selected !== null && !shutAway;
+    controls?.classList.toggle('is-floating', floating);
+    const cell = floating ? plots?.querySelector<HTMLElement>(`[data-plot="${selected}"]`) : null;
+    if (controls && cell) placeBeside(controls, cell, 150);
+  }
+
+  /** Puts a popover under a plot, or over it when it's near the bottom of the tile. */
+  function placeBeside(pop: HTMLElement, cell: HTMLElement, height: number): void {
+    const tb = box.getBoundingClientRect();
+    const cb = cell.getBoundingClientRect();
+    const above = cb.bottom - tb.top + height > tb.height && cb.top - tb.top > height;
+    pop.classList.toggle('is-above', above);
+    pop.style.setProperty('--card-x', `${Math.round(cb.left - tb.left + cb.width / 2)}px`);
+    pop.style.setProperty('--card-y', `${Math.round(above ? cb.top - tb.top - 10 : cb.bottom - tb.top + 10)}px`);
   }
 
   function select(plot: number | null): void {
     selected = plot;
     if (plot !== null) focusAt = plot;
     render();
-    if (plot !== null) say(COPY.choose(planting_()));
+    say(plot !== null ? COPY.choose(planting_()) : (shut() ?? ''));
   }
 
   function pickKind(next: PickedKind): void {
@@ -525,10 +543,15 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     const i = Number(cell.dataset.plot);
     focusAt = i;
     const f = flowers.find((x) => x.plot === i);
-    if (f) openCard(f, cell);
-    else {
+    if (f) {
+      if (selected !== null) select(null);
+      openCard(f, cell);
+    } else {
       closeCard(false);
-      if (!shut()) select(selected === i ? null : i);
+      // Tapping the picked plot again plants there.
+      if (shut()) return;
+      if (selected === i) void plant();
+      else select(i);
     }
   });
   // The plots are one tab stop; arrows, Home and End move between them.
@@ -543,6 +566,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     if (e.key in moves) next = focusAt + moves[e.key]!;
     else if (e.key === 'Home') next = 0;
     else if (e.key === 'End') next = n - 1;
+    if (e.key === 'Escape' && selected !== null && plantButton && !isBusy(plantButton)) select(null);
     if (next === null || next < 0 || next >= n) return;
     e.preventDefault();
     for (const b of plots.querySelectorAll<HTMLButtonElement>('[data-plot][tabindex="0"]')) b.tabIndex = -1;
@@ -845,13 +869,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     if (!card) return;
     cardFor = f.uri;
     fillCard();
-    const tb = box.getBoundingClientRect();
-    const cb = cell.getBoundingClientRect();
-    // Under the flower, or over it when it's near the bottom of the tile.
-    const above = cb.bottom - tb.top + 260 > tb.height && cb.top - tb.top > 260;
-    card.classList.toggle('is-above', above);
-    card.style.setProperty('--card-x', `${Math.round(cb.left - tb.left + cb.width / 2)}px`);
-    card.style.setProperty('--card-y', `${Math.round(above ? cb.top - tb.top - 10 : cb.bottom - tb.top + 10)}px`);
+    placeBeside(card, cell, 260);
     card.hidden = false;
     card.focus();
   }
@@ -936,6 +954,15 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   doc.addEventListener('click', (event) => {
     const target = event.target instanceof Node ? event.target : null;
     if (card && !card.hidden && target && !card.contains(target) && !plots?.contains(target)) closeCard(false);
+    // A tap away from the picked plot and its popover puts it back (not one in the sign-in dialog).
+    const away = target && !controls?.contains(target) && !plots?.contains(target) && !(target instanceof Element && target.closest('dialog'));
+    if (selected !== null && away && target.isConnected && plantButton && !isBusy(plantButton)) select(null);
+  });
+  controls?.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key !== 'Escape' || selected === null || !plantButton || isBusy(plantButton)) return;
+    const plot = selected;
+    select(null);
+    plots?.querySelector<HTMLButtonElement>(`[data-plot="${plot}"]`)?.focus();
   });
 
   plantButton?.addEventListener('click', () => void plant());

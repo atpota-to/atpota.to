@@ -643,7 +643,7 @@ describe('the flower patch', () => {
     expect(statusText()).toBe(COPY.noPatch);
   });
 
-  it('picking: tap an empty plot, tap it again to unpick, or let it pick one near the middle', async () => {
+  it('picking: tap an empty plot and the picker pops up beside it; Escape or a tap away puts it back, or let it pick one near the middle', async () => {
     await rig().run();
     expect(plantButton().textContent).toBe(COPY.pick);
     document.querySelector<HTMLButtonElement>('[data-kind="violet"]')!.click();
@@ -653,9 +653,23 @@ describe('the flower patch', () => {
     expect(plot(3).querySelector('.home-flower--ghost')).not.toBeNull();
     expect(plantButton().textContent).toBe(COPY.plantHere('violet'));
     expect(statusText()).toBe(COPY.choose('violet'));
-    plot(3).click();
+    const controls = () => document.querySelector<HTMLElement>('[data-garden-controls]')!;
+    expect(controls().classList.contains('is-floating')).toBe(true);
+    // picking another flower keeps the plot picked
+    document.querySelector<HTMLButtonElement>('[data-kind="rose"]')!.click();
+    expect(plot(3).classList.contains('is-picked')).toBe(true);
+    expect(plantButton().textContent).toBe(COPY.plantHere('rose'));
+    // a tap away puts it back
+    document.body.click();
     expect(plot(3).classList.contains('is-picked')).toBe(false);
+    expect(controls().classList.contains('is-floating')).toBe(false);
     expect(plantButton().textContent).toBe(COPY.pick);
+    // and so does Escape
+    plot(4).click();
+    expect(controls().classList.contains('is-floating')).toBe(true);
+    plantButton().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(plot(4).classList.contains('is-picked')).toBe(false);
+    expect(document.activeElement).toBe(plot(4));
     // a planted plot can't be picked
     plot(20).click();
     expect(document.querySelector('.is-picked')).toBeNull();
@@ -781,10 +795,12 @@ describe('the flower patch', () => {
     // a flower pressed in a closed patch doesn't count
     r.owned.set(`at://${ME}/${SPROUT_NSID}/3pressed`, summer.uri);
     document.querySelector<HTMLButtonElement>('[data-kind="violet"]')!.click();
+    // tapping the picked plot again plants there
     plot(7).click();
-    plantButton().click();
+    plot(7).click();
     await flush();
     expect(r.calls.map((c) => c.path.split('.').pop())).toEqual(['createRecord']);
+    expect(document.querySelector('[data-garden-controls]')!.classList.contains('is-floating')).toBe(false);
     expect(statusText()).toBe(COPY.planted('violet'));
     expect(plot(7).classList.contains('is-yours')).toBe(true);
     // no picker and no button now, just a way to look after it (or dig it up)
