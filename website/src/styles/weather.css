@@ -483,8 +483,9 @@ html[data-theme="dark"] .weather-hero {
 /* "457 rec/sec" on one line; the forecast under it is words, so it reads lighter. */
 .weather-hero__big {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 0 8px;
   font-size: 64px;
   font-weight: 700;
   line-height: 1;
@@ -2091,8 +2092,9 @@ button.weather-hero__unit:disabled {
     height: 84px;
   }
 
+  /* shrinks with the phone, so a long reading never pushes the page sideways */
   .weather-hero__big {
-    font-size: 48px;
+    font-size: clamp(34px, 11vw, 48px);
   }
 
   .weather-tile__title {

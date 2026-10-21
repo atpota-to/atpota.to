@@ -385,18 +385,25 @@ function tag(tile: Element | null, counts: Measure, lens: LensState): void {
   el.textContent = `by ${counts}`;
 }
 
+/** The header's number, short enough for a phone: 21,345, then 222k, 1.23m. */
+export function bigAmount(v: number): string {
+  if (v < 100_000) return formatAmount(v);
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumSignificantDigits: 3 }).format(v).toLowerCase();
+}
+
 /** The header's reading: how busy it is (or how many accounts), what that is per, and the line under it. */
 function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   const words = WINDOW_INFO[sky.window].words;
   const byAcct = lens.measure === 'accounts' && sky.accounts !== null;
   const value = byAcct ? sky.accounts!.active : sky.records ? amountIn(sky.records.perSecond, lens.unit, sky.seconds) : sky.reading ? amountIn(recordsPerSecond(sky.reading), lens.unit, sky.seconds) : undefined;
   if (value === undefined) setText(report, '[data-r-records]', '–');
-  // accounts are counted, not measured: every one of them while it fits
-  else count(report, '[data-r-records]', value, byAcct && value < 10_000_000 ? formatCount : formatAmount);
+  else count(report, '[data-r-records]', value, bigAmount);
   const unit = $<HTMLButtonElement>(report, '[data-r-unit]');
   if (unit) {
+    // by accounts the line under the number already says "accounts"
+    unit.hidden = byAcct;
     unit.disabled = byAcct;
-    unit.textContent = byAcct ? 'accounts' : lens.unit === 'total' ? 'records' : `rec/${UNIT_INFO[lens.unit].short}`;
+    unit.textContent = byAcct ? '' : lens.unit === 'total' ? 'records' : `rec/${UNIT_INFO[lens.unit].short}`;
     if (byAcct) unit.removeAttribute('aria-label');
     else unit.setAttribute('aria-label', `${perWords(lens.unit)}. change to ${perWords(nextUnit(lens.unit))}`);
   }
