@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>about · atpotato</title>
     <meta name="title" content="about · atpotato">
-    <meta name="description" content="atpotato is a small studio making the atmosphere a little more fun, started by dame. how it grew, from one bluesky account in 2023 to a whole little patch.">
+    <meta name="description" content="atpotato is a small studio making the atmosphere a little more fun, grown by dame. dig down through how it grew, from open social in 2021 to a whole little patch.">
     <link rel="canonical" href="https://atpota.to/about">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#F4EEDF">
@@ -18,7 +18,7 @@
     <meta property="og:site_name" content="atpotato">
     <meta property="og:url" content="https://atpota.to/about">
     <meta property="og:title" content="about · atpotato">
-    <meta property="og:description" content="atpotato is a small studio making the atmosphere a little more fun, started by dame. how it grew, from one bluesky account in 2023 to a whole little patch.">
+    <meta property="og:description" content="atpotato is a small studio making the atmosphere a little more fun, grown by dame. dig down through how it grew, from open social in 2021 to a whole little patch.">
     <meta property="og:image" content="https://atpota.to/og/home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -45,104 +45,57 @@
     <a class="skip-link" href="#main">skip to content</a>
     <!-- @partial header -->
 
-    <!-- MOCKUP: three looks for one page, picked with ?look=vine|dig|packets. The milestones
-         are one list (.timeline) that each look styles on its own; only the intro differs.
-         Once a look is chosen, keep its intro and its CSS and drop the rest. -->
     <main id="main" class="about-page" tabindex="-1">
-        <script>
-            (function (main) {
-                var looks = ['vine', 'dig', 'packets'], look = 'vine';
-                try {
-                    var asked = new URLSearchParams(location.search).get('look');
-                    if (looks.indexOf(asked) !== -1) look = asked;
-                } catch (e) {}
-                main.setAttribute('data-look', look);
-            })(document.currentScript.parentNode);
-        </script>
-
-        <nav class="about-switch" aria-label="mockup looks">
-            <span class="about-switch__label">mockup</span>
-            <a class="about-switch__link" href="?look=vine" data-look-link="vine">the vine</a>
-            <a class="about-switch__link" href="?look=dig" data-look-link="dig">dig down</a>
-            <a class="about-switch__link" href="?look=packets" data-look-link="packets">seed packets</a>
-        </nav>
-
         <div class="about">
 
-            <!-- ===== intro, look 1: the vine. bio in the studio's voice, a card for its maker ===== -->
-            <div class="about-intro about-intro--vine" data-for-look="vine">
-                <section class="tile tile--lg about-bio" aria-labelledby="about-title-vine">
-                    <p class="eyebrow">about</p>
-                    <h1 class="about-bio__title" id="about-title-vine">a small studio with its roots in the atmosphere.</h1>
-                    <div class="about-bio__words">
-                        <p>atpotato makes apps, tools and guides for the atmosphere, the open network bluesky is built on. some are useful, like aturi, which opens any atproto link in the app you actually use. some are peaceful, like anisota. and some, like flushes, are just silly. we like it that way.</p>
-                        <p>it's the studio of <a href="https://bsky.app/profile/dame.is">dame</a>: a creative technologist in appalachia by day, and three moths in a trench coat by night. dame has been on bluesky since the invite-code days of 2023, and started atpotato in 2025 to give all the little experiments somewhere to grow.</p>
-                        <p>poe, the potato in the corner, helps out. ask it anything about atproto.</p>
-                    </div>
-                    <div class="about-bio__actions">
-                        <a class="btn btn--primary" href="mailto:contact@atpota.to">say hi</a>
-                        <a class="btn btn--outline" href="https://bsky.app/profile/atpota.to">follow on bluesky</a>
-                    </div>
-                </section>
-                <aside class="tile tile--sun about-maker" aria-label="who makes atpotato">
-                    <img class="about-maker__poe" src="/src/assets/mascot/potato-wave.svg" alt="" width="220" height="179">
-                    <a class="about-maker__card" href="https://bsky.app/profile/dame.is">
-                        <img class="about-maker__avatar" src="https://cdn.bsky.app/img/avatar_thumbnail/plain/did:plc:gq4fo3u6tqzzdkjlwzpb23tj/bafkreibrss2qwswc3rg5xuf2wfm343ma5ejlcdndvweyje3j3srqwrlpqa" alt="" width="64" height="64">
-                        <span class="about-maker__who">
-                            <span class="about-maker__eyebrow">grown by</span>
-                            <span class="about-maker__name">dame</span>
-                            <span class="about-maker__handle">@dame.is · they/them</span>
-                        </span>
-                    </a>
-                </aside>
-            </div>
-
-            <!-- ===== intro, look 2: dig down. the surface: sky, grass, poe on top of the layers ===== -->
-            <section class="about-intro about-intro--dig" data-for-look="dig" aria-labelledby="about-title-dig">
+            <!-- the surface: sky, grass, and poe standing on top of everything below -->
+            <section class="about-surface" aria-labelledby="about-title">
                 <div class="about-surface__words">
                     <p class="eyebrow">about</p>
-                    <h1 class="about-surface__title" id="about-title-dig">every potato starts underground.</h1>
-                    <p>atpotato is a small studio making the atmosphere a little more fun, with apps and tools for the open network bluesky is built on.</p>
-                    <p>it's dug, planted and watered by <a href="https://bsky.app/profile/dame.is">dame</a>, who's been building on bluesky since 2023. everything here grew from one account and a lot of curiosity. dig down to see the layers.</p>
+                    <h1 class="about-surface__title" id="about-title">every potato starts underground.</h1>
+                    <p>atpotato is a small studio making the atmosphere a little more fun, with apps, tools and guides for the open network bluesky is built on. some are useful, some are peaceful, and some are just silly.</p>
+                    <p>it's dug, planted and watered by <a href="https://bsky.app/profile/dame.is">dame</a>, who's been building open, decentralized social software since 2021, and has been on bluesky since the invite-code days. everything here grew from that, one layer at a time.</p>
                 </div>
                 <img class="about-surface__poe" src="/src/assets/mascot/potato-kawaii.svg" alt="" width="260" height="212">
                 <span class="about-surface__sprout about-surface__sprout--1" aria-hidden="true"></span>
                 <span class="about-surface__sprout about-surface__sprout--2" aria-hidden="true"></span>
             </section>
 
-            <!-- ===== intro, look 3: seed packets. a note from dame, in their own voice ===== -->
-            <div class="about-intro about-intro--packets" data-for-look="packets">
-                <section class="tile tile--lg about-note" aria-labelledby="about-title-packets">
-                    <p class="eyebrow">a note from the gardener</p>
-                    <h1 class="about-note__title" id="about-title-packets">hi, i'm dame.</h1>
-                    <div class="about-note__words">
-                        <p>atpotato is my little studio. i make apps, tools and guides for the atmosphere, the open network bluesky is built on, and i try to make each one feel a little handmade, and a little mischievous.</p>
-                        <p>i joined bluesky back when you still needed an invite code, and i've been building on it ever since: a moth-themed client, a bathroom, a sea turtle game, and a potato who answers questions. below is every seed so far.</p>
-                        <p>if you'd like to make something together, or just say hi, i'd love to hear from you.</p>
-                    </div>
-                    <a class="about-note__sign" href="https://bsky.app/profile/dame.is">
-                        <img class="about-note__avatar" src="https://cdn.bsky.app/img/avatar_thumbnail/plain/did:plc:gq4fo3u6tqzzdkjlwzpb23tj/bafkreibrss2qwswc3rg5xuf2wfm343ma5ejlcdndvweyje3j3srqwrlpqa" alt="" width="52" height="52">
-                        <span><span class="about-note__name">dame</span> <span class="about-note__handle">@dame.is · they/them · appalachia</span></span>
-                    </a>
-                </section>
-                <ul class="about-facts" role="list">
-                    <li class="tile tile--sage about-fact"><strong>2023</strong><span>on bluesky since</span></li>
-                    <li class="tile tile--sky about-fact"><strong>6</strong><span>things grown</span></li>
-                    <li class="tile tile--sun about-fact"><strong>1</strong><span>potato</span></li>
-                </ul>
-            </div>
-
-            <!-- ===== the milestones: one list, three looks ===== -->
+            <!-- how it grew: a year to a layer of soil. The list runs oldest first, and the page
+                 stacks it newest on top (column-reverse), so the deeper you dig, the further back. -->
             <section class="about-story" aria-labelledby="about-story-title">
                 <div class="about-story__head">
                     <h2 class="about-story__title" id="about-story-title">how it grew</h2>
-                    <p class="about-story__sub">from one account in 2023 to a whole little patch.<span class="about-story__hint" data-for-look="packets"> scroll sideways for the rest &rarr;</span></p>
-                    <p class="about-story__draft"><span class="chip chip--muted">draft</span> placeholder list: dates come from each account's creation record. swap in the real ones.</p>
+                    <p class="about-story__sub">newest on top. the deeper you dig, the further back you go.</p>
                 </div>
 
-                <ol class="timeline" role="list" data-timeline>
+                <ol class="timeline" role="list">
                     <li class="timeline__year">
-                        <h3 class="timeline__label"><span class="timeline__yr">2023</span> <span class="timeline__layer" aria-hidden="true">deep down</span></h3>
+                        <h3 class="timeline__label"><span class="timeline__yr">2021</span> <span class="timeline__layer" aria-hidden="true">bedrock</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--origin">
+                                <span class="moment__icon moment__icon--glyph"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="17" r="2.6"/><circle cx="19" cy="17" r="2.6"/><path d="M10.7 7.3 6.3 14.7M13.3 7.3l4.4 7.4M7.6 17h8.8"/></svg></span>
+                                <p class="moment__date"><time datetime="2021">2021</time></p>
+                                <h4 class="moment__title">dame starts building open social</h4>
+                                <p class="moment__text">dame begins working on open, decentralized social software for a living, years before the atmosphere had a name.</p>
+                            </li>
+                        </ol>
+                    </li>
+
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2022</span> <span class="timeline__layer" aria-hidden="true">gravel</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--origin">
+                                <span class="moment__icon moment__icon--glyph"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 20.5 7.3v9.4L12 21.5l-8.5-4.8V7.3z"/><path d="M3.5 7.3 12 12l8.5-4.7M12 12v9.5"/></svg></span>
+                                <p class="moment__date"><time datetime="2022-07">jul 2022</time></p>
+                                <h4 class="moment__title">dame starts working on ipfs</h4>
+                                <p class="moment__text">ipfs gives every file an address made from what's inside it. atproto borrows the same trick, the cid, to fingerprint every record on the network.</p>
+                            </li>
+                        </ol>
+                    </li>
+
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2023</span> <span class="timeline__layer" aria-hidden="true">clay</span></h3>
                         <ol class="timeline__items" role="list">
                             <li class="moment moment--origin">
                                 <span class="moment__icon moment__icon--round"><img src="https://cdn.bsky.app/img/avatar_thumbnail/plain/did:plc:gq4fo3u6tqzzdkjlwzpb23tj/bafkreibrss2qwswc3rg5xuf2wfm343ma5ejlcdndvweyje3j3srqwrlpqa" alt="" width="48" height="48"></span>
@@ -170,9 +123,16 @@
                             </li>
                             <li class="moment moment--launch">
                                 <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
-                                <p class="moment__date"><time datetime="2025-08-21">aug 21, 2025</time></p>
+                                <p class="moment__date"><time datetime="2025-08-19">aug 19, 2025</time></p>
                                 <h4 class="moment__title">anisota hatches</h4>
                                 <p class="moment__text">a moth-themed bluesky client that deals your feed out as a deck of cards, and helps you be offline more.</p>
+                            </li>
+                            <li class="moment moment--milestone">
+                                <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2025-11">nov 2025</time> &ndash; <time datetime="2026-01">jan 2026</time></p>
+                                <h4 class="moment__title">anisota's harvest</h4>
+                                <p class="moment__stat"><strong>65,000</strong> <span>visitors</span></p>
+                                <p class="moment__text">a look back at your year on bluesky, starting with your most-used words. <a href="https://bsky.app/profile/bsky.app/post/3m6zx562tss2c">bluesky's own account</a> sent people to find theirs.</p>
                             </li>
                             <li class="moment moment--launch">
                                 <span class="moment__icon"><img src="/src/assets/projects/aturi.svg" alt="" width="48" height="48"></span>
@@ -187,19 +147,6 @@
                         <h3 class="timeline__label"><span class="timeline__yr">2026</span> <span class="timeline__layer" aria-hidden="true">topsoil</span></h3>
                         <ol class="timeline__items" role="list">
                             <li class="moment moment--milestone">
-                                <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
-                                <p class="moment__date"><time datetime="2026-06">jun 2026</time></p>
-                                <h4 class="moment__title">anisota's harvest</h4>
-                                <p class="moment__stat"><strong>x,xxx</strong> <span>people gathered a harvest</span></p>
-                                <p class="moment__text">a look back at your year in posts: your most-used words, your alt text streak, and more.</p>
-                            </li>
-                            <li class="moment moment--launch">
-                                <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
-                                <p class="moment__date"><time datetime="2026-06-25">jun 25, 2026</time></p>
-                                <h4 class="moment__title">anisota virginiensis</h4>
-                                <p class="moment__text">the big one: spells, post poetry, blended feeds, an alt text helper, and a whole lab to play in.</p>
-                            </li>
-                            <li class="moment moment--milestone">
                                 <span class="moment__icon"><img src="/src/assets/projects/flushes.png" alt="" width="48" height="48"></span>
                                 <p class="moment__date"><time datetime="2026-08-04">aug 4, 2026</time></p>
                                 <h4 class="moment__title">flushes 2.0, for the trevor project</h4>
@@ -208,15 +155,16 @@
                             </li>
                             <li class="moment moment--launch">
                                 <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
-                                <p class="moment__date"><time datetime="2026-08-21">aug 21, 2026</time></p>
+                                <p class="moment__date"><time datetime="2026-08-19">aug 19, 2026</time></p>
                                 <h4 class="moment__title">anisota turns one</h4>
                                 <p class="moment__text">with post scheduling, muted word lists, and a logo that follows the phase of the moon.</p>
                             </li>
-                            <li class="moment moment--launch">
+                            <li class="moment moment--milestone">
                                 <span class="moment__icon moment__icon--glyph"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.5l2.7 6 6.5.6-4.9 4.3 1.5 6.4L12 16.5 6.2 19.8l1.5-6.4L2.8 9.1l6.5-.6z"/></svg></span>
                                 <p class="moment__date"><time datetime="2026-09">sep 2026</time></p>
                                 <h4 class="moment__title">38 influential posters</h4>
-                                <p class="moment__text">a ballot for bluesky's most influential posters, made with @pds.dad.</p>
+                                <p class="moment__stat"><strong>110,000+</strong> <span>votes, from about 15,000 people</span></p>
+                                <p class="moment__text">a ballot for bluesky's most influential posters, made with @pds.dad. every vote was a record in the voter's own repo.</p>
                             </li>
                             <li class="moment moment--launch">
                                 <span class="moment__icon"><img src="/src/assets/projects/turtlemeat.png" alt="" width="48" height="48"></span>
@@ -240,11 +188,7 @@
                     </li>
                 </ol>
 
-                <div class="about-story__foot">
-                    <p data-for-look="vine">and still growing. follow <a href="https://bsky.app/profile/atpota.to">@atpota.to</a> to catch the next sprout.</p>
-                    <p data-for-look="dig">you've hit bedrock. everything above grew from here.</p>
-                    <p data-for-look="packets">more in the ground. follow <a href="https://bsky.app/profile/atpota.to">@atpota.to</a> to catch the next sprout.</p>
-                </div>
+                <p class="about-story__foot">that's as deep as it goes. everything above grew from here.</p>
             </section>
 
         </div>

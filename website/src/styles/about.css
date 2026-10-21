@@ -1,9 +1,6 @@
-/* The about page (about/index.html): a short bio, and how atpotato grew.
-
-   MOCKUP: <main data-look="vine|dig|packets"> picks one of three looks (?look= in the URL).
-   The milestones are one list, .timeline, styled per look below; each look has its own
-   intro, marked data-for-look. Once one is chosen, its intro and its section here stay,
-   and the rest goes. */
+/* The about page (about/index.html): a short bio up on the surface, and how atpotato grew
+   underneath it, a year to a layer of soil. Newest on top, darker the deeper you dig, and
+   each moment is a potato in its layer. */
 
 .about-page {
   padding: 24px var(--gutter, 16px) 72px;
@@ -16,477 +13,13 @@
 .about {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   max-width: 1120px;
   margin: 0 auto;
 }
 
-.about-page[data-look="vine"] [data-for-look]:not([data-for-look="vine"]),
-.about-page[data-look="dig"] [data-for-look]:not([data-for-look="dig"]),
-.about-page[data-look="packets"] [data-for-look]:not([data-for-look="packets"]) {
-  display: none !important;
-}
+/* ---------- the surface: sky, grass, poe ---------- */
 
-/* ---------- the mockup picker (goes once a look is chosen) ---------- */
-
-.about-switch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 auto 20px;
-  padding: 5px;
-  border: 2px dashed var(--dash);
-  border-radius: var(--radius-pill);
-}
-
-.about-switch__label {
-  padding: 0 8px 0 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.about-switch__link {
-  padding: 7px 16px;
-  border-radius: var(--radius-pill);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.about-switch__link:hover {
-  background: var(--line);
-  color: var(--text);
-}
-
-.about-page[data-look="vine"] [data-look-link="vine"],
-.about-page[data-look="dig"] [data-look-link="dig"],
-.about-page[data-look="packets"] [data-look-link="packets"] {
-  background: var(--brown);
-  color: var(--on-brown);
-}
-
-/* ---------- shared: the story's heading and a moment's parts ---------- */
-
-.about-story__head {
-  position: relative;
-  display: grid;
-  gap: 6px;
-  padding: 40px 8px 12px;
-}
-
-.about-story__title {
-  font-size: clamp(34px, 3.6vw, 48px);
-  line-height: 1.05;
-}
-
-.about-story__sub {
-  font-size: 18px;
-  color: var(--muted);
-}
-
-.about-story__draft {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.about-story__draft .chip {
-  background: var(--butter);
-  color: var(--text);
-  padding: 4px 12px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.timeline,
-.timeline__items {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.timeline__label {
-  font-size: 26px;
-}
-
-.timeline__layer {
-  display: none;
-}
-
-.moment {
-  position: relative;
-  display: grid;
-  justify-items: start;
-  gap: 6px;
-}
-
-.moment__icon {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 6px;
-  overflow: hidden;
-  border-radius: 16px;
-  background: var(--paper);
-}
-
-.moment__icon img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-}
-
-.moment__icon--round {
-  border-radius: 50%;
-}
-
-.moment__icon--round img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.moment__icon--glyph svg {
-  width: 32px;
-  height: 32px;
-  color: var(--sun-deep);
-}
-
-.moment__date {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-}
-
-.moment__title {
-  font-size: 22px;
-  line-height: 1.15;
-}
-
-.moment__stat {
-  display: grid;
-  margin: 4px 0 2px;
-}
-
-.moment__stat strong {
-  font-size: 46px;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-
-.moment__stat span {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-soft);
-}
-
-.moment__text {
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--text-soft);
-}
-
-.about-story__foot {
-  padding: 12px 8px 0;
-  font-size: 17px;
-  color: var(--muted);
-  text-align: center;
-}
-
-/* =====================================================================
-   look 1: the vine. a green stem winds down the middle, and each moment
-   hangs off it on a leaf, left then right. years are suns on the stem.
-   ===================================================================== */
-
-.about-intro--vine {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: 16px;
-}
-
-.about-bio {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 20px;
-  background: var(--paper);
-}
-
-.about-bio__title {
-  font-size: clamp(40px, 4.6vw, 64px);
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-}
-
-.about-bio__words {
-  display: grid;
-  gap: 14px;
-  max-width: 36em;
-  font-size: 18px;
-  line-height: 1.5;
-  color: var(--text-soft);
-}
-
-.about-bio__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.about-maker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 18px;
-  min-height: 420px;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: repeating-conic-gradient(from 0deg at 50% 62%, var(--sun) 0deg 9deg, var(--sun-deep) 9deg 18deg);
-}
-
-.about-maker__poe {
-  width: 230px;
-  height: auto;
-}
-
-.about-maker__card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  max-width: 320px;
-  padding: 12px 20px 12px 12px;
-  border-radius: var(--radius-md);
-  background: var(--card);
-  color: var(--text);
-  text-decoration: none;
-  box-shadow: var(--shadow-soft);
-  transition: transform var(--dur) var(--ease-out);
-}
-
-.about-maker__card:hover {
-  color: var(--text);
-  transform: translateY(-2px);
-}
-
-.about-maker__avatar {
-  flex: none;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--flesh-tint);
-}
-
-.about-maker__who {
-  display: grid;
-  gap: 1px;
-  line-height: 1.2;
-}
-
-.about-maker__eyebrow {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.75;
-}
-
-.about-maker__name {
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.about-maker__handle {
-  font-size: 15px;
-  opacity: 0.8;
-}
-
-.about-page[data-look="vine"] .timeline {
-  --vine-stem: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 140'%3E%3Cpath d='M18 0C34 35 34 35 18 70C2 105 2 105 18 140' fill='none' stroke='%2339B54A' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E");
-  position: relative;
-  display: grid;
-  gap: 32px;
-  padding: 16px 0 24px;
-}
-
-.about-page[data-look="vine"] .timeline::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: -8px;
-  left: 50%;
-  width: 36px;
-  margin-left: -18px;
-  background: var(--vine-stem) center top / 36px 140px repeat-y;
-}
-
-.about-page[data-look="vine"] .timeline__year {
-  display: grid;
-  gap: 24px;
-}
-
-.about-page[data-look="vine"] .timeline__label {
-  position: relative;
-  justify-self: center;
-  display: grid;
-  place-items: center;
-  width: 104px;
-  height: 104px;
-  border-radius: 50%;
-  background: var(--sun);
-  box-shadow: 0 0 0 10px color-mix(in srgb, var(--sun) 35%, transparent);
-  color: var(--on-sun);
-  font-size: 28px;
-}
-
-.about-page[data-look="vine"] .timeline__items {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-  column-gap: 96px;
-  row-gap: 20px;
-}
-
-.about-page[data-look="vine"] .moment {
-  padding: 24px 26px 26px;
-  border-radius: var(--radius-tile);
-  background: var(--card);
-}
-
-.about-page[data-look="vine"] .moment:nth-child(odd) {
-  grid-column: 1;
-}
-
-.about-page[data-look="vine"] .moment:nth-child(even) {
-  grid-column: 2;
-  margin-top: 80px;
-}
-
-/* the leaf each moment hangs from */
-.about-page[data-look="vine"] .moment::before {
-  content: "";
-  position: absolute;
-  top: 34px;
-  width: 50px;
-  height: 42px;
-  background: url("../assets/leaf.svg") center / contain no-repeat;
-}
-
-.about-page[data-look="vine"] .moment:nth-child(odd)::before {
-  right: -54px;
-  transform: rotate(-100deg);
-}
-
-.about-page[data-look="vine"] .moment:nth-child(even)::before {
-  left: -54px;
-  transform: rotate(100deg) scaleX(-1);
-}
-
-.about-page[data-look="vine"] .moment--origin {
-  background: var(--butter);
-}
-
-.about-page[data-look="vine"] .moment--milestone {
-  --muted: var(--on-sun-soft);
-  --text-soft: var(--on-sun-soft);
-  --ink: var(--on-sun);
-  background: var(--sun);
-  color: var(--on-sun);
-}
-
-.about-page[data-look="vine"] .about-story__foot {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  padding-top: 0;
-}
-
-.about-page[data-look="vine"] .about-story__foot::before {
-  content: "";
-  width: 84px;
-  height: 78px;
-  background: url("../assets/sprout.svg") center bottom / contain no-repeat;
-}
-
-@media (max-width: 800px) {
-  .about-intro--vine {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .about-maker {
-    min-height: 0;
-    padding-top: 36px;
-  }
-
-  .about-maker__poe {
-    width: 170px;
-  }
-
-  .about-page[data-look="vine"] .timeline::before {
-    left: 30px;
-  }
-
-  .about-page[data-look="vine"] .timeline__label {
-    justify-self: start;
-    width: 60px;
-    height: 60px;
-    font-size: 18px;
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--sun) 35%, transparent);
-  }
-
-  .about-page[data-look="vine"] .timeline__items {
-    grid-template-columns: minmax(0, 1fr);
-    padding-left: 72px;
-  }
-
-  .about-page[data-look="vine"] .moment:nth-child(n) {
-    grid-column: 1;
-    margin-top: 0;
-  }
-
-  .about-page[data-look="vine"] .moment:nth-child(n)::before {
-    right: auto;
-    left: -46px;
-    width: 38px;
-    height: 32px;
-    transform: rotate(100deg) scaleX(-1);
-  }
-
-  .about-page[data-look="vine"] .about-story__foot {
-    justify-items: start;
-    text-align: left;
-  }
-}
-
-/* =====================================================================
-   look 2: dig down. the intro is the surface (sky, grass, poe), and the
-   years are layers of soil below it: newest on top, darker the deeper
-   you go. each moment is a potato in its layer.
-   ===================================================================== */
-
-.about-page[data-look="dig"] .about {
-  gap: 0;
-}
-
-.about-intro--dig {
+.about-surface {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
@@ -541,14 +74,18 @@
   height: 37px;
 }
 
-/* the grass the story's heading sits on */
-.about-page[data-look="dig"] .about-story__head {
-  z-index: 5;
+/* ---------- the grass the story's heading sits on ---------- */
+
+.about-story__head {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  gap: 6px;
   padding: 26px 48px 30px;
   background: var(--sage);
 }
 
-.about-page[data-look="dig"] .about-story__head::before {
+.about-story__head::before {
   content: "";
   position: absolute;
   left: 0;
@@ -558,20 +95,35 @@
   background: radial-gradient(circle at 12px 14px, var(--sage) 11px, transparent 12px) 0 0 / 24px 14px repeat-x;
 }
 
-.about-page[data-look="dig"] .about-story__sub,
-.about-page[data-look="dig"] .about-story__draft {
+.about-story__title {
+  font-size: clamp(34px, 3.6vw, 48px);
+  line-height: 1.05;
+}
+
+.about-story__sub {
+  font-size: 18px;
   color: var(--text-soft);
 }
 
-.about-page[data-look="dig"] .timeline {
+/* ---------- the layers: a year each, newest on top ---------- */
+
+.timeline,
+.timeline__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline {
   display: flex;
   flex-direction: column-reverse;
 }
 
-.about-page[data-look="dig"] .timeline__year {
-  --mix: 22%;
+.timeline__year {
+  --mix: 18%;
   --layer: color-mix(in oklab, var(--skin) var(--mix), var(--soil));
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
   gap: 28px;
@@ -582,23 +134,34 @@
     var(--layer);
 }
 
-.about-page[data-look="dig"] .timeline__year:nth-last-child(1) {
+/* Lighter toward the top. Each layer sits over the one below it, so its lumpy edge shows. */
+.timeline__year:nth-last-child(1) {
   --mix: 88%;
+  z-index: 6;
+}
+
+.timeline__year:nth-last-child(2) {
+  --mix: 68%;
+  z-index: 5;
+}
+
+.timeline__year:nth-last-child(3) {
+  --mix: 50%;
   z-index: 4;
 }
 
-.about-page[data-look="dig"] .timeline__year:nth-last-child(2) {
-  --mix: 62%;
+.timeline__year:nth-last-child(4) {
+  --mix: 34%;
   z-index: 3;
 }
 
-.about-page[data-look="dig"] .timeline__year:nth-last-child(3) {
-  --mix: 38%;
+.timeline__year:nth-last-child(5) {
+  --mix: 24%;
   z-index: 2;
 }
 
 /* each layer's lumpy bottom edge, over the layer below */
-.about-page[data-look="dig"] .timeline__year::after {
+.timeline__year::after {
   content: "";
   position: absolute;
   left: 0;
@@ -608,7 +171,7 @@
   background: radial-gradient(ellipse 34px 14px at 34px 0, var(--layer) 98%, transparent 100%) 0 0 / 68px 14px repeat-x;
 }
 
-.about-page[data-look="dig"] .timeline__label {
+.timeline__label {
   display: grid;
   gap: 2px;
   align-self: start;
@@ -616,35 +179,37 @@
   padding: 12px 18px 14px;
   border-radius: 20px;
   background: var(--soil);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.08);
   color: var(--on-soil);
   line-height: 1;
 }
 
-.about-page[data-look="dig"] .timeline__yr {
+.timeline__yr {
   font-size: 40px;
 }
 
-.about-page[data-look="dig"] .timeline__layer {
-  display: block;
+.timeline__layer {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--on-soil-soft);
 }
 
-.about-page[data-look="dig"] .timeline__items {
+.timeline__items {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 22px;
 }
 
-/* a potato: lumpy, a little tilted, with a couple of eyes */
-.about-page[data-look="dig"] .moment {
-  --ink: var(--on-sun);
-  --muted: var(--on-sun);
-  --text-soft: var(--on-sun);
+/* ---------- a moment: a potato, lumpy, a little tilted, with a couple of eyes ---------- */
+
+.moment {
+  position: relative;
+  display: grid;
+  justify-items: start;
   flex: 1 1 240px;
+  gap: 6px;
   max-width: 330px;
   padding: 26px 30px 30px;
   border-radius: 46px 70px 52px 76px / 60px 46px 70px 52px;
@@ -658,26 +223,18 @@
   transform: rotate(-1.2deg);
 }
 
-.about-page[data-look="dig"] .moment:nth-child(even) {
+.moment:nth-child(even) {
   border-radius: 70px 44px 76px 50px / 48px 66px 50px 72px;
   transform: rotate(1.4deg) translateY(10px);
 }
 
-.about-page[data-look="dig"] .moment:nth-child(3n) {
+.moment:nth-child(3n) {
   border-radius: 56px 60px 44px 80px / 70px 50px 64px 46px;
   transform: rotate(-0.4deg) translateY(-6px);
 }
 
-.about-page[data-look="dig"] .moment__icon {
-  background: rgb(255 253 247 / 0.7);
-}
-
-.about-page[data-look="dig"] .moment__date {
-  opacity: 0.8;
-}
-
-/* a golden potato */
-.about-page[data-look="dig"] .moment--milestone {
+/* a golden potato, for the big ones */
+.moment--milestone {
   background:
     radial-gradient(circle at 86% 18%, rgb(255 255 255 / 0.7) 0 4px, transparent 5px),
     radial-gradient(circle at 80% 28%, rgb(255 255 255 / 0.5) 0 2px, transparent 3px),
@@ -685,21 +242,93 @@
   box-shadow: inset -8px -10px 0 rgb(201 146 49 / 0.45), 0 0 0 6px rgb(255 217 120 / 0.35), 0 8px 0 rgb(0 0 0 / 0.12);
 }
 
-.about-page[data-look="dig"] .about-story__foot {
+.moment__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgb(255 253 247 / 0.7);
+}
+
+.moment__icon img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.moment__icon--round {
+  border-radius: 50%;
+}
+
+.moment__icon--round img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.moment__icon--glyph svg {
+  width: 30px;
+  height: 30px;
+  color: #725B36;
+}
+
+.moment__date {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+}
+
+.moment__title {
+  font-size: 22px;
+  line-height: 1.15;
+  color: inherit;
+}
+
+.moment__stat {
+  display: grid;
+  margin: 4px 0 2px;
+}
+
+.moment__stat strong {
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.moment__stat span {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.moment__text {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.moment a,
+.moment a:hover {
+  color: inherit;
+}
+
+/* ---------- the bottom ---------- */
+
+.about-story__foot {
   padding: 40px 48px 44px;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background:
     radial-gradient(ellipse at 30% 40%, rgb(255 255 255 / 0.06) 0 18px, transparent 19px) 0 0 / 120px 70px,
     color-mix(in oklab, var(--soil) 80%, black);
   color: var(--on-soil-soft);
-}
-
-.about-page[data-look="dig"] .about-story__foot a {
-  color: var(--on-soil);
+  font-size: 17px;
+  text-align: center;
 }
 
 @media (max-width: 800px) {
-  .about-intro--dig {
+  .about-surface {
     grid-template-columns: minmax(0, 1fr);
     padding: 32px 20px 0;
   }
@@ -712,321 +341,31 @@
     width: 170px;
   }
 
-  .about-page[data-look="dig"] .about-story__head {
+  .about-story__head {
     padding: 22px 20px 26px;
   }
 
-  .about-page[data-look="dig"] .timeline__year {
+  .timeline__year {
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
     padding: 32px 20px 40px;
   }
 
-  .about-page[data-look="dig"] .timeline__label {
+  .timeline__label {
     display: flex;
     align-items: baseline;
     gap: 10px;
   }
 
-  .about-page[data-look="dig"] .timeline__yr {
+  .timeline__yr {
     font-size: 30px;
   }
 
-  .about-page[data-look="dig"] .moment {
+  .moment {
     max-width: none;
   }
 
-  .about-page[data-look="dig"] .about-story__foot {
+  .about-story__foot {
     padding: 32px 20px 36px;
-  }
-}
-
-/* =====================================================================
-   look 3: seed packets. a note from dame, then every moment as a seed
-   packet in one long row you scroll sideways, with a stake for each year.
-   ===================================================================== */
-
-.about-intro--packets {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 16px;
-}
-
-.about-note {
-  display: grid;
-  align-content: start;
-  gap: 18px;
-  background: var(--paper);
-}
-
-.about-note__title {
-  font-size: clamp(44px, 5vw, 72px);
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-}
-
-.about-note__words {
-  display: grid;
-  gap: 14px;
-  max-width: 38em;
-  font-size: 19px;
-  line-height: 1.55;
-  color: var(--text-soft);
-}
-
-.about-note__sign {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: fit-content;
-  margin-top: 6px;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.about-note__sign:hover {
-  color: var(--text);
-}
-
-.about-note__avatar {
-  flex: none;
-  width: 56px;
-  height: 56px;
-  border: 3px solid var(--sun);
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--flesh-tint);
-}
-
-.about-note__name {
-  display: inline-block;
-  font-size: 30px;
-  font-weight: 700;
-  transform: rotate(-4deg);
-}
-
-.about-note__handle {
-  display: block;
-  font-size: 15px;
-  color: var(--muted);
-}
-
-.about-facts {
-  display: grid;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin: 0;
-  padding: 0;
-}
-
-.about-fact {
-  display: grid;
-  align-content: center;
-  gap: 4px;
-}
-
-.about-fact strong {
-  font-size: 56px;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-
-.about-fact span {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-soft);
-}
-
-.about-page[data-look="packets"] .timeline {
-  display: flex;
-  align-items: stretch;
-  gap: 18px;
-  /* the whole width of the window, with the first packet lined up with the page */
-  margin-inline: calc(50% - 50vw);
-  padding: 22px max(var(--gutter), calc(50vw - 50%)) 76px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: max(var(--gutter), calc(50vw - 50%));
-  scrollbar-color: var(--dash) transparent;
-  /* the row they're planted in */
-  background:
-    radial-gradient(ellipse 22px 8px at 50% 50%, var(--skin) 98%, transparent) 0 calc(100% - 30px) / 64px 16px repeat-x,
-    linear-gradient(var(--flesh-tint), var(--flesh-tint)) 0 calc(100% - 22px) / 100% 32px no-repeat;
-  background-attachment: local;
-}
-
-.about-page[data-look="packets"] .timeline__year,
-.about-page[data-look="packets"] .timeline__items {
-  display: contents;
-}
-
-/* a stake in the ground for each year */
-.about-page[data-look="packets"] .timeline__label {
-  position: relative;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 64px;
-  scroll-snap-align: start;
-}
-
-.about-page[data-look="packets"] .timeline__label::before {
-  content: "";
-  position: absolute;
-  top: 40px;
-  bottom: -46px;
-  left: 50%;
-  width: 12px;
-  margin-left: -6px;
-  border-radius: 6px 6px 2px 2px;
-  background: var(--skin);
-}
-
-.about-page[data-look="packets"] .timeline__yr {
-  position: relative;
-  margin-top: 24px;
-  padding: 16px 10px;
-  border-radius: 12px;
-  background: var(--brown);
-  color: var(--on-brown);
-  font-size: 24px;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-}
-
-.about-page[data-look="packets"] .moment {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  width: 248px;
-  padding: 0 0 24px;
-  overflow: hidden;
-  border-radius: 0 0 18px 18px;
-  background: var(--paper);
-  box-shadow: var(--shadow-soft);
-  scroll-snap-align: start;
-}
-
-/* the packet's crimped top */
-.about-page[data-look="packets"] .moment::before {
-  content: "";
-  order: -2;
-  align-self: stretch;
-  height: 14px;
-  margin-bottom: -6px;
-  background:
-    radial-gradient(circle at 7px 0, var(--bg) 5px, transparent 5.5px) 0 0 / 14px 14px repeat-x,
-    linear-gradient(transparent 9px, rgb(0 0 0 / 0.08) 9px 11px, transparent 11px),
-    var(--packet, var(--sage));
-}
-
-.about-page[data-look="packets"] .moment > :not(.moment__icon) {
-  margin-inline: 22px;
-}
-
-.about-page[data-look="packets"] .moment__icon {
-  order: -1;
-  align-self: stretch;
-  width: auto;
-  height: 150px;
-  margin-bottom: 14px;
-  border-radius: 0;
-  background: var(--packet, var(--sage));
-}
-
-.about-page[data-look="packets"] .moment__icon img {
-  width: 86px;
-  height: 86px;
-  border-radius: 20px;
-}
-
-.about-page[data-look="packets"] .moment__icon--round img {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  border: 4px solid var(--paper);
-}
-
-.about-page[data-look="packets"] .moment__icon--glyph svg {
-  width: 72px;
-  height: 72px;
-}
-
-.about-page[data-look="packets"] .moment--origin {
-  --packet: var(--butter);
-}
-
-.about-page[data-look="packets"] .moment--milestone {
-  --packet: var(--sun);
-}
-
-.about-page[data-look="packets"] .moment__date::before {
-  content: "sown ";
-  font-weight: 400;
-}
-
-.about-page[data-look="packets"] .moment__title {
-  font-size: 20px;
-}
-
-.about-page[data-look="packets"] .moment__stat strong {
-  font-size: 38px;
-}
-
-.about-page[data-look="packets"] .moment__text {
-  font-size: 15px;
-}
-
-/* a prize rosette on the big ones */
-.about-page[data-look="packets"] .moment--milestone::after {
-  content: "★";
-  position: absolute;
-  top: 24px;
-  right: 16px;
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--blush);
-  box-shadow: 0 0 0 4px var(--paper), 0 0 0 7px var(--blush);
-  color: #FFFFFF;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.about-page[data-look="packets"] .about-story__foot {
-  margin-top: -14px;
-}
-
-@media (max-width: 800px) {
-  .about-intro--packets {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .about-facts {
-    grid-template-rows: none;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .about-fact {
-    --tile-pad: 16px;
-  }
-
-  .about-fact strong {
-    font-size: 36px;
-  }
-
-  .about-fact span {
-    font-size: 14px;
-  }
-
-  .about-note__words {
-    font-size: 17px;
   }
 }

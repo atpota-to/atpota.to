@@ -72,6 +72,7 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
 | `/guides`, `/guides/bluesky-for-brands` | The guides. Written in markdown under `public/guides/`, and also published as a [standard.site](https://standard.site) publication in atpota.to's repo |
 | `/blog` | Poe's atmosphere dispatch, a weekly roundup written in [Leaflet](https://leaflet.pub) ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each; signed in, it has a button to your own. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
+| `/about` | Who makes atpotato, and how it grew: a year to a layer of soil, newest on top, from dame's start in open social in 2021 to now |
 | `/settings` | Signed-in visitors can make Poe forget them |
 
 The wordmark in the header sits in a little sky with the weather in it: a sun whose
