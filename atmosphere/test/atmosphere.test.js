@@ -5,13 +5,17 @@ import {
   addEvent,
   appDomain,
   conditionFor,
+  diversityIndex,
   diversityLevel,
+  diversityOf,
   emptyTally,
   eventOf,
   isBluesky,
   isNsid,
   MAX_COLLECTIONS,
   mergeTally,
+  NOBODY,
+  spreadOf,
   summarize,
 } from '../src/atmosphere.js';
 
@@ -72,9 +76,9 @@ test('sums a sample up: the split, the index, the busiest apps and collections',
   add('com.whtwnd.blog.entry', 2);
   addEvent(tally, { kind: 'delete' });
   addEvent(tally, { kind: 'identity' });
-  const r = summarize(tally, 2, '2026-10-20T00:00:00.000Z');
+  const r = summarize(tally, 2, '2026-10-20T00:00:00.000Z', { active: 40, elsewhere: 3, apps: [2, 1] });
   assert.deepEqual(r.records, { perSecond: 101, bluesky: 95, elsewhere: 6 });
-  assert.deepEqual(r.diversity, { index: 5.94, level: 'moderate', apps: 2, collections: 5 });
+  assert.deepEqual(r.diversity, { index: 10.31, level: 'very high', share: 7.5, spread: 1.89, apps: 2, collections: 5 });
   assert.deepEqual(r.apps, [
     { domain: 'tangled.sh', count: 10, perSecond: 5, collections: ['sh.tangled.feed.star', 'sh.tangled.repo'] },
     { domain: 'whtwnd.com', count: 2, perSecond: 1, collections: ['com.whtwnd.blog.entry'] },
@@ -93,7 +97,30 @@ test('keeps counting, without names, past MAX_COLLECTIONS collections', () => {
 });
 
 test('an empty sample has an index of 0', () => {
-  assert.deepEqual(summarize(emptyTally(), 1, '').diversity, { index: 0, level: 'low', apps: 0, collections: 0 });
+  assert.deepEqual(summarize(emptyTally(), 1, '').diversity, { index: 0, level: 'low', share: 0, spread: 0, apps: 0, collections: 0 });
+});
+
+test('spread: how many apps a crowd is spread across, as an effective number', () => {
+  assert.equal(spreadOf([10, 10, 10, 10]), 4);
+  assert.equal(spreadOf([7]), 1);
+  assert.equal(spreadOf([]), 0);
+  assert.equal(spreadOf([0, 0]), 0);
+  // one app with nearly everyone is nearly one app, however many others have an account
+  const crowded = spreadOf([990, ...Array(10).fill(1)]);
+  assert.ok(crowded > 1 && crowded < 1.1, `got ${crowded}`);
+});
+
+test('the diversity index goes by accounts and their spread, not by records', () => {
+  assert.deepEqual(diversityOf(NOBODY), { index: 0, share: 0, spread: 0 });
+  // half a percent of 10,000 accounts, evenly across ten apps, or all in one
+  const even = { active: 10_000, elsewhere: 50, apps: Array(10).fill(5) };
+  assert.deepEqual(diversityOf(even), { index: 1.58, share: 0.5, spread: 10 });
+  assert.deepEqual(diversityOf({ active: 10_000, elsewhere: 50, apps: [50] }), { index: 0.5, share: 0.5, spread: 1 });
+  // one more account, in an app of its own, however many records it writes
+  assert.deepEqual(diversityOf({ active: 10_001, elsewhere: 51, apps: [...even.apps, 1] }), { index: 1.65, share: 0.51, spread: 10.53 });
+  // sketches can count a few more elsewhere than active
+  assert.equal(diversityOf({ active: 3, elsewhere: 4, apps: [4] }).share, 100);
+  assert.equal(diversityIndex(0.5, 10), 1.58);
 });
 
 test('merging tallies is the same as adding their events one by one, cap included', () => {

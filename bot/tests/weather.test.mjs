@@ -65,7 +65,7 @@ const WEEK_HISTORY = {
   ],
   compare: { seconds: 604200, prevSeconds: 604800, lagMs: WEEK },
   appsOverTime: { bucket: "hour", points: [] },
-  accounts: { seconds: 604200, prevSeconds: 604800, total: { active: 2_500_000, bluesky: 2_499_000, elsewhere: 9000 },
+  accounts: { seconds: 604200, prevSeconds: 604800, total: { active: 2_500_000, bluesky: 2_499_000, elsewhere: 9000, index: 1.9 },
     points: [], apps: [{ domain: "tangled.sh", active: 300, prevActive: 200, collections: ["sh.tangled.repo"] }] },
 };
 
@@ -87,8 +87,8 @@ const MONTH_HISTORY = {
   apps: [],
   compare: { seconds: 1, prevSeconds: 1, lagMs: 30 * DAY },
   appsOverTime: { bucket: "day", points: monthPoints.map((p, k) => ({ t: p.t, apps: 120 + k })) },
-  accounts: { seconds: 2_000_000, prevSeconds: 0, total: { active: 9, bluesky: 9, elsewhere: 0 },
-    points: monthPoints.map((p, k) => ({ t: p.t, seconds: p.seconds, active: 1_000_000 + k, bluesky: 1_000_000, elsewhere: k })),
+  accounts: { seconds: 2_000_000, prevSeconds: 0, total: { active: 9, bluesky: 9, elsewhere: 0, index: 2.2 },
+    points: monthPoints.map((p, k) => ({ t: p.t, seconds: p.seconds, active: 1_000_000 + k, bluesky: 1_000_000, elsewhere: k, index: 1 + k / 10 })),
     apps: [] },
 };
 
@@ -134,7 +134,7 @@ const LIVE = {
   perSecond: { posts: 44.5, likes: 301.7, reposts: 50.3, follows: 28.1 },
   condition: "stormy",
   records: { perSecond: 434.4, bluesky: 432.2, elsewhere: 2.2 },
-  diversity: { index: 0.51, apps: 18, collections: 38, level: "extreme" },
+  diversity: { index: 1.34, apps: 18, collections: 38, level: "extreme", share: 0.44, spread: 9.27 },
   apps: [
     { domain: "lexicon.community", perSecond: 1, count: 58, collections: ["community.lexicon.calendar.event"] },
     { domain: "not a domain", perSecond: 0.5, count: 30, collections: [] },
@@ -199,7 +199,7 @@ test("now: the last minute, with the words worked out from the numbers and someo
   const r = await lib.readWeather("now", "UTC", impl, NOW);
   assert.deepEqual(calls, ["https://atpota.to/api/atmosphere"]);
   assert.equal(r.condition, "breezy", "from 434 records a second, not the body's own word");
-  assert.equal(r.diversity.level, "low");
+  assert.deepEqual(r.diversity, { index: 1.34, level: "low", accountSharePercent: 0.44, spreadAcrossApps: 9.3, apps: 18, collections: 38 });
   assert.deepEqual(r.records, { perSecond: 434.4, blueskyPerSecond: 432.2, elsewherePerSecond: 2.2 });
   assert.equal(r.bluesky.likesPerSecond, 301.7);
   assert.deepEqual(r.apps.map((a) => a.domain), ["lexicon.community"]);
@@ -224,7 +224,7 @@ test("week: the week's weather, its busiest and quietest well-heard hour, and th
   assert.equal("note" in r, false);
   assert.equal(r.condition, "breezy");
   assert.ok(r.perSecond > 450 && r.perSecond < 452, `about 450 a second, got ${r.perSecond}`);
-  assert.equal(r.diversity.level, "low");
+  assert.deepEqual(r.diversity, { index: 1.9, level: "low" }, "from the week's accounts, not its records");
   assert.deepEqual(r.busiestHour, { hour: "saturday, oct 24, 23:00", perSecond: 620, condition: "stormy" });
   assert.equal(r.quietestHour.perSecond, 310, "the barely-heard hour at 900 counts as neither");
   assert.equal(r.quietestHour.condition, "light");
@@ -249,9 +249,13 @@ test("week: each UTC day, the week before and the month come from the station's 
   assert.equal(r.days[0].weekday, "wednesday");
   assert.equal(r.days[0].perSecond, 460);
   assert.equal(r.days[0].activeAccounts, 1_000_023);
+  assert.equal(r.days[0].diversityIndex, 3.3);
   assert.equal(r.weekBefore.perSecond, 400);
   assert.equal(r.weekBefore.changePercent, 15);
-  assert.equal(r.weekBefore.mix, "a more mixed sky than the week before");
+  assert.equal(r.weekBefore.mix, "more of the new records from other apps than the week before");
+  assert.equal("diversityIndex" in r.weekBefore, false, "the week before's accounts can't be put together from its days");
+  assert.equal(r.month.diversityIndex, 2.2);
+  assert.equal(r.month.diversityLevel, "low");
   assert.equal(r.weekBefore.from, isoAt(TODAY - 13 * DAY));
   assert.equal(r.month.busiestDay.perSecond, 500);
   assert.equal(r.month.quietestDay.perSecond, 350);
@@ -305,6 +309,9 @@ test("week: a part that can't be read is named, and the rest still comes back", 
   const r = await lib.readWeather("week", "UTC", impl, NOW);
   assert.equal(r.perSecond > 0, true);
   assert.deepEqual(r.unavailable, ["each day", "the week before", "the month", "new apps", "the outlook"]);
+  const noAccounts = await lib.readWeather("week", "UTC", fakeFetch({ "/api/weather-history?range=week": { ...WEEK_HISTORY, accounts: null } }).impl, NOW);
+  assert.equal("diversity" in noAccounts, false, "no records-based stand-in");
+  assert.deepEqual(noAccounts.unavailable.slice(0, 2), ["the diversity index", "active accounts"]);
   await assert.rejects(lib.readWeather("week", "UTC", fakeFetch({}).impl, NOW));
 });
 
@@ -318,7 +325,10 @@ test("today: the high and low in the reader's zone, and the last hour against us
   assert.equal(r.lastHour.ready, true);
   assert.equal(r.lastHour.words, "busier than usual");
   assert.equal(r.lastHour.comparedWith, "this hour on the last 2 tuesdays");
-  assert.equal(r.lastHour.mix, "a more mixed sky than usual");
+  assert.equal(r.lastHour.mix, "more of the new records from other apps than usual");
+  assert.equal(r.today.recordsElsewherePercent, 1);
+  assert.equal("diversityIndex" in r.today, false);
+  assert.equal("diversityIndex" in r.last24Hours, false, "the day's history came without accounts");
   assert.equal(r.last24Hours.apps[0].change, undefined, "the day before wasn't heard");
   assert.deepEqual(r.newApps.apps.map((a) => a.domain), ["new.app"]);
 

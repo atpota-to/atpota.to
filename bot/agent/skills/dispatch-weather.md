@@ -31,7 +31,7 @@ need all of it.
 
 - **The headline.** The week's new records a second and its condition, against the
   week before (`weekBefore.changePercent`), and the diversity index with its level.
-  Round the way a person would: "about 450 new records a second", "0.42%".
+  Round the way a person would: "about 450 new records a second", "an index of 1.7".
 - **What moved the sky.** The busiest apps outside Bluesky (`apps`) and how each did
   against the week before (`change`), especially one that is new or way up.
   `sharePercent` is its share of everything written outside Bluesky. Active accounts
@@ -42,8 +42,10 @@ need all of it.
 
 The first issue with a weather section explains it in a sentence: the station on
 atpota.to counts every new record in the firehose, Bluesky's and every other app's,
-and the diversity index is the share written by apps other than Bluesky. If your
-newest issue already has a weather section, skip the explanation.
+and the diversity index is how much of the network isn't Bluesky, by the share of
+active accounts writing with other apps and how many apps they're spread across (so
+one account writing a thousand records counts once). If your newest issue already
+has a weather section, skip the explanation.
 
 Use the station's own weather words, because readers see the same ones on the
 weather page: calm, light, breezy, gusty and stormy by new records a second, and the

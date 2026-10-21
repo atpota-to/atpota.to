@@ -225,11 +225,12 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
   const over =
     basis === 'weeks' ? (base.windows === 1 ? `last ${weekday}` : `the last ${base.windows} ${weekday}s`) : base.windows === 1 ? 'yesterday' : `the last ${base.windows} days`;
   let detail = `${Math.round(rate)} new records a second over the last hour; usually about ${Math.round(usual)} at this hour (${over}).`;
-  // Diversity against usual, when both sides have enough records from other apps to say.
+  // The share of records from other apps against usual, when both sides have enough to
+  // say. Records, not the diversity index: one busy account can move this on its own.
   if (now.elsewhere >= 50 && base.elsewhere >= 50 && now.creates > 0 && base.creates > 0) {
     const mix = now.elsewhere / now.creates / (base.elsewhere / base.creates);
-    if (mix >= 1.3) detail += ' a more mixed sky than usual, too.';
-    else if (mix <= 0.77) detail += ' a little less mixed than usual.';
+    if (mix >= 1.3) detail += ' more of them from other apps than usual, too.';
+    else if (mix <= 0.77) detail += ' fewer of them from other apps than usual.';
   }
   if (basis === 'days') detail += ` in a week it'll compare with ${weekday}s.`;
   return { headline: `${how} ${when}`, detail, ratio };

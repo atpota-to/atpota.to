@@ -1,8 +1,8 @@
 /**
  * The sky on the home page's weather tile and the weather report's header gets cloudier
- * with the diversity index: a clear sky when every new record is a Bluesky one, up to
- * MAX_CLOUDS when the atmosphere is really mixing it up. The index is usually well under
- * one, so the count follows its square root: a little diversity already shows.
+ * with the diversity index: a clear sky when nobody active is writing outside Bluesky, up
+ * to MAX_CLOUDS when the atmosphere is really mixing it up. The index is usually a
+ * couple at most, so the count follows its square root: a little diversity already shows.
  *
  * Clouds drift across like the ones on the home page's sunburst tile (home.css). Each
  * slot always has the same height, size and speed, so a new reading only adds or removes

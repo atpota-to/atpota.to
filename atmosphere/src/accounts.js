@@ -72,6 +72,11 @@ export function sketchAccounts(seconds) {
   return { all: new Sketch().merge(bluesky).merge(elsewhere), bluesky, elsewhere, apps };
 }
 
+/** Sketches as the crowd a reading's diversity index is worked out from (atmosphere.js diversityOf). */
+export function crowdOf(sketches) {
+  return { active: sketches.all.estimate(), elsewhere: sketches.elsewhere.estimate(), apps: [...sketches.apps.values()].map((s) => s.estimate()) };
+}
+
 /** Each app's busiest collections in a tally, busiest first (at most three). */
 function collectionsByApp(tally) {
   const byApp = new Map();
@@ -89,9 +94,9 @@ function collectionsByApp(tally) {
 
 /**
  * Sketches as a reading's `accounts`: how many were active, on Bluesky and elsewhere,
- * the share of them that wrote elsewhere (percent, two decimals: the diversity index by
- * accounts), and the apps with the most accounts, with their busiest collections from
- * the window's tally.
+ * the share of them that wrote elsewhere (percent, two decimals: the reading's
+ * diversity.share too), and the apps with the most accounts, with their busiest
+ * collections from the window's tally.
  */
 export function summarizeAccounts(sketches, tally) {
   const active = sketches.all.estimate();

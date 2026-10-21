@@ -9,9 +9,11 @@ export default defineTool({
     "Read your weather station: the Atmosphere's weather, as atpota.to/weather reports it, never the " +
     "weather outside. The station counts every new record on the network, Bluesky's and every other " +
     "app's. The condition is its busyness by new records a second (calm under 300, light, breezy from " +
-    "400, gusty from 500, stormy from 600). The diversity index is the percent of new records written " +
-    "by apps other than Bluesky, with a level like the UV index (low under 3, moderate, high from 6, " +
-    "very high from 8, extreme from 11). Apps are named by their namespace as a domain: " +
+    "400, gusty from 500, stormy from 600). The diversity index is how much of the network isn't " +
+    "Bluesky by who's writing, not how much: the percent of active accounts that wrote with other apps, " +
+    "times the square root of how many apps' worth they're spread across, so one account writing a " +
+    "thousand records counts once. It has a level like the UV index (low under 3, moderate, high from " +
+    "6, very high from 8, extreme from 11). Apps are named by their namespace as a domain: " +
     "sh.tangled.* is tangled.sh. report \"now\" is the last 60 seconds. \"today\" is today so far in " +
     "timeZone: the busiest and quietest minute, the last hour against usual, apps the station heard " +
     "for the first time, and the last 24 hours' busiest apps. \"week\" is the past 7 days for your " +
