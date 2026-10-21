@@ -2,22 +2,37 @@
  * "atmospheric conditions" on the home page: a weather report for the network, from
  * /api/atmosphere (server/atmosphere.ts samples the whole firehose for a few seconds).
  * The tile is a link to the full report at /weather (weather-page.ts), which reuses the
- * reading, its checks and its wording from here.
- * It loads when the tile comes near the screen and checks again while the tile is on
- * screen and the tab is visible: every 15 seconds when the reading is the weather
- * station's live 60 seconds, once a minute when it's the fallback sample. Numbers roll to each
- * new reading (roll.ts), and the little sun's rays turn faster when the network is busy.
- * Under reduced motion the numbers just change and the rays hold still.
+ * reading, its checks and its wording from here, and its header is the report's in small:
+ * "392 rec/sec", the forecast, and the station's last 60 seconds as a sparkline
+ * (weather-spark.ts).
+ * It reads the weather as soon as the page loads, in the same request as the hero's scene,
+ * then checks again while the tile is on screen and the tab is visible: every 15 seconds
+ * when the reading is the weather station's live 60 seconds, once a minute when it's the
+ * fallback sample. Numbers roll to each new reading (roll.ts), and the little sun's rays
+ * turn faster when the network is busy. Under reduced motion the numbers just change and
+ * the rays hold still.
  *
  * Under the Bluesky numbers sits the diversity index: the share of new records written
  * outside Bluesky, with a bar for the split, and the sky behind it all gets cloudier as
  * the index climbs (weather-sky.ts).
  *
- * States live on the tile as data-state="loading" | "ready" | "error".
+ * States live on the tile as data-state="loading" | "ready" | "error". While it loads,
+ * every part of the tile is already in its place (home.css shimmers where the numbers go),
+ * so nothing moves when the reading lands.
+ *
+ * Every good reading is kept in this tab for STORE_MS (storedReading), so the next page
+ * shows the weather straight away and rolls on to a fresh one, and announced as a
+ * READING_EVENT, so the sky behind the header's wordmark (nav-weather.ts) keeps up with
+ * the tile and the report without asking again.
+ *
+ * The hero tile's scene (scene.ts) reads the same weather on load; readAtmosphere() lets the
+ * two share one request when they ask within SHARE_MS of each other. The scene keeps its
+ * own weather on the hero as data-weather="calm|rain|…", so the tile is [data-weather-tile].
  */
 
 import { rollText } from './roll';
 import { cloudCount, renderClouds } from './weather-sky';
+import { renderSpark } from './weather-spark';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
@@ -127,15 +142,68 @@ function clean(r: Reading): Reading {
   return out;
 }
 
-export async function fetchReading(fetchImpl: typeof fetch = fetch): Promise<Reading | null> {
+async function request(fetchImpl: typeof fetch): Promise<Reading | null> {
   try {
     const res = await fetchImpl(ATMOSPHERE_ENDPOINT, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
     const body = (await res.json()) as unknown;
-    return isReading(body) ? clean(body) : null;
+    if (!isReading(body)) return null;
+    const reading = clean(body);
+    remember(reading);
+    return reading;
   } catch {
     return null;
   }
+}
+
+/** Two readers asking this close together get the same reading. */
+export const SHARE_MS = 10_000;
+let shared: { at: number; reading: Promise<Reading | null> } | null = null;
+
+/** A fresh reading, always asked for; readAtmosphere() hands it to anyone who asks in the next SHARE_MS. */
+export function fetchReading(fetchImpl: typeof fetch = fetch, now: number = Date.now()): Promise<Reading | null> {
+  const reading = request(fetchImpl);
+  shared = { at: now, reading };
+  return reading;
+}
+
+/** The reading anyone asked for in the last SHARE_MS (still on its way, perhaps), or a fresh one. */
+export function readAtmosphere(fetchImpl: typeof fetch = fetch, now: number = Date.now()): Promise<Reading | null> {
+  if (shared && now - shared.at < SHARE_MS) return shared.reading;
+  return fetchReading(fetchImpl, now);
+}
+
+const STORE_KEY = 'atpotato:weather';
+/** A reading this recent is shown at once on the next page in this tab, while a fresh one comes. */
+export const STORE_MS = 120_000;
+/** Sent on window with each good reading (detail: the Reading), for the header's sky. */
+export const READING_EVENT = 'weather:reading';
+
+/** The last good reading in this tab, if it's under STORE_MS old. */
+export function storedReading(now = Date.now()): Reading | null {
+  try {
+    const raw = sessionStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const data: unknown = JSON.parse(raw);
+    if (!obj(data) || !num(data.at) || now - data.at > STORE_MS || now < data.at) return null;
+    return isReading(data.reading) ? clean(data.reading) : null;
+  } catch {
+    return null;
+  }
+}
+
+function remember(reading: Reading, now = Date.now()): void {
+  try {
+    sessionStorage.setItem(STORE_KEY, JSON.stringify({ at: now, reading }));
+  } catch {
+    /* storage full or blocked: the next page just waits for its own */
+  }
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<Reading>(READING_EVENT, { detail: reading }));
+}
+
+/** Forgets the shared reading (tests). */
+export function resetSharedReading(): void {
+  shared = null;
 }
 
 /** The index as people read it: two decimals under 1, one under 10, whole after that. */
@@ -195,9 +263,13 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
   const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
   if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
   spinRays(tile, recordsPerSecond(reading));
+  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+  if (spark) renderSpark(spark, reading);
   const sky = tile.querySelector<HTMLElement>('[data-weather-sky]');
   if (sky && reading.diversity) renderClouds(sky, cloudCount(reading.diversity.index));
+  // its room is kept while the tile loads; a reading from before the diversity index has none
   const mix = tile.querySelector<HTMLElement>('[data-weather-mix]');
+  if (mix) mix.hidden = !(reading.records && reading.diversity);
   if (mix && reading.records && reading.diversity) {
     const index = tile.querySelector<HTMLElement>('[data-weather-index]');
     if (index) countTo(index, reading.diversity.index, formatIndex);
@@ -206,8 +278,8 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     const text = tile.querySelector<HTMLElement>('[data-weather-mix-text]');
     if (text) rollText(text, ratioText(reading.records));
     renderRatio(tile.querySelector('[data-weather-bar-bsky]'), tile.querySelector('[data-weather-bar-else]'), reading.records);
-    mix.hidden = false;
   }
+  tile.removeAttribute('aria-busy');
   tile.dataset.state = 'ready';
 }
 
@@ -216,42 +288,51 @@ export function renderWeatherError(tile: HTMLElement): void {
   if (tile.dataset.state === 'ready') return;
   const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
   if (cond) cond.textContent = ERROR_TEXT;
+  tile.removeAttribute('aria-busy');
   tile.dataset.state = 'error';
 }
 
 export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch = fetch): void {
-  const tile = root.querySelector<HTMLElement>('[data-weather]');
+  const tile = root.querySelector<HTMLElement>('[data-weather-tile]');
   if (!tile || tile.dataset.weatherBound === 'true') return;
   tile.dataset.weatherBound = 'true';
-  let onScreen = false;
-  let started = false;
+  // aria-busy only from JS: without JS the tile isn't shown at all
+  tile.setAttribute('aria-busy', 'true');
+  const stored = storedReading();
+  if (stored) renderReading(tile, stored);
+  let onScreen = !('IntersectionObserver' in window);
   let every = REFRESH_MS;
-  const load = async () => {
-    const reading = await fetchReading(fetchImpl);
+  let checkedAt = -Infinity;
+  let checking = false;
+  let timer: number | undefined;
+  const due = () => onScreen && document.visibilityState !== 'hidden';
+  const check = async () => {
+    if (checking) return;
+    checking = true;
+    window.clearTimeout(timer);
+    checkedAt = Date.now();
+    const reading = await readAtmosphere(fetchImpl);
+    checking = false;
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
-  };
-  const tick = () => {
-    window.setTimeout(async () => {
-      if (onScreen && document.visibilityState !== 'hidden') await load();
-      tick();
+    timer = window.setTimeout(() => {
+      if (due()) void check();
     }, every);
   };
-  const begin = () => {
-    if (started) return;
-    started = true;
-    void load().then(tick);
+  // Back on screen, or back in the tab, with a reading that's had its time: check now.
+  const resume = () => {
+    if (due() && Date.now() - checkedAt >= every) void check();
   };
-  if (!('IntersectionObserver' in window)) {
-    onScreen = true;
-    begin();
-    return;
-  }
+  // The first reading straight away, whether the tile is on screen or not: the hero's scene
+  // asks at the same moment, so it's the same request (readAtmosphere).
+  void check();
+  document.addEventListener('visibilitychange', resume);
+  if (onScreen) return;
   new IntersectionObserver(
     (entries) => {
       onScreen = entries.some((e) => e.isIntersecting);
-      if (onScreen) begin();
+      resume();
     },
     { rootMargin: '200px 0px' },
   ).observe(tile);

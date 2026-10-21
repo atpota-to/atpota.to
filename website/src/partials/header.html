@@ -1,5 +1,11 @@
 <header class="site-header" data-site-header>
-  <a class="site-header__brand" href="/" aria-label="atpotato home" data-nav="home">
+  <a class="site-header__brand" href="/" aria-label="atpotato home" data-nav-brand data-nav="home">
+    <!-- a little sky behind the wordmark, with the weather in it (src/scripts/nav-weather.ts):
+         the sun's rays turn with how busy the network is, clouds come with the diversity index -->
+    <span class="site-header__sky" aria-hidden="true" data-nav-sky>
+      <!-- @svg weather-sun.svg class="site-header__sun weather-sun" -->
+      <span class="weather-sky" data-weather-sky></span>
+    </span>
     <!-- @svg wordmark.svg class="wordmark" -->
   </a>
   <button type="button" class="site-header__menu-btn" aria-expanded="false" aria-controls="site-menu" data-nav-toggle>

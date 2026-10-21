@@ -74,7 +74,9 @@ site chat       ──► website  /api/poe ──► bot  POST /website/chat �
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each; signed in, it has a button to your own. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
 | `/settings` | Signed-in visitors can make Poe forget them |
 
-Poe's chat panel sits in the corner of every page. Click it, press `/` anywhere,
+The wordmark in the header sits in a little sky with the weather in it: a sun whose
+rays turn faster when the network is busy, and a cloud or two as the diversity index
+climbs. Poe's chat panel sits in the corner of every page. Click it, press `/` anywhere,
 or highlight a word in a guide to ask about it.
 
 ### functions

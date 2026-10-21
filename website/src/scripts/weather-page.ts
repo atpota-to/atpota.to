@@ -5,8 +5,10 @@
  * share of new records written outside Bluesky) on a UV-index-style scale, the split as a
  * bar, the busiest apps elsewhere, Bluesky's busiest collections, and the last minute:
  * every kind of event and the accounts active, as counts. When the reading is the weather station's rolling 60 seconds it checks
- * again every 5 seconds (with a sparkline of those 60 seconds), otherwise once a minute,
- * always only while the tab is visible; a failed check keeps the last reading on screen.
+ * again every 5 seconds (with a sparkline of those 60 seconds, weather-spark.ts), otherwise
+ * once a minute, always only while the tab is visible; a failed check keeps the last
+ * reading on screen. Coming from another page in the same tab, the reading it last saw
+ * (storedReading, under two minutes old) is on screen at once, and rolls on to a fresh one.
  * Numbers roll to each new reading (roll.ts), the bars grow, shrink and trade places
  * rather than being drawn afresh, and the sparkline scrolls along, so nothing on the page
  * jumps while it's live.
@@ -36,8 +38,9 @@
 import { alertsFor, createAlertDesk, newAppAlert, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, type Almanac } from './weather-almanac';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
-import { renderChart, smoothPath, type ChartPoint } from './weather-chart';
+import { renderChart, type ChartPoint } from './weather-chart';
 import { cloudCount, renderClouds } from './weather-sky';
+import { renderSpark } from './weather-spark';
 import {
   CONDITION_TEXT,
   ERROR_TEXT,
@@ -50,6 +53,7 @@ import {
   recordsPerSecond,
   renderRatio,
   spinRays,
+  storedReading,
   type Reading,
 } from './weather';
 
@@ -261,20 +265,12 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   // now
   count(report, '[data-r-records]', recordsPerSecond(r), (n) => String(Math.round(n)));
   setText(report, '[data-r-cond]', CONDITION_TEXT[r.condition]);
-  const live = r.source === 'station';
   spinRays(report, recordsPerSecond(r));
   const acct = r.accounts;
   const sky = $(report, '[data-weather-sky]');
   if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
   const spark = $(report, '[data-r-spark]');
-  if (spark) {
-    const series = r.series ?? [];
-    const records = series.map((p) => p?.creates ?? null);
-    spark.hidden = !live || records.filter((p) => p !== null).length < 2;
-    // the second the window ends on, so the next one knows how far to scroll
-    const last = series.findLastIndex((p) => p !== null);
-    if (!spark.hidden) renderSparkline(spark, records, last >= 0 ? series[last]!.t + (series.length - 1 - last) : undefined);
-  }
+  if (spark) renderSpark(spark, r);
 
   // diversity
   if (r.diversity) {
@@ -340,59 +336,6 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
 
   if (report.dataset.state !== 'ready') setText(report, '[data-r-status]', `${CONDITION_TEXT[r.condition]}. diversity index ${r.diversity ? `${formatIndex(r.diversity.index)}, ${r.diversity.level}` : 'unknown'}.`);
   report.dataset.state = 'ready';
-}
-
-/**
- * A bare line of the last 60 seconds: decorative (aria-hidden), the reading says it in
- * words. It spans its own lowest to highest second, so a minute that only wobbles around
- * 450 still shows its shape. `end` is the second the window ends on: when the next
- * reading ends a few seconds later, the line scrolls left by that much instead of being
- * redrawn in place, the old line fading as it goes.
- */
-export function renderSparkline(host: HTMLElement, values: Array<number | null>, end?: number): void {
-  const w = 240;
-  const h = 36;
-  const heard = values.filter((v): v is number => v !== null);
-  const max = Math.max(...heard);
-  const min = Math.min(...heard);
-  const span = max - min;
-  const step = values.length > 1 ? w / (values.length - 1) : w;
-  // one smooth run per stretch of seconds the station heard
-  const runs: Array<Array<[number, number]>> = [[]];
-  values.forEach((v, i) => {
-    if (v === null) runs.push([]);
-    else runs[runs.length - 1]!.push([i * step, span > 0 ? h - 3 - ((v - min) / span) * (h - 6) : h / 2]);
-  });
-  const d = runs.filter((r) => r.length).map(smoothPath).join('');
-  let svg = host.querySelector('svg');
-  if (!svg) {
-    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    svg.setAttribute('preserveAspectRatio', 'none');
-    svg.setAttribute('focusable', 'false');
-    host.replaceChildren(svg);
-  }
-  const before = svg.querySelector('path:not(.is-leaving)');
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', d);
-  path.setAttribute('vector-effect', 'non-scaling-stroke');
-  svg.append(path);
-  const shift = end !== undefined && host.dataset.end ? end - Number(host.dataset.end) : 0;
-  if (end !== undefined) host.dataset.end = String(end);
-  if (!before) return;
-  if (!(shift > 0 && shift < values.length) || !motionOK() || typeof path.animate !== 'function') {
-    before.remove();
-    return;
-  }
-  const dx = shift * step;
-  before.classList.add('is-leaving');
-  path.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: ROLL_MS, easing: ROLL_EASE });
-  before
-    .animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-dx}px)`, opacity: 0 }], { duration: ROLL_MS, easing: ROLL_EASE, fill: 'forwards' })
-    .finished.then(
-      () => before.remove(),
-      () => before.remove(),
-    );
 }
 
 // ---------- trends ----------
@@ -802,6 +745,12 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   measure.onChange((m) => {
     if (shown) renderReport(report, shown, m);
   });
+  // the last page's reading, until this one's comes (alerts only ever compare fresh ones)
+  const stored = storedReading();
+  if (stored) {
+    shown = stored;
+    renderReport(report, stored, measure.get());
+  }
   const load = async () => {
     const reading = await fetchReading(fetchImpl);
     if (reading) {
