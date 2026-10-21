@@ -48,7 +48,10 @@ routine numbers.
 2. **What stood out**, only if something did, in a sentence or two: a storm and what
    drove it, an app that blew in or is way up (`apps`, `change`), a sky much more or
    less mixed than usual, a week well above or below usual. The busiest and
-   quietest hours are news only when they break the usual daily rhythm.
+   quietest hours are news only when they break the usual daily rhythm. A burst
+   (`bursts`: one app writing a flood of records in a minute, a bulk import) is left
+   out of the weather, so it's never the busiest hour or a forecast, but a big one can
+   be the thing that stood out: name the app, how many records, and how fast.
 3. **The outlook**, only when it says something worth knowing. See below.
 4. **The weather page's link**, exactly as `page` returned it, on a line of its own,
    so it turns into a link card in Leaflet.

@@ -264,6 +264,15 @@ describe('when the sky is busiest', () => {
     expect(heatStep(410, 300, 520)).toBe(3);
     expect(heatStep(40, 40, 40)).toBe(3);
   });
+
+  it('goes by each hour\'s steady count, so one app\'s bulk import isn\'t the busiest hour of the week', () => {
+    // saturday midnight: 6,000 a second counted, from one minute of a bulk import; 350 without it
+    const burst = { dow: 6, hour: 0, seconds: 14_400, posts: 14_400 * 40, creates: 14_400 * 6000, steady: 14_400 * 350 };
+    const s = summarizeHeat({ ...ALMANAC.heatmap!, cells: [...ALMANAC.heatmap!.cells, burst] });
+    expect(s.busiest).toEqual({ dow: 2, hour: 13, rate: 520 });
+    expect(s.max).toBe(520);
+    expect(s.rate(6, 0)).toBe(350);
+  });
 });
 
 describe('reading the almanac', () => {
@@ -273,6 +282,8 @@ describe('reading the almanac', () => {
     const odd = readAlmanac({ ...ALMANAC, today: { start: 'x' }, newApps: { ...ALMANAC.newApps, apps: [{ domain: '<b>', firstSeen: 'x' }] } })!;
     expect(odd.today).toBeUndefined();
     expect(odd.newApps!.apps).toEqual([]);
+    const steady = readAlmanac({ ...ALMANAC, heatmap: { ...ALMANAC.heatmap, cells: [{ ...ALMANAC.heatmap!.cells[0], steady: 7_000_000 }, { ...ALMANAC.heatmap!.cells[1], steady: 'x' }] } })!;
+    expect(steady.heatmap!.cells.map((c) => c.steady)).toEqual([7_000_000, undefined]);
     expect(await fetchAlmanac(TZ, answer({ error: 'unavailable' }, 503))).toBeNull();
   });
 });

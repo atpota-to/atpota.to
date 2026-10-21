@@ -150,8 +150,10 @@ migration is in [`supabase/atmosphere_weather_station.sql`](supabase/atmosphere_
 applied 2026-10-20. Besides the two tables, it adds views `atmosphere_hour` and
 `atmosphere_day` (security_invoker). Anyone can read; only the service role
 writes (RLS). The later SQL is in [`sql/`](sql/): the almanac, the accounts tables
-([`atmosphere_accounts.sql`](sql/atmosphere_accounts.sql)) and what's kept for how long
-([`atmosphere_retention.sql`](sql/atmosphere_retention.sql)), all applied.
+([`atmosphere_accounts.sql`](sql/atmosphere_accounts.sql)), what's kept for how long
+([`atmosphere_retention.sql`](sql/atmosphere_retention.sql)) and the steady counts that
+keep one app's bulk import out of the weather
+([`atmosphere_steady.sql`](sql/atmosphere_steady.sql)), all applied.
 [`sql/atmosphere_accounts_cleanup.sql`](sql/atmosphere_accounts_cleanup.sql) drops a
 first try at the accounts tables that was never used. It has **not** been run yet:
 the Supabase connector holds DROPs for confirmation. For any range:

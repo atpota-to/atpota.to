@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-history.js';
-import { byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Point } from '../server/weather-history.js';
+import { burstHours, byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Burst, type Point } from '../server/weather-history.js';
 
 // /api/weather-history against a scripted Supabase.
 
@@ -156,6 +156,91 @@ describe('weather history', () => {
   it('only takes GET and HEAD', async () => {
     const res = await api.POST(new Request('https://atpota.to/api/weather-history', { method: 'POST' }));
     expect(res.status).toBe(405);
+  });
+});
+
+describe('steady counts and bursts', () => {
+  // An hour as the atmosphere_hour view has it: `steady` is its records with any burst taken out.
+  const hourRow = (hour: string, creates: number, steady?: number | string) => ({ ...row(hour), minute: undefined, hour, seconds_covered: 3600, creates, ...(steady === undefined ? {} : { steady }) });
+
+  it('asks the hour and day views for steady, and the minute table not', () => {
+    const select = (range: keyof typeof RANGES) => new URL(queryUrl(SUPABASE_URL, range, NOW)).searchParams.get('select')!.split(',');
+    expect(select('hour')).not.toContain('steady');
+    for (const range of ['day', 'week', 'month', 'year'] as const) expect(select(range)).toContain('steady');
+  });
+
+  it('reads steady when it comes, and sums it only when every point has one', () => {
+    const a = toPoint(hourRow('2026-10-20T15:00:00Z', 5000, '4000'), 'hour')!;
+    const b = toPoint(hourRow('2026-10-20T16:00:00Z', 3000, 3000), 'hour')!;
+    const none = toPoint(hourRow('2026-10-20T17:00:00Z', 1000), 'hour')!;
+    expect(a.steady).toBe(4000);
+    expect('steady' in none).toBe(false);
+    expect('steady' in toPoint(hourRow('2026-10-20T18:00:00Z', 1000, -1), 'hour')!).toBe(false);
+    expect(sumPoints([a, b], 'x').steady).toBe(7000);
+    expect('steady' in sumPoints([a, none], 'x')).toBe(false);
+    expect(byMonth([a, b])[0]!.steady).toBe(7000);
+  });
+
+  it('picks out the hours that ran well past their steady count, biggest first', () => {
+    const p = (hour: string, creates: number, steady?: number) => toPoint(hourRow(hour, creates, steady), 'hour')!;
+    expect(burstHours([
+      p('2026-10-17T00:00:00Z', 5_000_000, 1_500_000),
+      p('2026-10-17T01:00:00Z', 1_600_000, 1_550_000), // 3% over: not a burst
+      p('2026-10-17T02:00:00Z', 2_000_000, 1_500_000),
+      p('2026-10-17T03:00:00Z', 9_000_000), // no steady count, so nothing to say
+    ])).toEqual([
+      { t: '2026-10-17T00:00:00.000Z', records: 3_500_000 },
+      { t: '2026-10-17T02:00:00.000Z', records: 500_000 },
+    ]);
+  });
+
+  it('names the app whose minute made a burst, and none when no app made most of it', async () => {
+    const urls: URL[] = [];
+    const fetch = (async (input: string) => {
+      const url = new URL(input);
+      urls.push(url);
+      const table = url.pathname.split('/').pop();
+      if (table === 'atmosphere_hour')
+        return Response.json([
+          hourRow('2026-10-17T00:00:00+00:00', 5_000_000, 1_500_000),
+          hourRow('2026-10-17T01:00:00+00:00', 1_600_000, 1_550_000),
+          hourRow('2026-10-17T02:00:00+00:00', 2_000_000, 1_500_000),
+        ]);
+      if (table === 'atmosphere_minute_app')
+        return Response.json(
+          url.searchParams.getAll('minute')[0] === 'gte.2026-10-17T00:00:00.000Z'
+            ? [{ minute: '2026-10-17T00:59:00+00:00', domain: 'podping.at', creates: 3_400_000, collections: ['at.podping.records.podping', '<b>'] }]
+            : [{ minute: '2026-10-17T02:06:00+00:00', domain: 'standard.site', creates: 7_869, collections: [] }],
+        );
+      if (url.pathname.includes('/rpc/')) return new Response('no', { status: 404 });
+      return Response.json([]);
+    }) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => Date.parse('2026-10-17T03:30:00Z'), env: () => ({}), log: () => undefined });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=week'))).json()) as { bursts: Burst[]; total: Point };
+    expect(body.bursts).toEqual([
+      {
+        t: '2026-10-17T00:00:00.000Z',
+        records: 3_500_000,
+        app: { domain: 'podping.at', minute: '2026-10-17T00:59:00.000Z', records: 3_400_000, collections: ['at.podping.records.podping'] },
+      },
+      // the biggest app-minute that hour is a sliver of it, so no app gets the blame
+      { t: '2026-10-17T02:00:00.000Z', records: 500_000 },
+    ]);
+    expect(body.total.steady).toBe(4_550_000);
+    const asked = urls.find((u) => u.pathname.endsWith('/atmosphere_minute_app'))!;
+    expect(asked.searchParams.getAll('minute')).toEqual(['gte.2026-10-17T00:00:00.000Z', 'lt.2026-10-17T01:00:00.000Z']);
+    expect(asked.searchParams.get('order')).toBe('creates.desc');
+    expect(asked.searchParams.get('limit')).toBe('1');
+  });
+
+  it('lists bursts for a week only (Poe\'s dispatch), so the page\'s other ranges and the cards don\'t wait on them', async () => {
+    const db = supabase(() => Response.json([row('2026-10-20T16:59:00+00:00')]));
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    for (const range of ['hour', 'day', 'month']) {
+      const body = (await (await h.GET(new Request(`https://atpota.to/api/weather-history?range=${range}`))).json()) as object;
+      expect('bursts' in body).toBe(false);
+    }
+    expect(db.urls.some((u) => u.includes('atmosphere_minute_app'))).toBe(false);
   });
 });
 

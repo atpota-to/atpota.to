@@ -15,7 +15,9 @@
  *   newApps  apps outside Bluesky heard in the last 24 hours that the station had never
  *            heard before (atmosphere_new_apps). Until the station has listened for
  *            WARMUP_MS, every app is new to it, so it says it's warming up instead
- *   heatmap  every hour of the week in `tz` over the last HEATMAP_MS (atmosphere_heatmap)
+ *   heatmap  every hour of the week in `tz` over the last HEATMAP_MS (atmosphere_heatmap),
+ *            each with its steady count too: its records with any one-minute burst taken
+ *            out (atmosphere/sql/atmosphere_steady.sql), which is what "usual" goes by
  *   records  the busiest whole minute the station has heard, by new records a second, and
  *            the minute it heard the most apps outside Bluesky (readRecords). Only since
  *            it listened live (LIVE_SINCE): the archive's backfill has minutes of a replay's
@@ -124,6 +126,8 @@ export interface HeatCell {
   seconds: number;
   posts: number;
   creates: number;
+  /** creates with any burst taken out: no minute counts for more than 3 times its hour's median */
+  steady?: number;
 }
 
 export interface Heatmap {
@@ -188,7 +192,8 @@ export function toHeatmap(body: unknown): Heatmap | null {
   const cells = body.cells.flatMap((c): HeatCell[] => {
     const v = counts(c, ['dow', 'hour', 'seconds', 'posts', 'creates'] as const);
     if (!v || !Number.isInteger(v.dow) || v.dow < 1 || v.dow > 7 || !Number.isInteger(v.hour) || v.hour > 23) return [];
-    return [v];
+    const steady = isRecord(c) && isCount(c.steady) ? num(c.steady) : null;
+    return [steady === null ? v : { ...v, steady }];
   });
   return { seconds: total.seconds, cells };
 }
