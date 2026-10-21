@@ -16,7 +16,8 @@
  *   greeted by handle in the bubble (src/scripts/reader.ts).
  * - Counts: a reader signed in with Bluesky has their pets saved to their own repo
  *   (pet-sync.ts), so the count follows them across devices, and the tile shows it
- *   ([data-pet-count]). The higher of the saved count and this browser's wins, so pets
+ *   ([data-pet-count]), with this visit's pets and the current streak beside it
+ *   (countExtras). The higher of the saved count and this browser's wins, so pets
  *   from before signing in aren't lost. A signed-out reader who pets a few times is
  *   offered sign-in (the header's dialog, account.ts, asked with PET_SIGNIN_EVENT), which
  *   comes back here with a "pet" pending action; one whose session predates the
@@ -52,6 +53,14 @@ export const COUNT_COPY = {
 /** "1,234": the tile's count (home.css puts the heart in front). */
 export function countLabel(total: number): string {
   return total.toLocaleString('en');
+}
+
+/** The pill's extras: pets this visit (once it differs from the total) and the streak (2+ in a row). */
+export function countExtras(total: number, visit: number, streak: number): { visit: string | null; streak: string | null } {
+  return {
+    visit: visit > 0 && visit < total ? `${countLabel(visit)} this visit` : null,
+    streak: streak >= 2 ? `×${countLabel(streak)} in a row` : null,
+  };
 }
 
 /** The everyday pet motions (classes in home.css). The flip (is-spinning) is saved for reactions. */
@@ -101,13 +110,13 @@ export interface PetReaction {
 /** Long streaks (pets in a row) that get a line of their own. */
 const STREAK_REACTIONS: Readonly<Record<number, PetReaction>> = {
   15: { face: 'wow', say: "15 in a row?! you're good at this" },
-  20: { face: 'happy', say: 'combo x20 ✦', spin: true, blush: true },
-  30: { face: 'kawaii', say: 'my fries are jealous', blush: true },
-  42: { face: 'wink', say: '42: the answer to everything', blush: true },
-  50: { face: 'happy', say: 'FIFTY. new record?', spin: true, blush: true },
-  75: { face: 'sleepy', say: 'so… relaxed… (˘ω˘)', blush: true },
-  100: { face: 'kawaii', say: '100 in a row. you are unstoppable', spin: true, blush: true },
-  200: { face: 'wow', say: 'do you need a snack break?', blush: true },
+  20: { face: 'happy', say: '20 in a row ✦ combo!', spin: true, blush: true },
+  30: { face: 'kawaii', say: '30 in a row. fries are jealous', blush: true },
+  42: { face: 'wink', say: '42 in a row: the answer', blush: true },
+  50: { face: 'happy', say: '50 in a row! new record?', spin: true, blush: true },
+  75: { face: 'sleepy', say: '75 in a row… so relaxed (˘ω˘)', blush: true },
+  100: { face: 'kawaii', say: '100 in a row! unstoppable', spin: true, blush: true },
+  200: { face: 'wow', say: '200 in a row?! snack break?', blush: true },
 };
 
 /** What Poe does on the nth pet in a row (1-based). Old friends (10+ pets on earlier visits) hear so. */
@@ -340,6 +349,7 @@ export function initPet(root: ParentNode = document, opts: PetOptions = {}): voi
   const settle = () => {
     count = 0;
     franticShown = false;
+    showCount();
     img.classList.remove('is-blushing');
     say(undefined);
     restoreMascot(img);
@@ -397,6 +407,8 @@ export function initPet(root: ParentNode = document, opts: PetOptions = {}): voi
   const countN = countEl?.querySelector<HTMLElement>('[data-pet-count-n]');
   const countUnit = countEl?.querySelector<HTMLElement>('[data-pet-count-unit]');
   const askButton = countEl?.querySelector<HTMLButtonElement>('[data-pet-count-ask]');
+  const visitEl = countEl?.querySelector<HTMLElement>('[data-pet-count-visit]');
+  const streakEl = countEl?.querySelector<HTMLElement>('[data-pet-count-streak]');
   let synced = false;
   let trouble: PetSyncTrouble | null = null;
   let shown: number | null = null;
@@ -420,6 +432,12 @@ export function initPet(root: ParentNode = document, opts: PetOptions = {}): voi
     countEl.hidden = false;
     countN.textContent = countLabel(total);
     if (countUnit) countUnit.textContent = ` ${total === 1 ? 'pet' : 'pets'} from you${offer ? ', not saved yet' : ''}`;
+    const extras = countExtras(total, visit, count);
+    for (const [el, text] of [[visitEl, extras.visit], [streakEl, extras.streak]] as const) {
+      if (!el) continue;
+      el.hidden = text === null;
+      el.textContent = text ?? '';
+    }
     if (askButton) {
       askButton.hidden = !offer;
       askButton.textContent = trouble ? COUNT_COPY.again : COUNT_COPY.ask;

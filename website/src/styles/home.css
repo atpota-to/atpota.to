@@ -2027,6 +2027,24 @@ html[data-theme="dark"] {
   color: var(--blush);
 }
 
+.home-sun__count-extra {
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.home-sun__count-extra::before {
+  content: "· " / "";
+}
+
+.home-sun__count-extra[hidden] {
+  display: none;
+}
+
+.home-sun__count-streak {
+  color: var(--blush);
+  opacity: 1;
+}
+
 .home-sun__count-ask {
   padding: 4px 11px;
   border: 0;
@@ -3832,4 +3850,11 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
 
 .home-guide__stack {
   view-transition-name: guide-stack;
+}
+
+/* very narrow phones: with "save them" showing, the visit count makes the pill too wide */
+@media (max-width: 380px) {
+  .home-sun__count:has(.home-sun__count-ask:not([hidden])) .home-sun__count-extra:not(.home-sun__count-streak) {
+    display: none;
+  }
 }
