@@ -9,6 +9,9 @@
  *    "weather" -> ./weather-page.ts (dynamic import; each page module
  *    exports `init()`, called once)
  * 3. mountPoe() from src/poe/index.ts (the corner widget, on every page)
+ * 4. the weather in the sky behind the header's wordmark (./nav-weather.ts), loaded once
+ *    the page is idle: it's decoration, and the home page and the weather report have
+ *    their own reading to share with it by then
  *
  * Page CSS is linked from each page's <head>, not imported here, so it never flashes.
  */
@@ -60,3 +63,12 @@ safely('tab', () => initTabTitle());
 safely('tagline', () => initTagline());
 void initPage();
 safely('poe', mountPoe);
+
+const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+const navWeather = () =>
+  void import('./nav-weather').then(
+    (m) => safely('nav weather', () => m.initNavWeather()),
+    (error) => console.error('[atpotato] nav weather failed', error),
+  );
+if (idle) idle(navWeather, { timeout: 2000 });
+else window.setTimeout(navWeather, 300);

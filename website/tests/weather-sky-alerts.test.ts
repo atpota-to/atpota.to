@@ -60,7 +60,7 @@ describe('the sky gets cloudier with the diversity index', () => {
     const INDEX = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
     const start = INDEX.indexOf('<a class="tile tile--link home-weather"');
     document.body.innerHTML = INDEX.slice(start, INDEX.indexOf('</a>\n', INDEX.indexOf('home-weather__go', start)) + 4);
-    const tile = document.querySelector<HTMLElement>('[data-weather]')!;
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
     renderReading(tile, READING);
     expect(tile.querySelector('[data-weather-sky]')!.getAttribute('aria-hidden')).toBe('true');
     expect(tile.querySelectorAll('[data-weather-sky] .weather-sky__drift')).toHaveLength(cloudCount(0.22));

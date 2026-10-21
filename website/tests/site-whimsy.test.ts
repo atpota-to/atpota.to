@@ -25,11 +25,26 @@ import {
 } from '../src/scripts/garden.js';
 import { COPY as TEASER, initGardenTeaser } from '../src/scripts/garden-teaser.js';
 import { initLatest, LOADING_LINES } from '../src/scripts/home.js';
+import { FIRST_ASK_MS, initNavWeather, MAX_NAV_CLOUDS, NAV_REFRESH_MS, renderNavSky } from '../src/scripts/nav-weather.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
 import { greeting, initPet, milestoneLine, PETS_KEY, petReaction } from '../src/scripts/pet.js';
 import { forgetReader, readReader, READER_KEY, rememberReader } from '../src/scripts/reader.js';
 import { initTagline, TAGLINES } from '../src/scripts/tagline.js';
-import { CONDITION_TEXT, ERROR_TEXT, fetchReading, formatIndex, ratioText, renderReading, renderWeatherError } from '../src/scripts/weather.js';
+import {
+  CONDITION_TEXT,
+  ERROR_TEXT,
+  fetchReading,
+  formatIndex,
+  initWeather,
+  ratioText,
+  READING_EVENT,
+  renderReading,
+  renderWeatherError,
+  resetSharedReading,
+  STORE_MS,
+  storedReading,
+} from '../src/scripts/weather.js';
+import { cloudCount } from '../src/scripts/weather-sky.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const INDEX = read('../index.html');
@@ -156,19 +171,23 @@ describe('atmospheric conditions', () => {
 
   it('links to the full weather report', () => {
     document.body.innerHTML = tileHtml();
-    expect(document.querySelector<HTMLAnchorElement>('[data-weather]')!.getAttribute('href')).toBe('/weather');
+    expect(document.querySelector<HTMLAnchorElement>('[data-weather-tile]')!.getAttribute('href')).toBe('/weather');
   });
 
-  it('shows the diversity index once a reading has it', () => {
+  it('keeps room for the diversity index while it loads, and fills it once a reading has it', () => {
     document.body.innerHTML = tileHtml();
-    const tile = document.querySelector<HTMLElement>('[data-weather]')!;
-    expect(tile.querySelector<HTMLElement>('[data-weather-mix]')!.hidden).toBe(true);
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
+    const mix = tile.querySelector<HTMLElement>('[data-weather-mix]')!;
+    expect(mix.hidden).toBe(false);
+    // a reading from before the diversity index has none to show
+    renderReading(tile, READING);
+    expect(mix.hidden).toBe(true);
     renderReading(tile, {
       ...READING,
       records: { perSecond: 400, bluesky: 398, elsewhere: 2 },
       diversity: { index: 0.5, level: 'low', apps: 3, collections: 20 },
     });
-    expect(tile.querySelector<HTMLElement>('[data-weather-mix]')!.hidden).toBe(false);
+    expect(mix.hidden).toBe(false);
     expect(tile.querySelector('[data-weather-index]')!.textContent).toBe('0.50');
     expect(tile.querySelector('[data-weather-level]')!.textContent).toBe('low');
     expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from outside bluesky');
@@ -184,7 +203,7 @@ describe('atmospheric conditions', () => {
 
   it('shows the reading and the weather', () => {
     document.body.innerHTML = tileHtml();
-    const tile = document.querySelector<HTMLElement>('[data-weather]')!;
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
     renderReading(tile, READING);
     expect(tile.dataset.state).toBe('ready');
     expect(tile.querySelector('[data-weather-posts]')!.textContent).toBe('31');
@@ -196,9 +215,63 @@ describe('atmospheric conditions', () => {
     expect(tile.dataset.state).toBe('ready');
   });
 
+  it('reads the weather as the page loads, even with the tile off screen and the hero wearing its own weather', async () => {
+    resetSharedReading();
+    // the hero's scene (scene.ts) keeps its weather as data-weather, and comes first
+    document.body.innerHTML = `<div class="tile home-sun" data-scene data-weather="calm"></div>${tileHtml()}`;
+    const seen: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: (entries: Array<{ isIntersecting: boolean }>) => void) {
+          seen.push(cb);
+        }
+        observe() {}
+      },
+    );
+    const fetchImpl = vi.fn(async () => Response.json({ ...READING, source: 'station' }));
+    initWeather(document, fetchImpl as unknown as typeof fetch);
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
+    await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(document.querySelector<HTMLElement>('[data-scene]')!.dataset.weatherBound).toBeUndefined();
+    expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(CONDITION_TEXT.gusty);
+    // scrolled to straight away, the reading is still fresh: no second request
+    seen[0]!([{ isIntersecting: true }]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the last page\'s reading at once, then rolls on to a fresh one', async () => {
+    resetSharedReading();
+    await fetchReading((async () => Response.json({ ...READING, condition: 'calm' })) as typeof fetch);
+    // a new page: the reading is in this tab's storage, not in the page's memory
+    resetSharedReading();
+    expect(storedReading()!.condition).toBe('calm');
+    expect(storedReading(Date.now() + STORE_MS + 1)).toBeNull();
+    document.body.innerHTML = tileHtml();
+    let answer!: (r: Response) => void;
+    initWeather(document, (() => new Promise<Response>((r) => (answer = r))) as typeof fetch);
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
+    expect(tile.dataset.state).toBe('ready');
+    expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(CONDITION_TEXT.calm);
+    answer(Response.json(READING));
+    await vi.waitFor(() => expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(CONDITION_TEXT.gusty));
+  });
+
+  it('tells the rest of the page about each new reading', async () => {
+    const heard = vi.fn();
+    window.addEventListener(READING_EVENT, heard);
+    await fetchReading((async () => Response.json(READING)) as typeof fetch);
+    await fetchReading((async () => Response.json({ error: 'unavailable' }, { status: 503 })) as typeof fetch);
+    window.removeEventListener(READING_EVENT, heard);
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect((heard.mock.calls[0]![0] as CustomEvent).detail.condition).toBe('gusty');
+  });
+
   it('says so when the sky is hard to read', () => {
     document.body.innerHTML = tileHtml();
-    const tile = document.querySelector<HTMLElement>('[data-weather]')!;
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
     renderWeatherError(tile);
     expect(tile.dataset.state).toBe('error');
     expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(ERROR_TEXT);
@@ -220,6 +293,69 @@ describe('atmospheric conditions', () => {
     );
     expect(full!.diversity).toBeUndefined();
     expect(full!.apps).toEqual([{ domain: 'tangled.sh', perSecond: 1, count: 5, collections: ['sh.tangled.repo'] }]);
+  });
+});
+
+describe("the sky behind the header's wordmark", () => {
+  const READING = {
+    perSecond: { posts: 31.4, likes: 170.2, reposts: 22, follows: 14.6 },
+    condition: 'breezy' as const,
+    records: { perSecond: 452.4, bluesky: 450, elsewhere: 2.4 },
+    diversity: { index: 9, level: 'very high' as const, apps: 12, collections: 30 },
+  };
+  const HEADER = read('../src/partials/header.html');
+  const brandHtml = () => HEADER.slice(HEADER.indexOf('<a class="site-header__brand"'), HEADER.indexOf('</a>') + '</a>'.length);
+  const answer = (body: unknown) => vi.fn(async () => Response.json(body)) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+
+  beforeEach(() => resetSharedReading());
+
+  it('is decoration on the home link, with the weather sun in it', () => {
+    expect(brandHtml()).toMatch(/<span class="site-header__sky" aria-hidden="true" data-nav-sky>/);
+    expect(brandHtml()).toContain('<!-- @svg weather-sun.svg class="site-header__sun weather-sun" -->');
+    expect(brandHtml()).toContain('aria-label="atpotato home"');
+  });
+
+  it('shows the weather: the condition, a few clouds at most, and the reading in words on hover', () => {
+    document.body.innerHTML = brandHtml();
+    const brand = document.querySelector<HTMLElement>('[data-nav-brand]')!;
+    renderNavSky(brand, READING);
+    expect(brand.querySelector<HTMLElement>('[data-nav-sky]')!.dataset.condition).toBe('breezy');
+    expect(cloudCount(9)).toBeGreaterThan(MAX_NAV_CLOUDS);
+    expect(brand.querySelectorAll('.weather-sky__drift')).toHaveLength(MAX_NAV_CLOUDS);
+    expect(brand.title).toBe(`the atmosphere right now: ${CONDITION_TEXT.breezy}. 452 new records a second`);
+    expect(brand.getAttribute('aria-label')).toBe('atpotato home');
+  });
+
+  it("takes the page's readings, and only asks by itself when none come", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = brandHtml();
+    const fetchImpl = answer({ ...READING, condition: 'gusty' });
+    initNavWeather(document, fetchImpl);
+    const brand = document.querySelector<HTMLElement>('[data-nav-brand]')!;
+    expect(brand.title).toBe('');
+    // the home tile or the weather report got one
+    window.dispatchEvent(new CustomEvent(READING_EVENT, { detail: { ...READING, condition: 'calm' } }));
+    expect(brand.title).toContain(CONDITION_TEXT.calm);
+    await vi.advanceTimersByTimeAsync(FIRST_ASK_MS + 1);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    // nothing more for a while: it asks
+    await vi.advanceTimersByTimeAsync(NAV_REFRESH_MS);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(brand.title).toContain(CONDITION_TEXT.gusty);
+  });
+
+  it("shows the last page's reading at once, and asks for a fresh one when the page has none", async () => {
+    vi.useFakeTimers();
+    await fetchReading(answer({ ...READING, condition: 'calm' }));
+    resetSharedReading();
+    document.body.innerHTML = brandHtml();
+    const fetchImpl = answer(READING);
+    initNavWeather(document, fetchImpl);
+    const brand = document.querySelector<HTMLElement>('[data-nav-brand]')!;
+    expect(brand.title).toContain(CONDITION_TEXT.calm);
+    await vi.advanceTimersByTimeAsync(FIRST_ASK_MS + 1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(brand.title).toContain(CONDITION_TEXT.breezy);
   });
 });
 
