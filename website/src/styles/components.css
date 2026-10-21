@@ -1004,6 +1004,175 @@ html[data-theme="dark"] {
   }
 }
 
+/* ---------- theme button in the header (header.html, theme.ts) ---------- */
+
+/* In the header bar: a round sun/moon button the size of an avatar. */
+.nav-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--dur-spring) var(--ease-spring),
+    background-color var(--dur) ease;
+}
+
+.nav-theme:hover {
+  transform: translateY(-2px) rotate(-12deg);
+}
+
+.nav-theme__icon {
+  display: flex;
+}
+
+.nav-theme__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.nav-theme .icon-moon,
+.nav-theme[aria-pressed="true"] .icon-sun {
+  display: none;
+}
+
+.nav-theme[aria-pressed="true"] .icon-moon {
+  display: block;
+}
+
+.nav-theme__label,
+.nav-theme__track {
+  display: none;
+}
+
+/* The label stays readable to screen readers while only the icon shows. */
+@media (min-width: 881px) {
+  .nav-theme__label {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* In the phone sheet: a full "dark mode" row with a switch at its end, last in the sheet. */
+@media (max-width: 880px) {
+  html.js .site-menu .nav-theme {
+    order: 1;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
+    height: auto;
+    min-height: 52px;
+    padding: 0 14px 0 18px;
+    border-radius: 18px;
+    background: var(--inset);
+    font-size: 17px;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  html.js .site-menu .nav-theme:hover {
+    transform: none;
+    background: var(--line-strong);
+  }
+
+  html.js .site-menu .nav-theme__label {
+    display: block;
+    flex: 1;
+  }
+
+  html.js .site-menu .nav-theme__track {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 46px;
+    height: 28px;
+    border-radius: var(--radius-pill);
+    background: var(--line-strong);
+    transition: background-color var(--dur) ease;
+  }
+
+  html.js .site-menu .nav-theme:hover .nav-theme__track {
+    background: color-mix(in srgb, var(--text) 18%, transparent);
+  }
+
+  html.js .site-menu .nav-theme__knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: var(--shadow-soft);
+    transition: transform var(--dur-spring) var(--ease-spring);
+  }
+
+  html.js .site-menu .nav-theme[aria-pressed="true"] .nav-theme__track {
+    background: var(--sun);
+  }
+
+  html.js .site-menu .nav-theme[aria-pressed="true"] .nav-theme__knob {
+    transform: translateX(18px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html.js .site-menu .nav-theme {
+      opacity: 0;
+      transform: translateY(-10px);
+      transition:
+        opacity var(--dur) ease,
+        transform var(--dur-spring) var(--ease-spring),
+        background-color var(--dur) ease;
+    }
+
+    html.js .site-header.is-menu-open .site-menu .nav-theme {
+      opacity: 1;
+      transform: none;
+      transition-delay: 280ms, 280ms, 0s;
+    }
+  }
+}
+
+/* Without JS nothing can toggle it, so the header goes without. */
+html:not(.js) .nav-theme {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-theme,
+  .nav-theme__track,
+  .nav-theme__knob {
+    transition: none;
+  }
+
+  .nav-theme:hover {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .nav-theme__track {
+    border: 1px solid CanvasText;
+  }
+
+  .nav-theme__knob {
+    background: CanvasText;
+  }
+}
+
 /* ---------- sign-in dialog (src/partials/signin.html, src/blog/signin.ts) ---------- */
 
 html:has(.blog-signin[open]) {

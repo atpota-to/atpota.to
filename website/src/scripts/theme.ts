@@ -3,7 +3,7 @@
  * shell sets the initial value before first paint (same storage key and values as
  * the old site: localStorage "theme" = "light" | "dark"). Light is the default; the
  * OS setting is not consulted, so dark only shows once a visitor picks it. This
- * module wires the footer toggle(s) ([data-theme-toggle], aria-pressed = dark is
+ * module wires the toggles in the header and footer ([data-theme-toggle], aria-pressed = dark is
  * on), keeps the theme-color meta in sync, and fires `window` event "theme:change"
  * with detail { theme }. Where the browser has view transitions (and motion is
  * welcome), the new theme spreads out in a circle from the toggle (base.css).
@@ -110,8 +110,10 @@ export function initTheme(): void {
   document.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target.closest('[data-theme-toggle]') : null;
     if (!target) return;
-    // A keyboard press has no pointer position: grow from the toggle's knob instead.
-    const knob = (target.querySelector('.theme-toggle__knob') ?? target).getBoundingClientRect();
+    // A keyboard press has no pointer position: grow from the toggle's knob instead
+    // (or the toggle itself, where its knob is hidden, as on the desktop nav button).
+    const knobRect = target.querySelector('[data-theme-knob]')?.getBoundingClientRect();
+    const knob = knobRect && knobRect.width > 0 ? knobRect : target.getBoundingClientRect();
     const fromPointer = event.detail > 0 && (event.clientX !== 0 || event.clientY !== 0);
     toggleThemeFrom(fromPointer ? event.clientX : knob.left + knob.width / 2, fromPointer ? event.clientY : knob.top + knob.height / 2);
   });
