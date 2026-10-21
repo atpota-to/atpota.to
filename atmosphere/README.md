@@ -183,7 +183,9 @@ It rewrites a minute's row and all its app rows, then re-sums the hourly and dai
 roll-ups (`atmosphere_hour_app`, `atmosphere_day_app`) from `--from` on. It's safe while the live station runs:
 `--to` must be at least 3 minutes ago, and the station never goes back to a minute
 it has written. It takes up to 48 hours a run, and reads about 6 minutes of history
-in 30 s.
+in 30 s. Bluesky's hosts hang up on a long replay (on 2026-10-21, after about 95 s
+and 300 MB); it says `jetstream hung up at …; picking it back up` and carries on from
+there, counting nothing twice. It writes only once the whole window is read.
 
 **How far back.** Jetstream keeps a lookback of about a day and a half on Bluesky's
 hosts. Minutes before it come back partial, are listed, and are left alone.

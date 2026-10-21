@@ -13,7 +13,10 @@
 //     /root/atpota-live/atmosphere/src/replay.js --from ... --to ... --dry-run
 //
 // Jetstream only keeps a lookback (about a day and a half on Bluesky's hosts); minutes
-// before it come back partial and are left alone. Older history comes from Jetstream
+// before it come back partial and are left alone. Bluesky's hosts also hang up on a long
+// replay (on 2026-10-21, after about 95 s and 300 MB: some 20 minutes of the firehose), so
+// when one does, it reconnects a little before the last event it got and carries on,
+// dropping what it already counted, as the live station does. Older history comes from Jetstream
 // v2's archive: archive.js, which counts with the same minuteCounter.
 //
 // Rewriting replaces the minute's row and all its app rows (a recount can drop an app the
@@ -27,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { accountOf } from './accounts.js';
 import { eventOfMessage } from './atmosphere.js';
 import { happenedUs, MAX_EARLIER_S } from './clock.js';
-import { DEFAULT_URLS, withCursor } from './jetstream.js';
+import { DEFAULT_URLS, REWIND_US, withCursor } from './jetstream.js';
 import { Station } from './station.js';
 import { minuteRows, REQUEST_TIMEOUT_MS } from './writer.js';
 
@@ -39,6 +42,8 @@ export const SILENCE_MS = 30_000;
 export const WRITE_LAG_S = 180;
 /** At most this much in one run. */
 export const MAX_WINDOW_S = 48 * 3600;
+/** Wait this long before picking a replay back up after Jetstream hangs up. */
+export const RESUME_DELAY_MS = 1000;
 
 const iso = (second) => new Date(second * 1000).toISOString();
 
@@ -78,14 +83,31 @@ export function minuteCounter({ fromSec, toSec, onMinute }) {
  * `toSec`, and calls onMinute(minuteSec, tally, seconds, accounts) for each minute in
  * [fromSec, toSec) as soon as nothing more can land in it. Resolves with the time_us of
  * the first event Jetstream sent (later than asked means its lookback ends there).
+ *
+ * If Jetstream hangs up partway, it reconnects REWIND_US before the last event it got,
+ * drops everything up to that event, and carries on (onResume({ atUs, resumes }) hears
+ * about it). It only gives up when a connection brings nothing new.
  */
-export function replayWindow({ host, fromSec, toSec, onMinute, open = (url) => new WebSocket(url), setTimer = setTimeout, clearTimer = clearTimeout }) {
+export function replayWindow({
+  host,
+  fromSec,
+  toSec,
+  onMinute,
+  onResume = () => {},
+  open = (url) => new WebSocket(url),
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+  resumeDelayMs = RESUME_DELAY_MS,
+}) {
   return new Promise((resolve, reject) => {
     let counter = null;
     let firstUs = null;
+    /** The last event counted, on any connection. */
+    let lastUs = null;
+    let resumes = 0;
     let done = false;
     let quiet = null;
-    const sock = open(withCursor(host, Math.round((fromSec - LEAD_S) * 1e6)));
+    let sock = null;
 
     const finish = (err) => {
       if (done) return;
@@ -104,25 +126,59 @@ export function replayWindow({ host, fromSec, toSec, onMinute, open = (url) => n
       quiet = setTimer(() => finish(new Error(`jetstream went quiet for ${SILENCE_MS / 1000} s`)), SILENCE_MS);
     };
 
-    sock.onopen = () => {
-      counter = minuteCounter({ fromSec, toSec, onMinute });
+    function connect(cursorUs) {
+      const self = open(withCursor(host, cursorUs));
+      sock = self;
+      // a connection picking up a replay drops what an earlier one already counted
+      const dropThroughUs = lastUs;
+      let fresh = false;
+      // a connection that never opens goes quiet too
       listen();
-    };
-    sock.onmessage = (msg) => {
-      if (done || !counter) return;
-      listen();
-      let m;
-      try {
-        m = JSON.parse(typeof msg.data === 'string' ? msg.data : Buffer.from(msg.data).toString('utf8'));
-      } catch {
-        return;
-      }
-      if (typeof m?.time_us !== 'number') return;
-      if (firstUs === null) firstUs = m.time_us;
-      if (counter.push(m.time_us, eventOfMessage(m), happenedUs(m), accountOf(m))) finish(null);
-    };
-    sock.onerror = (e) => finish(new Error(`jetstream error: ${e?.message ?? 'unknown'}`));
-    sock.onclose = () => finish(new Error('jetstream closed before the window was read'));
+
+      // the socket that hung up is ignored from here on
+      const hungUp = (why) => {
+        if (done || sock !== self) return;
+        if (!fresh) return finish(new Error(why));
+        resumes++;
+        clearTimer(quiet);
+        try {
+          self.close();
+        } catch {
+          // already gone
+        }
+        onResume({ atUs: lastUs, resumes });
+        setTimer(() => {
+          if (!done) connect(lastUs - REWIND_US);
+        }, resumeDelayMs);
+        sock = null;
+      };
+
+      self.onopen = () => {
+        if (done || sock !== self) return;
+        counter ??= minuteCounter({ fromSec, toSec, onMinute });
+        listen();
+      };
+      self.onmessage = (msg) => {
+        if (done || sock !== self || !counter) return;
+        listen();
+        let m;
+        try {
+          m = JSON.parse(typeof msg.data === 'string' ? msg.data : Buffer.from(msg.data).toString('utf8'));
+        } catch {
+          return;
+        }
+        if (typeof m?.time_us !== 'number') return;
+        if (dropThroughUs !== null && m.time_us <= dropThroughUs) return;
+        fresh = true;
+        if (firstUs === null) firstUs = m.time_us;
+        if (lastUs === null || m.time_us > lastUs) lastUs = m.time_us;
+        if (counter.push(m.time_us, eventOfMessage(m), happenedUs(m), accountOf(m))) finish(null);
+      };
+      self.onerror = (e) => hungUp(`jetstream error: ${e?.message ?? 'unknown'}`);
+      self.onclose = () => hungUp('jetstream closed before the window was read');
+    }
+
+    connect(Math.round((fromSec - LEAD_S) * 1e6));
   });
 }
 
@@ -202,6 +258,7 @@ async function main(argv) {
     host,
     fromSec: args.fromSec,
     toSec: args.toSec,
+    onResume: ({ atUs, resumes }) => console.log(`jetstream hung up at ${new Date(atUs / 1000).toISOString()}; picking it back up (${resumes})`),
     onMinute(minuteSec, tally, seconds, accounts) {
       // the rewritten rows carry their active accounts too; the sketches (atmosphere_account_*) are left as they are
       const rows = minuteRows(minuteSec, tally, seconds, accounts);
