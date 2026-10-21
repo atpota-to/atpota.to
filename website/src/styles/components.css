@@ -2058,6 +2058,12 @@ html[data-theme="dark"] {
   fill: var(--weather-moon);
 }
 
+/* the moon's dark side, just showing, so a new moon is still there */
+.weather-sun__moon-dark {
+  fill: var(--weather-moon);
+  opacity: 0.18;
+}
+
 html[data-theme="dark"] .weather-sun__day {
   display: none;
 }
@@ -2102,6 +2108,13 @@ html[data-theme="dark"] .weather-sun__night {
   .weather-sun__moon,
   .weather-sun__star {
     fill: Canvas;
+  }
+
+  .weather-sun__moon-dark {
+    fill: none;
+    stroke: CanvasText;
+    stroke-width: 3;
+    opacity: 1;
   }
 }
 

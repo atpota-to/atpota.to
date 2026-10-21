@@ -2,7 +2,8 @@
 <!-- The weather sun (home tile and /weather), drawn like the mascot: a soft, slightly
      wobbly disc in a deeper ring, chunky rounded rays, and a shine where Poe has its
      eye highlights. No face, so it can be whatever the weather is. By night (dark
-     theme) it's the home tile's moon instead. Colours are components.css tokens;
+     theme) it's the moon instead, in tonight's phase (moon.ts draws the lit part; this
+     crescent is what shows without JS). Colours are components.css tokens;
      weather.ts turns [data-weather-rays] faster when the network is busy. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <g class="weather-sun__day">
@@ -15,7 +16,8 @@
     <circle class="weather-sun__glint" cx="35.5" cy="53" r="2.2"/>
   </g>
   <g class="weather-sun__night">
-    <path class="weather-sun__moon" d="M48.1 29.1 A23 23 0 1 0 72.1 58.4 A19 19 0 0 1 48.1 29.1 Z"/>
+    <circle class="weather-sun__moon-dark" cx="50" cy="50" r="23"/>
+    <path class="weather-sun__moon" data-moon-lit="50 50 23" d="M50 27A23 23 0 0 1 50 73A9.2 23 0 0 0 50 27Z"/>
     <path class="weather-sun__star" d="M80 14 L82 20 L88 22 L82 24 L80 30 L78 24 L72 22 L78 20 Z"/>
     <circle class="weather-sun__star" cx="88" cy="42" r="2.5"/>
     <circle class="weather-sun__star" cx="68" cy="10" r="1.8"/>
