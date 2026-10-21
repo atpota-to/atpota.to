@@ -19,6 +19,8 @@ import { addressOf, gardenWords, placeFlowers } from './garden-words.js';
 
 /** With cleanUrls, garden/index.html is served at /garden (/garden/index.html only redirects there). */
 export const PAGE_PATHS = ['/garden'] as const;
+/** Only on the garden page: a protected preview answers its login page with a 200, and that mustn't go out as a garden. */
+export const PAGE_MARKER = 'data-garden-page';
 export const SITE_ORIGIN = 'https://atpota.to';
 export const CACHE_OK = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
 export const CACHE_PLAIN = 'public, max-age=0, s-maxage=60';
@@ -123,7 +125,12 @@ export function createGardenPageHandlers(deps: GardenPageDeps = {}) {
     const actor = (url.searchParams.get('actor') ?? '').trim();
     const level = url.searchParams.get('level') === 'flowers' ? 'flowers' : 'garden';
     const [html, g] = await Promise.all([
-      page(request).catch((error: unknown) => {
+      page(request)
+        .then((text) => {
+          if (!text.includes(PAGE_MARKER)) throw new Error('that is not the garden page');
+          return text;
+        })
+        .catch((error: unknown) => {
         log({ event: 'garden_page_error', error: (error as Error)?.message ?? 'Error' });
         return null;
       }),

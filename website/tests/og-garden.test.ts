@@ -206,11 +206,14 @@ describe('the garden page function', () => {
     }
   }, 10_000);
 
-  it("answers 503 when the built page can't be fetched", async () => {
-    const h = createGardenPageHandlers({ load: async () => garden(), page: async () => Promise.reject(new Error('down')), log: () => undefined });
-    const res = await h.GET(new Request('https://atpota.to/api/garden-page?actor=dame.is'));
-    expect(res.status).toBe(503);
-    expect(res.headers.get('cache-control')).toBe('no-store');
+  it("answers 503, uncached, when the built page can't be fetched, or something else comes back", async () => {
+    const login = '<!DOCTYPE html><html><head><title>Login – Vercel</title></head><body></body></html>';
+    for (const page of [async () => Promise.reject(new Error('down')), async () => login]) {
+      const h = createGardenPageHandlers({ load: async () => garden(), page, log: () => undefined });
+      const res = await h.GET(new Request('https://atpota.to/api/garden-page?actor=dame.is'));
+      expect(res.status).toBe(503);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    }
   });
 
   it("points the community garden's tags at /garden, its flowers address included", () => {
