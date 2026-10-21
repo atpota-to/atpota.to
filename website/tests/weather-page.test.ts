@@ -13,6 +13,7 @@ import {
   renderHeadlineChange,
   renderSky,
   accountSummary,
+  bigAmount,
   bindExplainers,
   diversityParts,
   EXPLAINERS,
@@ -661,8 +662,8 @@ describe('in the lens', () => {
     expect(text('[data-r-unit-words]')).toBe('new records in the last minute');
     renderReport(report, LIVE, lens({ measure: 'accounts', unit: 'hour' }));
     expect(text('[data-r-records]')).toBe('21,345');
-    expect(text('[data-r-unit]')).toBe('accounts');
-    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.disabled).toBe(true);
+    expect([bigAmount(99_999), bigAmount(222_380), bigAmount(1_234_567), bigAmount(38_400_000)]).toEqual(['99,999', '222k', '1.23m', '38.4m']);
+    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.hidden).toBe(true); // the line under it says accounts
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true); // its line is records
   });
 
@@ -726,7 +727,7 @@ describe('in the lens', () => {
     expect(bars('[data-r-apps]')[0]).toEqual(['tangled.sh', '86,400']);
 
     renderWindow(report, DAY, lens({ window: 'day', measure: 'accounts' }));
-    expect(text('[data-r-records]')).toBe('2,000,000');
+    expect(text('[data-r-records]')).toBe('2m');
     expect(text('[data-r-cond]')).toBe('different accounts wrote something in the last 24 hours');
     expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
     expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');

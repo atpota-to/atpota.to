@@ -19,11 +19,11 @@ import { flowerSeed, SEED } from '../shared/garden-rules.js';
 import { drawFlower, drawSeed, seedVariant, variantFor, type Stage } from '../src/scripts/flowers.js';
 import { ATPOTATO_DID } from './blog/config.js';
 import { createGardenHandlers, isActor, type Garden, type GardenDeps } from './garden.js';
-import { gardenWords, placeFlowers, statsText, type Plant } from './garden-words.js';
+import { addressOf, gardenWords, placeFlowers, statsText, type Plant } from './garden-words.js';
 
 export { addressOf, gardenWords, placeFlowers, statsText, type Placed, type Plant } from './garden-words.js';
 import { cardArt, renderPng } from './og-weather.js';
-import { C, CARD_HEIGHT, chip, h, img, page, tile, wordmark, type Art, type El } from './og-weather-cards.js';
+import { C, CARD_HEIGHT, chip, h, img, page, tile, wordmark, type Art, type El, type Style } from './og-weather-cards.js';
 
 export const CACHE_OK = 'public, max-age=0, s-maxage=900, stale-while-revalidate=86400';
 export const CACHE_MISSING = 'public, max-age=0, s-maxage=60';
@@ -150,10 +150,24 @@ export function patchSvg(cols: number, rows: number, plots: ReadonlyMap<number, 
 
 // ---------- the card ----------
 
-/** Bigger for a short name, smaller for a long one. */
+/** Bigger for a short name, smaller for a long one; never more than two lines (drawGarden). */
 export function titleSize(title: string): number {
   const n = [...title].length;
-  return n <= 16 ? 76 : n <= 28 ? 64 : 52;
+  return n <= 16 ? 76 : n <= 28 ? 64 : n <= 40 ? 52 : 44;
+}
+
+/**
+ * A name or a note as the card's font can draw it: no emoji (signika has none, so they come
+ * out as empty boxes) and no runs of spaces left behind where they were.
+ */
+export function cardText(s: string): string {
+  return s.replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u200D\uFE0E\uFE0F\u20E3]/gu, '').replace(/\s+/g, ' ').replace(/\s+([',.!?)])/g, '$1').replace(/\(\s*\)/g, '').trim();
+}
+
+/** A line of text cut short with an ellipsis, or `lines` lines of it: satori only clamps a block, and a block takes a bare string. */
+function clipped(text: string, lines: number, style: Style): El {
+  const clip: Style = lines === 1 ? { whiteSpace: 'nowrap', textOverflow: 'ellipsis' } : { lineClamp: lines };
+  return { type: 'div', props: { style: { display: 'block', overflow: 'hidden', ...clip, ...style }, children: text } };
 }
 
 export function drawGarden(g: Garden, art: Art, avatar: string | null, now: number): El {
@@ -162,16 +176,29 @@ export function drawGarden(g: Garden, art: Art, avatar: string | null, now: numb
   const cols = g.patch?.cols ?? 4;
   const rows = g.patch?.rows ?? 5;
   const potatoW = 250;
+  const title = cardText(words.title) || cardText(`@${g.owner.handle}'s garden`);
+  const note = words.note ? cardText(words.note) : '';
+  const community = g.owner.did === ATPOTATO_DID;
   const text = tile(
     { flex: 1, minWidth: 0, padding: '50px 54px', background: C.paper },
-    h({ alignItems: 'center', gap: 16 }, wordmark(art, C.brown, 40), chip(words.chip, { background: C.leafTint, color: C.leaf, height: 40, fontSize: 20, fontWeight: 700 })),
     h(
-      { flexDirection: 'column', marginTop: 'auto', paddingTop: 24, maxWidth: 420, position: 'relative' },
-      avatar ? img(avatar, 76, 76, { borderRadius: 999, marginBottom: 18, border: `4px solid ${C.skin}` }) : null,
-      h({ fontSize: titleSize(words.title), fontWeight: 700, lineHeight: 1, letterSpacing: '-0.025em', color: C.ink }, words.title),
-      h({ marginTop: 18, fontSize: 25, lineHeight: 1.35, color: C.soft }, words.lede),
+      { alignItems: 'center', gap: 16 },
+      wordmark(art, C.brown, 40),
+      words.chip ? chip(words.chip, { background: C.leafTint, color: C.leaf, height: 40, fontSize: 20, fontWeight: 700 }) : null,
+    ),
+    h(
+      { flexDirection: 'column', marginTop: 'auto', paddingTop: 24, maxWidth: 440, position: 'relative' },
+      community
+        ? null
+        : h(
+            { alignItems: 'center', gap: 14, marginBottom: 20 },
+            avatar ? img(avatar, 60, 60, { borderRadius: 999, border: `3px solid ${C.skin}`, flexShrink: 0 }) : null,
+            clipped(`@${addressOf(g.owner)}`, 1, { minWidth: 0, fontSize: 24, fontWeight: 600, color: C.soft }),
+          ),
+      clipped(title, 2, { fontSize: titleSize(title), fontWeight: 700, lineHeight: 1.05, letterSpacing: '-0.025em', color: C.ink }),
+      note ? clipped(note, 2, { marginTop: 16, fontSize: 24, lineHeight: 1.35, color: C.soft }) : null,
       h(
-        { marginTop: 22, alignSelf: 'flex-start', alignItems: 'center', height: 44, padding: '0 20px', borderRadius: 999, background: C.bg, fontSize: 20, fontWeight: 700, color: C.leaf },
+        { marginTop: 24, alignSelf: 'flex-start', alignItems: 'center', height: 44, padding: '0 20px', borderRadius: 999, background: C.bg, fontSize: 20, fontWeight: 700, color: C.leaf },
         statsText(g, placed),
       ),
     ),

@@ -20,20 +20,27 @@ export interface Plant {
   grew: { wind: number; mix: number; apps: string[] } | null;
 }
 
-/** What a garden card says, in the page's own words (src/scripts/garden-page.ts COPY). */
-export function gardenWords(g: Garden): { chip: string; title: string; lede: string } {
+/**
+ * What a garden card says, in the page's own words (src/scripts/garden-page.ts COPY). The
+ * lede is the page's description; the card itself only carries the owner's own note, since
+ * a link preview prints the description under it anyway. Someone's garden has no chip: the
+ * card names its owner beside their avatar instead.
+ */
+export function gardenWords(g: Garden): { chip: string | null; title: string; lede: string; note: string | null } {
   const who = g.owner.displayName || `@${g.owner.handle}`;
   if (g.owner.did === ATPOTATO_DID) {
     return {
       chip: 'gardens',
       title: 'the community garden',
       lede: "everyone's patch on atpota.to, a fresh one each season. plant one flower, look after it for its first week, and watch it bloom.",
+      note: g.patch?.note || null,
     };
   }
   return {
-    chip: 'a garden on atpota.to',
+    chip: null,
     title: g.patch?.name || `${who}'s garden`,
     lede: g.patch?.note || (g.patch ? `@${g.owner.handle}'s garden on atpota.to. plant a flower in it, look after it for its first week, and watch it bloom.` : `@${g.owner.handle} hasn't set up a garden yet.`),
+    note: g.patch?.note || null,
   };
 }
 
