@@ -39,6 +39,8 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/tangled_key
           chmod 600 ~/.ssh/tangled_key
+          # Public, so safe to log: compare it with the keys on Tangled (Settings → Keys).
+          echo "Using key $(ssh-keygen -lf ~/.ssh/tangled_key)"
           ssh-keyscan -t ed25519 tangled.org >> ~/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/tangled_key -o IdentitiesOnly=yes -o BatchMode=yes"
           git push git@tangled.org:atpota.to/atpota.to HEAD:refs/heads/main
