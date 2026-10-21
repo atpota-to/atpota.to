@@ -244,9 +244,10 @@ counted. For that reason `archive.js` leaves alone any minute that already has a
 a run that stopped safe to start again.
 
 **Cost.** The API key is free. Downloads count against the key's byte allowance, which
-Bluesky doesn't publish. When it runs out, the server answers 429 and the SDK waits
-and resumes from its byte offset, so a small allowance makes a run slower, not
-broken. It says when it's waiting.
+Bluesky doesn't publish ([their rules](https://bsky.network/docs/jetstream-replay)). When
+it runs out, the server answers 429 with a `Retry-After`; the SDK waits that long
+(`archive.js` lifts its 30 s cap to 15 minutes) and resumes from its byte offset, so a
+small allowance makes a run slower, not broken. It says when it's waiting.
 
 **Once, on the droplet:**
 

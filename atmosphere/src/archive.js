@@ -38,8 +38,9 @@
 // Needs JETSTREAM_API_KEY in .env (free, from https://bsky.network/account) and the
 // official SDK, @bsky/jetstream, installed once outside the release, since deploys copy
 // code only (README.md, "Backfilling from the archive"). Downloads count against the
-// key's byte allowance; the SDK waits out a 429 and resumes a cut-off download from
-// its byte offset, so a small allowance only makes it slower.
+// key's byte allowance; the SDK waits out a 429 for as long as its Retry-After says (up
+// to MAX_RETRY_WAIT_MS) and resumes a cut-off download from its byte offset, so a small
+// allowance only makes it slower.
 
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -69,6 +70,12 @@ export const LIVE_MAX_RATE = 5000;
 export const MAX_SILENCE_S = MAX_EARLIER_S;
 /** Tries per Supabase request before giving up on the run. */
 export const WRITE_TRIES = 5;
+/**
+ * The longest the SDK may wait before retrying a download. A 429 says how long in its
+ * Retry-After, and Bluesky asks clients to wait that long; the SDK caps every wait at
+ * 30 s unless told otherwise, so it would ask again too soon and be refused again.
+ */
+export const MAX_RETRY_WAIT_MS = 15 * 60_000;
 
 const iso = (second) => new Date(second * 1000).toISOString();
 const isoUs = (us) => new Date(Math.floor(us / 1000)).toISOString();
@@ -303,6 +310,7 @@ export async function backfill({ args, host, apiKey, db, Jetstream, fetch = glob
     service: host,
     apiKey,
     retry: {
+      maxDelayMs: MAX_RETRY_WAIT_MS,
       // Mostly the allowance running out (429): say so now and then, so a slow run doesn't look stuck.
       onRetry(err, info) {
         retried.n++;
