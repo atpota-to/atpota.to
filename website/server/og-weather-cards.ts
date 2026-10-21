@@ -367,11 +367,88 @@ export function cloudsSvg(count: number, width: number, height: number, scale = 
 }
 
 /** Poe on a dirt hill in the corner of a tile, with something to say. */
-function poeOnHill(art: Art, face: MascotFace, says: string | null, width: number): Array<El | null> {
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+
+/** Meteorological seasons, north of the equator, by UTC month (src/scripts/scene.ts seasonOf). */
+const MONTH_SEASONS: readonly Season[] = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'];
+
+export function seasonOf(ms: number): Season {
+  return MONTH_SEASONS[new Date(ms).getUTCMonth()]!;
+}
+
+/**
+ * The home page's meadow (src/styles/home.css: --ground by season, its shade and the tufts'
+ * colour mixed from it), so Poe stands out from the ground it stands on. Winter is snow.
+ */
+const MEADOW: Record<Season, { ground: string; shade: string; tuft: string | null }> = (() => {
+  const meadow = (ground: string) => ({ ground, shade: mixColor('#4C7A33', ground, 0.26), tuft: mixColor('#2F5A22', ground, 0.5) });
+  return {
+    spring: meadow('#C3E6A0'),
+    summer: meadow('#ADD884'),
+    autumn: meadow('#D2C67C'),
+    winter: { ground: '#F3F7FA', shade: '#DCE6EE', tuft: null },
+  };
+})();
+
+const HILL = { w: 760, h: 190 };
+
+/** One of the season's bits on the meadow (src/assets/scene/flowers, buttercups, leaves). */
+function scatterBit(season: Season, x: number, y: number, i: number): string {
+  if (season === 'spring') {
+    const petal = i % 2 ? '#F7C6D3' : '#FFFFFF';
+    const petals = [0, 1, 2, 3, 4].map((k) => {
+      const a = (k * 2 * Math.PI) / 5 - Math.PI / 2;
+      return `<circle cx="${(x + 4.3 * Math.cos(a)).toFixed(1)}" cy="${(y + 4.3 * Math.sin(a)).toFixed(1)}" r="4.2" fill="${petal}"/>`;
+    });
+    return `${petals.join('')}<circle cx="${x}" cy="${y}" r="3.2" fill="#F2B33D"/>`;
+  }
+  if (season === 'summer') return `<circle cx="${x}" cy="${y}" r="4.6" fill="#F7D34A"/><circle cx="${x}" cy="${y}" r="1.8" fill="#E0A93A"/>`;
+  if (season === 'autumn') {
+    const fill = ['#E07B39', '#C9542E', '#F2B33D', '#B5652A'][i % 4];
+    return `<path transform="translate(${x} ${y}) rotate(${(i * 67) % 360}) scale(1.6)" d="M0,-7 C5,-5 6,3 0,8 C-6,3 -5,-5 0,-7Z" fill="${fill}"/>`;
+  }
+  return '';
+}
+
+/**
+ * The hill Poe stands on, as the home page draws it: the season's meadow with a darker band
+ * low down, grass tufts along the crest, the season's flowers or leaves, and a soft shadow
+ * under Poe's feet at (feetX, feetY). Shapes only.
+ */
+export function hillSvg(season: Season, feetX: number, feetY: number): string {
+  const { w, h } = HILL;
+  const m = MEADOW[season];
+  const crest = (x: number) => h / 2 - (h / 2) * Math.sqrt(Math.max(0, 1 - ((x - w / 2) / (w / 2)) ** 2));
+  const tufts = m.tuft
+    ? [70, 150, 235, 545]
+        .map((x) => `<path transform="translate(${x - 17} ${(crest(x) - 30).toFixed(1)}) scale(1.4)" d="M12,23 q-2,-8 -8,-12 M12,23 q0,-11 1,-20 M12,23 q3,-7 9,-10" fill="none" stroke="${m.tuft}" stroke-width="3" stroke-linecap="round"/>`)
+        .join('')
+    : '';
+  const bits = [[40, 44], [118, 70], [190, 34], [262, 82], [330, 50], [470, 92], [560, 58], [640, 88]]
+    .map(([x, dy], i) => scatterBit(season, x!, Math.round(crest(x!) + dy!), i))
+    .join('');
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">` +
+    `<defs><clipPath id="hill"><ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}"/></clipPath>` +
+    `<radialGradient id="shadow"><stop offset="0" stop-color="#2A1E10" stop-opacity="0.22"/><stop offset="1" stop-color="#2A1E10" stop-opacity="0"/></radialGradient></defs>` +
+    `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${m.ground}"/>` +
+    `<ellipse clip-path="url(#hill)" cx="${w / 2}" cy="${h * 0.92}" rx="${w * 0.42}" ry="${h * 0.46}" fill="${m.shade}"/>` +
+    `${tufts}${bits}` +
+    `<ellipse cx="${feetX}" cy="${feetY}" rx="120" ry="16" fill="url(#shadow)"/>` +
+    '</svg>'
+  );
+}
+
+function poeOnHill(art: Art, face: MascotFace, says: string | null, width: number, season: Season): Array<El | null> {
   const potato = 320;
+  const potatoH = Math.round((potato * 419) / 515);
+  const tileH = CARD_HEIGHT - 56;
+  const hill = { left: width - 560, top: tileH + 70 - HILL.h };
+  // Poe's feet, in the hill's own coordinates: the middle of its picture, its bottom edge.
+  const feet = { x: width - 14 - potato / 2 - hill.left, y: tileH - 46 - hill.top - 4 };
   return [
-    h({ position: 'absolute', left: width - 560, width: 760, bottom: -70, height: 190, borderRadius: '50%', background: C.skin }),
-    img(art.mascot(face), potato, Math.round((potato * 419) / 515), { position: 'absolute', right: 14, bottom: 46 }),
+    svgImage(hillSvg(season, feet.x, feet.y), HILL.w, HILL.h, { position: 'absolute', left: hill.left, top: hill.top }),
+    img(art.mascot(face), potato, potatoH, { position: 'absolute', right: 14, bottom: 46 }),
     says
       ? h(
           {
@@ -410,7 +487,7 @@ function forecast(d: CardData, art: Art): El | null {
       { width: sky.w, height: sky.h, background: C.sky, color: C.skyText, padding: '46px 54px' },
       svgImage(cloudsSvg(cloudCount(mix?.index ?? 0), sky.w, sky.h), sky.w, sky.h, { position: 'absolute', left: 0, top: 0 }),
       sun(190, { position: 'absolute', right: 330, top: 26 }),
-      ...poeOnHill(art, FACE[condition], mix ? LEVEL_TEXT[mix.level] : null, sky.w),
+      ...poeOnHill(art, FACE[condition], mix ? LEVEL_TEXT[mix.level] : null, sky.w, seasonOf(d.at)),
       masthead(art, 'the atmosphere weather report', C.brownOnSky, { background: 'rgba(255, 255, 255, 0.8)', color: C.skyText }),
       h(
         { flexDirection: 'column', marginTop: 'auto', width: 640 },
@@ -745,7 +822,7 @@ export function drawQuiet(d: CardData, art: Art): El {
       { width: sky.w, height: sky.h, background: C.sky, color: C.skyText, padding: '46px 54px' },
       svgImage(cloudsSvg(2, sky.w, sky.h), sky.w, sky.h, { position: 'absolute', left: 0, top: 0 }),
       sun(190, { position: 'absolute', right: 330, top: 26 }),
-      ...poeOnHill(art, 'sleepy', 'come see how the sky is doing', sky.w),
+      ...poeOnHill(art, 'sleepy', 'come see how the sky is doing', sky.w, seasonOf(d.at)),
       wordmark(art, C.brownOnSky),
       h(
         { flexDirection: 'column', marginTop: 'auto', width: 600 },

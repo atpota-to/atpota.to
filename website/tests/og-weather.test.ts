@@ -28,9 +28,11 @@ import {
   drawQuiet,
   formatIndex,
   gaugeAt,
+  hillSvg,
   isCard,
   LEVEL_TEXT,
   MAX_CLOUDS,
+  seasonOf,
   stamp,
   usualChip,
   usualOf,
@@ -201,6 +203,19 @@ describe('og weather: the cards', () => {
       'the last hour', 'much busier than usual', '+25%', 'today in numbers', '212', '446', 'new records', '11.4 million', 'from other apps',
     ]));
     expect(texts(drawCard('trend', data(), art))).toEqual(expect.arrayContaining(['busiest hour 450', '362']));
+  });
+
+  it("stands Poe on the home page's meadow for the season, never on its own colour", () => {
+    expect(['2026-01-05', '2026-04-05', '2026-07-05', '2026-10-21', '2026-12-31'].map((d) => seasonOf(Date.parse(`${d}T12:00:00Z`))))
+      .toEqual(['winter', 'spring', 'summer', 'autumn', 'winter']);
+    expect(hillSvg('autumn', 386, 70)).toContain('fill="#D2C67C"');
+    expect(hillSvg('spring', 386, 70)).toContain('fill="#C3E6A0"');
+    expect(hillSvg('summer', 386, 70)).toContain('fill="#ADD884"');
+    expect(hillSvg('winter', 386, 70)).toContain('fill="#F3F7FA"');
+    expect(hillSvg('winter', 386, 70)).not.toContain('stroke-linecap'); // no grass in the snow
+    for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {
+      expect(hillSvg(season, 386, 70)).not.toMatch(/#A58650/i); // Poe's own outline brown
+    }
   });
 
   it('counts new apps no further than the almanac lists them', async () => {
