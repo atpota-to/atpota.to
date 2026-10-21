@@ -202,19 +202,18 @@
             <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
                 <div class="weather-tile__head">
                     <h2 class="weather-tile__title" id="weather-trends-title">trends</h2>
-                    <div class="weather-controls">
-                    <div class="weather-range weather-measure" role="group" aria-label="count new records or active accounts">
-                        <button type="button" class="weather-range__btn" data-measure="records" aria-pressed="true">records</button>
-                        <button type="button" class="weather-range__btn" data-measure="accounts" aria-pressed="false">accounts</button>
-                    </div>
                     <div class="weather-range" role="group" aria-label="time range">
                         <button type="button" class="weather-range__btn" data-range="hour" aria-pressed="false" aria-label="last hour">1h</button>
                         <button type="button" class="weather-range__btn" data-range="day" aria-pressed="true" aria-label="last 24 hours">1d</button>
                         <button type="button" class="weather-range__btn" data-range="week" aria-pressed="false" aria-label="last 7 days">1w</button>
                         <button type="button" class="weather-range__btn" data-range="month" aria-pressed="false" aria-label="last 30 days">30d</button>
                     </div>
-                    </div>
                 </div>
+                <!-- records or accounts, for this tile alone (weather-page.ts createMeasure) -->
+                <button type="button" class="weather-measure" data-measure-toggle="trends" data-measure="accounts">
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="accounts"><circle cx="10" cy="6.75" r="3.25"/><path d="M3.75 17c.6-3.4 3.1-5.25 6.25-5.25s5.65 1.85 6.25 5.25"/></svg>
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="records"><rect x="4.25" y="2.75" width="11.5" height="14.5" rx="2"/><path d="M7.25 7h5.5M7.25 10h5.5M7.25 13h3.5"/></svg>
+                </button>
                 <!-- loading and errors show here; once the charts are drawn it's only read out, for screen readers -->
                 <p class="weather-trends__summary" data-t-summary aria-live="polite">digging through the records…</p>
                 <div class="weather-trends__charts">
@@ -242,11 +241,11 @@
                 <div class="weather-tile__head">
                     <h2 class="weather-tile__title" id="weather-apps-title">elsewhere in the atmosphere</h2>
                     <p class="weather-tile__aside" data-r-apps-count></p>
-                    <div class="weather-range weather-measure" role="group" aria-label="rank apps by new records or active accounts">
-                        <button type="button" class="weather-range__btn" data-measure="records" aria-pressed="true">records</button>
-                        <button type="button" class="weather-range__btn" data-measure="accounts" aria-pressed="false">accounts</button>
-                    </div>
                 </div>
+                <button type="button" class="weather-measure" data-measure-toggle="apps" data-measure="accounts">
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="accounts"><circle cx="10" cy="6.75" r="3.25"/><path d="M3.75 17c.6-3.4 3.1-5.25 6.25-5.25s5.65 1.85 6.25 5.25"/></svg>
+                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="records"><rect x="4.25" y="2.75" width="11.5" height="14.5" rx="2"/><path d="M7.25 7h5.5M7.25 10h5.5M7.25 13h3.5"/></svg>
+                </button>
                 <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
                 <ol class="weather-bars" role="list" data-r-apps></ol>
             </section>

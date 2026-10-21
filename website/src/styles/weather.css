@@ -1517,11 +1517,51 @@ html[data-theme="dark"] .weather-hero {
   outline-offset: 2px;
 }
 
-/* Records or accounts (weather-page.ts createMeasure), beside the range on the trends and on the apps elsewhere. */
-.weather-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
+/* Records or accounts (weather-page.ts createMeasure): an icon in the top right of the trends
+   and of the apps elsewhere, each tile its own. It shows what the tile is counting; a tap swaps it. */
+.weather-measure {
+  position: absolute;
+  top: calc(var(--tile-pad) - 4px);
+  right: calc(var(--tile-pad) - 6px);
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.weather-measure svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.weather-measure[data-measure="accounts"] [data-measure-icon="records"],
+.weather-measure[data-measure="records"] [data-measure-icon="accounts"] {
+  display: none;
+}
+
+.weather-measure:hover {
+  border-color: var(--dash);
+}
+
+.weather-measure:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* room for it beside the title */
+.weather-tile:has(> .weather-measure) > .weather-tile__head {
+  padding-right: 44px;
 }
 
 .weather-apps .weather-tile__aside {

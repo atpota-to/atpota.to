@@ -388,20 +388,28 @@ describe('records or accounts', () => {
     expect((await fetchHistory('hour', answer({ ...HISTORY, accounts: { ...acct, total: null } })))!.accounts).toBeUndefined();
   });
 
-  it('one toggle for the whole page, remembered', () => {
-    localStorage.removeItem(MEASURE_KEY);
-    const measure = createMeasure(document);
+  it('a toggle for each tile, accounts first, each remembered on its own', () => {
+    const keys = ['trends', 'apps'].map((t) => `${MEASURE_KEY}-${t}`);
+    for (const k of keys) localStorage.removeItem(k);
+    const button = (t: string) => document.querySelector<HTMLButtonElement>(`[data-measure-toggle="${t}"]`)!;
+    expect(document.querySelectorAll('[data-measure-toggle]')).toHaveLength(2); // the trends and the apps elsewhere
+    const trends = createMeasure(button('trends'));
+    const apps = createMeasure(button('apps'));
+    expect([trends.get(), apps.get()]).toEqual(['accounts', 'accounts']);
     const seen: string[] = [];
-    measure.onChange((m) => seen.push(m));
-    expect(measure.get()).toBe('records');
-    const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-measure="accounts"]')];
-    expect(buttons).toHaveLength(2); // the trends and the apps elsewhere
-    buttons[1]!.click();
-    expect(seen).toEqual(['accounts']);
-    expect([...document.querySelectorAll('[data-measure="accounts"]')].map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'true']);
-    expect(localStorage.getItem(MEASURE_KEY)).toBe('accounts');
-    expect(createMeasure(document).get()).toBe('accounts');
-    localStorage.removeItem(MEASURE_KEY);
+    trends.onChange((m) => seen.push(`trends ${m}`));
+    apps.onChange((m) => seen.push(`apps ${m}`));
+    button('trends').click();
+    expect(seen).toEqual(['trends records']);
+    expect([trends.get(), apps.get()]).toEqual(['records', 'accounts']);
+    expect(button('trends').dataset.measure).toBe('records');
+    expect(button('trends').getAttribute('aria-label')).toMatch(/^counting new records/);
+    expect(button('apps').getAttribute('aria-label')).toMatch(/^counting active accounts/);
+    expect(localStorage.getItem(keys[0]!)).toBe('records');
+    expect(localStorage.getItem(keys[1]!)).toBeNull();
+    expect(createMeasure(button('trends')).get()).toBe('records');
+    expect(createMeasure(button('apps')).get()).toBe('accounts');
+    for (const k of keys) localStorage.removeItem(k);
   });
 
   it('axis numbers stay short', () => {

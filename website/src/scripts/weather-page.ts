@@ -21,9 +21,10 @@
  * apps over the range, each with an arrow for how it did against the same span a day
  * (or a week, or 30 days) earlier.
  *
- * Records or accounts: a toggle on the trends and on the apps elsewhere (the same one,
- * remembered in this browser) switches them from new records to active accounts, the
- * different DIDs that wrote anything, so a bot writing a thousand records counts once.
+ * Records or accounts: an icon in the corner of the trends and of the apps elsewhere (each
+ * its own, remembered in this browser) switches that tile between active accounts, the
+ * different DIDs that wrote anything, so a bot writing a thousand records counts once, and
+ * new records. Accounts come first.
  * The station counts those with HyperLogLog sketches (atmosphere/src/accounts.js); the
  * live reading has them for its 60 seconds, /api/weather-history for each range.
  *
@@ -98,6 +99,7 @@ export const BLUESKY_NAMES: Record<string, string> = {
 
 export type Measure = 'records' | 'accounts';
 
+/** Where a tile's choice is kept in this browser: the key plus the tile's name (data-measure-toggle). */
 export const MEASURE_KEY = 'weather-measure';
 
 export interface MeasureToggle {
@@ -105,36 +107,40 @@ export interface MeasureToggle {
   onChange(fn: (m: Measure) => void): void;
 }
 
+const MEASURE_LABEL: Record<Measure, string> = {
+  accounts: 'counting active accounts. switch to new records',
+  records: 'counting new records. switch to active accounts',
+};
+
 /**
- * Every records / accounts toggle on the page ([data-measure] buttons), as one: pressing
- * one presses its twin, and the choice is remembered in this browser if it can be.
+ * One tile's records / accounts toggle: an icon button ([data-measure-toggle]) showing what the
+ * tile counts, accounts unless this browser remembers otherwise for that tile. A tap swaps it.
  */
-export function createMeasure(root: ParentNode): MeasureToggle {
-  let current: Measure = 'records';
+export function createMeasure(button: HTMLButtonElement | null): MeasureToggle {
+  const key = `${MEASURE_KEY}-${button?.dataset.measureToggle ?? ''}`;
+  let current: Measure = 'accounts';
   try {
-    if (localStorage.getItem(MEASURE_KEY) === 'accounts') current = 'accounts';
+    if (localStorage.getItem(key) === 'records') current = 'records';
   } catch {
-    // no storage: records it is
+    // no storage: accounts it is
   }
   const listeners: Array<(m: Measure) => void> = [];
-  const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-measure]')];
   const show = () => {
-    for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.measure === current));
+    if (!button) return;
+    button.dataset.measure = current;
+    button.setAttribute('aria-label', MEASURE_LABEL[current]);
+    button.title = MEASURE_LABEL[current];
   };
-  for (const b of buttons) {
-    b.addEventListener('click', () => {
-      const next = b.dataset.measure;
-      if ((next !== 'records' && next !== 'accounts') || next === current) return;
-      current = next;
-      try {
-        localStorage.setItem(MEASURE_KEY, next);
-      } catch {
-        // remembered for this visit only
-      }
-      show();
-      for (const fn of listeners) fn(current);
-    });
-  }
+  button?.addEventListener('click', () => {
+    current = current === 'accounts' ? 'records' : 'accounts';
+    try {
+      localStorage.setItem(key, current);
+    } catch {
+      // remembered for this visit only
+    }
+    show();
+    for (const fn of listeners) fn(current);
+  });
   show();
   return { get: () => current, onChange: (fn) => listeners.push(fn) };
 }
@@ -825,7 +831,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   let rainbowAt = -Infinity;
   // the busiest minute on record, from the almanac, raised by any live minute that beats it
   let record: number | null = null;
-  const measure = createMeasure(root);
+  const measure = createMeasure($<HTMLButtonElement>(report, '[data-measure-toggle="apps"]'));
   let shown: Reading | null = null;
   measure.onChange((m) => {
     if (shown) renderReport(report, shown, m);
@@ -864,7 +870,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     }, every);
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
-  if (trends) initTrends(trends, fetchImpl, measure);
+  if (trends) initTrends(trends, fetchImpl, createMeasure($<HTMLButtonElement>(trends, '[data-measure-toggle="trends"]')));
   const newApps = watchNewApps(desk);
   initAlmanac(report, fetchImpl, (a) => {
     newApps(a);
