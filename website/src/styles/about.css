@@ -242,6 +242,7 @@
   box-shadow: inset -8px -10px 0 rgb(201 146 49 / 0.45), 0 0 0 6px rgb(255 217 120 / 0.35), 0 8px 0 rgb(0 0 0 / 0.12);
 }
 
+/* a sticker on the potato: the picture fills it, and a pale rim sets it off */
 .moment__icon {
   display: grid;
   place-items: center;
@@ -250,20 +251,12 @@
   margin-bottom: 6px;
   overflow: hidden;
   border-radius: 16px;
-  background: rgb(255 253 247 / 0.7);
+  background: #725B36;
+  box-shadow: 0 0 0 3px rgb(255 253 247 / 0.75);
+  color: #FFF4D6;
 }
 
 .moment__icon img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-}
-
-.moment__icon--round {
-  border-radius: 50%;
-}
-
-.moment__icon--round img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -272,7 +265,18 @@
 .moment__icon--glyph svg {
   width: 30px;
   height: 30px;
-  color: #725B36;
+}
+
+/* poe, on the sunburst from atpotato's avatar, with a different face each time */
+.moment__icon--poe {
+  background: repeating-conic-gradient(#FFD978 0deg 10deg, #FFCB52 10deg 20deg);
+}
+
+.moment__icon--poe img {
+  width: 86%;
+  height: auto;
+  margin-top: 8%;
+  object-fit: contain;
 }
 
 .moment__date {
