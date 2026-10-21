@@ -57,7 +57,7 @@ export interface LensState {
   unit: Unit;
 }
 
-export const LENS_DEFAULT: LensState = { window: 'now', measure: 'accounts', unit: 'second' };
+export const LENS_DEFAULT: LensState = { window: 'hour', measure: 'accounts', unit: 'second' };
 
 /** Where the lens is kept in this browser. */
 export const LENS_KEY = 'weather-lens';

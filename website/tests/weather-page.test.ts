@@ -35,8 +35,8 @@ import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading }
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
 
-/** A lens counting records unless the test says otherwise (the page's own default is accounts). */
-const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, measure: 'records', ...change });
+/** The live reading, counting records, unless the test says otherwise (the page's own default is the last hour, by accounts). */
+const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, window: 'now', measure: 'records', ...change });
 
 // /weather: the atmosphere weather report, filled from one /api/atmosphere reading.
 
@@ -83,7 +83,7 @@ describe('the atmosphere weather report', () => {
   });
 
   it('fills every tile from one reading', () => {
-    renderReport(report, READING);
+    renderReport(report, READING, lens());
     expect(report.dataset.state).toBe('ready');
     expect(text('[data-r-records]')).toBe('444'); // every new record, not just posts
     expect(text('[data-r-cond]')).toBe(CONDITION_TEXT.stormy);
@@ -99,7 +99,7 @@ describe('the atmosphere weather report', () => {
   });
 
   it('draws the apps and bluesky collections as bars, longest for the busiest', () => {
-    renderReport(report, READING);
+    renderReport(report, READING, lens());
     const apps = [...report.querySelectorAll('[data-r-apps] li')];
     expect(apps.map((li) => li.querySelector('.weather-bars__label')!.textContent)).toEqual(['tangled.sh', 'whtwnd.com']);
     expect(apps[0]!.querySelector('.weather-bars__sub')!.textContent).toBe('sh.tangled.repo, sh.tangled.feed.star');
@@ -111,7 +111,7 @@ describe('the atmosphere weather report', () => {
   });
 
   it('keeps each bar from one reading to the next, so it can grow, roll and trade places', () => {
-    renderReport(report, READING);
+    renderReport(report, READING, lens());
     const [tangled, whtwnd] = [...report.querySelectorAll('[data-r-apps] li')];
     renderReport(report, {
       ...READING,
@@ -119,25 +119,25 @@ describe('the atmosphere weather report', () => {
         { domain: 'whtwnd.com', perSecond: 6, count: 30, collections: ['com.whtwnd.blog.entry'] },
         { domain: 'tangled.sh', perSecond: 3, count: 15, collections: [] },
       ],
-    });
+    }, lens());
     const rows = [...report.querySelectorAll('[data-r-apps] li')];
     expect(rows).toEqual([whtwnd, tangled]);
     expect(rows.map((li) => li.querySelector('.weather-bars__value')!.textContent)).toEqual(['6', '3']);
     expect(rows.map((li) => li.querySelector<HTMLElement>('.weather-bars__fill')!.style.width)).toEqual(['100%', '50%']);
     expect(rows[1]!.querySelector('.weather-bars__sub')).toBeNull();
-    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 1, count: 5, collections: [] }] });
+    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 1, count: 5, collections: [] }] }, lens());
     expect([...report.querySelectorAll('[data-r-apps] .weather-bars__label')].map((l) => l.textContent)).toEqual(['x.y']);
   });
 
   it('says so when nobody but bluesky was writing', () => {
-    renderReport(report, { ...READING, apps: [], records: { perSecond: 400, bluesky: 400, elsewhere: 0 }, diversity: { index: 0, level: 'low', apps: 0, collections: 8 } });
+    renderReport(report, { ...READING, apps: [], records: { perSecond: 400, bluesky: 400, elsewhere: 0 }, diversity: { index: 0, level: 'low', apps: 0, collections: 8 } }, lens());
     expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(false);
     expect(report.querySelector<HTMLElement>('[data-r-bar-else]')!.hidden).toBe(true);
     expect(text('[data-r-apps-count]')).toBe('');
   });
 
   it('puts names from the firehose on the page as text, never markup', () => {
-    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 1, count: 1, collections: ['<img src=x>'] }] });
+    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 1, count: 1, collections: ['<img src=x>'] }] }, lens());
     expect(report.querySelector('[data-r-apps] img')).toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe('the atmosphere weather report', () => {
     renderReportError(report);
     expect(report.dataset.state).toBe('error');
     expect(text('[data-r-cond]')).toBe(ERROR_TEXT);
-    renderReport(report, READING);
+    renderReport(report, READING, lens());
     renderReportError(report);
     expect(report.dataset.state).toBe('ready');
   });
@@ -161,7 +161,7 @@ describe('live from the weather station', () => {
   const series = Array.from({ length: 60 }, (_, i) => (i === 30 ? null : { t: 1792512960 + i, creates: 440, bluesky: 438, elsewhere: 2, posts: 40 + (i % 5) }));
 
   it('draws a sparkline of the last 60 seconds', () => {
-    renderReport(report, { ...READING, source: 'station', seconds: 60, series });
+    renderReport(report, { ...READING, source: 'station', seconds: 60, series }, lens());
     const spark = report.querySelector<HTMLElement>('[data-r-spark]')!;
     expect(spark.hidden).toBe(false);
     // the missing second breaks the line in two
@@ -169,7 +169,7 @@ describe('live from the weather station', () => {
   });
 
   it('a sampled reading has no sparkline', () => {
-    renderReport(report, { ...READING, source: 'sample' });
+    renderReport(report, { ...READING, source: 'sample' }, lens());
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true);
   });
 });
@@ -307,16 +307,16 @@ describe('records or accounts', () => {
   const section = () => report.querySelector<HTMLElement>('[data-r-trends]')!;
 
   it("puts the last minute's active accounts in the last minute, and what the index is made of", () => {
-    renderReport(report, LIVE);
+    renderReport(report, LIVE, lens());
     const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
     expect(minute.hidden).toBe(false);
     expect(text('[data-r-active]')).toBe('21,345');
     expect(text('[data-r-acct-index]')).toBe('0.52% of 21,345 active accounts wrote outside bluesky, across about 12 apps.');
-    renderReport(report, READING);
+    renderReport(report, READING, lens());
     expect(minute.hidden).toBe(true);
     expect(text('[data-r-acct-index]')).toBe('0.52% of the accounts heard just now wrote outside bluesky, across about 12 apps.');
     // a reading from before the index went by accounts
-    renderReport(report, { ...READING, diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 } });
+    renderReport(report, { ...READING, diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 } }, lens());
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
   });
 
@@ -470,18 +470,18 @@ describe('the lists', () => {
         { nsid: 'app.bsky.feed.like', perSecond: 308, count: 1540 },
         { nsid: 'app.bsky.graph.starterpack', perSecond: 0.01, count: 1 },
       ],
-    });
+    }, lens());
     expect(report.querySelectorAll('[data-r-apps] li')).toHaveLength(5);
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 5');
     expect([...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent)).toEqual([BLUESKY_NAMES['app.bsky.feed.like']]);
   });
 
   it("says when other apps only wrote a trickle, rather than that nobody did", () => {
-    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 0.02, count: 1, collections: [] }] });
+    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 0.02, count: 1, collections: [] }] }, lens());
     const empty = report.querySelector<HTMLElement>('[data-r-apps-empty]')!;
     expect(empty.hidden).toBe(false);
     expect(empty.textContent).toBe(APPS_TRICKLE);
-    renderReport(report, { ...READING, apps: [], diversity: { ...READING.diversity!, apps: 0 } });
+    renderReport(report, { ...READING, apps: [], diversity: { ...READING.diversity!, apps: 0 } }, lens());
     expect(empty.textContent).toBe(APPS_EMPTY);
   });
 });
@@ -513,8 +513,9 @@ describe('the lens', () => {
     for (const id of ['weather-trends-title', 'weather-apps-title', 'weather-minute-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeLessThan(group);
   });
 
-  it('starts from the address, else this browser, else now, accounts, a second', () => {
-    expect(LENS_DEFAULT).toEqual({ window: 'now', measure: 'accounts', unit: 'second' });
+  it('starts from the address, else this browser, else the last hour, accounts, a second', () => {
+    expect(LENS_DEFAULT).toEqual({ window: 'hour', measure: 'accounts', unit: 'second' });
+    expect(createLens('?w=now').get().window).toBe('now');
     expect(createLens('').get()).toEqual(LENS_DEFAULT);
     expect(createLens('?m=records').get().measure).toBe('records');
     expect(createLens('?w=24h&m=records&u=hour').get()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
@@ -531,14 +532,16 @@ describe('the lens', () => {
     l.set({ window: 'day' });
     l.set({ window: 'day' });
     l.set({ unit: 'total' });
-    expect(seen).toEqual(['now→day second', 'day→day total']);
+    expect(seen).toEqual(['hour→day second', 'day→day total']);
     expect(location.search).toBe('?w=24h&u=total');
     expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'accounts', unit: 'total' });
     l.set({ measure: 'records' });
     expect(new URLSearchParams(location.search).get('m')).toBe('records');
     l.set({ measure: 'accounts' });
-    l.set({ window: 'now', unit: 'second' });
+    l.set({ window: 'hour', unit: 'second' });
     expect(location.search).toBe('');
+    l.set({ window: 'now' });
+    expect(location.search).toBe('?w=now');
   });
 
   it('the bar and the header\'s unit drive it, and the unit stands aside for accounts', () => {
