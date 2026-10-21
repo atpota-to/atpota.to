@@ -1,7 +1,7 @@
-// The consumer against scripted sockets: cursors, replays, fallback, stalls.
+// The consumer against scripted sockets: cursors, replays, fallback, stalls, falling behind.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createJetstream, DEFAULT_URLS, REWIND_US, STALL_MS, withCursor } from '../src/jetstream.js';
+import { BEHIND_MS, CATCHUP_SAMPLE_MS, createJetstream, DEFAULT_URLS, REWIND_US, STALL_MS, WATCHDOG_MS, withCursor } from '../src/jetstream.js';
 import { Station } from '../src/station.js';
 
 const T0 = 1_792_512_000;
@@ -18,14 +18,14 @@ class FakeSocket {
   }
 }
 
-function harness({ startCursorUs = null, maxReplaySeconds = 1800 } = {}) {
+function harness({ startCursorUs = null, maxReplaySeconds = 1800, log = quiet } = {}) {
   const clock = { ms: (T0 + 100) * 1000 };
   const station = new Station({ now: () => clock.ms });
   const sockets = [];
   const timers = [];
   const jet = createJetstream({
     station,
-    log: quiet,
+    log,
     now: () => clock.ms,
     open: (url) => {
       const s = new FakeSocket(url);
@@ -173,4 +173,101 @@ test('stop closes the socket and schedules nothing', () => {
   h.sockets[0].onclose({});
   assert.equal(h.timers.length, 0);
   assert.equal(h.station.connected, false);
+});
+
+/**
+ * Plays a replay for `seconds` of wall time, a watchdog check every WATCHDOG_MS, the stream
+ * moving `speed` times as fast as the clock (in tenths of a second), until the socket closes.
+ */
+function replay(h, sock, speed, seconds) {
+  let streamUs = cursorOf(sock);
+  for (let t = 0; t < seconds * 1000 && !sock.closed; t += WATCHDOG_MS) {
+    const target = streamUs + WATCHDOG_MS * 1000 * speed;
+    while (streamUs + 100_000 <= target && streamUs + 100_000 <= h.clock.ms * 1000) sock.onmessage({ data: msg((streamUs += 100_000)) });
+    h.clock.ms += WATCHDOG_MS;
+    h.jet.check();
+  }
+  return streamUs;
+}
+
+test('a replay that falls further behind is given up for the live tail, and the gap is logged', () => {
+  const warnings = [];
+  const h = harness({ startCursorUs: (T0 + 100 - 1500) * 1e6, log: { ...quiet, warn: (m, f) => warnings.push([m, f]) } });
+  h.jet.start();
+  const [a] = h.sockets;
+  a.onopen();
+  // a fifth of real time, as on 2026-10-21
+  replay(h, a, 0.2, 120);
+  assert.equal(a.closed, true, 'given up');
+  assert.equal(h.station.connected, false);
+  const [, why] = warnings.find(([m]) => m === 'jetstream too far behind, skipping to the live tail');
+  assert.ok(why.behindSeconds > 1500);
+  assert.equal(why.catchingUp, 0.2);
+  assert.equal(why.gapFrom, new Date(h.station.lastUs / 1000).toISOString());
+  const skippedAt = h.clock.ms;
+  assert.ok(skippedAt - (T0 + 100) * 1000 <= BEHIND_MS + CATCHUP_SAMPLE_MS + 2 * WATCHDOG_MS, 'within about half a minute of watching');
+
+  h.fire();
+  const b = h.sockets[1];
+  assert.equal(cursorOf(b), null, 'reconnects at the live tail');
+  assert.equal(new URL(b.url).host, new URL(a.url).host, 'on the same host');
+  b.onopen();
+  const live = Math.floor(h.clock.ms / 1000) - 3;
+  for (let us = live * 1e6; us <= (live + 2) * 1e6; us += 100_000) b.onmessage({ data: msg(us) });
+  assert.equal(h.station.buckets.get(live + 1).covered, true, 'live seconds are counted');
+  assert.equal(h.station.buckets.get(live + 1).tally.creates.get('app.bsky.feed.post'), 10);
+  assert.equal(h.station.buckets.get(live - 60)?.covered ?? false, false, 'the gap is missing, not quiet');
+
+  // once it's live, a drop resumes from a cursor again
+  b.onclose({});
+  h.fire();
+  assert.equal(cursorOf(h.sockets[2]), h.station.lastUs - REWIND_US);
+});
+
+test('a replay that is catching up, but too slowly, is given up too', () => {
+  const h = harness({ startCursorUs: (T0 + 100 - 1500) * 1e6 });
+  h.jet.start();
+  h.sockets[0].onopen();
+  // 1.5 times real time would take 48 minutes to win back 24
+  replay(h, h.sockets[0], 1.5, 120);
+  assert.equal(h.sockets[0].closed, true);
+  h.fire();
+  assert.equal(cursorOf(h.sockets[1]), null);
+});
+
+test('a replay that is catching up quickly is left to finish', () => {
+  const h = harness({ startCursorUs: (T0 + 100 - 1500) * 1e6 });
+  h.jet.start();
+  const [a] = h.sockets;
+  a.onopen();
+  // after a restart: 25 minutes back at 10 times real time is under 3 minutes
+  const streamUs = replay(h, a, 10, 240);
+  assert.equal(a.closed, false);
+  assert.ok(h.clock.ms * 1000 - streamUs < 5e6, 'caught up, within a few seconds of live');
+});
+
+test('a short lag after a reconnect never trips it', () => {
+  const h = harness();
+  h.jet.start();
+  const [a] = h.sockets;
+  a.onopen();
+  a.onmessage({ data: msg((h.clock.ms - BEHIND_MS + 5000) * 1000) });
+  // the stream crawls, but is never a minute behind
+  for (let i = 0; i < 40; i++) {
+    a.onmessage({ data: msg((h.clock.ms - BEHIND_MS + 5000) * 1000) });
+    h.clock.ms += WATCHDOG_MS;
+    h.jet.check();
+  }
+  assert.equal(a.closed, false);
+});
+
+test('a live-tail connection that fails before it delivers still goes to the live tail next', () => {
+  const h = harness({ startCursorUs: (T0 + 100 - 1500) * 1e6 });
+  h.jet.start();
+  h.sockets[0].onopen();
+  replay(h, h.sockets[0], 0.2, 120);
+  h.fire();
+  h.sockets[1].onerror({});
+  h.fire();
+  assert.equal(cursorOf(h.sockets[2]), null);
 });
