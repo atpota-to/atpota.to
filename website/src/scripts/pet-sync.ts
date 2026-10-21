@@ -10,8 +10,10 @@
  * burst of pets is one write. The record is read without credentials (repos are public);
  * a count that isn't a whole number from 0 to MAX_PETS is treated as no record.
  *
- * It's the reader's own number in their own repo, so it's on the honour system: nothing
- * here or on atpota.to trusts it for anything but saying it back to them.
+ * It's the reader's own number in their own repo, so it's on the honour system: atpota.to
+ * says it back to them, and puts it on the community garden's pets board (the garden index
+ * keeps it; server/leaderboard.ts), where atpotato blocking an account takes it off. Nothing
+ * else trusts it.
  */
 
 import type { Auth, Session } from '../blog/auth';

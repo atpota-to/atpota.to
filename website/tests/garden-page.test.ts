@@ -13,6 +13,7 @@ import {
   featuredFlower,
   gardenPath,
   initGardenPage,
+  LEADERS_SHOWN,
   markSeen,
   numbersFor,
   parseGardenPath,
@@ -74,6 +75,19 @@ function flowerOf(did: string, opts: { daysOld?: number; rkey?: string; patch?: 
   } as GardenerFlower;
 }
 
+/** What /api/leaderboard answers: two tied second for flowers, and nobody yet for pets or visitors. */
+const leaderboard = () => ({
+  flowers: [
+    { rank: 1, did: CY, handle: 'cy.example', avatar: null, n: 12, gardens: 4 },
+    { rank: 2, did: BO, handle: 'bo.example', avatar: null, n: 5, gardens: 2 },
+    { rank: 2, did: MO, handle: 'mo.example', avatar: null, n: 5, gardens: 1 },
+  ],
+  tending: [{ rank: 1, did: BO, handle: 'bo.example', avatar: null, n: 1204, neighbours: 1 }],
+  pets: [],
+  kinds: [{ rank: 1, did: CY, handle: 'cy.example', avatar: null, n: 3 }],
+  visitors: [],
+});
+
 const pressedOf = (did: string, rkey: string, kind: string): GardenerFlower => ({ ...flowerOf(did, { rkey, kind, patch: summer, daysOld: 120, care: 1 }), tends: [] });
 
 interface PersonOpts {
@@ -89,17 +103,20 @@ interface Rig {
   asked: string[];
   /** Query strings /api/garden was asked with. */
   gardenAsked: string[];
+  /** Times /api/leaderboard was asked. */
+  leadersAsked: number;
   run: () => Promise<void>;
 }
 
 /** A network where each person may keep a garden (rkey "self"), and the reader may sign in as ME. */
-function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Record<string, PersonOpts>; gardenerDown?: boolean } = {}): Rig {
+function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Record<string, PersonOpts>; gardenerDown?: boolean; leaders?: Record<string, unknown> | 'down' } = {}): Rig {
   document.body.innerHTML = MAIN + DIALOG;
   window.history.replaceState(null, '', opts.path ?? '/garden');
   const calls: Rig['calls'] = [];
   const went: Prepared[] = [];
   const asked: string[] = [];
   const gardenAsked: string[] = [];
+  let leadersAsked = 0;
   const people: Record<string, PersonOpts> = {
     [ME]: { flowers: [flowerOf(ME), flowerOf(ME, { rkey: '3kbo', patch: boGarden, kind: 'tulip', plot: 4, daysOld: 9, care: 0.43, thirsty: true }), pressedOf(ME, '3kold1', 'daisy')], garden: true },
     [CY]: { flowers: [flowerOf(CY), pressedOf(CY, '3kold1', 'daisy')], garden: true, displayName: 'Cy' },
@@ -175,6 +192,11 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
       const flowers = [visitor(BO, 3), visitor(MO, 9)];
       return Response.json({ owner, patch, patches: [{ rkey: 'self', name: g.name, season: null, open, planted: flowers.length, plots: Number(g.cols) * Number(g.rows), opensAt: null, closesAt: g.closesAt ?? null }], flowers, total: flowers.length });
     }
+    if (url.pathname === '/api/leaderboard') {
+      leadersAsked++;
+      if (!opts.leaders || opts.leaders === 'down') return Response.json({ error: 'unavailable' }, { status: 503 });
+      return Response.json({ boards: opts.leaders, updatedAt: '2026-10-20T11:59:00.000Z' });
+    }
     if (url.origin === 'https://public.api.bsky.app') return Response.json({ did: ME, handle: 'me.test', displayName: 'Me' });
     return new Response('unexpected', { status: 599 });
   }) as typeof fetch;
@@ -183,6 +205,9 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
     went,
     asked,
     gardenAsked,
+    get leadersAsked() {
+      return leadersAsked;
+    },
     run: () =>
       initGardenPage({
         auth: opts.auth === null ? null : auth,
@@ -299,6 +324,93 @@ describe('the garden page', () => {
     await rig({ signedIn: true, path: '/garden/me.test' }).run();
     expect(text('[data-head-eyebrow]')).toBe(COPY.eyebrow(true));
     expect(document.title).toBe(COPY.docTitle(null));
+  });
+
+  it('the community garden has the leaderboards: one board at a time, ranked, with ties', async () => {
+    const r = rig({ leaders: leaderboard() });
+    await r.run();
+    expect(r.leadersAsked).toBe(1);
+    expect(shown('[data-leaders]')).toBe(true);
+    const boards = [...document.querySelectorAll<HTMLButtonElement>('[data-leaders-boards] button')];
+    expect(boards.map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+      [COPY.leaders.boards.flowers, 'true'],
+      [COPY.leaders.boards.tending, 'false'],
+      [COPY.leaders.boards.pets, 'false'],
+      [COPY.leaders.boards.kinds, 'false'],
+      [COPY.leaders.boards.visitors, 'false'],
+    ]);
+    expect(text('[data-leaders-what]')).toBe(COPY.leaders.what.flowers);
+    const rows = () =>
+      [...document.querySelectorAll<HTMLElement>('[data-leaders-list] .garden-leader')].map((li) => [
+        li.querySelector('.garden-leader__rank')!.textContent,
+        li.querySelector('.garden-leader__name')!.textContent,
+        li.querySelector('.garden-leader__score')!.textContent,
+      ]);
+    expect(rows()).toEqual([
+      ['1', '@cy.example', `12 ${COPY.leaders.count.flowers(12)}${COPY.leaders.gardens(4)}`],
+      ['2', '@bo.example', `5 ${COPY.leaders.count.flowers(5)}${COPY.leaders.gardens(2)}`],
+      ['2', '@mo.example', `5 ${COPY.leaders.count.flowers(5)}${COPY.leaders.gardens(1)}`],
+    ]);
+    // the top three get a colour each; a tie shares one
+    expect([...document.querySelectorAll('.garden-leader__rank')].map((n) => n.className)).toEqual([
+      'garden-leader__rank is-top1',
+      'garden-leader__rank is-top2',
+      'garden-leader__rank is-top2',
+    ]);
+    expect($('.garden-leader__who').getAttribute('href')).toBe('/garden/cy.example');
+    // signed out, nobody is "you", and nothing nags
+    expect(document.querySelector('.garden-leader.is-you')).toBeNull();
+    expect(text('[data-leaders-status]')).toBe('');
+    // another board: the same buttons (focus stays put), the other list
+    const tending = boards[1]!;
+    tending.focus();
+    tending.click();
+    expect(document.activeElement).toBe(tending);
+    expect(tending.getAttribute('aria-pressed')).toBe('true');
+    expect(boards[0]!.getAttribute('aria-pressed')).toBe('false');
+    expect(text('[data-leaders-what]')).toBe(COPY.leaders.what.tending);
+    expect(rows()).toEqual([['1', '@bo.example', `1,204 ${COPY.leaders.count.tending(1204)}${COPY.leaders.neighbours(1)}`]]);
+    boards[4]!.click();
+    expect(rows()).toEqual([]);
+    expect(text('[data-leaders-status]')).toBe(COPY.leaders.empty);
+  });
+
+  it('signed in, your own place on each board: in the top, under it, or how to get on', async () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ rank: i + 1, did: `did:plc:${'p'.repeat(22)}${'abcdefghijklmn'[i]}a`, handle: `p${i}.example`, avatar: null, n: 100 - i }));
+    const pets = [...many, { rank: 15, did: ME, handle: 'me.test', avatar: null, n: 3 }];
+    const flowers = [...leaderboard().flowers, { rank: 4, did: ME, handle: 'me.test', avatar: null, n: 2, gardens: 2 }];
+    const r = rig({ signedIn: true, leaders: { ...leaderboard(), flowers, pets } });
+    await r.run();
+    // on flowers, in the top
+    const you = $('.garden-leader.is-you');
+    expect(you.dataset.leader).toBe(ME);
+    expect(document.querySelector('.garden-leader__gap')).toBeNull();
+    expect(text('[data-leaders-status]')).toBe('');
+    expect(you.querySelector('.garden-leader__you')?.textContent).toBe(COPY.leaders.you);
+    // on pets, fifteenth: the top ten, then a gap, then you
+    $<HTMLButtonElement>('[data-board="pets"]').click();
+    const items = [...document.querySelectorAll<HTMLElement>('[data-leaders-list] > li')];
+    expect(items).toHaveLength(LEADERS_SHOWN + 2);
+    expect(items[LEADERS_SHOWN]!.className).toBe('garden-leader__gap');
+    expect(items.at(-1)!.dataset.leader).toBe(ME);
+    expect(items.at(-1)!.querySelector('.garden-leader__rank')!.textContent).toBe('15');
+    // not on tending yet: how to get on it
+    $<HTMLButtonElement>('[data-board="tending"]').click();
+    expect(document.querySelector('.garden-leader.is-you')).toBeNull();
+    expect(text('[data-leaders-status]')).toBe(COPY.leaders.notYet.tending);
+  });
+
+  it('the leaderboards are only on the community garden, and stay out of the way when they don’t load', async () => {
+    const theirs = rig({ path: '/garden/cy.example', leaders: leaderboard() });
+    await theirs.run();
+    expect(theirs.leadersAsked).toBe(0);
+    expect(shown('[data-leaders]')).toBe(false);
+    const down = rig({ leaders: 'down' });
+    await down.run();
+    expect(down.leadersAsked).toBe(1);
+    expect(shown('[data-leaders]')).toBe(false);
+    expect(shown('[data-garden]')).toBe(true);
+    expect($('[data-garden-page]').dataset.state).toBe('ready');
   });
 
   it("someone's page: who they are, their numbers, and their garden to plant in", async () => {

@@ -27,6 +27,10 @@ export const TEND_NSID = 'to.atpota.garden.tend';
 export const GARDEN_SUBJECT = 'did:plc:qntsxa2i4sb24noi45fx4np2';
 export const GARDEN_ENDPOINT = '/api/garden';
 export const GARDENER_ENDPOINT = '/api/gardener';
+export const LEADERBOARD_ENDPOINT = '/api/leaderboard';
+/** The leaderboards, in the order the community garden shows them (server/leaderboard.ts). */
+export const BOARDS = ['flowers', 'tending', 'pets', 'kinds', 'visitors'] as const;
+export type Board = (typeof BOARDS)[number];
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
 export type Season = (typeof SEASONS)[number];
 export const TEND_ACTIONS = ['water', 'sun', 'talk'] as const;
@@ -59,6 +63,23 @@ export interface Owner {
   handle: string;
   displayName: string | null;
   avatar: string | null;
+}
+
+/** Someone on a leaderboard: their rank (ties share one), and their count. */
+export interface Leader {
+  rank: number;
+  did: string;
+  handle: string;
+  avatar: string | null;
+  n: number;
+  /** flowers: how many people's gardens they're in. */
+  gardens?: number;
+  /** tending: how many people's flowers they've tended. */
+  neighbours?: number;
+}
+
+export interface LeaderboardView {
+  boards: Record<Board, Leader[]>;
 }
 
 export interface Patch {
@@ -510,6 +531,30 @@ export async function fetchGardener(actor: string, fetchImpl: typeof fetch = fet
       given: toGiven(body.given),
       poe: toPoe(body.poe),
     };
+  } catch {
+    return null;
+  }
+}
+
+function toLeader(v: unknown): Leader | null {
+  const l = v as Record<string, unknown>;
+  if (!isDidString(l?.did) || typeof l.handle !== 'string' || !isCount(l.rank) || l.rank < 1 || !isCount(l.n) || l.n < 1) return null;
+  const leader: Leader = { rank: l.rank, did: l.did, handle: l.handle, avatar: typeof l.avatar === 'string' && /^https:\/\/[^\s"'<>]+$/.test(l.avatar) ? l.avatar : null, n: l.n };
+  if (isCount(l.gardens)) leader.gardens = l.gardens;
+  if (isCount(l.neighbours)) leader.neighbours = l.neighbours;
+  return leader;
+}
+
+/** The leaderboards, each checked row by row; null when they can't be read. */
+export async function fetchLeaderboard(fetchImpl: typeof fetch = fetch): Promise<LeaderboardView | null> {
+  try {
+    const res = await fetchImpl(LEADERBOARD_ENDPOINT, { headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { boards?: unknown };
+    const boards = body?.boards as Record<string, unknown> | undefined;
+    if (!boards || typeof boards !== 'object' || Array.isArray(boards)) return null;
+    const read = (b: Board) => (Array.isArray(boards[b]) ? (boards[b] as unknown[]) : []).map(toLeader).filter((l): l is Leader => l !== null);
+    return { boards: Object.fromEntries(BOARDS.map((b) => [b, read(b)])) as Record<Board, Leader[]> };
   } catch {
     return null;
   }

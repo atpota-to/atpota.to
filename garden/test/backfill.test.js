@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBackfill, didDocumentUrl, pdsOf, RETRY_FAILED_MS } from '../src/backfill.js';
 import { CHUNK } from '../src/indexer.js';
-import { PATCH, SPROUT, TEND } from '../src/records.js';
+import { PATCH, PETS, SPROUT, TEND } from '../src/records.js';
 import { createStore } from '../src/state.js';
 
 const quiet = { info() {}, warn() {}, error() {} };
@@ -104,21 +104,24 @@ function backfillOn(w, { touchedSince, now = () => T0 } = {}) {
 const held = (did, collection, n) => ({ uri: `at://${did}/${collection}/${rkey(n)}`, did, collection });
 
 test('finds repos from the relay (every page, each collection) and from the index', async () => {
+  const pets = { uri: `at://${BOB}/${PETS}/self`, cid: CID, value: { $type: PETS, count: 12, createdAt: '2026-10-04T00:00:00Z', updatedAt: '2026-10-05T00:00:00Z' } };
   const w = world({
-    relay: { [SPROUT]: [[ALICE], [BOB]], [PATCH]: [[ALICE]], [TEND]: [[]] },
+    relay: { [SPROUT]: [[ALICE], [BOB]], [PATCH]: [[ALICE]], [TEND]: [[]], [PETS]: [[BOB]] },
     repos: {
       [ALICE]: { pds: 'https://pds.alice.example', records: { [PATCH]: [entry(ALICE, PATCH, 1)], [SPROUT]: [entry(ALICE, SPROUT, 1)] } },
-      [BOB]: { pds: 'https://pds.bob.example', records: { [SPROUT]: [entry(BOB, SPROUT, 2)] } },
+      [BOB]: { pds: 'https://pds.bob.example', records: { [SPROUT]: [entry(BOB, SPROUT, 2)], [PETS]: [pets] } },
       [CAROL]: { pds: 'https://pds.carol.example', records: { [TEND]: [entry(CAROL, TEND, 3)] } },
     },
     index: [held(CAROL, TEND, 3)],
   });
   const { backfill, status, store } = backfillOn(w);
   const result = await backfill.run('test');
-  assert.deepEqual(result, { repos: 3, listed: true, complete: 3, incomplete: 0, upserts: 4, deletes: 0, seconds: 0 });
-  assert.equal(w.requests.filter((u) => u.includes('listReposByCollection')).length, 4, 'two pages of sprouts, one each of the rest');
+  assert.deepEqual(result, { repos: 3, listed: true, complete: 3, incomplete: 0, upserts: 5, deletes: 0, seconds: 0 });
+  assert.equal(w.requests.filter((u) => u.includes('listReposByCollection')).length, 5, 'two pages of sprouts, one each of the rest');
   assert.ok(w.requests.some((u) => u.includes('collection=to.atpota.garden.sprout') && u.includes('cursor=1')));
-  assert.deepEqual([...w.rows.keys()].sort(), [entry(ALICE, PATCH, 1).uri, entry(ALICE, SPROUT, 1).uri, entry(BOB, SPROUT, 2).uri, entry(CAROL, TEND, 3).uri].sort());
+  assert.ok(w.requests.some((u) => u.includes('listReposByCollection') && u.includes('collection=to.atpota.poe.pets')));
+  assert.deepEqual([...w.rows.keys()].sort(), [entry(ALICE, PATCH, 1).uri, entry(ALICE, SPROUT, 1).uri, entry(BOB, SPROUT, 2).uri, pets.uri, entry(CAROL, TEND, 3).uri].sort());
+  assert.equal(w.rows.get(pets.uri).record.count, 12);
   const row = w.rows.get(entry(ALICE, SPROUT, 1).uri);
   assert.equal(row.first_seen_at, null, 'a backfill never claims a first-seen time');
   assert.equal(row.ref_uri, `at://${ALICE}/${PATCH}/self`);
@@ -223,7 +226,7 @@ test('applies in chunks of at most 500', async () => {
   assert.equal(result.upserts, CHUNK + 120);
   const applies = w.calls.filter((c) => c.name === 'garden_apply');
   assert.deepEqual(applies.map((c) => c.args.p_upserts.length + c.args.p_deletes.length), [CHUNK, 120]);
-  assert.equal(w.requests.filter((u) => u.includes('listRecords')).length, 3 + 6, 'tends a hundred at a time, plus the empty collections');
+  assert.equal(w.requests.filter((u) => u.includes('listRecords')).length, 4 + 6, 'tends a hundred at a time, plus the empty collections');
 });
 
 test('reads the index before listing, and leaves alone what the stream touched meanwhile', async () => {

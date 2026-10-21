@@ -2,7 +2,10 @@
 
 The garden's index: an AppView for the lexicons `to.atpota.garden.patch`,
 `to.atpota.garden.sprout` and `to.atpota.garden.tend`
-([`website/lexicons/to/atpota/garden/`](../website/lexicons/to/atpota/garden)). It keeps
+([`website/lexicons/to/atpota/garden/`](../website/lexicons/to/atpota/garden)), and for
+Poe's pet counts, `to.atpota.poe.pets` at `self`
+([`website/lexicons/to/atpota/poe/pets.json`](../website/lexicons/to/atpota/poe/pets.json)),
+so the community garden can say who has petted Poe the most. It keeps
 every such record on the network in Supabase, so the website reads one database instead
 of asking Constellation which records link where and Slingshot for each one. Beside them
 it **settles** each flower, once: what a mystery seed grew into, and the network weather
@@ -17,12 +20,17 @@ own process with its own Jetstream connection. See
 The schema is [`supabase/garden_index.sql`](supabase/garden_index.sql): tables
 `garden_records`, `garden_growth` and `garden_status`, the `garden_*` functions the
 indexer calls with the service role, and the three the website calls with the
-publishable key (`garden_sprouts`, `garden_tends`, `garden_growth_of`).
+publishable key (`garden_sprouts`, `garden_tends`, `garden_growth_of`). Then
+[`supabase/garden_leaderboard.sql`](supabase/garden_leaderboard.sql): `garden_records`
+takes `to.atpota.poe.pets` too, and `garden_leaderboard` adds up the community garden's
+boards for the website (`/api/leaderboard`): flowers (one a patch, unless it takes many),
+tending for other people's flowers (once a flower a day, by the TID key), pets, kinds
+grown to bloom, and visitors to people's own gardens.
 
 ## How it works
 
 - **The stream.** One Jetstream **v2** connection
-  (`/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&kinds=commit`),
+  (`/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&kinds=commit`),
   on `jetstream2.us-east`, falling back to `jetstream1`. Each commit becomes an upsert or
   a delete (`src/records.js`). A record that fails the shape checks (or that Postgres
   can't hold: a NUL, a lone surrogate, over 20,000 characters) is deleted from the index,
@@ -85,7 +93,12 @@ up:
 
 1. The schema: [`supabase/garden_index.sql`](supabase/garden_index.sql), applied to the
    Supabase project **atpota.to** (`zdzjtziydmwkxbzlkwxv`) as migration `garden_index` on
-   2026-10-20. A change to it goes in as a new migration.
+   2026-10-20. A change to it goes in as a new migration: the next is
+   [`supabase/garden_leaderboard.sql`](supabase/garden_leaderboard.sql), as migration
+   `garden_leaderboard`, which has to be in before the indexer that keeps pets deploys.
+   Until then Postgres refuses every pets row: the stream drops each one after three
+   tries, and a reconcile can't apply anything from a repo that has one, its garden
+   records included.
 2. On the droplet:
    ```bash
    mkdir -p /root/atpotato-garden && chmod 700 /root/atpotato-garden
@@ -157,7 +170,7 @@ CPUQuota=25%.
 ## Files
 
 ```
-src/records.js      the three collections; a record as a row, a Jetstream v2 event as an upsert or delete
+src/records.js      the four collections; a record as a row, a Jetstream v2 event as an upsert or delete
 src/jetstream.js    the connection: v2 URL, cursors per host, failover, stale cursors, recycling
 src/indexer.js      the batcher: last event per URI, garden_apply in chunks, cursors saved after success
 src/backfill.js     the reconcile: relay + index repos, DID documents, listRecords, compare and apply
@@ -167,5 +180,5 @@ src/state.js        state.json: cursors and the last reconcile
 src/server.js       /healthz
 src/index.js        wiring, heartbeat, stats line, shutdown
 src/backfill-once.js  `npm run backfill`: one reconcile, then exit
-supabase/           the migration (garden_index)
+supabase/           the migrations (garden_index, then garden_leaderboard)
 ```

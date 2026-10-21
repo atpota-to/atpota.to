@@ -1,6 +1,6 @@
 // records.js
-// What the index keeps: a garden record as a garden_records row, and a Jetstream v2 event
-// as what to do with it.
+// What the index keeps: a garden record (or a pet count for Poe) as a garden_records row,
+// and a Jetstream v2 event as what to do with it.
 //
 // The checks are cheap shape checks, enough that every row is safe to store and to join on
 // (a sprout's patch, a tend's flower). The website still validates each record fully when
@@ -13,9 +13,12 @@
 export const PATCH = 'to.atpota.garden.patch';
 export const SPROUT = 'to.atpota.garden.sprout';
 export const TEND = 'to.atpota.garden.tend';
-export const COLLECTIONS = [PATCH, SPROUT, TEND];
-/** What Jetstream v2 is asked for. */
-export const WILDCARD = 'to.atpota.garden.*';
+/** Poe's pet count, one record at PETS_RKEY in each petter's repo, for the garden's leaderboard. */
+export const PETS = 'to.atpota.poe.pets';
+export const PETS_RKEY = 'self';
+export const COLLECTIONS = [PATCH, SPROUT, TEND, PETS];
+/** What Jetstream v2 is asked for: the garden's wildcard, and the pets. */
+export const STREAM_COLLECTIONS = ['to.atpota.garden.*', PETS];
 export const COMMIT_TYPE = 'network.bsky.jetstream.subscribeEvents#commit';
 
 export const DID_RE = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2000}$/;
@@ -41,12 +44,13 @@ export function isoOrNull(value) {
   return /^(?!0000)\d{4}-/.test(iso) ? iso : null;
 }
 
-/** What a record points at: a sprout's patch, a tend's flower (null for a patch); undefined when its shape is wrong. */
+/** What a record points at: a sprout's patch, a tend's flower (null for a patch or pets); undefined when its shape is wrong. */
 function refOf(collection, r) {
   if (typeof r.createdAt !== 'string') return undefined;
   if (collection === PATCH) return typeof r.name === 'string' && Number.isInteger(r.cols) && Number.isInteger(r.rows) ? null : undefined;
   if (collection === SPROUT) return isStrongRef(r.patch) && isWord(r.kind) && Number.isInteger(r.plot) ? r.patch.uri : undefined;
   if (collection === TEND) return isStrongRef(r.subject) && isWord(r.action) ? r.subject.uri : undefined;
+  if (collection === PETS) return Number.isSafeInteger(r.count) && r.count >= 0 ? null : undefined;
   return undefined;
 }
 
@@ -61,6 +65,8 @@ export function isAddress(did, collection, rkey) {
  */
 export function toRow({ did, collection, rkey, cid, record, firstSeenAt = null }) {
   if (!isAddress(did, collection, rkey)) return null;
+  // Only the one at "self" is anyone's pet count (the website's pet-sync.ts).
+  if (collection === PETS && rkey !== PETS_RKEY) return null;
   if (typeof cid !== 'string' || !CID_RE.test(cid)) return null;
   if (!isObject(record) || record.$type !== collection) return null;
   let json;
@@ -87,7 +93,7 @@ export function toRow({ did, collection, rkey, cid, record, firstSeenAt = null }
 
 /**
  * A Jetstream v2 payload (the `payload` of a {"$type":"message"} envelope) as
- * { op: 'upsert', row } | { op: 'delete', uri }, or null when it isn't a garden commit.
+ * { op: 'upsert', row } | { op: 'delete', uri }, or null when it isn't a commit the index keeps.
  */
 export function eventOf(payload) {
   if (!isObject(payload)) return null;

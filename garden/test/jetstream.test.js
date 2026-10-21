@@ -85,15 +85,15 @@ function harness({ cursors = {}, hosts = [A, B], beforeRecycle } = {}) {
 
 const parts = (s) => {
   const u = new URL(s.url);
-  return { host: `${u.protocol}//${u.host}`, path: u.pathname, collections: u.searchParams.get('collections'), kinds: u.searchParams.get('kinds'), cursor: u.searchParams.get('cursor') };
+  return { host: `${u.protocol}//${u.host}`, path: u.pathname, collections: u.searchParams.getAll('collections'), kinds: u.searchParams.get('kinds'), cursor: u.searchParams.get('cursor') };
 };
 
-test('the v2 URL: the garden wildcard, commits only, and the cursor when there is one', () => {
-  assert.equal(streamUrl(A, null), `${A}/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&kinds=commit`);
-  assert.equal(streamUrl(A, 26252275534), `${A}/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&kinds=commit&cursor=26252275534`);
+test('the v2 URL: the garden wildcard and the pets, commits only, and the cursor when there is one', () => {
+  assert.equal(streamUrl(A, null), `${A}/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&kinds=commit`);
+  assert.equal(streamUrl(A, 26252275534), `${A}/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&kinds=commit&cursor=26252275534`);
   const h = harness({ cursors: { [A]: 41 } });
   h.jet.start();
-  assert.deepEqual(parts(h.sockets[0]), { host: A, path: '/xrpc/network.bsky.jetstream.subscribeEvents', collections: 'to.atpota.garden.*', kinds: 'commit', cursor: '41' });
+  assert.deepEqual(parts(h.sockets[0]), { host: A, path: '/xrpc/network.bsky.jetstream.subscribeEvents', collections: ['to.atpota.garden.*', 'to.atpota.poe.pets'], kinds: 'commit', cursor: '41' });
   const fresh = harness();
   fresh.jet.start();
   assert.equal(parts(fresh.sockets[0]).cursor, null);

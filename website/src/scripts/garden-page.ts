@@ -4,7 +4,9 @@
  *   /garden                  the community garden (atpotato's page, as /garden/atpota.to),
  *                            for everyone: where the nav goes. Its header is the garden's,
  *                            not atpotato's: a flower for a face, this season's numbers, and
- *                            (signed in) a button to your own page
+ *                            (signed in) a button to your own page. Under its patch, the
+ *                            leaderboards (/api/leaderboard, server/leaderboard.ts), one board
+ *                            at a time, with your own place on it when you're signed in
  *   /garden/dame.is          someone's page, by handle or DID: their garden, where anyone can
  *                            plant a flower (the "garden" level)
  *   /garden/dame.is/flowers  every flower they've planted, in any garden: the one that needs
@@ -39,11 +41,13 @@ import { speciesOf } from '../../shared/garden-rules.js';
 import { bloomsAt, DAY_MS, drawFlower, drawSeed, GROW_DAYS, KIND_INFO, kindName, KINDS, rarityOdds, sampleVariant, stageFor, type FlowerKind, type Stage, type Variant } from './flowers';
 import {
   actorOf,
+  BOARDS,
   COPY as PATCH_COPY,
   dayOf,
   describeBloom,
   drawPlanted,
   fetchGardener,
+  fetchLeaderboard,
   flowerVariant,
   GARDEN_SIZES,
   GARDEN_SUBJECT,
@@ -66,11 +70,14 @@ import {
   wateredToday,
   weatherLines,
   weatherLooks,
+  type Board,
   type Flower,
   type GardenController,
   type GardenerFlower,
   type GardenerView,
   type GardenView,
+  type Leader,
+  type LeaderboardView,
   type Patch,
   type Planting,
   type TendAction,
@@ -83,6 +90,8 @@ export { actorOf, gardenPath } from './garden';
 export const SEEN_KEY = 'garden:seen';
 /** Neighbours who help count towards a flower's care, up to this many (server/garden.ts). */
 const MAX_HELPERS = 3;
+/** People shown on a board; your own place is added under them when it's further down. */
+export const LEADERS_SHOWN = 10;
 
 export type Level = 'garden' | 'flowers';
 export type Filter = 'all' | 'growing' | 'bloom' | 'pressed';
@@ -203,6 +212,34 @@ export const COPY = {
     helpers: (owner: boolean) => (owner ? "who's helped you" : "who's helped them"),
     helped: (owner: boolean) => (owner ? "who you've helped" : "who they've helped"),
     none: 'no connections yet. plant somewhere, or water someone else\'s flower.',
+  },
+  leaders: {
+    boards: { flowers: 'flowers', tending: 'tending', pets: 'pets', kinds: 'kinds', visitors: 'visitors' } satisfies Record<Board, string>,
+    what: {
+      flowers: 'most flowers planted, in any garden on atpota.to',
+      tending: "most tending for other people's flowers, each one once a day",
+      pets: 'most pets for poe',
+      kinds: `most kinds grown to bloom, of the ${KINDS.length} in the field guide`,
+      visitors: "most people who've planted in their own garden",
+    } satisfies Record<Board, string>,
+    count: {
+      flowers: (n: number) => (n === 1 ? 'flower' : 'flowers'),
+      tending: (n: number) => (n === 1 ? 'time tending' : 'times tending'),
+      pets: (n: number) => (n === 1 ? 'pet' : 'pets'),
+      kinds: (n: number) => (n === 1 ? 'kind' : 'kinds'),
+      visitors: (n: number) => (n === 1 ? 'visitor' : 'visitors'),
+    } satisfies Record<Board, (n: number) => string>,
+    gardens: (n: number) => `in ${n} ${n === 1 ? 'garden' : 'gardens'}`,
+    neighbours: (n: number) => `for ${n} ${n === 1 ? 'neighbour' : 'neighbours'}`,
+    you: 'you',
+    empty: 'nobody on this board yet. you could be first!',
+    notYet: {
+      flowers: 'plant a flower to get on the board.',
+      tending: "water a neighbour's flower to get on the board.",
+      pets: 'pet poe on the home page to get on the board.',
+      kinds: 'grow a flower all the way to bloom to get on the board.',
+      visitors: "share your garden's link to get on the board.",
+    } satisfies Record<Board, string>,
   },
   guideCount: (found: number, total: number) => `${found} of ${total} found`,
   notFound: 'not found yet',
@@ -1236,6 +1273,68 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     }
   }
 
+  /* ---------- the leaderboard (the community garden) ---------- */
+
+  const leadersCard = q('[data-leaders]');
+  const leadersBoards = q('[data-leaders-boards]');
+  const leadersWhat = q('[data-leaders-what]');
+  const leadersList = q('[data-leaders-list]');
+  const leadersStatus = q('[data-leaders-status]');
+  let leaders: LeaderboardView | null = null;
+  let board: Board = BOARDS[0];
+
+  function leaderItem(l: Leader, b: Board): HTMLLIElement {
+    const L = COPY.leaders;
+    const you = me?.did === l.did;
+    const li = el(doc, 'li', { class: you ? 'garden-leader is-you' : 'garden-leader', 'data-leader': l.did });
+    const rank = el(doc, 'span', { class: l.rank <= 3 ? `garden-leader__rank is-top${l.rank}` : 'garden-leader__rank' }, String(l.rank));
+    const who = el(doc, 'a', { class: 'garden-leader__who', href: gardenPath(actorOf(l)) });
+    who.append(face(doc, l, 'garden-chip__face'), el(doc, 'span', { class: 'garden-leader__name' }, `@${l.handle}`));
+    if (you) who.append(el(doc, 'span', { class: 'garden-leader__you' }, L.you));
+    const score = el(doc, 'span', { class: 'garden-leader__score' });
+    const count = el(doc, 'span', { class: 'garden-leader__count' });
+    count.append(el(doc, 'strong', {}, l.n.toLocaleString('en')), ` ${L.count[b](l.n)}`);
+    score.append(count);
+    const extra = b === 'flowers' && l.gardens ? L.gardens(l.gardens) : b === 'tending' && l.neighbours ? L.neighbours(l.neighbours) : null;
+    if (extra) score.append(el(doc, 'span', { class: 'garden-leader__extra' }, extra));
+    li.append(rank, who, score);
+    return li;
+  }
+
+  /** The board picked: its top people, and your own place under them if it's further down. */
+  function renderLeaders(): void {
+    if (!leadersCard || !leadersList || !leaders) return;
+    const L = COPY.leaders;
+    leadersCard.hidden = false;
+    for (const b of leadersBoards?.querySelectorAll<HTMLButtonElement>('[data-board]') ?? []) b.setAttribute('aria-pressed', String(b.dataset.board === board));
+    setText(leadersWhat, L.what[board]);
+    const rows = leaders.boards[board];
+    const top = rows.slice(0, LEADERS_SHOWN);
+    const mine = me ? rows.find((l) => l.did === me!.did) : undefined;
+    const items = top.map((l) => leaderItem(l, board));
+    if (mine && !top.includes(mine)) items.push(el(doc, 'li', { class: 'garden-leader__gap', 'aria-hidden': 'true' }, '…'), leaderItem(mine, board));
+    leadersList.replaceChildren(...items);
+    setText(leadersStatus, !rows.length ? L.empty : me && !mine ? L.notYet[board] : '');
+  }
+
+  /** The community garden's leaderboards; the card stays hidden when they can't be read. */
+  async function loadLeaders(): Promise<void> {
+    if (!leadersCard || !isCommunity()) return;
+    leaders = await fetchLeaderboard(fetchImpl);
+    if (!leaders) return;
+    leadersBoards?.replaceChildren(
+      ...BOARDS.map((b) => {
+        const button = el(doc, 'button', { type: 'button', class: 'garden-filters__btn', 'aria-pressed': 'false', 'data-board': b }, COPY.leaders.boards[b]);
+        button.addEventListener('click', () => {
+          board = b;
+          renderLeaders();
+        });
+        return button;
+      }),
+    );
+    renderLeaders();
+  }
+
   /* ---------- load ---------- */
 
   const route = parseGardenPath(win.location.pathname);
@@ -1291,7 +1390,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   renderGuide();
   // How it grows: for anyone at the community garden, and on your own page until you plant.
   if (isCommunity() || (owner && !person.flowers.length)) fillHow();
-  await showGarden();
+  await Promise.all([showGarden(), loadLeaders()]);
 }
 
 export function init(): Promise<void> {

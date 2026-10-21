@@ -476,6 +476,140 @@ html[data-theme="dark"] {
   color: var(--muted);
 }
 
+/* ---------- the leaderboard (the community garden) ---------- */
+
+/* A row of its own under the patch; most first, down one column then the next when
+   there's room. */
+.garden-leaders {
+  flex: 1 1 100%;
+}
+
+.garden-leaders__pick {
+  display: grid;
+  gap: 8px;
+}
+
+.garden-leaders__what {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.garden-leaders__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2 320px;
+  column-gap: 28px;
+}
+
+.garden-leader {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  break-inside: avoid;
+}
+
+.garden-leader.is-you {
+  margin: 0 -10px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  background: var(--leaf-tint);
+}
+
+.garden-leader__rank {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.garden-leader__rank.is-top1 {
+  background: var(--sun);
+  color: var(--on-sun);
+}
+
+.garden-leader__rank.is-top2 {
+  background: var(--water-tint);
+  color: var(--on-water-tint);
+}
+
+.garden-leader__rank.is-top3 {
+  background: var(--flesh-tint);
+  color: var(--text);
+}
+
+.garden-leader__who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.garden-leader__who:hover .garden-leader__name {
+  text-decoration: underline;
+}
+
+.garden-leader__who:focus-visible {
+  border-radius: var(--radius-pill);
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.garden-leader__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.garden-leader__you {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.garden-leader__score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--muted);
+  text-align: right;
+}
+
+.garden-leader__count strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.garden-leader__extra {
+  font-size: 13px;
+}
+
+.garden-leader__gap {
+  padding: 0 0 0 11px;
+  color: var(--muted);
+  break-inside: avoid;
+}
+
 /* ---------- the flowers level: one up close ---------- */
 
 .garden-hero {
