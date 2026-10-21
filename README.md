@@ -91,6 +91,7 @@ in `website/server/`, so Vercel only builds the entry points.
 | `api/atmosphere.ts` | The weather station's rolling 60 seconds, for the home page's "atmospheric conditions" and `/weather` (cached 5 seconds; needs `ATMOSPHERE_STATION_SECRET`). Without the station it samples a few seconds of Jetstream itself, and one sample serves everyone for a minute |
 | `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key): records a second, active accounts and the diversity index they make, and apps heard over a range, and the busiest apps with how each did against a day (or month, or year) earlier |
 | `api/weather-almanac.ts` | The almanac on `/weather`, in the reader's time zone: today's high and low, the last hour against usual, apps heard for the first time, and the week as a heat map |
+| `api/og-weather.ts` | `/weather`'s Open Graph card, `/og/weather.png` (a rewrite), drawn from the weather right now with satori and resvg and cached for 5 minutes. `?card=forecast` (the default), `trend`, `mix` or `today` picks the design. Without the numbers it draws a quiet card, never an error |
 
 ### layout
 
@@ -133,7 +134,7 @@ needs an app password, never the main one:
 | --- | --- |
 | `npm run publish:guides` | Publishes the guides' standard.site records from the markdown in `public/guides/` |
 | `npm run garden:patches` | Writes the current season's community patch and the next three, so one is always open. `--overflow <season>` adds a second patch for a season that filled up |
-| `npm run og` | Renders the Open Graph cards into `public/og/` with headless Chromium. Needs `npx playwright install chromium-headless-shell` once. The Vercel build runs it too, and keeps the committed cards if it fails |
+| `npm run og` | Renders the Open Graph cards into `public/og/` with headless Chromium. Needs `npx playwright install chromium-headless-shell` once. The Vercel build runs it too, and keeps the committed cards if it fails. `/weather`'s card isn't one of these: it's drawn live by `api/og-weather.ts` |
 
 ### environment
 

@@ -6,7 +6,7 @@ import {
   WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, pickMoment, postGate,
 } from '../src/gates/weather.js';
 import {
-  parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft,
+  parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft, freshCardUrl,
 } from '../src/weather-posts.js';
 
 const POE = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
@@ -265,7 +265,10 @@ test('a due daily report goes to Poe, comes back as a post, and is posted with t
   assert.equal(record.embed.external.uri, WEATHER_PAGE);
   assert.equal(record.embed.external.title, 'the atmosphere weather report · atpotato');
   assert.equal(record.embed.external.thumb.ref.$link, 'bafythumb');
-  assert.ok(w.fetched.includes('https://atpota.to/og/weather.png'));
+  // The card as of this minute, in the daily report's design, not the CDN's copy from minutes ago.
+  const card = new URL(w.fetched.find((u) => u.startsWith('https://atpota.to/og/weather.png')));
+  assert.equal(card.searchParams.get('card'), 'trend');
+  assert.match(card.searchParams.get('v'), /^\d+$/);
   const stored = db.prepare('SELECT * FROM weather_post WHERE id = ?').get(asked.id);
   assert.equal(stored.status, 'posted');
   assert.equal(stored.post_uri, `at://${POE}/app.bsky.feed.post/${w.posts[0].rkey}`);
@@ -375,6 +378,15 @@ test('off, the kill switch and a low stage ask nothing', async () => {
     delete process.env.KILL_SWITCH;
   }
   assert.equal(w.dispatched.length, 0);
+});
+
+test('each kind of post gets its own card design, fresh to the minute', () => {
+  const at = Date.parse('2026-10-21T17:05:30.000Z');
+  assert.equal(freshCardUrl('https://atpota.to/og/weather.png', 'storm', at),
+    `https://atpota.to/og/weather.png?card=forecast&v=${Math.floor(at / 60_000)}`);
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png?card=trend', 'new_app', at)).searchParams.get('card'), 'mix');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'unusual', at)).searchParams.get('card'), 'today');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'mixed', at)).searchParams.get('card'), 'mix');
 });
 
 test('facts carry the trigger and the sky around it', () => {

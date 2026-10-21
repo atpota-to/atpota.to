@@ -59,6 +59,26 @@ const MAX_JSON_BYTES = 1_000_000;
 const POSTING_STUCK_MS = 10 * 60_000;
 const DAY = 86_400_000;
 
+/**
+ * Which of the weather card's designs (website/server/og-weather-cards.ts) goes
+ * under each kind of post: the sky for a storm, the barometer for an hour off
+ * usual, the other apps for a mixed sky or a new one, the day's chart for the
+ * daily report.
+ */
+export const CARD_FOR = { daily: 'trend', storm: 'forecast', unusual: 'today', mixed: 'mix', new_app: 'mix' };
+
+/**
+ * The page's card as of this minute, in the design for this kind of post. The
+ * CDN keeps the bare URL for several minutes, and a storm post under a card from
+ * before the storm would say the opposite of the post.
+ */
+export function freshCardUrl(url, kind, nowMs = Date.now()) {
+  const u = new URL(url);
+  if (CARD_FOR[kind]) u.searchParams.set('card', CARD_FOR[kind]);
+  u.searchParams.set('v', String(Math.floor(nowMs / 60_000)));
+  return u.href;
+}
+
 // --- reading the weather ------------------------------------------------------
 
 // The same checks the bot's lib/weather.ts makes: app names are other people's
@@ -397,7 +417,8 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
   } catch (err) {
     logger.warn('weather page unreachable for the card', { error: err.message });
   }
-  const { thumb, note } = page ? await cardThumb(page, WEATHER_PAGE, deps) : { thumb: null, note: 'the page did not answer' };
+  const fresh = { ...deps, fetchImage: (url) => deps.fetchImage(freshCardUrl(url, row.kind)) };
+  const { thumb, note } = page ? await cardThumb(page, WEATHER_PAGE, fresh) : { thumb: null, note: 'the page did not answer' };
   const record = buildAnnouncement({
     text,
     pageUrl: WEATHER_PAGE,

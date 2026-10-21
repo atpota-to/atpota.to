@@ -716,8 +716,11 @@ answers on `POST /weather-draft` with the post, or `skip`. The draft goes throug
 the reply gates as a single post (length, markdown, non-answers, `@handles`), with
 no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
 same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
-posted with an `app.bsky.embed.external` card for the weather page, whose
-og:image is the page's live weather card, and the caps are checked again first.
+posted with an `app.bsky.embed.external` card for the weather page, and the caps
+are checked again first. The card's image is the page's live weather card
+(`/og/weather.png`), fetched fresh to the minute in the design that suits the post
+(`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
+apps for a mixed sky or a new one, the day's chart for the daily report.
 With `WEATHER_POSTS=draft` it stops there as `held`, and counts against the caps
 as the post it would have been, so draft mode shows the cadence posting would have.
 

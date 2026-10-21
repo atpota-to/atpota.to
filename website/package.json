@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@atproto/oauth-client-browser": "^0.5.10",
-    "@vercel/firewall": "^1.2.6"
+    "@resvg/resvg-wasm": "2.6.2",
+    "@vercel/firewall": "^1.2.6",
+    "satori": "0.32.0"
   }
 }
