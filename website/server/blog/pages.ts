@@ -186,8 +186,11 @@ function emailForm(site: SiteInfo, returnTo: string): string {
   return signup ? emailFormHtml(signup, 'subscribe') : '';
 }
 
-/** Signed-in state ("signed in as @alice · sign out"), filled in by src/blog/. */
-const ACCOUNT_LINE = '<p class="blog-account" data-blog-account aria-live="polite" hidden></p>';
+/**
+ * Short notes from src/blog/ ("subscribed!", "sign-in was cancelled"). Who's signed in, and
+ * signing out, live in the header's account button (src/scripts/account.ts).
+ */
+const NOTICE_LINE = '<p class="blog-notice" data-blog-notice aria-live="polite" hidden></p>';
 
 /** Under the email form: subscribe with bluesky, follow, rss. */
 function altLinks(site: SiteInfo, afterForm: boolean): string {
@@ -235,7 +238,7 @@ export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets:
     `<p class="blog-hero__lede">${escapeHtml(site.tagline)}</p>` +
     heroForm +
     altLinks(site, !!heroForm) +
-    ACCOUNT_LINE +
+    NOTICE_LINE +
     `</div>` +
     potato(assets, 'happy', 'blog-hero__potato', 260, 212, true) +
     `</section>` +
@@ -385,7 +388,7 @@ export function postPage(input: PostInput): Page {
     recommendButton(discussion) +
     (reply ? `<a class="btn btn--outline btn--sm" href="${escapeAttr(reply)}">reply on bluesky ${ARROW}</a>` : '') +
     `</div>` +
-    ACCOUNT_LINE +
+    NOTICE_LINE +
     `</div>` +
     (discussion ? discussionHtml(site, doc, discussion) : '') +
     nav +

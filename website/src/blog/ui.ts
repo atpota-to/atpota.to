@@ -4,7 +4,7 @@
  * <body data-page="blog"> pages.
  *
  * The server renders the pieces (server/blog/pages.ts): subscribe and recommend buttons
- * (hidden), Leaflet's email subscribe forms, account lines, and the comments section with
+ * (hidden), Leaflet's email subscribe forms, notice lines, and the comments section with
  * an empty compose slot. This module reveals and wires them, builds the compose form and
  * per-comment buttons, and adds the reader's own new comments to the page. DOM is built
  * with createElement and textContent only; nothing from the network becomes HTML here.
@@ -12,7 +12,12 @@
  * The email forms post straight to Leaflet and work without this module. For a reader
  * signed in with Bluesky who hasn't subscribed there yet, each gets an "also subscribe
  * with bluesky" box (ticked): submitting writes the subscription record first, then sends
- * the form on to Leaflet, so one submit does both.
+ * the form on to Leaflet, so one submit does both. With the box ticked the email is
+ * optional, and an empty one subscribes on Bluesky alone. The "subscribe with bluesky"
+ * link under the form would say the same thing as the box, so it steps aside meanwhile.
+ *
+ * Who's signed in, and signing out, are the header's (src/scripts/account.ts): these pages
+ * only say what just happened, in their notice lines.
  *
  * Sign-in leaves the page (auth.ts). Before it does, the action that prompted it is saved
  * (state.ts); when the reader is back on that page, signed in, the action finishes.
@@ -64,7 +69,7 @@ import {
 import type { KeyValueStore } from '../poe/storage';
 import { burst, cheer } from '../scripts/burst';
 import { el, isBusy, loadMe, mountSignIn, setBusy, SIGNIN_COPY, type Me } from './signin';
-import { forgetReader, rememberReader } from '../scripts/reader';
+import { rememberReader } from '../scripts/reader';
 import { focusForTyping } from '../scripts/typing-focus';
 
 export { APPVIEW, normalizeHandle, PREPARED_TTL_MS } from './signin';
@@ -80,8 +85,6 @@ export const COPY = {
   subscribed: 'subscribed on bluesky',
   recommend: 'recommend',
   recommended: 'recommended',
-  signedInAs: 'signed in as',
-  signOut: 'sign out',
   signInToComment: 'sign in to comment',
   otherHost: 'sign in to comment on atpota.to',
   commentLabel: 'write a comment',
@@ -110,7 +113,6 @@ export const COPY = {
     subscribedAddEmail: 'subscribed on bluesky! to get it in your inbox too, add your email above.',
     emailSubscribed: "you're subscribed by email. see you in your inbox!",
     unsubscribed: 'unsubscribed.',
-    signedOut: 'signed out.',
     cancelled: "sign-in was cancelled, so nothing changed.",
     signInFailed: "sign-in didn't finish. try again?",
     saveFailed: "that didn't save. try again in a moment?",
@@ -168,7 +170,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   const subscribeButtons = publication ? [...doc.querySelectorAll<HTMLButtonElement>('button[data-blog-subscribe]')] : [];
   const emailForms = publication ? [...doc.querySelectorAll<HTMLFormElement>('form[data-blog-email]')] : [];
   const recommendButton = documentUri ? doc.querySelector<HTMLButtonElement>('button[data-blog-recommend]') : null;
-  const accountLines = [...doc.querySelectorAll<HTMLElement>('[data-blog-account]')];
+  const noticeLines = [...doc.querySelectorAll<HTMLElement>('[data-blog-notice]')];
   const talk = documentUri ? doc.querySelector<HTMLElement>('[data-blog-comments]') : null;
   const compose = talk?.querySelector<HTMLElement>('[data-comment-compose]') ?? null;
   const commentList = talk?.querySelector<HTMLOListElement>('[data-comment-list]') ?? null;
@@ -205,21 +207,12 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   const status = talk ? el(doc, 'p', { class: 'visually-hidden', role: 'status', 'data-comment-status': '' }) : null;
   if (status) talk?.append(status);
 
-  /* ---------- account line and notices ---------- */
+  /* ---------- notices ---------- */
 
-  function renderAccount(): void {
-    for (const line of accountLines) {
-      line.replaceChildren();
-      if (session && me) {
-        line.append(doc.createTextNode(`${COPY.signedInAs} `));
-        line.append(el(doc, 'a', { class: 'blog-account__who', href: profileUrl(me.handle) }, me.handle.startsWith('did:') ? me.handle : `@${me.handle}`));
-        line.append(doc.createTextNode(' · '));
-        const out = el(doc, 'button', { type: 'button', class: 'blog-account__out' }, COPY.signOut);
-        out.addEventListener('click', () => void signOut());
-        line.append(out);
-      }
-      if (notice) line.append(el(doc, 'span', { class: 'blog-account__notice' }, notice));
-      line.hidden = !(session && me) && !notice;
+  function renderNotice(): void {
+    for (const line of noticeLines) {
+      line.textContent = notice;
+      line.hidden = !notice;
     }
   }
 
@@ -228,17 +221,32 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     clearTimeout(noticeTimer);
     noticeTimer = setTimeout(() => {
       notice = '';
-      renderAccount();
+      renderNotice();
     }, 10_000);
-    renderAccount();
+    renderNotice();
   }
 
   /* ---------- subscribe and recommend ---------- */
 
+  /** Buttons in the line of links right under an email form (altLinksHtml), and that line's "or". */
+  const underForm = new Map(
+    subscribeButtons
+      .map((button) => [button, button.closest('.blog-alt')] as const)
+      .filter(([, line]) => line?.previousElementSibling?.matches('form[data-blog-email]'))
+      .map(([button, line]) => [button, line!.querySelector<HTMLElement>('.blog-alt__or')]),
+  );
+
   function renderSubscribe(): void {
     const on = Boolean(session && subscriptions?.length);
+    // The form's "also subscribe with bluesky" box (renderEmailExtras) stands in for the button
+    // under it until the reader has subscribed, and the button stays out of the way while the
+    // session or that state loads, so it doesn't show for a moment and go.
+    const boxed = starting || Boolean(session && !subscriptions?.length);
     for (const button of subscribeButtons) {
-      button.hidden = false;
+      button.hidden = boxed && underForm.has(button);
+      // "or subscribed on bluesky" reads oddly; "or follow poe" is fine.
+      const or = underForm.get(button);
+      if (or) or.hidden = on && !button.hidden;
       button.setAttribute('aria-pressed', String(on));
       button.classList.toggle('is-on', on);
       const label = button.querySelector('[data-blog-subscribe-label]') ?? button;
@@ -360,6 +368,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
 
   interface EmailExtras {
     form: HTMLFormElement;
+    input: HTMLInputElement | null;
     send: HTMLButtonElement | null;
     also: HTMLLabelElement;
     box: HTMLInputElement;
@@ -377,23 +386,37 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     const row = form.querySelector('.blog-email__row');
     if (row) row.after(also, error);
     else form.append(also, error);
-    const x: EmailExtras = { form, send: form.querySelector<HTMLButtonElement>('button[type="submit"]'), also, box, alsoText, error };
+    const x: EmailExtras = {
+      form,
+      input: form.querySelector<HTMLInputElement>('input[type="email"]'),
+      send: form.querySelector<HTMLButtonElement>('button[type="submit"]'),
+      also,
+      box,
+      alsoText,
+      error,
+    };
     form.addEventListener('submit', (event) => void sendEmail(x, event));
+    box.addEventListener('change', renderEmailExtras);
     return x;
   });
 
-  /** The "also subscribe with bluesky" box shows only while it would add something. */
+  /**
+   * The "also subscribe with bluesky" box shows only while it would add something. While
+   * it's ticked the email is optional: an empty one means Bluesky alone.
+   */
   function renderEmailExtras(): void {
     const offer = Boolean(session && me && subscriptions && !subscriptions.length);
     for (const x of emailExtras) {
       x.also.hidden = !offer;
       if (offer && me) x.alsoText.textContent = COPY.email.also(me.handle.startsWith('did:') ? null : me.handle);
+      if (x.input) x.input.required = !(offer && x.box.checked);
     }
   }
 
   /**
    * Lets the form go to Leaflet as is, unless the box is ticked: then the Bluesky
-   * subscription is saved first. If that fails, the reader stays here to retry or untick.
+   * subscription is saved first, and the form goes on only if there's an email to send.
+   * If the save fails, the reader stays here to retry or untick.
    */
   async function sendEmail(x: EmailExtras, event: Event): Promise<void> {
     if (x.send && isBusy(x.send)) {
@@ -418,7 +441,17 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
       busySubscribe = false;
       renderSubscribe();
     }
-    // submit() skips the submit event (and validation, which already passed to get here).
+    if (!x.input?.value.trim()) {
+      if (x.send) setBusy(x.send, false);
+      notify(COPY.notices.subscribedAddEmail);
+      burst(x.send ?? x.form, 'leaves', win);
+      cheer(win);
+      return;
+    }
+    // submit() skips the submit event (and validation, which already passed to get here), and
+    // the button's formaction with it: Leaflet's address lives there (server/blog/subscribe.ts).
+    const to = x.send?.getAttribute('formaction');
+    if (to) x.form.setAttribute('action', to);
     x.form.submit();
   }
 
@@ -671,7 +704,7 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   /* ---------- session ---------- */
 
   function renderAll(): void {
-    renderAccount();
+    renderNotice();
     renderSubscribe();
     renderRecommend();
     renderCompose();
@@ -701,14 +734,6 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     recommends = null;
     for (const f of talk?.querySelectorAll('.comment-form--reply') ?? []) f.remove();
     renderAll();
-  }
-
-  async function signOut(): Promise<void> {
-    const s = session;
-    signedOut();
-    forgetReader();
-    notify(COPY.notices.signedOut);
-    await s?.signOut().catch(() => undefined);
   }
 
   async function perform(kind: IntentKind): Promise<void> {
