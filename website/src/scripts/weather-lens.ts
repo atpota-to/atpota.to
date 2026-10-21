@@ -4,8 +4,8 @@
  *
  *   window   now (the station's live 60 seconds), or the last hour, 24 hours, 7 days or
  *            30 days, from /api/weather-history and /api/weather-span
- *   measure  new records, or active accounts (the different DIDs that wrote anything, so a
- *            bot writing a thousand records counts once)
+ *   measure  active accounts, the default (the different DIDs that wrote anything, so a
+ *            bot writing a thousand records counts once), or new records
  *   unit     what a rate is per: a second, a minute, an hour or a day, or "total" for
  *            the counts themselves
  *
@@ -57,7 +57,7 @@ export interface LensState {
   unit: Unit;
 }
 
-export const LENS_DEFAULT: LensState = { window: 'now', measure: 'records', unit: 'second' };
+export const LENS_DEFAULT: LensState = { window: 'now', measure: 'accounts', unit: 'second' };
 
 /** Where the lens is kept in this browser. */
 export const LENS_KEY = 'weather-lens';

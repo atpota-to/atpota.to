@@ -35,7 +35,8 @@ import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading }
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
 
-const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, ...change });
+/** A lens counting records unless the test says otherwise (the page's own default is accounts). */
+const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, measure: 'records', ...change });
 
 // /weather: the atmosphere weather report, filled from one /api/atmosphere reading.
 
@@ -502,7 +503,7 @@ describe('the lens', () => {
       ['week', '7d'],
       ['month', '30d'],
     ]);
-    expect([...bar.querySelectorAll<HTMLElement>('[data-lens-measure]')].map((b) => b.textContent)).toEqual(['records', 'accounts']);
+    expect([...bar.querySelectorAll<HTMLElement>('[data-lens-measure]')].map((b) => b.textContent)).toEqual(['accounts', 'records']);
     expect([...bar.querySelectorAll('option')].map((o) => o.value)).toEqual(['second', 'minute', 'hour', 'day', 'total']);
     // the old per-tile toggles are gone
     expect(report.querySelector('[data-measure-toggle], [data-range], [data-s-toggle]')).toBeNull();
@@ -512,12 +513,14 @@ describe('the lens', () => {
     for (const id of ['weather-trends-title', 'weather-apps-title', 'weather-minute-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeLessThan(group);
   });
 
-  it('starts from the address, else this browser, else now, records, a second', () => {
+  it('starts from the address, else this browser, else now, accounts, a second', () => {
+    expect(LENS_DEFAULT).toEqual({ window: 'now', measure: 'accounts', unit: 'second' });
     expect(createLens('').get()).toEqual(LENS_DEFAULT);
-    expect(createLens('?w=24h&m=accounts&u=hour').get()).toEqual({ window: 'day', measure: 'accounts', unit: 'hour' });
+    expect(createLens('?m=records').get().measure).toBe('records');
+    expect(createLens('?w=24h&m=records&u=hour').get()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
     expect(createLens('?w=lots&u=fortnight').get()).toEqual(LENS_DEFAULT);
-    localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'week', measure: 'accounts', unit: 'nope' }));
-    expect(createLens('').get()).toEqual({ window: 'week', measure: 'accounts', unit: 'second' });
+    localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'week', measure: 'records', unit: 'nope' }));
+    expect(createLens('').get()).toEqual({ window: 'week', measure: 'records', unit: 'second' });
     expect(createLens('?w=1h').get().window).toBe('hour');
   });
 
@@ -530,7 +533,10 @@ describe('the lens', () => {
     l.set({ unit: 'total' });
     expect(seen).toEqual(['now→day second', 'day→day total']);
     expect(location.search).toBe('?w=24h&u=total');
-    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'records', unit: 'total' });
+    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'accounts', unit: 'total' });
+    l.set({ measure: 'records' });
+    expect(new URLSearchParams(location.search).get('m')).toBe('records');
+    l.set({ measure: 'accounts' });
     l.set({ window: 'now', unit: 'second' });
     expect(location.search).toBe('');
   });
@@ -538,6 +544,10 @@ describe('the lens', () => {
   it('the bar and the header\'s unit drive it, and the unit stands aside for accounts', () => {
     const l = createLens('');
     bindLens(report, l);
+    // accounts first: the unit waits for records
+    expect(report.querySelector('[data-lens-measure="accounts"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(report.querySelector<HTMLSelectElement>('[data-lens-unit]')!.disabled).toBe(true);
+    report.querySelector<HTMLButtonElement>('[data-lens-measure="records"]')!.click();
     report.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
     expect(l.get().window).toBe('week');
     expect(report.querySelector('[data-lens-window="week"]')!.getAttribute('aria-pressed')).toBe('true');
@@ -624,7 +634,7 @@ describe('in the lens', () => {
   });
 
   it('the diversity index is always by accounts, and says so when the lens counts records', () => {
-    renderReport(report, LIVE);
+    renderReport(report, LIVE, lens());
     const tag = report.querySelector<HTMLElement>('.weather-diversity [data-tag]')!;
     expect([tag.hidden, tag.textContent]).toEqual([false, 'by accounts']);
     renderReport(report, LIVE, lens({ measure: 'accounts' }));
