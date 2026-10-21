@@ -1,0 +1,375 @@
+/*
+ * /overlay (src/overlay/**): Poe and the weather card on a transparent page, for an OBS
+ * browser source. Sized for a 1920x1080 canvas; OBS scales and crops from there. Poe
+ * sits in a bottom corner (?side=left|right) and the card in the top corner across from it.
+ * Colours are the site's tokens, so ?theme=dark comes for free.
+ */
+
+:root {
+  --ov-sky-text: #2C3A3E;
+  --ov-sky-mono: #34505B;
+  --ov-cell: rgba(255, 255, 255, 0.6);
+  --ov-bubble-shadow: 0 10px 28px rgba(61, 47, 27, 0.22);
+  --ov-poe-width: 300px;
+}
+
+html[data-theme="dark"] {
+  --ov-sky-text: var(--text-soft);
+  --ov-sky-mono: var(--muted);
+  --ov-cell: rgba(255, 253, 247, 0.07);
+  --ov-bubble-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* OBS shows whatever is behind a transparent page: the stream. */
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+p,
+h2,
+dl,
+dd {
+  margin: 0;
+}
+
+/* ---------- the weather card ---------- */
+
+.ov-weather {
+  position: fixed;
+  top: 32px;
+  left: 32px;
+  width: 400px;
+  border-radius: var(--radius-tile);
+  background: var(--sky);
+  color: var(--ov-sky-text);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+body[data-side="left"] .ov-weather {
+  left: auto;
+  right: 32px;
+}
+
+.ov-weather__body {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px 18px;
+}
+
+.ov-weather__title,
+.ov-weather__foot,
+.ov-weather__app-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ov-weather__sun {
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+
+.ov-weather__big {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-weather__unit {
+  font-size: 16px;
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__cond {
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.ov-weather__spark {
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ov-weather__row div {
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--ov-cell);
+}
+
+.ov-weather__row dt {
+  font-size: 12px;
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__row dd {
+  margin-top: 2px;
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-weather__mix {
+  display: grid;
+  gap: 6px;
+}
+
+.ov-weather__mix-head {
+  font-size: 15px;
+}
+
+.ov-weather__level {
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__app {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-weather__app.is-turning {
+  animation: ov-turn 0.6s var(--ease-out);
+}
+
+.ov-weather__foot {
+  font-size: 11px;
+}
+
+/* Until the first reading lands (or if none does), the numbers sit quiet. */
+.ov-weather[data-state="loading"] [data-weather-records],
+.ov-weather[data-state="error"] [data-weather-records] {
+  opacity: 0.5;
+}
+
+@keyframes ov-turn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- Poe ---------- */
+
+.ov-poe {
+  position: fixed;
+  right: 48px;
+  bottom: 0;
+  width: var(--ov-poe-width);
+}
+
+body[data-side="left"] .ov-poe {
+  right: auto;
+  left: 48px;
+}
+
+.ov-potato {
+  position: relative;
+  /* the bottom of the potato tucked under the edge of the screen, like the website's corner Poe */
+  margin-bottom: calc(var(--ov-poe-width) * -0.18);
+  transform-origin: 50% 100%;
+  animation: ov-breathe var(--bob, 3200ms) ease-in-out infinite;
+}
+
+.ov-potato__img,
+.ov-potato__arm {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+/* The leaf arm on its own, behind the body; it swings while Poe waves (poe.css does the same). */
+.ov-potato__arm {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: -1;
+  opacity: 0;
+  transform-origin: 19% 53%;
+}
+
+.ov-potato[data-waving] .ov-potato__arm {
+  opacity: 1;
+  animation: poe-wave 1.6s ease-in-out;
+}
+
+.ov-potato[data-hopping] .ov-potato__img {
+  transform-origin: 50% 100%;
+  animation: ov-hop 1.2s var(--ease-out);
+}
+
+@keyframes ov-breathe {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  50% {
+    transform: scale(1.025, 0.975);
+  }
+}
+
+@keyframes ov-hop {
+  0%,
+  50%,
+  100% {
+    transform: none;
+  }
+
+  20%,
+  70% {
+    transform: translateY(-40px) scale(0.95, 1.06);
+  }
+
+  40%,
+  90% {
+    transform: scale(1.06, 0.94);
+  }
+}
+
+/* the same swing as the website's wave (poe.css) */
+@keyframes poe-wave {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  20% {
+    transform: rotate(12deg);
+  }
+
+  40% {
+    transform: rotate(-5deg);
+  }
+
+  60% {
+    transform: rotate(10deg);
+  }
+
+  80% {
+    transform: rotate(-2deg);
+  }
+}
+
+/* ---------- what Poe says ---------- */
+
+.ov-bubble {
+  position: absolute;
+  right: 30%;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 460px;
+  padding: 14px 18px;
+  border-radius: 22px 22px 6px 22px;
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--ov-bubble-shadow);
+  transform-origin: 90% 100%;
+  animation: ov-bubble-in 0.42s var(--ease-spring);
+}
+
+body[data-side="left"] .ov-bubble {
+  right: auto;
+  left: 30%;
+  border-radius: 22px 22px 22px 6px;
+  transform-origin: 10% 100%;
+}
+
+.ov-bubble.is-leaving {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s var(--ease-out);
+}
+
+.ov-bubble__label {
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--leaf);
+}
+
+.ov-bubble__text {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ov-bubble__sub {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text-soft);
+}
+
+@keyframes ov-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-potato,
+  .ov-potato[data-waving] .ov-potato__arm,
+  .ov-potato[data-hopping] .ov-potato__img,
+  .ov-bubble,
+  .ov-weather__app.is-turning {
+    animation: none;
+  }
+}

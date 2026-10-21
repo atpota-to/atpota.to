@@ -75,11 +75,42 @@ weather moment  ──► droplet ──► bot  POST /weather/moment ──► 
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each, with the leaderboards under it (most flowers, most tending for other people's flowers, most pets for Poe, most kinds found, most visitors); signed in, it has a button to your own and shows your place on each board. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
 | `/about` | Who makes atpotato, and how it grew: a year to a layer of soil, newest on top, from dame's start in open social in 2021 to now |
 | `/settings` | Signed-in visitors can make Poe forget them |
+| `/overlay` | Poe and the weather for a livestream, as an OBS browser source (transparent; see [stream overlay](#stream-overlay)) |
 
 The wordmark in the header sits in a little sky with the weather in it: a sun whose
 rays turn faster when the network is busy, and a cloud or two as the diversity index
 climbs. Poe's chat panel sits in the corner of every page. Click it, press `/` anywhere,
 or highlight a word in a guide to ask about it.
+
+### stream overlay
+
+`/overlay` is Poe and the "atmospheric conditions" card on a transparent page, for
+streaming. In OBS add a **Browser** source with the URL, width 1920 and height 1080
+(the page is drawn for that canvas; crop or scale it from there).
+
+```
+https://atpota.to/overlay?streamer=dame.is
+```
+
+The weather card sits in a top corner and refreshes every 15 seconds; Poe sits in the
+bottom corner across from it, blinking, glancing and waving, and bobbing faster when the
+atmosphere is busy. Poe says the weather alerts from `/weather` (a storm rolls in, a new
+app blows in, the sky gets more mixed) in a speech bubble. With `streamer=` it also
+watches that account's [stream.place](https://stream.place) chat on Jetstream: a hello
+to each new chatter, thanks (and a hop) for each new follower, and three chat commands,
+`!weather` (Poe reads out the weather), `!pet` and `!poe`. It only ever says handles,
+never what people wrote.
+
+| param | does |
+| --- | --- |
+| `show=poe` or `show=weather` | just one piece, so each can be its own browser source (default both) |
+| `streamer=<handle or DID>` | whose stream.place chat to watch |
+| `chat=off`, `follows=off`, `alerts=off` | turn off hellos and commands, follower thanks, or weather alerts |
+| `side=left` | Poe bottom-left and the card top-right |
+| `theme=dark` | the dark theme's colours |
+| `demo` | Poe runs through example lines every 10 seconds, for placing things |
+
+The code is in `website/src/overlay/` (settings in `params.ts`).
 
 ### functions
 
