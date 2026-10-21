@@ -114,11 +114,11 @@ test('announce posts once, links the issue with swapRecord, and keeps every othe
   assert.equal(record.text, `${original.value.title}\n\n${original.value.description}`);
   assert.deepEqual(record.langs, ['en']);
   assert.equal(record.embed.$type, 'app.bsky.embed.external');
-  assert.equal(record.embed.external.uri, `https://poe.leaflet.pub/${k}`);
+  assert.equal(record.embed.external.uri, `https://atpota.to/blog/${k}`);
   assert.equal(record.embed.external.title, original.value.title);
   assert.equal(record.embed.external.description, original.value.description);
   assert.equal(record.embed.external.thumb.ref.$link, 'bafkthumb');
-  assert.deepEqual(s.images, ['https://leaflet.pub/lish/og.png']);
+  assert.deepEqual(s.images, ['https://atpota.to/og/blog.png']);
   assert.equal(record.facets, undefined);
 
   assert.equal(s.puts.length, 1);
@@ -259,7 +259,7 @@ test('a card image on another site is skipped, and the post still goes out', asy
   const reply = await announce({ rkey: k }, deps);
   assert.equal(s.images.length, 0);
   assert.equal(s.created[0].record.embed.external.thumb, undefined);
-  assert.match(reply, /the card has no image: the og:image is not on leaflet\.pub/);
+  assert.match(reply, /the card has no image: the og:image is not on atpota\.to/);
 });
 
 test('a post made before a crash is found under its stored key, not made again', async () => {
@@ -347,7 +347,7 @@ test('announce latest over DM picks the newest issue, says which, and stores it'
   await pollOperatorDms({ api: inbox([message], sent), fetcher: async () => { throw new Error('agent'); }, dispatchDeps: deps });
   await settleCommands();
   assert.equal(s.created.length, 1);
-  assert.equal(s.created[0].record.embed.external.uri, `https://poe.leaflet.pub/${k}`);
+  assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${k}`);
   assert.match(sent[0].text, /^the latest issue is "attie sites, spaces near beta, and a brand new cow"\.\n\nannounced/);
   const cmd = db.prepare('SELECT kind, document_rkey FROM dispatch_command WHERE message_id = ?').get(message.id);
   assert.deepEqual({ ...cmd }, { kind: 'announce_latest', document_rkey: k });

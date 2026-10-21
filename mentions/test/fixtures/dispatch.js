@@ -8,7 +8,7 @@ const PUBLISHER = config.dispatch.publisherDid;
 const PUBLICATION = config.dispatch.publicationUri;
 
 export const docUri = (rkey) => `at://${PUBLISHER}/site.standard.document/${rkey}`;
-export const pageFor = (rkey, { image = 'https://leaflet.pub/lish/og.png' } = {}) =>
+export const pageFor = (rkey, { image = 'https://atpota.to/og/blog.png' } = {}) =>
   `<html><head><link rel="alternate" href="${docUri(rkey)}"/>` +
   `<link rel="site.standard.document" href="${docUri(rkey)}"/>` +
   `<meta property="og:image:type" content="image/png"/>` +
