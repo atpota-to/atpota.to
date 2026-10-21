@@ -101,13 +101,13 @@ export interface PetReaction {
 /** Long streaks (pets in a row) that get a line of their own. */
 const STREAK_REACTIONS: Readonly<Record<number, PetReaction>> = {
   15: { face: 'wow', say: "15 in a row?! you're good at this" },
-  20: { face: 'happy', say: 'combo x20 ✦', spin: true, blush: true },
-  30: { face: 'kawaii', say: 'my fries are jealous', blush: true },
-  42: { face: 'wink', say: '42: the answer to everything', blush: true },
-  50: { face: 'happy', say: 'FIFTY. new record?', spin: true, blush: true },
-  75: { face: 'sleepy', say: 'so… relaxed… (˘ω˘)', blush: true },
-  100: { face: 'kawaii', say: '100 in a row. you are unstoppable', spin: true, blush: true },
-  200: { face: 'wow', say: 'do you need a snack break?', blush: true },
+  20: { face: 'happy', say: '20 in a row ✦ combo!', spin: true, blush: true },
+  30: { face: 'kawaii', say: '30 in a row. fries are jealous', blush: true },
+  42: { face: 'wink', say: '42 in a row: the answer', blush: true },
+  50: { face: 'happy', say: '50 in a row! new record?', spin: true, blush: true },
+  75: { face: 'sleepy', say: '75 in a row… so relaxed (˘ω˘)', blush: true },
+  100: { face: 'kawaii', say: '100 in a row! unstoppable', spin: true, blush: true },
+  200: { face: 'wow', say: '200 in a row?! snack break?', blush: true },
 };
 
 /** What Poe does on the nth pet in a row (1-based). Old friends (10+ pets on earlier visits) hear so. */
