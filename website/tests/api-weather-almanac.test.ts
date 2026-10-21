@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-almanac.js';
-import { CACHE, createAlmanacHandlers, HEATMAP_MS, timeZone, toHeatmap, toNewApps, toNormal, toToday, WARMUP_MS } from '../server/weather-almanac.js';
+import { CACHE, createAlmanacHandlers, HEATMAP_MS, readDiversity, timeZone, toHeatmap, toNewApps, toNormal, toToday, WARMUP_MS } from '../server/weather-almanac.js';
 
 // /api/weather-almanac against a scripted Supabase.
 
@@ -107,5 +107,64 @@ describe('weather almanac', () => {
 
   it('only takes GET and HEAD', async () => {
     expect((await api.POST(new Request('https://atpota.to/api/weather-almanac', { method: 'POST' }))).status).toBe(405);
+  });
+});
+
+describe('the diversity index against usual', () => {
+  // 17:00 on a tuesday: the last whole hour is 16:00
+  const hour = (daysAgo: number) => new Date(Date.parse('2026-11-03T16:00:00.000Z') - daysAgo * 86_400_000).toISOString().replace('.000Z', '+00:00');
+  const everyone = (daysAgo: number, dids: number, elsewhere: number, seconds = 3600) => ({ t: hour(daysAgo), seconds, dids, dids_elsewhere: elsewhere });
+  const apps = (daysAgo: number, ...dids: number[]) => dids.map((n) => ({ t: hour(daysAgo), dids: n }));
+  function db(main: unknown[], appRows: unknown[]) {
+    const asked: string[] = [];
+    const get = async (path: string) => {
+      asked.push(path);
+      const offset = Number(/offset=(\d+)/.exec(path)?.[1] ?? 0);
+      return offset > 0 ? [] : path.startsWith('atmosphere_account_app_sketch') ? appRows : main;
+    };
+    return { asked, db: { get, rpc: async () => null } };
+  }
+
+  it("works out the last whole hour's index, and the same hour's on the days and weeks before", async () => {
+    const { asked, db: d } = db(
+      [
+        everyone(0, 100_000, 1000), // 1%, four even apps: 2
+        everyone(1, 100_000, 500), // 0.5%, four even apps: 1
+        everyone(2, 100_000, 500, 1200), // barely heard: left out
+        everyone(7, 100_000, 1000), // 1%, one app: 1
+        everyone(42, 100_000, 1000), // its apps are no longer kept: left out
+      ],
+      [...apps(0, 250, 250, 250, 250), ...apps(1, 125, 125, 125, 125), ...apps(2, 500), ...apps(7, 1000)],
+    );
+    const got = await readDiversity(d, NOW);
+    expect(got).toEqual({
+      hour: '2026-11-03T16:00:00.000Z',
+      now: { index: 2, share: 1, spread: 4, elsewhere: 1000 },
+      days: { windows: 1, index: 1 },
+      weeks: { windows: 1, index: 1 },
+    });
+    expect(asked[0]).toContain('period=eq.hour&t=in.(2026-11-03T16:00:00.000Z,2026-11-02T16:00:00.000Z,');
+    expect(asked.every((q) => !q.includes('sketch,') && !q.includes(',sketch'))).toBe(true); // counts only, no sketches to merge
+  });
+
+  it('has nothing to say when the last whole hour was not heard', async () => {
+    expect(await readDiversity(db([everyone(1, 100_000, 500)], apps(1, 500)).db, NOW)).toBeNull();
+  });
+
+  it('comes with the normal, and the normal comes without it when it cannot be read', async () => {
+    const answers = { ...ANSWERS };
+    const fetch = (async (url: string) => {
+      const name = /\/rpc\/([a-z_]+)$/.exec(url)?.[1];
+      if (name) return name in answers ? Response.json(answers[name]) : new Response('nope', { status: 500 });
+      if (url.includes('/atmosphere_account_app_sketch')) return Response.json(apps(0, 250, 250, 250, 250));
+      return Response.json([everyone(0, 100_000, 1000)]);
+    }) as typeof globalThis.fetch;
+    const h = createAlmanacHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await get(h)).json()) as Record<string, any>;
+    expect(body.normal.weeks.windows).toBe(2);
+    expect(body.normal.diversity).toEqual({ hour: '2026-11-03T16:00:00.000Z', now: { index: 2, share: 1, spread: 4, elsewhere: 1000 }, days: { windows: 0, index: 0 }, weeks: { windows: 0, index: 0 } });
+    const without = (await (await get(createAlmanacHandlers({ fetch: supabase().fetch, now: () => NOW, env: () => ({}), log: () => undefined }))).json()) as Record<string, any>;
+    expect(without.normal.weeks.windows).toBe(2);
+    expect('diversity' in without.normal).toBe(false);
   });
 });
