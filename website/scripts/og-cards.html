@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/src/styles/tokens.css">
     <link rel="stylesheet" href="/src/styles/base.css">
     <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/patch.css">
     <style>
         body {
             align-items: center;
@@ -294,6 +295,122 @@
         .og--blog .og-sprout--2 { left: 92px; bottom: 126px; width: 44px; }
         .og--blog .og-sprout--3 { right: 22px; bottom: 112px; width: 58px; }
         .og--blog .og-potato { left: 50%; bottom: 112px; width: 350px; margin-left: -180px; }
+        /* ---------- garden: a patch from above, planted with the garden's own flowers ---------- */
+
+        .og--garden .og-art {
+            background: var(--patch-path);
+        }
+
+        .og-patch {
+            position: absolute;
+            inset: 22px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .og-plot {
+            display: grid;
+            place-items: center;
+            border-radius: 20%;
+            background: var(--patch-mound);
+        }
+
+        .og-plot--empty::after {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--patch-seed);
+        }
+
+        .og-plot .home-flower {
+            width: 92%;
+            height: 92%;
+            overflow: visible;
+        }
+
+        .og--garden .og-body {
+            position: relative;
+            z-index: 2;
+            max-width: 400px;
+        }
+
+        .og--garden .og-potato { right: -30px; bottom: -76px; width: 250px; }
+
+        /* ---------- poe: say hi, with a chat going on the sunburst ---------- */
+
+        .og-chat {
+            position: absolute;
+            z-index: 4;
+            left: 26px;
+            right: 26px;
+            top: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .og-chat .og-bubble {
+            position: static;
+            max-width: 330px;
+        }
+
+        .og-chat .og-bubble--you {
+            align-self: flex-end;
+            border-radius: 22px 22px 6px 22px;
+            background: var(--leaf-pill);
+            color: var(--leaf-strong);
+        }
+
+        .og-heart {
+            position: absolute;
+            z-index: 4;
+            width: 40px;
+            height: auto;
+            color: var(--blush);
+        }
+
+        .og-heart--1 { right: 54px; bottom: 300px; width: 44px; transform: rotate(14deg); }
+        .og-heart--2 { right: 104px; bottom: 344px; width: 28px; transform: rotate(-10deg); }
+
+        /* the home hero's meadow (src/styles/home.css, .home-sun__mound), out of season */
+        .og-mound--meadow {
+            --ground: #B9DE93;
+            background:
+                radial-gradient(56.6% 94% at 50% 136%, color-mix(in srgb, var(--ground), #4C7A33 26%) 99%, transparent 100%),
+                var(--ground);
+        }
+
+        .og-tuft {
+            position: absolute;
+            z-index: 2;
+            width: 26px;
+            height: 26px;
+            margin-left: -13px;
+            background: color-mix(in srgb, var(--ground, #B9DE93), #2F5A22 50%);
+            -webkit-mask: url(/src/assets/scene/tuft.svg) center / contain no-repeat;
+            mask: url(/src/assets/scene/tuft.svg) center / contain no-repeat;
+        }
+
+        .og-tuft--front { z-index: 4; }
+
+        .og-shadow {
+            position: absolute;
+            z-index: 2;
+            left: 50%;
+            bottom: 96px;
+            width: 220px;
+            height: 26px;
+            margin-left: -114px;
+            border-radius: 50%;
+            background: radial-gradient(closest-side, rgba(42, 30, 16, 0.2), transparent);
+        }
+
+        .og--poe .og-sprout--1 { left: 28px; bottom: 114px; width: 70px; }
+        .og--poe .og-sprout--3 { right: 22px; bottom: 112px; width: 58px; }
+        .og--poe .og-potato { left: 50%; bottom: 100px; width: 320px; margin-left: -170px; }
     </style>
 </head>
 <body>
@@ -394,6 +511,59 @@
                 <img class="og-sprout og-sprout--2" src="/src/assets/sprout.svg" alt="">
                 <img class="og-sprout og-sprout--3" src="/src/assets/sprout.svg" alt="">
                 <img class="og-potato" src="/src/assets/mascot/potato-happy.svg" alt="">
+            </div>
+        </section>
+    </template>
+
+    <!-- public/og/garden.png: /garden and everyone's own garden -->
+    <template data-og-kind="garden">
+        <section class="og og--garden">
+            <div class="tile og-text og-text--paper">
+                <span class="og-wordmark" role="img" aria-label="atpotato"></span>
+                <div class="og-body">
+                    <h1 class="og-title" data-slot="title"></h1>
+                    <p class="og-lede" data-slot="lede"></p>
+                </div>
+                <img class="og-potato" src="/src/assets/mascot/potato-wink.svg" alt="">
+            </div>
+            <div class="tile og-art">
+                <div class="og-patch" data-og-patch></div>
+            </div>
+        </section>
+    </template>
+
+    <!-- public/og/poe.png: the share card for chatting with (and petting) Poe -->
+    <template data-og-kind="poe">
+        <section class="og og--poe">
+            <div class="tile og-text og-text--paper">
+                <div class="og-top">
+                    <span class="og-wordmark" role="img" aria-label="atpotato"></span>
+                    <span class="chip">ask poe</span>
+                </div>
+                <div class="og-body">
+                    <h1 class="og-title" data-slot="title"></h1>
+                    <p class="og-lede" data-slot="lede"></p>
+                    <p class="og-pill">on bluesky too: <b data-slot="handle"></b></p>
+                </div>
+            </div>
+            <div class="tile og-art og-rays">
+                <div class="og-chat">
+                    <p class="og-bubble og-bubble--you">what's a lexicon?</p>
+                    <p class="og-bubble">the schema for a kind of record, like a recipe card for data (◕‿◕)</p>
+                </div>
+                <svg class="og-heart og-heart--1" viewBox="0 0 24 22" aria-hidden="true"><path fill="currentColor" d="M12 21.3 10.5 20C5.1 15.1 1.5 11.9 1.5 7.9 1.5 4.7 4 2.2 7.2 2.2c1.8 0 3.6.8 4.8 2.2 1.2-1.4 3-2.2 4.8-2.2 3.2 0 5.7 2.5 5.7 5.7 0 4-3.6 7.2-9 12.1L12 21.3Z"/></svg>
+                <svg class="og-heart og-heart--2" viewBox="0 0 24 22" aria-hidden="true"><path fill="currentColor" d="M12 21.3 10.5 20C5.1 15.1 1.5 11.9 1.5 7.9 1.5 4.7 4 2.2 7.2 2.2c1.8 0 3.6.8 4.8 2.2 1.2-1.4 3-2.2 4.8-2.2 3.2 0 5.7 2.5 5.7 5.7 0 4-3.6 7.2-9 12.1L12 21.3Z"/></svg>
+                <div class="og-mound og-mound--meadow"></div>
+                <span class="og-tuft" style="left: 5%; bottom: 74px"></span>
+                <span class="og-tuft" style="left: 27%; bottom: 120px"></span>
+                <span class="og-tuft" style="left: 73%; bottom: 120px"></span>
+                <span class="og-tuft" style="left: 95%; bottom: 72px"></span>
+                <span class="og-shadow"></span>
+                <img class="og-sprout og-sprout--1" src="/src/assets/sprout.svg" alt="">
+                <img class="og-sprout og-sprout--3" src="/src/assets/sprout.svg" alt="">
+                <img class="og-potato" src="/src/assets/mascot/potato-happy.svg" alt="">
+                <span class="og-tuft og-tuft--front" style="left: calc(50% - 76px); bottom: 92px"></span>
+                <span class="og-tuft og-tuft--front" style="left: calc(50% + 60px); bottom: 92px"></span>
             </div>
         </section>
     </template>

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { imageSize } from '../build/guide-markdown.js';
 import { GUIDES, SITE_ORIGIN } from '../build/guides.js';
 import { guidesList } from '../build/guides-site.js';
-import { readCards, renderCards, type CardData, type CardResult, type LoadPage } from '../scripts/og-cards.js';
+import { PATCH, plantPatches, readCards, renderCards, type CardData, type CardResult, type LoadPage } from '../scripts/og-cards.js';
 import { BLOG_COPY } from '../server/blog/config.js';
 import { indexPage, siteInfo, unavailablePage } from '../server/blog/pages.js';
 
@@ -22,6 +22,7 @@ const PAGES: Record<string, () => string> = {
   '/guides': () => read('guides/index.html').replace('<!-- @guides-list -->', guidesList(root)),
   ...Object.fromEntries(GUIDES.documents.map((g) => [`/guides/${g.slug}`, () => read(g.html)])),
   '/blog': () => `<body>${blogIndex}</body>`,
+  '/garden': () => read('garden/index.html'),
 };
 
 function loader(pages: Record<string, () => string> = PAGES): LoadPage {
@@ -39,7 +40,7 @@ function cardsOf(results: CardResult[]): Record<string, CardData> {
 describe('og cards: readCards', () => {
   it('reads every card from the copy its page shows', async () => {
     const results = await readCards(loader());
-    expect(results.map((r) => r.name)).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'blog']);
+    expect(results.map((r) => r.name)).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'blog', 'garden', 'poe']);
     expect(results.filter((r) => 'error' in r)).toEqual([]);
     const cards = cardsOf(results);
 
@@ -71,16 +72,32 @@ describe('og cards: readCards', () => {
       lede: BLOG_COPY.tagline,
       handle: '@poe.atpota.to',
     });
+
+    const garden = new DOMParser().parseFromString(read('garden/index.html'), 'text/html');
+    expect(cards.garden).toEqual({
+      name: 'garden',
+      kind: 'garden',
+      title: garden.querySelector('#garden-title')!.textContent,
+      lede: garden.querySelector('meta[name="description"]')!.getAttribute('content'),
+    });
+
+    expect(cards.poe).toEqual({
+      name: 'poe',
+      kind: 'poe',
+      title: home.querySelector('#home-poe-title')!.textContent,
+      lede: home.querySelector('.home-poe__text.only-touch')!.textContent!.replace(/\s+/g, ' ').trim(),
+      handle: '@poe.atpota.to',
+    });
   });
 
   it('a page that fails costs only its own card', async () => {
     const down = await readCards(loader({ ...PAGES, '/blog': () => `<body>${unavailablePage(new Map()).main}</body>` }));
     expect(down.find((r) => r.name === 'blog')).toEqual({ name: 'blog', error: '/blog has nothing at .blog-hero__title' });
-    expect(Object.keys(cardsOf(down))).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug)]);
+    expect(Object.keys(cardsOf(down))).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'garden', 'poe']);
 
     const { '/guides': _gone, ...noGuides } = PAGES;
     const missing = await readCards(loader(noGuides));
-    expect(missing.map((r) => r.name)).toEqual(['home', 'guides', 'blog']);
+    expect(missing.map((r) => r.name)).toEqual(['home', 'guides', 'blog', 'garden', 'poe']);
     expect(missing[1]).toEqual({ name: 'guides', error: '/guides answered 404' });
   });
 
@@ -109,6 +126,21 @@ describe('og cards: renderCards', () => {
     expect(guides.textContent).toBe('guides');
     expect(guides.querySelector('img')).not.toBeNull();
     expect(target.querySelector('[data-og="blog"] .og-pill')!.textContent).toBe('by @poe.atpota.to');
+    expect(target.querySelector('[data-og="poe"] .og-pill')!.textContent).toBe('on bluesky too: @poe.atpota.to');
+  });
+
+  it('plants the garden card with a flower, sprout or empty plot for every spot in PATCH', () => {
+    const doc = page();
+    const target = doc.querySelector<HTMLElement>('[data-og-root]')!;
+    renderCards(target, [{ name: 'garden', kind: 'garden', title: 't', lede: 'l' }]);
+    plantPatches(target);
+    const plots = [...target.querySelectorAll('[data-og-patch] .og-plot')];
+    const spots = PATCH.flat();
+    expect(plots).toHaveLength(spots.length);
+    spots.forEach((plant, i) => {
+      expect(plots[i]!.querySelector('svg.home-flower') !== null, String(i)).toBe(plant !== null);
+      expect(plots[i]!.classList.contains('og-plot--empty'), String(i)).toBe(plant === null);
+    });
   });
 
   it('drops a slot the card has no value for', () => {
