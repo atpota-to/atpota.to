@@ -13,13 +13,16 @@ import {
   hourWords,
   rangeAt,
   readAlmanac,
+  recordHigh,
   renderHeatmap,
   renderNewApps,
+  renderRecords,
   renderToday,
   roughly,
   summarizeHeat,
   USUAL_EDGES,
   usualText,
+  whenWords,
   type Almanac,
 } from '../src/scripts/weather-almanac.js';
 import { appChange } from '../src/scripts/weather-page.js';
@@ -283,5 +286,47 @@ describe('the mix against usual', () => {
     const body = { ...ALMANAC, normal: { ...ALMANAC.normal, diversity: diversity(2.8, 2) } };
     expect(readAlmanac(body)!.normal!.diversity).toEqual(diversity(2.8, 2));
     expect(readAlmanac({ ...body, normal: { ...body.normal, diversity: { ...diversity(2.8, 2), weeks: null } } })!.normal!.diversity).toBeUndefined();
+  });
+});
+
+describe('records', () => {
+  const RECORDS = { since: '2026-10-20T16:50:00.000Z', busiest: { minute: '2026-10-21T00:04:00.000Z', perSecond: 609.8 }, mostApps: { minute: '2026-11-03T15:31:00.000Z', apps: 41 } };
+
+  it('reads them, and drops a part that does not check out', () => {
+    expect(readAlmanac({ ...ALMANAC, records: RECORDS })!.records).toEqual(RECORDS);
+    expect(readAlmanac({ ...ALMANAC, records: { ...RECORDS, mostApps: { minute: 'nope', apps: 3 } } })!.records!.mostApps).toBeNull();
+  });
+
+  it("today's high is the record when it beats the busiest minute before today", () => {
+    expect(recordHigh({ ...ALMANAC, records: RECORDS })).toEqual({ ...ALMANAC.today!.high!, today: true });
+    const older = { ...RECORDS, busiest: { minute: '2026-10-21T00:04:00.000Z', perSecond: 702 } };
+    expect(recordHigh({ ...ALMANAC, records: older })).toEqual({ ...older.busiest, today: false });
+    expect(recordHigh({ ...ALMANAC, today: undefined, records: undefined })).toBeNull();
+  });
+
+  it('says when, in the reader\'s zone', () => {
+    expect(whenWords('2026-10-21T00:04:00.000Z', false, TZ)).toBe('oct 20, 8:04 pm');
+    expect(whenWords('2026-11-03T20:14:00.000Z', true, TZ)).toBe('today, 3:14 pm');
+  });
+
+  it('fills the records in the today tile, and marks today\'s high when it is one', () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    const a = { ...ALMANAC, records: RECORDS };
+    renderToday(tile, a, NOW, TZ);
+    renderRecords(tile, a, TZ);
+    expect(tile.querySelector<HTMLElement>('[data-a-records]')!.hidden).toBe(false);
+    expect(text('[data-a-record-busiest]')).toBe('642');
+    expect(text('[data-a-record-busiest-at]')).toBe('a second, today, 3:14 pm');
+    expect(text('[data-a-record-apps]')).toBe('41');
+    expect(text('[data-a-record-apps-at]')).toBe('apps, today, 10:31 am');
+    expect(text('[data-a-records-since]')).toBe('records since the station started listening live, oct 20.');
+    expect(text('[data-a-high-at]')).toBe('high at 3:14 pm · a record!');
+    expect(text('[data-a-range-said]')).toMatch(/ the high is the busiest minute on record\.$/);
+  });
+
+  it('stays hidden with no records to show', () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    renderRecords(tile, { ...ALMANAC, today: undefined, records: undefined }, TZ);
+    expect(tile.querySelector<HTMLElement>('[data-a-records]')!.hidden).toBe(true);
   });
 });

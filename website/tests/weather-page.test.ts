@@ -15,9 +15,12 @@ import {
   createMeasure,
   fetchHistory,
   formatRate,
+  gustOf,
+  humidityOf,
   MEASURE_KEY,
   ratesOf,
   renderReport,
+  renderReadouts,
   renderReportError,
   renderTrends,
   trendSummary,
@@ -451,5 +454,35 @@ describe("what's this? Poe explains", () => {
     const levels = EXPLAINERS.diversity!.answer;
     expect(levels).toContain('0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme');
     expect(DIVERSITY_SCALE.map(([, from]) => from)).toEqual([0, 3, 6, 8, 11]);
+  });
+});
+
+describe("the weather app's readouts", () => {
+  it('humidity is the share of writes that change or take back a record', () => {
+    expect(humidityOf({ creates: 90, updates: 4, deletes: 6, identity: 1, account: 0 })).toBe(10);
+    expect(humidityOf({ creates: 0, updates: 0, deletes: 0, identity: 3, account: 0 })).toBeNull();
+  });
+
+  it("gusts are the busiest second of the station's minute, and a sample has none", () => {
+    const series = [{ t: 1, creates: 420 }, null, { t: 3, creates: 980 }, { t: 4, creates: 440 }] as Reading['series'];
+    expect(gustOf({ ...READING, source: 'station', series })).toBe(980);
+    expect(gustOf({ ...READING, source: 'station', series: [] })).toBeNull();
+    expect(gustOf({ ...READING, source: 'sample', series })).toBeNull();
+  });
+
+  it('fills feels like, gusts, humidity and visibility', () => {
+    renderReadouts(report, { ...READING, source: 'station', series: [{ t: 1, creates: 1234 }] as Reading['series'] });
+    expect(text('[data-r-feels]')).toBe('51');
+    expect(report.querySelector<HTMLElement>('[data-r-gusts-wrap]')!.hidden).toBe(false);
+    expect(text('[data-r-gusts]')).toBe('1,234');
+    expect(text('[data-r-humidity]')).toBe('3.7%');
+    expect(text('[data-r-visibility]')).toBe('12 apps');
+  });
+
+  it('hides gusts for a sampled reading, and dashes what it does not know', () => {
+    renderReadouts(report, { ...READING, source: 'sample', events: undefined, diversity: { ...READING.diversity!, apps: undefined } } as unknown as Reading);
+    expect(report.querySelector<HTMLElement>('[data-r-gusts-wrap]')!.hidden).toBe(true);
+    expect(text('[data-r-humidity]')).toBe('–');
+    expect(text('[data-r-visibility]')).toBe('–');
   });
 });

@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@atproto/oauth-client-browser": "^0.5.10",
-    "@vercel/firewall": "^1.2.6"
+    "@vercel/firewall": "^1.2.6",
+    "@vercel/og": "^0.11.1"
   }
 }

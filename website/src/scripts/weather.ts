@@ -265,11 +265,18 @@ export function countTo(el: HTMLElement, to: number, format: (n: number) => stri
   rollText(el, format(to), Number.isFinite(from) ? Math.sign(to - from) : undefined);
 }
 
-/** Turns the little sun's rays with how busy the network is. */
+/**
+ * Turns the little sun's rays with how busy the network is. The rate is kept on the rays
+ * (data-rate), so a reader spinning the report's sun (weather-hero.ts, data-boost) speeds
+ * them up on top of it.
+ */
 export function spinRays(root: ParentNode, recordsPerSecond: number): void {
   const rays = root.querySelector<SVGElement>('[data-weather-rays]');
-  const spin = rays?.getAnimations?.()[0];
-  if (spin) spin.playbackRate = Math.max(0.3, Math.min(3, recordsPerSecond / RAYS_BASELINE));
+  if (!rays) return;
+  const rate = Math.max(0.3, Math.min(3, recordsPerSecond / RAYS_BASELINE));
+  rays.dataset.rate = String(rate);
+  const spin = rays.getAnimations?.()[0];
+  if (spin) spin.playbackRate = rate * (Number(rays.dataset.boost) || 1);
 }
 
 /**

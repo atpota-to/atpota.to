@@ -6,6 +6,11 @@
   "devCommand": "vite --port $PORT",
   "outputDirectory": "dist",
   "functions": {
+    "api/weather-card.ts": {
+      "maxDuration": 30,
+      "supportsCancellation": true,
+      "includeFiles": "{server/fonts/**,src/assets/wordmark.svg,src/assets/weather-sun.svg,src/assets/mascot/**}"
+    },
     "api/*.ts": {
       "maxDuration": 300,
       "supportsCancellation": true
@@ -16,6 +21,7 @@
     { "source": "/blog", "destination": "/api/blog?view=index" },
     { "source": "/blog/feed.xml", "destination": "/api/blog?view=feed" },
     { "source": "/blog/:path*", "destination": "/api/blog?view=post&path=:path*" },
+    { "source": "/weather/card.png", "destination": "/api/weather-card" },
     { "source": "/garden/:actor", "destination": "/garden" },
     { "source": "/garden/:actor/flowers", "destination": "/garden" }
   ],

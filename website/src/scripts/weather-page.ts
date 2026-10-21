@@ -37,11 +37,13 @@
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
-import { alertsFor, createAlertDesk, newAppAlert, type AlertDesk, type Watch } from './weather-alerts';
-import { clock, initAlmanac, readerTimeZone, type Almanac } from './weather-almanac';
+import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, type Watch } from './weather-alerts';
+import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
+import { initForecast } from './weather-forecast';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { renderChart, type ChartPoint } from './weather-chart';
 import { explain, type PoeExplanation } from '../poe/say';
+import { airNow, clearedUp, initHero, RAINBOW_COOLDOWN_MS, renderAir, showRainbow } from './weather-hero';
 import { cloudCount, renderClouds } from './weather-sky';
 import { renderSpark } from './weather-spark';
 import {
@@ -272,6 +274,11 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   const acct = r.accounts;
   const sky = $(report, '[data-weather-sky]');
   if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
+  // the weather you can see: wind, rain or snow (weather-hero.ts)
+  const hero = $(report, '[data-weather-hero]');
+  if (hero) hero.dataset.condition = r.condition;
+  const air = $(report, '[data-weather-air]');
+  if (air) renderAir(air, airNow(r.condition));
   const spark = $(report, '[data-r-spark]');
   if (spark) renderSpark(spark, r);
 
@@ -336,9 +343,44 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   const minuteAccounts = $(report, '[data-r-minute-accounts]');
   if (minuteAccounts) minuteAccounts.hidden = !acct;
   count(report, '[data-r-active]', acct?.active, formatCount);
+  renderReadouts(report, r);
 
   if (report.dataset.state !== 'ready') setText(report, '[data-r-status]', `${CONDITION_TEXT[r.condition]}. diversity index ${r.diversity ? `${formatIndex(r.diversity.index)}, ${r.diversity.level}` : 'unknown'}.`);
   report.dataset.state = 'ready';
+}
+
+/**
+ * Humidity: edits and deletions, as a percent of everything written (new records, edits
+ * and deletions). null when nothing was written.
+ */
+export function humidityOf(events: NonNullable<Reading['events']>): number | null {
+  const writes = events.creates + events.updates + events.deletes;
+  return writes > 0 ? ((events.updates + events.deletes) / writes) * 100 : null;
+}
+
+/** Gusts: the busiest single second in the station's 60, by new records. null for a sampled reading. */
+export function gustOf(r: Reading): number | null {
+  if (r.source !== 'station') return null;
+  const heard = (r.series ?? []).flatMap((p) => (p ? [p.creates] : []));
+  return heard.length ? Math.max(...heard) : null;
+}
+
+/** "3.4%", "0.48%". */
+function percent(v: number): string {
+  return `${v < 1 ? v.toFixed(2) : v.toFixed(1)}%`;
+}
+
+/** The last minute as a weather app's details: feels like, gusts, humidity and visibility (EXPLAINERS.readouts says what they mean). */
+export function renderReadouts(report: HTMLElement, r: Reading): void {
+  count(report, '[data-r-feels]', r.perSecond.posts);
+  const gust = gustOf(r);
+  const gusts = $(report, '[data-r-gusts-wrap]');
+  if (gusts) gusts.hidden = gust === null;
+  if (gust !== null) count(report, '[data-r-gusts]', gust, formatCount);
+  const humid = r.events ? humidityOf(r.events) : null;
+  roll(report, '[data-r-humidity]', humid === null ? '–' : percent(humid));
+  const apps = r.diversity?.apps;
+  roll(report, '[data-r-visibility]', apps === undefined ? '–' : `${apps} app${apps === 1 ? '' : 's'}`);
 }
 
 /** What a diversity index is made of, in a line: its share of accounts, and how spread out they are (Poe has the rest, EXPLAINERS). */
@@ -368,6 +410,33 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       'so a crowd spread over lots of apps scores higher than the same crowd piled into one.',
       '',
       "it reads like the uv index: 0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme. a usual minute sits around 2 right now, so it's mostly bluesky out there. for now (◕‿◕)",
+    ].join('\n'),
+  },
+  readouts: {
+    question: 'what do feels like, gusts, humidity and visibility mean?',
+    answer: [
+      "they're my take on a weather app's details, all from the last minute:",
+      '',
+      "- feels like: new posts a second. likes and follows are most of the records, but posts are what you actually feel when you scroll",
+      '- gusts: the busiest single second of the minute. when a bot dumps a pile of records at once, it shows up here first',
+      '- humidity: edits and deletions as a share of everything written. a muggy minute is one where people are second-guessing themselves',
+      "- visibility: how many apps outside bluesky wrote anything. on a clear day you can see a long way past bluesky",
+      '',
+      "none of these are official anything. i made them up, but the numbers are real (◕‿◕)",
+    ].join('\n'),
+  },
+  forecast: {
+    question: 'how does the forecast work?',
+    answer: [
+      "it's a real forecast, not just what's usual. three things go into it:",
+      '',
+      "- usual: what each hour of the day has looked like over the last two weeks, nudged toward that hour of the week once i've heard a few of them. i take the middle value, so one bot's burst doesn't become normal",
+      "- running: how far the last day has run from usual. if the whole network is having a busy day, the forecast stays busy too",
+      "- memory: how long a busy or quiet spell tends to last. right now's difference from usual fades out hour by hour, as fast as it has in the past",
+      '',
+      "then i play the next 12 hours forward a few hundred times, each hour wobbling by as much as my own past misses did. the shaded band is where 8 runs in 10 land, and the chance of a storm is how many runs went past 600 new records a second.",
+      '',
+      "network sunrise is when the usual day climbs past halfway between its quietest and busiest hours, and sunset is when it falls back. underneath, i keep score: how far off my forecasts for the next hour have been, against just going by usual (◕‿◕)",
     ].join('\n'),
   },
 };
@@ -795,6 +864,11 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   bindHush(root, desk);
   bindExplainers(root);
   let watch: Watch | null = null;
+  const hero = $(report, '[data-weather-hero]');
+  if (hero) initHero(hero);
+  let rainbowAt = -Infinity;
+  // the busiest minute on record, from the almanac, raised by any live minute that beats it
+  let record: number | null = null;
   const measure = createMeasure(root);
   let shown: Reading | null = null;
   measure.onChange((m) => {
@@ -811,9 +885,19 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     if (reading) {
       shown = reading;
       renderReport(report, reading, measure.get());
+      // a storm that clears leaves a rainbow, now and then
+      if (hero && clearedUp(watch?.condition, reading.condition) && Date.now() - rainbowAt >= RAINBOW_COOLDOWN_MS) {
+        rainbowAt = Date.now();
+        showRainbow(hero);
+      }
       const next = alertsFor(watch, reading);
       watch = next.watch;
       for (const a of next.alerts) desk.push(a);
+      const beaten = recordAlert(record, reading);
+      if (beaten) {
+        desk.push(beaten);
+        record = recordsPerSecond(reading);
+      }
     } else renderReportError(report);
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
   };
@@ -825,7 +909,13 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, fetchImpl, measure);
-  initAlmanac(report, fetchImpl, watchNewApps(desk));
+  const newApps = watchNewApps(desk);
+  initAlmanac(report, fetchImpl, (a) => {
+    newApps(a);
+    const best = recordHigh(a)?.perSecond;
+    if (best !== undefined) record = Math.max(record ?? 0, best);
+  });
+  initForecast(report, fetchImpl, readerTimeZone());
 }
 
 /** Alerts for apps the almanac lists as new that it didn't list last time (the first load only sets the scene). */

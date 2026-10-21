@@ -3,7 +3,7 @@
  * rows in Supabase (server/supabase-public.ts, atmosphere/sql/atmosphere_almanac.sql).
  *
  *   GET /api/weather-almanac?tz=America/New_York
- *   ->  { tz, today?, normal?, newApps?, heatmap? }
+ *   ->  { tz, today?, normal?, newApps?, heatmap?, records? }
  *
  *   today    today so far, from midnight in `tz`: totals, and the busiest and quietest
  *            whole minute by new records a second, every app (atmosphere_today's
@@ -16,8 +16,12 @@
  *            heard before (atmosphere_new_apps). Until the station has listened for
  *            WARMUP_MS, every app is new to it, so it says it's warming up instead
  *   heatmap  every hour of the week in `tz` over the last HEATMAP_MS (atmosphere_heatmap)
+ *   records  the busiest whole minute the station has heard, by new records a second, and
+ *            the minute it heard the most apps outside Bluesky (readRecords). Only since
+ *            it listened live (LIVE_SINCE): the archive's backfill has minutes of a replay's
+ *            pile-up in it, tens of thousands a second, that no one ever saw
  *
- * Each part is asked for at once and left out if it fails; only all four failing is a
+ * Each part is asked for at once and left out if it fails; only all of them failing is a
  * 503. `tz` is an IANA zone name (the page sends the reader's own); anything else is a 400.
  * Cached at the CDN for a minute per zone.
  */
@@ -127,6 +131,13 @@ export interface Heatmap {
   cells: HeatCell[];
 }
 
+export interface Records {
+  /** Records count from here (LIVE_SINCE). */
+  since: string;
+  busiest: Extreme | null;
+  mostApps: { minute: string; apps: number } | null;
+}
+
 function extreme(x: unknown): Extreme | null {
   if (!isRecord(x)) return null;
   const minute = iso(x.minute);
@@ -222,6 +233,33 @@ export async function readDiversity(db: Supabase, at: number): Promise<NormalDiv
   return { hour: new Date(hour).toISOString(), now, days: usual(USUAL_DAYS), weeks: usual(USUAL_WEEKS) };
 }
 
+/**
+ * The station's records since it listened live: the whole minute with the most new records
+ * a second, and the one with the most apps outside Bluesky. Straight off the minute rows
+ * (the newest of any tie), no sums needed.
+ */
+export async function readRecords(db: Supabase): Promise<Records> {
+  const since = new Date(LIVE_SINCE).toISOString();
+  const path = (select: string, order: string, extra = '') => `atmosphere_minute?select=${select}&minute=gte.${since}${extra}&order=${order},minute.desc&limit=1`;
+  const [busy, apps] = await Promise.all([
+    db.get(path('minute,creates,seconds_covered', 'creates.desc', '&seconds_covered=eq.60')),
+    db.get(path('minute,apps', 'apps.desc')),
+  ]);
+  const first = (rows: unknown) => (Array.isArray(rows) ? rows[0] : undefined);
+  const b = first(busy);
+  const bm = isRecord(b) ? iso(b.minute) : null;
+  const bc = counts(b, ['creates', 'seconds_covered'] as const);
+  const a = first(apps);
+  const am = isRecord(a) ? iso(a.minute) : null;
+  const ac = counts(a, ['apps'] as const);
+  if (!Array.isArray(busy) || !Array.isArray(apps)) throw new Error('records did not check out');
+  return {
+    since,
+    busiest: bm && bc && bc.seconds_covered > 0 ? { minute: bm, perSecond: Math.round((bc.creates / bc.seconds_covered) * 10) / 10 } : null,
+    mostApps: am && ac ? { minute: am, apps: ac.apps } : null,
+  };
+}
+
 export interface AlmanacDeps {
   fetch?: Fetch;
   now?: () => number;
@@ -250,7 +288,7 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
         return undefined;
       }
     };
-    const [today, normal, newApps, heatmap] = await Promise.all([
+    const [today, normal, newApps, heatmap, records] = await Promise.all([
       part('today', async () => toToday(await db.rpc('atmosphere_today', { tz }))),
       part('normal', async () => {
         const diversity = readDiversity(db, at).catch((error) => {
@@ -263,9 +301,10 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
       }),
       part('new_apps', async () => toNewApps(await db.rpc('atmosphere_new_apps', { since: new Date(at - DAY).toISOString(), max_apps: 50 }), at)),
       part('heatmap', async () => toHeatmap(await db.rpc('atmosphere_heatmap', { tz, since: new Date(at - HEATMAP_MS).toISOString() }))),
+      part('records', () => readRecords(db)),
     ]);
-    if (!today && !normal && !newApps && !heatmap) return json(request, 503, { error: 'unavailable' }, 'no-store');
-    return json(request, 200, { tz, today, normal, newApps, heatmap }, CACHE);
+    if (!today && !normal && !newApps && !heatmap && !records) return json(request, 503, { error: 'unavailable' }, 'no-store');
+    return json(request, 200, { tz, today, normal, newApps, heatmap, records }, CACHE);
   }
 
   return { GET, HEAD: GET, methodNotAllowed: async (request: Request) => methodNotAllowed(request) };
