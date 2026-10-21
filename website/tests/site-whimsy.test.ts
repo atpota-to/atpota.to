@@ -411,25 +411,38 @@ describe('the community garden tile', () => {
     expect(INDEX).not.toContain('patch.css');
   });
 
-  it('shows a row of flowers, one of each kind, and how many plots are planted', async () => {
+  it('shows the live patch: every plot, the flowers in theirs as they are today, and how many are planted', async () => {
     const t = tile();
-    await initGardenTeaser(t, answer({ patch: PATCH, patches: [], flowers: [flower(3), flower(40)], total: 2 }), () => 0.5);
+    const NOW = Date.parse('2026-10-20T12:00:00Z');
+    const sprout = { ...flower(40), plantedAt: '2026-10-20T00:00:00Z' };
+    await initGardenTeaser(t, answer({ patch: PATCH, patches: [], flowers: [flower(3), sprout], total: 2 }), () => 0.5, () => NOW);
     expect(t.dataset.state).toBe('ready');
-    const row = t.querySelector<HTMLElement>('[data-teaser-row]')!;
-    expect(row.getAttribute('aria-hidden')).toBe('true');
-    expect(row.querySelectorAll('.home-garden__mound svg.home-flower')).toHaveLength(6);
+    const patch = t.querySelector<HTMLElement>('[data-teaser-patch]')!;
+    expect(patch.getAttribute('aria-hidden')).toBe('true');
+    expect(patch.style.getPropertyValue('--teaser-cols')).toBe('12');
+    expect(patch.querySelectorAll('.home-garden__plot')).toHaveLength(96);
+    const planted = patch.querySelectorAll<HTMLElement>('.home-garden__plot--planted');
+    expect([...planted].map((p) => p.dataset.plot)).toEqual(['3', '40']);
+    expect(planted[0]!.querySelector('.home-garden__sway svg.home-flower')).not.toBeNull();
+    // each comes up in its own time
+    const delays = [...patch.querySelectorAll<HTMLElement>('.home-garden__sway')].map((s) => s.style.getPropertyValue('--grow-delay'));
+    expect(new Set(delays).size).toBe(2);
+    // jsdom has no IntersectionObserver: the flowers grow straight away
+    expect(t.dataset.seen).toBe('true');
     expect(t.querySelector('[data-teaser-season]')!.textContent).toBe('autumn 2026');
     expect(t.querySelector('[data-teaser-count]')!.textContent).toBe('2 of 96 plots planted');
   });
 
-  it('an empty patch invites; a failed load keeps the flowers, words and link', async () => {
+  it('an empty patch invites; a failed load keeps a few flowers, the words and the link', async () => {
     const t = tile();
     await initGardenTeaser(t, answer({ patch: PATCH, patches: [], flowers: [], total: 0 }));
     expect(t.querySelector('[data-teaser-count]')!.textContent).toBe(TEASER.count(0, 96));
+    expect(t.querySelectorAll('[data-teaser-patch] svg')).toHaveLength(0);
     const broken = tile();
     await initGardenTeaser(broken, answer({ error: 'unavailable' }, 503));
     expect(broken.dataset.state).toBe('error');
-    expect(broken.querySelectorAll('[data-teaser-row] svg')).toHaveLength(6);
+    expect(broken.querySelectorAll('[data-teaser-patch] .home-garden__plot')).toHaveLength(96);
+    expect(broken.querySelectorAll('[data-teaser-patch] svg')).toHaveLength(6);
     expect(broken.querySelector('[data-teaser-count]')!.textContent).toBe('plant a flower, watch it bloom');
   });
 });
