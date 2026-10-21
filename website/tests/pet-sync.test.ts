@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SCOPE, type Auth, type Session } from '../src/blog/auth.js';
 import { grants } from './lexicon-helpers.js';
 import { readPending, resetBlogStoresForTests, sessionStoreFor } from '../src/blog/state.js';
-import { ASK_AFTER, COUNT_COPY, initPet, PETS_KEY } from '../src/scripts/pet.js';
+import { ASK_AFTER, COUNT_COPY, initPet, PET_RESET_MS, PETS_KEY } from '../src/scripts/pet.js';
 import { createPetSync, MAX_PETS, PET_SIGNIN_EVENT, PETS_NSID, PETS_RKEY, petsRecord, readSavedPets, SAVE_DELAY_MS, toSavedPets, troubleFrom } from '../src/scripts/pet-sync.js';
 
 const DID = 'did:plc:reader';
@@ -163,7 +163,7 @@ describe('the tile count', () => {
     <div class="home-sun" data-mascot-trigger>
       <img data-mascot="kawaii" data-pet src="poe.svg" alt="poe">
       <p class="home-sun__bubble"><span class="only-hover">psst, hover me</span><span data-pet-say></span></p>
-      <p class="home-sun__count" data-pet-count hidden><span data-pet-count-n></span><span data-pet-count-unit></span><button type="button" data-pet-count-ask hidden></button></p>
+      <p class="home-sun__count" data-pet-count hidden><span data-pet-count-n></span><span data-pet-count-unit></span><span data-pet-count-visit hidden></span><span data-pet-count-streak hidden></span><button type="button" data-pet-count-ask hidden></button></p>
     </div>`;
   const q = (sel: string) => document.querySelector<HTMLElement>(sel)!;
   const pet = (n = 1) => {
@@ -172,7 +172,7 @@ describe('the tile count', () => {
 
   it('is on the home page, next to Poe', () => {
     const index = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../index.html'), 'utf8');
-    for (const attr of ['data-pet-count', 'data-pet-count-n', 'data-pet-count-unit', 'data-pet-count-ask']) expect(index).toContain(`${attr}`);
+    for (const attr of ['data-pet-count', 'data-pet-count-n', 'data-pet-count-unit', 'data-pet-count-visit', 'data-pet-count-streak', 'data-pet-count-ask']) expect(index).toContain(`${attr}`);
     expect(index.indexOf('data-pet-count')).toBeGreaterThan(index.indexOf('data-pet-say'));
   });
 
@@ -181,6 +181,25 @@ describe('the tile count', () => {
     initPet(document, { auth: null });
     pet(ASK_AFTER + 2);
     expect(q('[data-pet-count]').hidden).toBe(true);
+  });
+
+  it("shows this visit's pets and the streak beside the total, and drops the streak after a pause", () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = HERO;
+    localStorage.setItem(PETS_KEY, '330');
+    initPet(document, { auth: fakeAuth(null, false) });
+    pet(5);
+    expect(q('[data-pet-count-n]').textContent).toBe('335');
+    expect(q('[data-pet-count-visit]').textContent).toBe('5 this visit');
+    expect(q('[data-pet-count-streak]').textContent).toBe('×5 in a row');
+    vi.advanceTimersByTime(PET_RESET_MS);
+    expect(q('[data-pet-count-streak]').hidden).toBe(true);
+    expect(q('[data-pet-count-visit]').hidden).toBe(false);
+    pet();
+    expect(q('[data-pet-count-visit]').textContent).toBe('6 this visit');
+    expect(q('[data-pet-count-streak]').hidden).toBe(true);
+    pet();
+    expect(q('[data-pet-count-streak]').textContent).toBe('×2 in a row');
   });
 
   it('offers a signed-out reader sign-in after a few pets', () => {
