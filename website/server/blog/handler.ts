@@ -8,6 +8,10 @@
  *                                                                   path or its record key
  *   /.well-known/site.standard.publication/blog    view=well-known  the publication's at:// URI
  *                                                                   (standard.site verification)
+ *   /receive_auth_callback                         view=email-return
+ *                                                                   Leaflet's way back for an
+ *                                                                   email subscriber: a redirect
+ *                                                                   to their page (subscribe.ts)
  *
  * Pages are cached by Vercel's CDN for a few minutes and served stale while they refresh,
  * so a new post shows up within about five minutes without a deploy. Records, identities
@@ -35,6 +39,7 @@ import {
 } from './pages.js';
 import { documentPath, findDocument, findPublication, listDocuments, type BlogDocument, type Publication } from './records.js';
 import { bareDocument, fetchShell, fillShell, type Shell } from './shell.js';
+import { EMAIL_RETURN_COOKIE_CLEARED, emailReturnLocation } from './subscribe.js';
 
 /** Fresh for 5 minutes at the CDN, then served stale for up to a day while it refreshes. */
 export const CACHE_OK = 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400';
@@ -152,6 +157,14 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
     const config = readBlogConfig(e);
     const url = new URL(request.url);
     const view = url.searchParams.get('view') ?? 'index';
+
+    // Needs no records: Leaflet's token is for Leaflet, the page to go back to is in a cookie.
+    if (view === 'email-return') {
+      return new Response(null, {
+        status: 303,
+        headers: { location: emailReturnLocation(request.headers.get('cookie')), 'cache-control': 'no-store', 'set-cookie': EMAIL_RETURN_COOKIE_CLEARED, ...BASE_HEADERS },
+      });
+    }
 
     let data: BlogData;
     try {

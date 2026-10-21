@@ -6,6 +6,7 @@ import * as api from '../api/blog.js';
 import { POE_DID } from '../server/blog/config.js';
 import { resetEmbedCaches } from '../server/blog/embeds.js';
 import { CACHE_MISSING, CACHE_OK, createBlogHandlers, type BlogDeps } from '../server/blog/handler.js';
+import { EMAIL_RETURN_COOKIE, LEAFLET_RETURN_PATH } from '../server/blog/subscribe.js';
 import { pageTitle } from '../server/routes.js';
 
 // Handler-level tests for /api/blog. The network (plc.directory, the PDS, the public
@@ -359,6 +360,30 @@ describe('/api/blog feed and well-known', () => {
     const res = await api.POST(new Request(`${ORIGIN}/api/blog`, { method: 'POST' }));
     expect(res.status).toBe(405);
     expect(res.headers.get('allow')).toBe('GET, HEAD');
+  });
+});
+
+describe('/api/blog back from Leaflet', () => {
+  // What Leaflet sends a confirmed email subscriber to: its own token, which only it can read.
+  const back = (cookie?: string) => get('view=email-return&token=leaflet-only', cookie ? { headers: { cookie } } : {});
+
+  it('sends the reader on to the page they subscribed from, with the return marker', async () => {
+    const { h, seen } = setup();
+    const res = await h.GET(back(`other=1; ${EMAIL_RETURN_COOKIE}=${encodeURIComponent('/blog/issue-2#signup-2')}`));
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/blog/issue-2?subscribed=email#signup-2');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('set-cookie')).toBe(`${EMAIL_RETURN_COOKIE}=; Path=${LEAFLET_RETURN_PATH}; Max-Age=0; Secure; SameSite=Lax`);
+    // no records needed, so a PDS outage doesn't strand anyone here
+    expect(seen.urls).toEqual([]);
+  });
+
+  it("falls back to the index's form without a cookie, or with one that isn't a blog page here", async () => {
+    const { h } = setup();
+    expect((await h.GET(back())).headers.get('location')).toBe('/blog?subscribed=email#subscribe');
+    for (const bad of ['https://evil.com/blog', '//evil.com/blog', '/\\evil.com/blog', '/settings', '/blogx', '%E0%A4%A']) {
+      expect((await h.GET(back(`${EMAIL_RETURN_COOKIE}=${encodeURIComponent(bad)}`))).headers.get('location'), bad).toBe('/blog?subscribed=email#subscribe');
+    }
   });
 });
 

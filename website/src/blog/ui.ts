@@ -9,12 +9,14 @@
  * per-comment buttons, and adds the reader's own new comments to the page. DOM is built
  * with createElement and textContent only; nothing from the network becomes HTML here.
  *
- * The email forms post straight to Leaflet and work without this module. For a reader
- * signed in with Bluesky who hasn't subscribed there yet, each gets an "also subscribe
- * with bluesky" box (ticked): submitting writes the subscription record first, then sends
- * the form on to Leaflet, so one submit does both. With the box ticked the email is
- * optional, and an empty one subscribes on Bluesky alone. The "subscribe with bluesky"
- * link under the form would say the same thing as the box, so it steps aside meanwhile.
+ * The email forms post straight to Leaflet and work without this module, which notes the
+ * page in a cookie on the way (EMAIL_RETURN_COOKIE) so the reader comes back to it rather
+ * than to the index. For a reader signed in with Bluesky who hasn't subscribed there yet,
+ * each gets an "also subscribe with bluesky" box (ticked): submitting writes the
+ * subscription record first, then sends the form on to Leaflet, so one submit does both.
+ * With the box ticked the email is optional, and an empty one subscribes on Bluesky alone.
+ * The "subscribe with bluesky" link under the form would say the same thing as the box, so
+ * it steps aside meanwhile.
  *
  * Who's signed in, and signing out, are the header's (src/scripts/account.ts): these pages
  * only say what just happened, in their notice lines.
@@ -76,8 +78,14 @@ export { APPVIEW, normalizeHandle, PREPARED_TTL_MS } from './signin';
 /** Matches MAX_COMMENT_DEPTH in server/blog/pages.ts. */
 export const MAX_DEPTH = 4;
 export const NOTICE_KEY = 'blog:notice';
-/** Leaflet sends a reader back with ?subscribed=email; matches server/blog/subscribe.ts. */
+/** Back from Leaflet with ?subscribed=email; matches server/blog/subscribe.ts. */
 export const EMAIL_RETURN = { param: 'subscribed', value: 'email' } as const;
+/**
+ * Leaflet sends a confirmed reader to /receive_auth_callback rather than to the form's
+ * redirect; this cookie tells that route which page to send them on to. Matches
+ * EMAIL_RETURN_COOKIE and LEAFLET_RETURN_PATH in server/blog/subscribe.ts.
+ */
+export const EMAIL_RETURN_COOKIE = { name: 'blog_email_return', path: '/receive_auth_callback', maxAge: 86_400 } as const;
 
 export const COPY = {
   /** Matches SUBSCRIBE_COPY.bluesky, the label the server renders. */
@@ -151,6 +159,19 @@ function recordUrl(uri: string): string | null {
   return at ? `https://aturi.to/profile/${at.did}/${at.collection}/${at.rkey}` : null;
 }
 
+/** Notes the form's redirect (path and #form) for the way back from Leaflet. */
+function rememberEmailReturn(doc: Document, win: Window, form: HTMLFormElement): void {
+  let back: URL;
+  try {
+    back = new URL(form.querySelector<HTMLInputElement>('input[name="redirect"]')?.value ?? '');
+  } catch {
+    return;
+  }
+  doc.cookie =
+    `${EMAIL_RETURN_COOKIE.name}=${encodeURIComponent(`${back.pathname}${back.search}${back.hash}`)}; ` +
+    `Path=${EMAIL_RETURN_COOKIE.path}; Max-Age=${EMAIL_RETURN_COOKIE.maxAge}; SameSite=Lax${win.location.protocol === 'https:' ? '; Secure' : ''}`;
+}
+
 /**
  * Wires the page. Resolves once the reader's session (if any) has been restored, the page
  * shows their state, and any action they started before signing in has run.
@@ -178,6 +199,9 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   const auth = opts.auth === undefined ? sharedAuth(win) : opts.auth;
 
   if (!root || (!subscribeButtons.length && !recommendButton && !talk)) return;
+
+  // The forms go to Leaflet whether or not sign-in is offered here.
+  for (const form of emailForms) form.addEventListener('submit', () => rememberEmailReturn(doc, win, form));
 
   if (!auth) {
     // Previews and other hosts: point at the real site instead of offering a sign-in that can't work.

@@ -21,6 +21,7 @@
     { "source": "/blog", "destination": "/api/blog?view=index" },
     { "source": "/blog/feed.xml", "destination": "/api/blog?view=feed" },
     { "source": "/blog/:path*", "destination": "/api/blog?view=post&path=:path*" },
+    { "source": "/receive_auth_callback", "destination": "/api/blog?view=email-return" },
     { "source": "/og/weather.png", "destination": "/api/og-weather" },
     { "source": "/garden/:actor", "destination": "/garden" },
     { "source": "/garden/:actor/flowers", "destination": "/garden" }
