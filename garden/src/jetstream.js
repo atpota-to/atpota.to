@@ -1,8 +1,8 @@
 // jetstream.js
-// One Jetstream v2 connection at a time, filtered to the garden:
+// One Jetstream v2 connection at a time, filtered to the garden and Poe's pet counts:
 //
 //   wss://<host>/xrpc/network.bsky.jetstream.subscribeEvents
-//     ?collections=to.atpota.garden.*&kinds=commit[&cursor=<seq>]
+//     ?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&kinds=commit[&cursor=<seq>]
 //
 // v2, like the mentions service, not the v1 the weather station reads. The differences
 // that matter (see mentions/src/jetstream.js for how each one bit):
@@ -34,7 +34,7 @@
 // opened and then dropped retries the same host. Backoff 1, 2, 4 … 30 s, reset once a
 // connection has stayed up STABLE_MS.
 
-import { WILDCARD } from './records.js';
+import { STREAM_COLLECTIONS } from './records.js';
 
 export const PATH = '/xrpc/network.bsky.jetstream.subscribeEvents';
 export const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
@@ -44,7 +44,8 @@ export const STABLE_MS = 30_000;
 export const FAILURES_BEFORE_DROPPING_CURSOR = 4;
 
 export function streamUrl(host, cursor) {
-  return `${host}${PATH}?collections=${WILDCARD}&kinds=commit${cursor === null || cursor === undefined ? '' : `&cursor=${cursor}`}`;
+  const collections = STREAM_COLLECTIONS.map((c) => `collections=${c}`).join('&');
+  return `${host}${PATH}?${collections}&kinds=commit${cursor === null || cursor === undefined ? '' : `&cursor=${cursor}`}`;
 }
 
 export function createJetstream({

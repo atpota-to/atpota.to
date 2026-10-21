@@ -1,7 +1,7 @@
 // Which records the index keeps, as which rows, and what each Jetstream v2 event does.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COMMIT_TYPE, eventOf, MAX_RECORD_CHARS, PATCH, SPROUT, TEND, toRow } from '../src/records.js';
+import { COMMIT_TYPE, eventOf, MAX_RECORD_CHARS, PATCH, PETS, SPROUT, TEND, toRow } from '../src/records.js';
 
 const DID = 'did:plc:abcdefghijklmnopqrstuvwx';
 const CID = 'bafyreiabcdefghijklmnopqrstuvwxyz234567';
@@ -54,6 +54,24 @@ test('a tend points at its flower', () => {
   assert.equal(row(TEND, tend({ action: 'x'.repeat(65) })), null);
   assert.equal(row(TEND, tend({ subject: null })), null);
   assert.equal(row(TEND, tend({ action: undefined })), null);
+});
+
+test("Poe's pet count: at \"self\" only, a whole number, nothing it points at", () => {
+  const pets = (extra = {}) => ({ $type: PETS, count: 120, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-02T00:00:00Z', ...extra });
+  const r = row(PETS, pets(), { rkey: 'self' });
+  assert.equal(r.uri, `at://${DID}/${PETS}/self`);
+  assert.equal(r.ref_uri, null);
+  assert.equal(r.record.count, 120);
+  assert.ok(row(PETS, pets({ count: 0 }), { rkey: 'self' }));
+  assert.equal(row(PETS, pets(), { rkey: '3m4abcdefgh22' }), null, 'not at self');
+  assert.equal(row(PETS, pets({ count: '120' }), { rkey: 'self' }), null);
+  assert.equal(row(PETS, pets({ count: 1.5 }), { rkey: 'self' }), null);
+  assert.equal(row(PETS, pets({ count: -1 }), { rkey: 'self' }), null);
+  assert.equal(row(PETS, pets({ count: 2 ** 60 }), { rkey: 'self' }), null);
+  assert.equal(row(PETS, pets({ createdAt: undefined }), { rkey: 'self' }), null);
+  // an update to it arrives like any other, and the rest of Poe's records aren't kept
+  assert.equal(eventOf({ $type: COMMIT_TYPE, did: DID, collection: PETS, rkey: 'self', operation: 'update', cid: CID, record: pets({ count: 121 }) }).row.record.count, 121);
+  assert.equal(eventOf({ $type: COMMIT_TYPE, did: DID, collection: 'to.atpota.poe.memory', rkey: 'self', operation: 'create', cid: CID, record: {} }), null);
 });
 
 test('a createdAt that does not parse, or that Postgres would refuse, is stored as null', () => {

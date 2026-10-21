@@ -1,6 +1,7 @@
 // index.js
-// atpotato garden index: every to.atpota.garden.* record on the network, kept in Supabase
-// from Jetstream and reconciled against each repo, and what each flower grew into.
+// atpotato garden index: every to.atpota.garden.* record on the network (and every
+// to.atpota.poe.pets count, for the leaderboard), kept in Supabase from Jetstream and
+// reconciled against each repo, and what each flower grew into.
 // See README.md.
 //
 // Timers: the indexer flushes on its own (indexer.js); a reconcile is checked for every
