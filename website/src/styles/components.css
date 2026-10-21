@@ -521,7 +521,12 @@ html[data-theme="dark"] {
   --btn-h: 48px;
   gap: 8px;
   padding: 0 20px;
+  background: var(--leaf-pill);
   font-size: 16px;
+}
+
+.ask-poe-btn:hover {
+  background: color-mix(in srgb, var(--leaf-pill) 82%, var(--leaf));
 }
 
 /* Set by the widget while the panel is open (aria-expanded on [data-poe-open]). */
@@ -944,6 +949,14 @@ html[data-theme="dark"] {
     padding: 0 18px;
     border-radius: 18px;
     font-size: 18px;
+  }
+
+  html.js .site-nav__link:not([aria-current="page"]) {
+    background: var(--inset);
+  }
+
+  html.js .site-nav__link:not([aria-current="page"]):hover {
+    background: var(--line-strong);
   }
 
   /* The links drop in one after another as the sheet opens. */
