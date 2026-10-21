@@ -26,11 +26,18 @@ takes `to.atpota.poe.pets` too, and `garden_leaderboard` adds up the community g
 boards for the website (`/api/leaderboard`): flowers (one a patch, unless it takes many),
 tending for other people's flowers (once a flower a day, by the TID key), pets, kinds
 grown to bloom, and visitors to people's own gardens.
+Then [`supabase/garden_chat_pets.sql`](supabase/garden_chat_pets.sql): `garden_records`
+takes `place.stream.chat.message` too, for **chat pets**: a "!pet" in dame.is's
+[stream.place](https://stream.place) chat, where Poe sits in the stream overlay
+(`website/src/overlay`). The index keeps only those messages, and only their `streamer`
+and `createdAt`, never the words; the pets board adds one an hour for each person to their
+`to.atpota.poe.pets` count. Reconcile doesn't list chat (there's far too much of it), so
+chat pets are the stream's alone: reconcile never lists them and never deletes them.
 
 ## How it works
 
 - **The stream.** One Jetstream **v2** connection
-  (`/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&kinds=commit`),
+  (`/xrpc/network.bsky.jetstream.subscribeEvents?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&collections=place.stream.chat.message&kinds=commit`),
   on `jetstream2.us-east`, falling back to `jetstream1`. Each commit becomes an upsert or
   a delete (`src/records.js`). A record that fails the shape checks (or that Postgres
   can't hold: a NUL, a lone surrogate, over 20,000 characters) is deleted from the index,

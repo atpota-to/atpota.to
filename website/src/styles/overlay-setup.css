@@ -1,0 +1,233 @@
+/* The overlay's setup page (overlay/setup.html, src/overlay/setup.ts): the settings, the
+   URL they make, and a live preview of the overlay over a pretend stream. */
+
+.ovs-page {
+  padding: 24px var(--gutter, 16px) 64px;
+}
+
+.ovs-page:focus {
+  outline: none;
+}
+
+.ovs {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+.ovs [hidden] {
+  display: none !important;
+}
+
+.ovs-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px 24px;
+}
+
+.ovs-head__poe {
+  width: 110px;
+  height: auto;
+}
+
+.ovs-head__title {
+  margin: 4px 0 6px;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.1;
+}
+
+.ovs-head__lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--text-soft);
+}
+
+.ovs-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ovs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ovs-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ovs-head__poe {
+    width: 80px;
+  }
+}
+
+/* ---------- the form ---------- */
+
+.ovs-form {
+  display: grid;
+  gap: 18px;
+}
+
+.ovs-set {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ovs-set--row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ovs-set legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ovs-field {
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ovs-field--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-weight: 400;
+}
+
+.ovs-field em,
+.ovs-check em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.ovs-field input[type="text"],
+.ovs-field textarea,
+.ovs-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.ovs-field--row select {
+  width: auto;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.ovs-field textarea {
+  resize: vertical;
+}
+
+.ovs-field input[type="range"] {
+  flex: 1 1 140px;
+  accent-color: var(--leaf);
+}
+
+.ovs-field output {
+  min-width: 3ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.ovs-field input:focus-visible,
+.ovs-field textarea:focus-visible,
+.ovs-field select:focus-visible,
+.ovs-check input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.ovs-check {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.ovs-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--leaf);
+  transform: translateY(3px);
+}
+
+/* ---------- the preview and the URL ---------- */
+
+.ovs-out {
+  display: grid;
+  gap: 14px;
+}
+
+.ovs-out__title {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* A pretend stream behind the overlay: a dusky game scene in a 16:9 box. */
+.ovs-preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at 70% 30%, rgba(255, 217, 120, 0.35), transparent 40%),
+    linear-gradient(160deg, #3B4A6B 0%, #5B4A6E 55%, #2E3B32 56%, #23301F 100%);
+}
+
+.ovs-preview__frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  border: 0;
+  background: transparent;
+  transform: scale(var(--scale, 0.3));
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.ovs-out__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ovs-out__status {
+  font-size: 14px;
+  color: var(--leaf);
+}
+
+.ovs-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 15px;
+  color: var(--text-soft);
+}

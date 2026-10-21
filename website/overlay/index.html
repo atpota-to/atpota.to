@@ -20,7 +20,7 @@
 </head>
 <body data-page="overlay">
     <!-- the weather card (src/overlay/weather.ts): the home page's weather tile, for a stream -->
-    <section class="ov-weather" data-weather-tile data-state="loading" aria-labelledby="ov-weather-title">
+    <section class="ov-weather" data-ov-card data-state="loading" aria-labelledby="ov-weather-title">
         <div class="weather-sky" data-weather-sky aria-hidden="true"></div>
         <div class="ov-weather__body">
             <h2 class="ov-weather__title" id="ov-weather-title">atmospheric conditions</h2>
@@ -46,6 +46,24 @@
             </div>
             <p class="ov-weather__app" data-ov-app hidden><span class="ov-weather__app-label">busy elsewhere</span> <strong data-ov-app-domain></strong> <span data-ov-app-rate></span></p>
             <p class="ov-weather__foot">atpota.to/weather</p>
+        </div>
+    </section>
+
+    <!-- the weather strip (?show=strip): the card's reading in one slim bar along the bottom -->
+    <section class="ov-strip" data-ov-strip data-state="loading" aria-label="atmospheric conditions" hidden>
+        <div class="weather-sky" data-weather-sky aria-hidden="true"></div>
+        <div class="ov-strip__body">
+            <!-- @svg weather-sun.svg class="ov-strip__sun weather-sun" -->
+            <p class="ov-strip__big"><span data-weather-records>&ndash;</span> <span class="ov-strip__unit">rec/sec</span></p>
+            <p class="ov-strip__cond" data-weather-cond>checking the sky…</p>
+            <div class="weather-spark ov-strip__spark" data-weather-spark aria-hidden="true"></div>
+            <dl class="ov-strip__row">
+                <div><dt>posts</dt><dd data-weather-posts>&ndash;</dd></div>
+                <div><dt>likes</dt><dd data-weather-likes>&ndash;</dd></div>
+                <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
+            </dl>
+            <p class="ov-strip__mix" data-weather-mix><span class="ov-strip__label">diversity</span> <strong data-weather-index>&ndash;</strong> <span class="ov-strip__level" data-weather-level></span></p>
+            <p class="ov-strip__app" data-ov-app hidden><span class="ov-strip__label">busy elsewhere</span> <strong data-ov-app-domain></strong> <span data-ov-app-rate></span></p>
         </div>
     </section>
 

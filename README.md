@@ -75,7 +75,7 @@ weather moment  ──► droplet ──► bot  POST /weather/moment ──► 
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each, with the leaderboards under it (most flowers, most tending for other people's flowers, most pets for Poe, most kinds found, most visitors); signed in, it has a button to your own and shows your place on each board. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
 | `/about` | Who makes atpotato, and how it grew: a year to a layer of soil, newest on top, from dame's start in open social in 2021 to now |
 | `/settings` | Signed-in visitors can make Poe forget them |
-| `/overlay` | Poe and the weather for a livestream, as an OBS browser source (transparent; see [stream overlay](#stream-overlay)) |
+| `/overlay`, `/overlay/setup` | Poe and the weather for a livestream, as an OBS browser source (transparent), and a page that builds its URL with a preview; see [stream overlay](#stream-overlay) |
 
 The wordmark in the header sits in a little sky with the weather in it: a sun whose
 rays turn faster when the network is busy, and a cloud or two as the diversity index
@@ -84,29 +84,41 @@ or highlight a word in a guide to ask about it.
 
 ### stream overlay
 
-`/overlay` is Poe and the "atmospheric conditions" card on a transparent page, for
-streaming. In OBS add a **Browser** source with the URL, width 1920 and height 1080
-(the page is drawn for that canvas; crop or scale it from there).
+`/overlay` is Poe and the "atmospheric conditions" weather on a transparent page, for
+streaming. **`/overlay/setup` builds the URL** with a live preview: pick what to show, type
+your handle, copy the URL. In OBS add a **Browser** source with it, width 1920 and height
+1080 (the page is drawn for that canvas), tick *control audio via OBS* to hear Poe, and
+leave *shutdown source when not visible* off so it keeps listening between scenes.
 
 ```
 https://atpota.to/overlay?streamer=dame.is
 ```
 
-The weather card sits in a top corner and refreshes every 15 seconds; Poe sits in the
-bottom corner across from it, blinking, glancing and waving, and bobbing faster when the
-atmosphere is busy. Poe says the weather alerts from `/weather` (a storm rolls in, a new
-app blows in, the sky gets more mixed) in a speech bubble. With `streamer=` it also
-watches that account's [stream.place](https://stream.place) chat on Jetstream: a hello
-to each new chatter, thanks (and a hop) for each new follower, and three chat commands,
-`!weather` (Poe reads out the weather), `!pet` and `!poe`. It only ever says handles,
-never what people wrote.
+- **The weather**: the card in a top corner, or the strip (one slim bar along the bottom),
+  refreshed every 15 seconds, with the busiest apps outside Bluesky taking turns.
+- **Poe** sits in the bottom corner across from it, blinking, glancing and waving, bobbing
+  faster when the atmosphere is busy, and dozing off (z's and all) after a few quiet
+  minutes; the next thing that happens startles it awake. It says the weather alerts from
+  `/weather` in a speech bubble, with a little sound for each kind of line (made with
+  WebAudio).
+- **With `streamer=`** it watches that account's [stream.place](https://stream.place) chat,
+  follows and streams on Jetstream: a cheer when the stream goes live (with its title) and a
+  goodbye when it ends, a hello with their avatar to each new chatter, "welcome back" to
+  regulars (remembered in the browser source, so reloading it mid-stream doesn't greet
+  everyone again), thanks and a hop for new followers, and the chat commands `!weather`,
+  `!forecast`, `!apps`, `!pet` and `!poe`. In dame.is's chat, `!pet` also counts on the
+  garden's pets leaderboard, one an hour (`garden/`). It only ever says handles, never
+  what people wrote.
 
 | param | does |
 | --- | --- |
-| `show=poe` or `show=weather` | just one piece, so each can be its own browser source (default both) |
+| `show=poe,weather,strip` | which pieces, in any mix; one piece per browser source lets you place each alone (default `poe,weather`) |
 | `streamer=<handle or DID>` | whose stream.place chat to watch |
 | `chat=off`, `follows=off`, `alerts=off` | turn off hellos and commands, follower thanks, or weather alerts |
-| `side=left` | Poe bottom-left and the card top-right |
+| `ignore=<handles or DIDs>` | people Poe never greets, thanks or answers (bots), comma separated |
+| `sound=off`, `volume=0-100` | Poe's noises (default 40) |
+| `nap=<minutes>`, `nap=off` | how long it's quiet before Poe naps (default 5) |
+| `side=left` | Poe bottom-left and the weather on the right |
 | `theme=dark` | the dark theme's colours |
 | `demo` | Poe runs through example lines every 10 seconds, for placing things |
 

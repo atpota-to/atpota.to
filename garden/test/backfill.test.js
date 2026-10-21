@@ -292,3 +292,17 @@ test('a pass that could not read the index is retried later, not every minute', 
   backfill.check();
   assert.equal(backfill.running, true);
 });
+
+test('leaves chat pets to the stream: never listed, never deleted for not being listed', async () => {
+  const chatPet = { uri: `at://${ALICE}/place.stream.chat.message/3m4abcdefgh22`, did: ALICE, collection: 'place.stream.chat.message' };
+  const w = world({
+    relay: { [SPROUT]: [[ALICE]], [PATCH]: [[]], [TEND]: [[]], [PETS]: [[]] },
+    repos: { [ALICE]: { pds: 'https://pds.alice.example', records: { [SPROUT]: [entry(ALICE, SPROUT, 1)] } } },
+    index: [chatPet],
+  });
+  const { backfill } = backfillOn(w);
+  const result = await backfill.run('test');
+  assert.equal(result.deletes, 0);
+  assert.ok(w.rows.has(chatPet.uri));
+  assert.ok(!w.requests.some((u) => u.includes('place.stream.chat.message')), 'chat is never listed');
+});

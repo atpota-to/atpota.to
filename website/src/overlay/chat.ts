@@ -1,8 +1,10 @@
 /**
  * What's happening on the stream, from Jetstream: messages in the streamer's stream.place
- * chat (place.stream.chat.message records whose `streamer` is them) and new follows of
- * the streamer (app.bsky.graph.follow records whose `subject` is them). Both are public
- * records in people's own repos, so the overlay needs no sign-in and no stream.place API.
+ * chat (place.stream.chat.message records whose `streamer` is them), new follows of the
+ * streamer (app.bsky.graph.follow records whose `subject` is them), and the streamer's own
+ * place.stream.livestream records: a new one is a stream going live, and one updated with
+ * an `endedAt` is that stream over. All of them are public records in people's own repos,
+ * so the overlay needs no sign-in and no stream.place API.
  *
  * Jetstream only filters by collection, so the follows come for the whole network (tens a
  * second, a few KB) and are picked out here. With follows off it asks for chat alone.
@@ -13,6 +15,7 @@
 
 export const CHAT = 'place.stream.chat.message';
 export const FOLLOW = 'app.bsky.graph.follow';
+export const LIVESTREAM = 'place.stream.livestream';
 
 /** Bluesky's us-east hosts share one address, so the fallback is in us-west (as server/atmosphere.ts). */
 export const JETSTREAMS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe'] as const;
@@ -23,15 +26,20 @@ export const RETRY_MAX_MS = 60_000;
 /** Picks up where it left off if it was gone less than this, so nobody's hello is missed. */
 const REWIND_MAX_US = 5 * 60 * 1_000_000;
 
-export type Command = 'weather' | 'pet' | 'poe';
+export type Command = 'weather' | 'forecast' | 'apps' | 'pet' | 'poe';
 
-export type StreamEvent = { kind: 'chat'; did: string; command: Command | null } | { kind: 'follow'; did: string };
+export type StreamEvent =
+  | { kind: 'chat'; did: string; command: Command | null }
+  | { kind: 'follow'; did: string }
+  /** The streamer's stream: `rkey` tells one stream from the next; the title is theirs. */
+  | { kind: 'live'; rkey: string; title: string | null }
+  | { kind: 'ended'; rkey: string };
 
 const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
-/** "!weather", "!pet", "!poe" at the start of a message (any case); anything else is chat. */
+/** "!weather", "!forecast", "!apps", "!pet", "!poe" at the start of a message (any case); anything else is chat. */
 export function commandOf(text: string): Command | null {
-  const m = /^\s*!(weather|pet|poe)\b/i.exec(text);
+  const m = /^\s*!(weather|forecast|apps|pet|poe)\b/i.exec(text);
   return m ? (m[1]!.toLowerCase() as Command) : null;
 }
 
@@ -39,8 +47,14 @@ export function commandOf(text: string): Command | null {
 export function eventFor(message: unknown, streamer: string): StreamEvent | null {
   if (!obj(message) || message.kind !== 'commit' || typeof message.did !== 'string') return null;
   const commit = message.commit;
-  if (!obj(commit) || commit.operation !== 'create' || !obj(commit.record)) return null;
+  if (!obj(commit) || !obj(commit.record)) return null;
   const record = commit.record;
+  if (commit.collection === LIVESTREAM && message.did === streamer && typeof commit.rkey === 'string') {
+    if (commit.operation === 'create' && record.endedAt === undefined) return { kind: 'live', rkey: commit.rkey, title: typeof record.title === 'string' && record.title.trim() ? record.title.trim().slice(0, 140) : null };
+    if (commit.operation === 'update' && typeof record.endedAt === 'string') return { kind: 'ended', rkey: commit.rkey };
+    return null;
+  }
+  if (commit.operation !== 'create') return null;
   if (commit.collection === CHAT && record.streamer === streamer && typeof record.text === 'string') {
     return { kind: 'chat', did: message.did, command: commandOf(record.text) };
   }
@@ -53,6 +67,7 @@ export function eventFor(message: unknown, streamer: string): StreamEvent | null
 export function jetstreamUrl(host: string, follows: boolean, cursor?: number): string {
   const url = new URL(host);
   url.searchParams.append('wantedCollections', CHAT);
+  url.searchParams.append('wantedCollections', LIVESTREAM);
   if (follows) url.searchParams.append('wantedCollections', FOLLOW);
   if (cursor !== undefined) url.searchParams.set('cursor', String(cursor));
   return url.toString();
@@ -144,18 +159,37 @@ export async function resolveActor(actor: string, fetchImpl: typeof fetch = fetc
   }
 }
 
-/** Looks up handles, remembering each one for the visit. */
-export function createNames(fetchImpl: typeof fetch = fetch): (did: string) => Promise<string | null> {
-  const known = new Map<string, Promise<string | null>>();
+/** An avatar from Bluesky's image CDN, or null: nothing else is put on stream. */
+export function avatarUrl(url: unknown): string | null {
+  if (typeof url !== 'string' || url.length > 1000) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.hostname === 'cdn.bsky.app' ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface Who {
+  /** "@handle", or null for an account without a working one. */
+  handle: string | null;
+  avatar: string | null;
+}
+
+export const NOBODY: Who = Object.freeze({ handle: null, avatar: null });
+
+/** Looks up handles and avatars, remembering each one for the visit. */
+export function createNames(fetchImpl: typeof fetch = fetch): (did: string) => Promise<Who> {
+  const known = new Map<string, Promise<Who>>();
   return (did) => {
-    let name = known.get(did);
-    if (!name) {
-      name = fetchImpl(`${APPVIEW}/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`)
+    let who = known.get(did);
+    if (!who) {
+      who = fetchImpl(`${APPVIEW}/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`)
         .then((res) => (res.ok ? res.json() : null))
-        .then((body: unknown) => (obj(body) ? atHandle(body.handle) : null))
-        .catch(() => null);
-      known.set(did, name);
+        .then((body: unknown) => (obj(body) ? { handle: atHandle(body.handle), avatar: avatarUrl(body.avatar) } : NOBODY))
+        .catch(() => NOBODY);
+      known.set(did, who);
     }
-    return name;
+    return who;
   };
 }

@@ -1,6 +1,12 @@
 // records.js
-// What the index keeps: a garden record (or a pet count for Poe) as a garden_records row,
-// and a Jetstream v2 event as what to do with it.
+// What the index keeps: a garden record (or a pet count for Poe, or a pet from a stream's
+// chat) as a garden_records row, and a Jetstream v2 event as what to do with it.
+//
+// Chat pets: a stream.place chat message in dame.is's chat (PETS_STREAMER) that starts
+// with "!pet" is a pet for Poe on stream (website/src/overlay). Only those are kept, and
+// only their `streamer` and `createdAt`: never what anyone wrote. The leaderboard counts
+// one an hour for each person (garden_chat_pets.sql). Chat messages are too many to list
+// from every repo, so reconcile leaves them to the stream (RECONCILED).
 //
 // The checks are cheap shape checks, enough that every row is safe to store and to join on
 // (a sprout's patch, a tend's flower). The website still validates each record fully when
@@ -16,9 +22,17 @@ export const TEND = 'to.atpota.garden.tend';
 /** Poe's pet count, one record at PETS_RKEY in each petter's repo, for the garden's leaderboard. */
 export const PETS = 'to.atpota.poe.pets';
 export const PETS_RKEY = 'self';
-export const COLLECTIONS = [PATCH, SPROUT, TEND, PETS];
-/** What Jetstream v2 is asked for: the garden's wildcard, and the pets. */
-export const STREAM_COLLECTIONS = ['to.atpota.garden.*', PETS];
+/** A stream.place chat message; "!pet" in PETS_STREAMER's chat is a pet for Poe. */
+export const CHAT = 'place.stream.chat.message';
+/** dame.is (website/src/overlay/lines.ts PETS_STREAMER). */
+export const PETS_STREAMER = 'did:plc:gq4fo3u6tqzzdkjlwzpb23tj';
+export const CHAT_PET_RE = /^\s*!pet\b/i;
+/** What reconcile lists from each repo. */
+export const RECONCILED = [PATCH, SPROUT, TEND, PETS];
+/** Everything the index holds. */
+export const COLLECTIONS = [...RECONCILED, CHAT];
+/** What Jetstream v2 is asked for: the garden's wildcard, the pets, and stream chat. */
+export const STREAM_COLLECTIONS = ['to.atpota.garden.*', PETS, CHAT];
 export const COMMIT_TYPE = 'network.bsky.jetstream.subscribeEvents#commit';
 
 export const DID_RE = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2000}$/;
@@ -51,7 +65,13 @@ function refOf(collection, r) {
   if (collection === SPROUT) return isStrongRef(r.patch) && isWord(r.kind) && Number.isInteger(r.plot) ? r.patch.uri : undefined;
   if (collection === TEND) return isStrongRef(r.subject) && isWord(r.action) ? r.subject.uri : undefined;
   if (collection === PETS) return Number.isSafeInteger(r.count) && r.count >= 0 ? null : undefined;
+  if (collection === CHAT) return isChatPet(r) ? null : undefined;
   return undefined;
+}
+
+/** A "!pet" in PETS_STREAMER's chat. */
+export function isChatPet(record) {
+  return isObject(record) && record.streamer === PETS_STREAMER && typeof record.text === 'string' && CHAT_PET_RE.test(record.text);
 }
 
 /** True when did, collection and rkey make a URI the index can hold. */
@@ -84,7 +104,8 @@ export function toRow({ did, collection, rkey, cid, record, firstSeenAt = null }
     collection,
     rkey,
     cid,
-    record,
+    // a chat pet keeps whose chat and when, never the words
+    record: collection === CHAT ? { $type: CHAT, streamer: record.streamer, createdAt: record.createdAt } : record,
     ref_uri: ref,
     created_at: isoOrNull(record.createdAt),
     first_seen_at: isoOrNull(firstSeenAt),
@@ -104,5 +125,7 @@ export function eventOf(payload) {
   if (operation === 'delete') return { op: 'delete', uri };
   if (operation !== 'create' && operation !== 'update') return null;
   const row = toRow({ did, collection, rkey, cid: payload.cid, record: payload.record, firstSeenAt: operation === 'create' ? payload.time : null });
+  // Almost every chat message isn't a pet: a new one is nothing to the index, not a delete.
+  if (!row && collection === CHAT && operation === 'create') return null;
   return row ? { op: 'upsert', row } : { op: 'delete', uri };
 }

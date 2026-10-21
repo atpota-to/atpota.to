@@ -28,7 +28,7 @@
 // retried after RETRY_FAILED_MS. It never throws out of the loop.
 
 import { applyChunked } from './indexer.js';
-import { COLLECTIONS, DID_RE, toRow } from './records.js';
+import { DID_RE, RECONCILED, toRow } from './records.js';
 
 export const RELAY_PAGES = 20;
 export const RELAY_LIMIT = 1000;
@@ -212,7 +212,7 @@ export function createBackfill({
       why = err;
     }
     if (pds !== null && pds !== GONE) {
-      for (const collection of COLLECTIONS) {
+      for (const collection of RECONCILED) {
         try {
           const rows = await listCollection(pds, did, collection);
           if (rows !== GONE) for (const [uri, row] of rows) listed.set(uri, row);
@@ -229,6 +229,8 @@ export function createBackfill({
     if (complete) {
       for (const h of held) {
         const uri = h?.uri;
+        // only what was listed can be missing from the listing: chat pets are the stream's
+        if (!RECONCILED.includes(h?.collection)) continue;
         if (typeof uri === 'string' && !listed.get(uri) && !touchedSince(uri, began)) entries.push([uri, { op: 'delete', uri }]);
       }
     } else {
@@ -245,7 +247,7 @@ export function createBackfill({
     log.info('reconcile starting', { reason });
     const dids = new Set();
     let listedRepos = true;
-    for (const collection of COLLECTIONS) {
+    for (const collection of RECONCILED) {
       try {
         for (const did of await relayRepos(collection)) dids.add(did);
       } catch (err) {

@@ -1,11 +1,12 @@
 /**
- * The weather card on the overlay: the home page's "atmospheric conditions" tile, made for
- * a stream. It's the same markup hooks (data-weather-*), so weather.ts renderReading draws
- * the numbers, the sun, the sparkline, the clouds and the diversity index; this adds the
- * apps outside Bluesky in turn, one every APP_MS, busiest first.
+ * The weather on the overlay: the card (the home page's "atmospheric conditions" tile, made
+ * for a stream) and the strip (the same in one slim bar). Both have the same markup hooks
+ * (data-weather-*), so weather.ts renderReading draws the numbers, the sun, the sparkline,
+ * the clouds and the diversity index; this adds the apps outside Bluesky in turn, one
+ * every APP_MS, busiest first.
  */
 
-import { formatRate, renderReading, type Reading } from '../scripts/weather';
+import { formatRate, renderReading, renderWeatherError, type Reading } from '../scripts/weather';
 
 export const APP_MS = 6000;
 /** How many of the busiest apps take turns. */
@@ -18,6 +19,8 @@ export function appTurns(r: Reading): Array<{ domain: string; rate: string }> {
 
 export interface WeatherCard {
   render(r: Reading): void;
+  /** No reading this time: a card that never had one says so, one that did keeps it. */
+  failed(): void;
 }
 
 export function mountWeatherCard(card: HTMLElement, win: Window = window): WeatherCard {
@@ -54,6 +57,9 @@ export function mountWeatherCard(card: HTMLElement, win: Window = window): Weath
       if (fresh.map((t) => t.domain).join() !== turns.map((t) => t.domain).join()) turn = 0;
       turns = fresh;
       showTurn();
+    },
+    failed() {
+      renderWeatherError(card);
     },
   };
 }
