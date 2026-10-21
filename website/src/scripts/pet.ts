@@ -193,7 +193,8 @@ export function greeting(handle: string | null, touch: boolean): string | null {
   return handle.length <= GREET_MAX_HANDLE ? `hi @${handle}! ${action} (◕‿◕)` : `hi again! ${action} (◕‿◕)`;
 }
 
-function readPets(): number {
+/** This browser's pet total (also counted by the about page's Poe, about.ts). */
+export function readPets(): number {
   try {
     const n = Number(window.localStorage.getItem(PETS_KEY));
     return Number.isSafeInteger(n) && n > 0 ? n : 0;
@@ -202,7 +203,7 @@ function readPets(): number {
   }
 }
 
-function savePets(total: number): void {
+export function savePets(total: number): void {
   try {
     window.localStorage.setItem(PETS_KEY, String(total));
   } catch {

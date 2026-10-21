@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { easeOut, formatStat, initPoe, initStats, parseStat } from '../src/scripts/about.js';
+import { PETS_KEY, readPets } from '../src/scripts/pet.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -62,13 +63,37 @@ describe('about page stats', () => {
 });
 
 describe('about page poe', () => {
-  it('cheers the corner poe when patted', () => {
-    document.body.innerHTML = '<button data-about-poe type="button"></button>';
-    initPoe();
+  const POE = `
+    <button data-about-poe type="button"></button>
+    <p data-about-pets hidden><span data-about-pets-n></span></p>`;
+
+  afterEach(() => window.localStorage.clear());
+
+  it('counts a pet toward the same total as the home page, and cheers the corner poe', () => {
+    window.localStorage.setItem(PETS_KEY, '41');
+    document.body.innerHTML = POE;
+    initPoe(document, window, { auth: null });
+    const pill = document.querySelector<HTMLElement>('[data-about-pets]')!;
+    expect(pill.hidden).toBe(false);
+    expect(document.querySelector('[data-about-pets-n]')!.textContent).toBe('41');
+
     const cheer = vi.fn();
     window.addEventListener('poe:cheer', cheer);
     document.querySelector<HTMLButtonElement>('[data-about-poe]')!.click();
     window.removeEventListener('poe:cheer', cheer);
     expect(cheer).toHaveBeenCalledOnce();
+    expect(window.localStorage.getItem(PETS_KEY)).toBe('42');
+    expect(readPets()).toBe(42);
+    expect(document.querySelector('[data-about-pets-n]')!.textContent).toBe('42');
+  });
+
+  it('keeps the pill hidden until there is a pet to count', () => {
+    document.body.innerHTML = POE;
+    initPoe(document, window, { auth: null });
+    const pill = document.querySelector<HTMLElement>('[data-about-pets]')!;
+    expect(pill.hidden).toBe(true);
+    document.querySelector<HTMLButtonElement>('[data-about-poe]')!.click();
+    expect(pill.hidden).toBe(false);
+    expect(document.querySelector('[data-about-pets-n]')!.textContent).toBe('1');
   });
 });

@@ -69,6 +69,31 @@
   height: auto;
 }
 
+/* your pets, all over the site (about.ts): the same pill as the home page's */
+.about-surface__count {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 85%, transparent);
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-surface__count[hidden] {
+  display: none;
+}
+
+.about-surface__count-n::before {
+  content: "♥ " / "";
+  color: var(--blush);
+}
+
 .about-surface__sprout {
   position: absolute;
   bottom: -4px;
@@ -397,6 +422,10 @@
     }
   }
 
+  .about-surface__count.is-bumping {
+    animation: about-bump 360ms var(--ease-spring);
+  }
+
   .about-surface__poe:active {
     rotate: 4deg;
     transition-duration: var(--dur-fast);
@@ -474,6 +503,12 @@
 
   60% {
     rotate: 6deg;
+  }
+}
+
+@keyframes about-bump {
+  40% {
+    scale: 1.12;
   }
 }
 
