@@ -11,7 +11,8 @@
     "start": "/opt/node22/bin/node --env-file=.env src/index.js",
     "test": "PATH=/opt/node22/bin:$PATH node --test --test-reporter=spec test/*.test.js",
     "replay": "/opt/node22/bin/node --env-file=.env src/replay.js",
-    "archive": "nice -n 10 /opt/node22/bin/node --env-file=.env src/archive.js"
+    "archive": "nice -n 10 /opt/node22/bin/node --env-file=.env src/archive.js",
+    "crawl": "nice -n 10 /opt/node22/bin/node --max-old-space-size=3072 --env-file=.env src/crawl.js"
   },
   "dependencies": {}
 }

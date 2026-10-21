@@ -104,7 +104,8 @@ export async function listSegments({ host, key, fetch = globalThis.fetch }) {
   return segments.sort((a, b) => a.index - b.index);
 }
 
-const rateOf = (s) => s.eventCount / Math.max(1, (s.maxWitnessedAt - s.minWitnessedAt) / 1e6);
+/** A segment's events a second, over the time it spans. */
+export const rateOf = (s) => s.eventCount / Math.max(1, (s.maxWitnessedAt - s.minWitnessedAt) / 1e6);
 
 /**
  * Which part of the archive holds [fromSec, toSec): the seq bounds to ask the SDK for,
@@ -215,7 +216,7 @@ export function parseArgs(argv, nowMs = Date.now()) {
 }
 
 /** Retries a Supabase request a few times (a blip shouldn't end a run that's hours in). */
-async function tries(what, fn) {
+export async function tries(what, fn) {
   for (let n = 1; ; n++) {
     try {
       return await fn();
