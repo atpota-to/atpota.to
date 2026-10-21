@@ -1,0 +1,393 @@
+/* The overlay's setup page (overlay/setup.html, src/overlay/setup.ts): the settings, the
+   URL they make, and a live preview of the overlay over a pretend stream. On a phone it's
+   one column with roomier rows to tap, and the preview opens full screen (turned on its
+   side while the phone is upright), since the whole 1920x1080 overlay is tiny in a column. */
+
+.ovs-page {
+  padding: 24px var(--gutter, 16px) 64px;
+}
+
+.ovs-page:focus {
+  outline: none;
+}
+
+.ovs {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+.ovs [hidden] {
+  display: none !important;
+}
+
+.ovs-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px 24px;
+}
+
+.ovs-head__poe {
+  width: 110px;
+  height: auto;
+}
+
+.ovs-head__title {
+  margin: 4px 0 6px;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.1;
+}
+
+.ovs-head__lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--text-soft);
+}
+
+.ovs-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ovs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ovs-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ovs-head__poe {
+    width: 80px;
+  }
+}
+
+.ovs-head__who {
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--leaf);
+}
+
+/* signed out, or on a host without sign-in */
+.ovs-gate {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.ovs-gate__title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.ovs-gate p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+/* ---------- the form ---------- */
+
+.ovs-form {
+  display: grid;
+  gap: 18px;
+}
+
+.ovs-set {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ovs-set--row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ovs-set legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ovs-field {
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ovs-field--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-weight: 400;
+}
+
+.ovs-field em,
+.ovs-check em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.ovs-field input[type="text"],
+.ovs-field textarea,
+.ovs-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.ovs-field--row select {
+  width: auto;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.ovs-field textarea {
+  resize: vertical;
+}
+
+.ovs-field input[type="range"] {
+  flex: 1 1 140px;
+  accent-color: var(--leaf);
+}
+
+.ovs-field output {
+  min-width: 3ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.ovs-field input:focus-visible,
+.ovs-field textarea:focus-visible,
+.ovs-field select:focus-visible,
+.ovs-check input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.ovs-check {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.ovs-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--leaf);
+  transform: translateY(3px);
+}
+
+/* the hint runs on after the words, wrapping with them */
+.ovs-check em {
+  margin-left: 4px;
+}
+
+@media (pointer: coarse) {
+  .ovs-set {
+    gap: 2px;
+  }
+
+  .ovs-check {
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .ovs-check input {
+    width: 22px;
+    height: 22px;
+    transform: none;
+  }
+
+  .ovs-field input[type="range"] {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ovs-set--row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* one row per weather widget: on or off, where, how big */
+.ovs-widgets {
+  display: grid;
+  gap: 8px;
+}
+
+.ovs-widget {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+}
+
+.ovs-widget .ovs-check {
+  grid-column: 1 / -1;
+}
+
+.ovs-widget .ovs-field--row {
+  font-size: 14px;
+}
+
+.ovs-widget select {
+  flex: 1 1 auto;
+}
+
+.ovs-widget.is-off .ovs-widget__where,
+.ovs-widget.is-off .ovs-widget__size {
+  opacity: 0.45;
+}
+
+/* ---------- the preview and the URL ---------- */
+
+.ovs-out {
+  display: grid;
+  gap: 14px;
+}
+
+.ovs-out__title {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* A pretend stream behind the overlay: a dusky game scene in a 16:9 box. */
+.ovs-preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at 70% 30%, rgba(255, 217, 120, 0.35), transparent 40%),
+    linear-gradient(160deg, #3B4A6B 0%, #5B4A6E 55%, #2E3B32 56%, #23301F 100%);
+}
+
+.ovs-preview__frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  border: 0;
+  background: transparent;
+  transform: scale(var(--scale, 0.3));
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* Full screen (the button on the preview): fixed over everything, as big as fits. While a
+   phone is upright it's turned on its side, so the 16:9 overlay gets the screen's length. */
+.ovs-preview__full {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(35, 26, 15, 0.7);
+  color: #FFFDF7;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ovs-preview__full:focus-visible {
+  outline: 3px solid var(--focus-on-dark);
+  outline-offset: 2px;
+}
+
+.ovs-preview.is-full {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: calc(var(--z-poe) + 10);
+  width: min(100vw, 100dvh * 16 / 9);
+  border-radius: 0;
+  box-shadow: 0 0 0 100vmax rgba(20, 15, 8, 0.92);
+  transform: translate(-50%, -50%);
+}
+
+@media (orientation: portrait) {
+  .ovs-preview.is-full {
+    width: min(100dvh, 100vw * 16 / 9);
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+}
+
+/* clear of Poe's corner while it's big */
+.ovs-preview.is-full .ovs-preview__full {
+  top: 10px;
+  bottom: auto;
+}
+
+html.ovs-full-open {
+  overflow: hidden;
+}
+
+/* the URL wraps on a narrow screen instead of hiding its end */
+.ovs-field .ovs-url {
+  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.ovs-out__saved {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 14px;
+  color: var(--leaf);
+}
+
+.ovs-out__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ovs-out__status {
+  font-size: 14px;
+  color: var(--leaf);
+}
+
+.ovs-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 15px;
+  color: var(--text-soft);
+}

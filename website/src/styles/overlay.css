@@ -1,0 +1,999 @@
+/*
+ * /overlay (src/overlay/**): Poe and the weather widgets on a transparent page, for an OBS
+ * browser source. Sized for a 1920x1080 canvas; OBS scales and crops from there. Widgets
+ * sit in six slots (layout.ts) and stack within one; Poe sits in a bottom corner
+ * (body[data-side]) at --ov-poe-width, facing into the screen. Colours are the site's
+ * tokens, so the dark theme comes for free.
+ */
+
+:root {
+  --ov-sky-text: #2C3A3E;
+  --ov-sky-mono: #34505B;
+  --ov-cell: rgba(255, 255, 255, 0.6);
+  --ov-bubble-shadow: 0 10px 28px rgba(61, 47, 27, 0.22);
+  --ov-poe-width: 300px;
+}
+
+html[data-theme="dark"] {
+  --ov-sky-text: var(--text-soft);
+  --ov-sky-mono: var(--muted);
+  --ov-cell: rgba(255, 253, 247, 0.07);
+  --ov-bubble-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* OBS shows whatever is behind a transparent page: the stream. */
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+p,
+h2,
+dl,
+dd {
+  margin: 0;
+}
+
+/* ---------- the slots ---------- */
+
+.ov-slot {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: calc(100vw - 64px);
+}
+
+.ov-slot--top-left,
+.ov-slot--top-center,
+.ov-slot--top-right {
+  top: 32px;
+}
+
+.ov-slot--bottom-left,
+.ov-slot--bottom-center,
+.ov-slot--bottom-right {
+  bottom: 32px;
+  flex-direction: column-reverse;
+}
+
+.ov-slot--top-left,
+.ov-slot--bottom-left {
+  left: 32px;
+  align-items: flex-start;
+}
+
+.ov-slot--top-right,
+.ov-slot--bottom-right {
+  right: 32px;
+  align-items: flex-end;
+}
+
+.ov-slot--top-center,
+.ov-slot--bottom-center {
+  left: 50%;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+/* the bottom corner Poe sits in: widgets stand on top of it, leaving room for its bubble */
+body[data-poe="on"][data-side="right"] .ov-slot--bottom-right,
+body[data-poe="on"][data-side="left"] .ov-slot--bottom-left {
+  bottom: calc(var(--ov-poe-width) * 0.68 + 170px);
+}
+
+/* The strip spans its edge: the whole width, or short of Poe on the bottom. */
+.ov-slot--top-center:has(> .ov-strip:not([hidden])),
+.ov-slot--bottom-center:has(> .ov-strip:not([hidden])) {
+  left: 32px;
+  right: 32px;
+  transform: none;
+  align-items: stretch;
+}
+
+body[data-poe="on"][data-side="right"] .ov-slot--bottom-center:has(> .ov-strip:not([hidden])) {
+  right: calc(var(--ov-poe-width) + 80px);
+}
+
+body[data-poe="on"][data-side="left"] .ov-slot--bottom-center:has(> .ov-strip:not([hidden])) {
+  left: calc(var(--ov-poe-width) + 80px);
+}
+
+/* ---------- the weather card ---------- */
+
+.ov-weather {
+  position: relative;
+  width: 400px;
+  border-radius: var(--radius-tile);
+  background: var(--sky);
+  color: var(--ov-sky-text);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.ov-weather__body {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px 18px;
+}
+
+.ov-weather__title,
+.ov-weather__foot,
+.ov-weather__app-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ov-weather__sun {
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+
+.ov-weather__big {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-weather__unit {
+  font-size: 16px;
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__cond {
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.ov-weather__spark {
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ov-weather__row div {
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--ov-cell);
+}
+
+.ov-weather__row dt {
+  font-size: 12px;
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__row dd {
+  margin-top: 2px;
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-weather__mix {
+  display: grid;
+  gap: 6px;
+}
+
+.ov-weather__mix-head {
+  font-size: 15px;
+}
+
+.ov-weather__level {
+  color: var(--ov-sky-mono);
+}
+
+.ov-weather__app {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-weather__app.is-turning {
+  animation: ov-turn 0.6s var(--ease-out);
+}
+
+.ov-weather__foot {
+  font-size: 11px;
+}
+
+/* Until the first reading lands (or if none does), the numbers sit quiet. */
+.ov-weather[data-state="loading"] [data-weather-records],
+.ov-weather[data-state="error"] [data-weather-records] {
+  opacity: 0.5;
+}
+
+@keyframes ov-turn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- the weather strip: one slim bar along an edge ---------- */
+
+.ov-strip {
+  position: relative;
+  border-radius: var(--radius-pill);
+  background: var(--sky);
+  color: var(--ov-sky-text);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.ov-strip__body {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 64px;
+  padding: 0 28px 0 12px;
+  white-space: nowrap;
+}
+
+.ov-strip__sun {
+  flex: none;
+  width: 48px;
+  height: 48px;
+}
+
+.ov-strip__big {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-strip__unit,
+.ov-strip__label,
+.ov-strip__level,
+.ov-strip__row dt {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ov-sky-mono);
+}
+
+.ov-strip__cond {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 16px;
+}
+
+.ov-strip__spark {
+  flex: 0 0 120px;
+  color: var(--ov-sky-mono);
+}
+
+.ov-strip__row {
+  display: flex;
+  gap: 14px;
+}
+
+.ov-strip__row div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.ov-strip__row dd,
+.ov-strip__mix strong,
+.ov-strip__app strong {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-strip__mix,
+.ov-strip__app {
+  font-size: 15px;
+}
+
+.ov-strip__app {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-strip__app.is-turning {
+  animation: ov-turn 0.6s var(--ease-out);
+}
+
+.ov-strip[data-state="loading"] [data-weather-records],
+.ov-strip[data-state="error"] [data-weather-records] {
+  opacity: 0.5;
+}
+
+/* ---------- the badge: the sun, records a second, and the sky in a word ---------- */
+
+.ov-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 22px 8px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--sky);
+  color: var(--ov-sky-text);
+  box-shadow: var(--shadow-soft);
+  white-space: nowrap;
+}
+
+.ov-badge__sun {
+  flex: none;
+  width: 52px;
+  height: 52px;
+}
+
+.ov-badge__big {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-badge__unit {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ov-sky-mono);
+}
+
+.ov-badge__word {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--ov-cell);
+  font-size: 16px;
+}
+
+.ov-badge__word:empty {
+  display: none;
+}
+
+.ov-badge[data-state="loading"] [data-weather-records] {
+  opacity: 0.5;
+}
+
+/* ---------- panels: the apps, the forecast and the pulse ---------- */
+
+.ov-panel {
+  display: grid;
+  gap: 12px;
+  width: 380px;
+  padding: 18px 22px;
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.ov-panel__title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ov-panel__note {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text-soft);
+}
+
+.ov-apps__list,
+.ov-fc__hours {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ov-apps__list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.ov-apps__name {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-apps__rate {
+  font-size: 14px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-apps__bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--weather-else) calc(var(--share, 0) * 100%), var(--line) 0);
+  transition: background 0.8s var(--ease-out);
+}
+
+.ov-fc__hours {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  text-align: center;
+}
+
+.ov-fc__hours li {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.ov-fc__time {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ov-fc__rate {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-fc__icon svg {
+  display: block;
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--text-soft);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ov-fc__icon .wf-sun {
+  fill: var(--weather-sun, #FFD978);
+  stroke: var(--weather-sun-ring, #F2AE3A);
+}
+
+.ov-fc__icon .wf-moon {
+  fill: var(--weather-moon, #FFE7A3);
+  stroke: none;
+}
+
+/* the moon in tonight's phase (weather-forecast.ts moonAt): its dark side, then a rim */
+.ov-fc__icon .wf-moon-dark {
+  fill: var(--weather-moon, #FFE7A3);
+  stroke: none;
+  opacity: 0.22;
+}
+
+.ov-fc__icon .wf-moon-rim {
+  stroke: var(--weather-sun-ring, #F2AE3A);
+}
+
+.ov-fc__icon .wf-cloud {
+  fill: var(--line);
+}
+
+.ov-fc__icon .wf-rain {
+  stroke: var(--weather-bsky);
+}
+
+.ov-pulse__big {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-pulse__unit {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.ov-pulse__line {
+  height: 90px;
+  color: var(--weather-else);
+}
+
+.ov-pulse__line svg {
+  height: 90px;
+}
+
+.ov-pulse__line path {
+  stroke-width: 3;
+}
+
+/* ---------- Poe ---------- */
+
+.ov-poe {
+  position: fixed;
+  right: 48px;
+  bottom: 0;
+  width: var(--ov-poe-width);
+}
+
+body[data-side="left"] .ov-poe {
+  right: auto;
+  left: 48px;
+}
+
+body[data-poe="off"] .ov-poe {
+  display: none;
+}
+
+/* Facing into the screen from the left (mirror.ts draws the faces that way): the arm swings
+   from the other shoulder, and the z's drift up the other way. */
+body[data-side="left"] .ov-potato__arm {
+  transform-origin: 81% 53%;
+}
+
+body[data-side="left"] .ov-potato[data-waving] .ov-potato__arm {
+  animation-name: poe-wave-left;
+}
+
+body[data-side="left"] .ov-potato__zzz {
+  left: auto;
+  right: 22%;
+  --zzz-dir: 1;
+}
+
+.ov-potato {
+  position: relative;
+  /* the bottom of the potato tucked under the edge of the screen, like the website's corner Poe */
+  margin-bottom: calc(var(--ov-poe-width) * -0.18);
+  transform-origin: 50% 100%;
+  animation: ov-breathe var(--bob, 3200ms) ease-in-out infinite;
+}
+
+.ov-potato__img,
+.ov-potato__arm {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+/* The leaf arm on its own, behind the body; it swings while Poe waves (poe.css does the same). */
+.ov-potato__arm {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: -1;
+  opacity: 0;
+  transform-origin: 19% 53%;
+}
+
+.ov-potato[data-waving] .ov-potato__arm {
+  opacity: 1;
+  animation: poe-wave 1.6s ease-in-out;
+}
+
+.ov-potato[data-hopping] .ov-potato__img {
+  transform-origin: 50% 100%;
+  animation: ov-hop 1.2s var(--ease-out);
+}
+
+/* Napping when the stream's quiet: slower breaths, and z's drifting up (poe.css's nap, bigger). */
+.ov-potato[data-napping] {
+  animation-duration: 5s;
+}
+
+.ov-potato__zzz {
+  position: absolute;
+  left: 22%;
+  top: 4%;
+  width: 90px;
+  height: 110px;
+  pointer-events: none;
+}
+
+.ov-potato__zzz i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  color: var(--paper);
+  font-size: 26px;
+  font-style: normal;
+  font-weight: 700;
+  -webkit-text-stroke: 1.5px var(--brown);
+  opacity: 0;
+}
+
+.ov-potato[data-napping] .ov-potato__zzz i {
+  animation: ov-zzz 2.4s ease-in infinite;
+}
+
+.ov-potato[data-napping] .ov-potato__zzz i:nth-child(2) {
+  font-size: 32px;
+  animation-delay: 0.8s;
+}
+
+.ov-potato[data-napping] .ov-potato__zzz i:nth-child(3) {
+  font-size: 40px;
+  animation-delay: 1.6s;
+}
+
+/* Woken up: a little jump. */
+.ov-potato[data-startled] .ov-potato__img {
+  transform-origin: 50% 100%;
+  animation: ov-startle 0.9s var(--ease-spring);
+}
+
+@keyframes ov-zzz {
+  0% {
+    opacity: 0;
+    transform: none;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--zzz-dir, -1) * 40px), -90px) rotate(calc(var(--zzz-dir, -1) * 12deg));
+  }
+}
+
+@keyframes ov-startle {
+  0% {
+    transform: none;
+  }
+
+  25% {
+    transform: translateY(-36px) scale(0.94, 1.08);
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes ov-breathe {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  50% {
+    transform: scale(1.025, 0.975);
+  }
+}
+
+@keyframes ov-hop {
+  0%,
+  50%,
+  100% {
+    transform: none;
+  }
+
+  20%,
+  70% {
+    transform: translateY(-40px) scale(0.95, 1.06);
+  }
+
+  40%,
+  90% {
+    transform: scale(1.06, 0.94);
+  }
+}
+
+/* the same swing as the website's wave (poe.css) */
+@keyframes poe-wave {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  20% {
+    transform: rotate(12deg);
+  }
+
+  40% {
+    transform: rotate(-5deg);
+  }
+
+  60% {
+    transform: rotate(10deg);
+  }
+
+  80% {
+    transform: rotate(-2deg);
+  }
+}
+
+@keyframes poe-wave-left {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  20% {
+    transform: rotate(-12deg);
+  }
+
+  40% {
+    transform: rotate(5deg);
+  }
+
+  60% {
+    transform: rotate(-10deg);
+  }
+
+  80% {
+    transform: rotate(2deg);
+  }
+}
+
+/* ---------- visitors (visitors.ts): they move by the Web Animations API, flap and wriggle here ---------- */
+
+.ov-visitors {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ov-visit {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: block;
+  line-height: 0;
+  will-change: transform;
+}
+
+.ov-visit svg {
+  display: block;
+  height: auto;
+  overflow: visible;
+}
+
+.ov-visit--butterfly .home-sun__wings,
+.ov-visit--moth .home-sun__wings {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: ov-flap 0.3s ease-in-out infinite alternate;
+}
+
+.ov-visit--moth .home-sun__wings {
+  animation-duration: 0.18s;
+}
+
+.ov-visit--snail .home-art-crawl {
+  animation: ov-crawl 1.5s ease-in-out infinite;
+}
+
+.ov-visit--bird .home-art-tilt {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: ov-peck 3.2s ease-in-out infinite;
+}
+
+/* the worm comes up out of its hole, looks about, and goes back down */
+.ov-visit__hole {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 44px;
+  height: 14px;
+  margin-left: -22px;
+  border-radius: 50%;
+  background: #3D2F1B;
+}
+
+.ov-visit__burrow {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 40px;
+  height: 90px;
+  margin-left: -20px;
+  overflow: hidden;
+}
+
+.ov-visit__burrow svg {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  margin-left: -13px;
+  transform: translateY(100%);
+  animation: ov-worm 9s ease-in-out forwards;
+}
+
+@keyframes ov-flap {
+  to {
+    transform: scaleX(0.35);
+  }
+}
+
+@keyframes ov-crawl {
+  50% {
+    transform: scaleX(1.06);
+  }
+}
+
+@keyframes ov-peck {
+  0%,
+  60%,
+  100% {
+    transform: none;
+  }
+
+  70% {
+    transform: rotate(14deg);
+  }
+
+  80% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes ov-worm {
+  0%,
+  100% {
+    transform: translateY(100%);
+  }
+
+  15%,
+  85% {
+    transform: translateY(8%);
+  }
+
+  45% {
+    transform: translateY(8%) rotate(-6deg);
+  }
+
+  60% {
+    transform: translateY(8%) rotate(6deg);
+  }
+}
+
+/* ---------- what Poe says ---------- */
+
+.ov-bubble {
+  position: absolute;
+  right: 30%;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 460px;
+  padding: 14px 18px;
+  border-radius: 22px 22px 6px 22px;
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--ov-bubble-shadow);
+  transform-origin: 90% 100%;
+  animation: ov-bubble-in 0.42s var(--ease-spring);
+}
+
+body[data-side="left"] .ov-bubble {
+  right: auto;
+  left: 30%;
+  border-radius: 22px 22px 22px 6px;
+  transform-origin: 10% 100%;
+}
+
+.ov-bubble.is-leaving {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s var(--ease-out);
+}
+
+.ov-bubble:has(.ov-bubble__avatar:not([hidden])) {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ov-bubble__avatar {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--flesh-tint);
+}
+
+.ov-bubble__label {
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--leaf);
+}
+
+.ov-bubble__text {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ov-bubble__sub {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text-soft);
+}
+
+@keyframes ov-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-potato,
+  .ov-potato[data-waving] .ov-potato__arm,
+  .ov-potato[data-hopping] .ov-potato__img,
+  .ov-potato[data-startled] .ov-potato__img,
+  .ov-potato[data-napping] .ov-potato__zzz i,
+  .ov-bubble,
+  .ov-weather__app.is-turning,
+  .ov-strip__app.is-turning {
+    animation: none;
+  }
+}
+
+/* Visitors are all motion: under reduced motion they stay away. */
+@media (prefers-reduced-motion: reduce) {
+  .ov-visitors {
+    display: none;
+  }
+}

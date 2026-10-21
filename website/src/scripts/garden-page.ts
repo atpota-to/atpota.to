@@ -235,7 +235,7 @@ export const COPY = {
     notYet: {
       flowers: 'plant a flower to get on the board.',
       tending: "water a neighbour's flower to get on the board.",
-      pets: 'pet poe on the home page to get on the board.',
+      pets: "pet poe on the home page (or type !pet in dame's stream.place chat) to get on the board.",
       kinds: 'grow a flower all the way to bloom to get on the board.',
       visitors: "share your garden's link to get on the board.",
     } satisfies Record<Board, string>,

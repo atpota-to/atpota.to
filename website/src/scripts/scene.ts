@@ -284,6 +284,17 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const BUTTERFLY_WING = 'M0,-1 C4,-14 18,-22 23,-15 C27,-9 21,1 8,2 C18,4 19,15 11,17 C5,18 2,9 0,3Z';
 const MOTH_WING = 'M0,-2 C6,-12 20,-12 22,-4 C24,4 14,8 4,4 C12,10 10,16 4,14 C1,13 0,8 0,3Z';
 
+/** The visitors drawn here, as [viewBox, markup]: static strings, also used by the stream overlay (src/overlay/visitors.ts). */
+export const BUTTERFLY_ART: readonly [string, string] = ['-26 -24 52 44', `${wings(BUTTERFLY_WING, '#1185FE')}<path d="M0,-8 V9" stroke="#123E73" stroke-width="2.6" stroke-linecap="round"/>`];
+export const MOTH_ART: readonly [string, string] = [
+  '-26 -20 52 38',
+  `${wings(MOTH_WING, '#E3D3B0', '<circle cx="9" cy="-4" r="2.6" fill="#A88F63"/><circle cx="-9" cy="-4" r="2.6" fill="#A88F63"/>')}<path d="M0,-7 V8" stroke="#8C7454" stroke-width="3" stroke-linecap="round"/><path d="M0,-7 l-4,-6 M0,-7 l4,-6" stroke="#8C7454" stroke-width="1.4" fill="none"/>`,
+];
+export const WORM_ART: readonly [string, string] = [
+  '-10 -40 20 48',
+  '<path d="M-7,8 V-30 a7,7 0 0 1 14,0 V8Z" fill="#E98D9E"/><path d="M-7,-14 h14 M-7,-6 h14 M-7,2 h14" stroke="#D07082" stroke-width="2"/><g class="home-sun__worm-face"><circle cx="-3" cy="-30" r="1.8" fill="#3D2F1B"/><circle cx="3" cy="-30" r="1.8" fill="#3D2F1B"/><path d="M-3,-25 q3,2.5 6,0" stroke="#3D2F1B" stroke-width="1.4" fill="none" stroke-linecap="round"/></g>',
+];
+
 function svg(viewBox: string, inner: string): SVGSVGElement {
   const el = document.createElementNS(SVG_NS, 'svg');
   el.setAttribute('viewBox', viewBox);
@@ -302,14 +313,9 @@ export function visitorElement(visitor: Visitor): HTMLElement | null {
   const el = document.createElement('span');
   el.className = `home-sun__visitor home-sun__visitor--${visitor}`;
   if (visitor === 'butterfly') {
-    el.appendChild(svg('-26 -24 52 44', `${wings(BUTTERFLY_WING, '#1185FE')}<path d="M0,-8 V9" stroke="#123E73" stroke-width="2.6" stroke-linecap="round"/>`));
+    el.appendChild(svg(...BUTTERFLY_ART));
   } else if (visitor === 'moth') {
-    el.appendChild(
-      svg(
-        '-26 -20 52 38',
-        `${wings(MOTH_WING, '#E3D3B0', '<circle cx="9" cy="-4" r="2.6" fill="#A88F63"/><circle cx="-9" cy="-4" r="2.6" fill="#A88F63"/>')}<path d="M0,-7 V8" stroke="#8C7454" stroke-width="3" stroke-linecap="round"/><path d="M0,-7 l-4,-6 M0,-7 l4,-6" stroke="#8C7454" stroke-width="1.4" fill="none"/>`,
-      ),
-    );
+    el.appendChild(svg(...MOTH_ART));
   } else {
     // The hole, then a window cut off at the hole's middle, so the worm comes up out of it.
     const hole = document.createElement('span');
@@ -319,10 +325,7 @@ export function visitorElement(visitor: Visitor): HTMLElement | null {
     const worm = document.createElement('span');
     worm.className = 'home-sun__worm';
     worm.appendChild(
-      svg(
-        '-10 -40 20 48',
-        '<path d="M-7,8 V-30 a7,7 0 0 1 14,0 V8Z" fill="#E98D9E"/><path d="M-7,-14 h14 M-7,-6 h14 M-7,2 h14" stroke="#D07082" stroke-width="2"/><g class="home-sun__worm-face"><circle cx="-3" cy="-30" r="1.8" fill="#3D2F1B"/><circle cx="3" cy="-30" r="1.8" fill="#3D2F1B"/><path d="M-3,-25 q3,2.5 6,0" stroke="#3D2F1B" stroke-width="1.4" fill="none" stroke-linecap="round"/></g>',
-      ),
+      svg(...WORM_ART),
     );
     burrow.appendChild(worm);
     el.append(hole, burrow);

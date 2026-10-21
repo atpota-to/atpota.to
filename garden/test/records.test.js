@@ -1,7 +1,7 @@
 // Which records the index keeps, as which rows, and what each Jetstream v2 event does.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COMMIT_TYPE, eventOf, MAX_RECORD_CHARS, PATCH, PETS, SPROUT, TEND, toRow } from '../src/records.js';
+import { CHAT, COMMIT_TYPE, eventOf, MAX_RECORD_CHARS, PATCH, PETS, PETS_STREAMER, SPROUT, TEND, toRow } from '../src/records.js';
 
 const DID = 'did:plc:abcdefghijklmnopqrstuvwx';
 const CID = 'bafyreiabcdefghijklmnopqrstuvwxyz234567';
@@ -151,4 +151,23 @@ test('anything else is not the index\'s business', () => {
   assert.equal(eventOf('commit'), null);
   // v1's shape (fields under `commit`) matches nothing
   assert.equal(eventOf({ did: DID, time_us: 1, kind: 'commit', commit: { operation: 'create', collection: SPROUT, rkey: 'x', record: sprout() } }), null);
+});
+
+test("a chat pet: !pet in dame.is's stream chat, kept without its words", () => {
+  const chat = (extra = {}) => ({ $type: CHAT, streamer: PETS_STREAMER, text: '!pet poe please', createdAt: '2026-10-21T23:00:00Z', ...extra });
+  const r = row(CHAT, chat());
+  assert.equal(r.uri, `at://${DID}/${CHAT}/3m4abcdefgh22`);
+  assert.equal(r.ref_uri, null);
+  assert.deepEqual(r.record, { $type: CHAT, streamer: PETS_STREAMER, createdAt: '2026-10-21T23:00:00Z' }, 'never the text');
+  assert.ok(row(CHAT, chat({ text: '  !PET' })));
+  assert.equal(row(CHAT, chat({ text: 'hello' })), null);
+  assert.equal(row(CHAT, chat({ text: '!petting zoo' })), null);
+  assert.equal(row(CHAT, chat({ streamer: 'did:plc:someoneelse' })), null, "someone else's chat");
+  assert.equal(row(CHAT, chat({ text: 7 })), null);
+
+  const commit = (operation, record) => ({ $type: COMMIT_TYPE, did: DID, collection: CHAT, rkey: '3m4abcdefgh22', operation, cid: CID, record, time: '2026-10-21T23:00:01Z' });
+  assert.equal(eventOf(commit('create', chat())).row.first_seen_at, '2026-10-21T23:00:01.000Z');
+  assert.equal(eventOf(commit('create', chat({ text: 'hi' }))), null, 'any other message is nothing to the index');
+  assert.deepEqual(eventOf(commit('update', chat({ text: 'hi' }))), { op: 'delete', uri: `at://${DID}/${CHAT}/3m4abcdefgh22` }, 'edited away');
+  assert.deepEqual(eventOf(commit('delete')), { op: 'delete', uri: `at://${DID}/${CHAT}/3m4abcdefgh22` });
 });

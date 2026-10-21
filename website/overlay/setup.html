@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>stream overlay · atpotato</title>
+    <meta name="title" content="stream overlay · atpotato">
+    <meta name="description" content="poe and the atmosphere weather on your livestream: set up the atpotato overlay for OBS, with a live preview.">
+    <link rel="canonical" href="https://atpota.to/overlay/setup">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="atpotato">
+    <meta property="og:url" content="https://atpota.to/overlay/setup">
+    <meta property="og:title" content="stream overlay · atpotato">
+    <meta property="og:description" content="poe and the atmosphere weather on your livestream: set up the atpotato overlay for OBS, with a live preview.">
+    <meta property="og:image" content="https://atpota.to/og/home.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="atpotato: making the atmosphere a little more fun. poe, a smiling potato with an @ on its tummy, waves from a dirt mound under a yellow sunburst.">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/overlay-setup.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="overlay-setup">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="ovs-page" tabindex="-1">
+        <!-- src/overlay/setup.ts: data-state is checking, unavailable, signed-out or signed-in. Settings are
+             saved to the signed-in account's own repo (to.atpota.poe.overlay), and the overlay follows them live. -->
+        <div class="ovs" data-ovs data-state="checking">
+            <header class="tile ovs-head">
+                <img class="ovs-head__poe" data-mascot="happy" src="/src/assets/mascot/potato-happy.svg" alt="" width="110" height="90">
+                <div>
+                    <p class="eyebrow">for streamers</p>
+                    <h1 class="ovs-head__title">poe on your stream</h1>
+                    <p class="ovs-head__lede">a little potato and the atmosphere's weather for your livestream. poe says hi to your <a href="https://stream.place">stream.place</a> chat, thanks new followers, answers <code>!weather</code>, <code>!forecast</code>, <code>!apps</code>, <code>!pet</code> and <code>!poe</code>, gets the odd visitor, and naps when it's quiet.</p>
+                    <p class="ovs-head__who" data-ovs-who>checking who you are…</p>
+                </div>
+            </header>
+
+            <section class="tile ovs-gate" data-ovs-signin hidden>
+                <h2 class="ovs-gate__title">sign in to set it up</h2>
+                <p>your overlay's settings live in your own repo, on your bluesky or atmosphere account, so they're the same on every computer and phone, and the overlay in OBS changes the moment you save.</p>
+                <button type="button" class="btn btn--primary" data-ovs-signin-button>sign in</button>
+            </section>
+
+            <section class="tile ovs-gate" data-ovs-unavailable hidden>
+                <h2 class="ovs-gate__title">sign in on atpota.to</h2>
+                <p>setting up the overlay needs a bluesky sign-in, which only works on <a href="https://atpota.to/overlay/setup">atpota.to</a> itself.</p>
+            </section>
+
+            <div class="ovs-grid" data-ovs-editor hidden>
+                <form class="tile ovs-form" data-ovs-form>
+                    <fieldset class="ovs-set">
+                        <legend>poe</legend>
+                        <label class="ovs-check"><input type="checkbox" name="poe" checked><span>show poe <em>along the bottom, facing into the screen</em></span></label>
+                        <div class="ovs-set--row">
+                            <label class="ovs-check"><input type="radio" name="side" value="left"><span>bottom left</span></label>
+                            <label class="ovs-check"><input type="radio" name="side" value="right" checked><span>bottom right</span></label>
+                        </div>
+                        <label class="ovs-field ovs-field--row">size
+                            <input type="range" name="poeScale" min="50" max="200" step="10" value="100">
+                            <output name="poeScaleOut">100%</output>
+                        </label>
+                        <label class="ovs-check"><input type="checkbox" name="chat" checked><span>hellos and chat commands</span></label>
+                        <label class="ovs-check"><input type="checkbox" name="follows" checked><span>thanks for new followers</span></label>
+                        <label class="ovs-check"><input type="checkbox" name="alerts" checked><span>weather alerts <em>storms, new apps blowing in</em></span></label>
+                        <label class="ovs-check"><input type="checkbox" name="visitors" checked><span>visitors <em>a butterfly, bird, snail, worm or moth now and then</em></span></label>
+                        <label class="ovs-field ovs-field--row">naps after
+                            <select name="nap">
+                                <option value="0">never</option>
+                                <option value="2">2 minutes</option>
+                                <option value="5" selected>5 minutes</option>
+                                <option value="10">10 minutes</option>
+                                <option value="20">20 minutes</option>
+                                <option value="30">30 minutes</option>
+                            </select>
+                            <em>of quiet</em>
+                        </label>
+                        <label class="ovs-field ovs-field--row">sounds
+                            <input type="range" name="volume" min="0" max="100" step="5" value="40">
+                            <output name="volumeOut">40</output>
+                        </label>
+                    </fieldset>
+
+                    <fieldset class="ovs-set">
+                        <legend>weather</legend>
+                        <!-- one row per widget (src/overlay/setup.ts builds them): on or off, where, how big -->
+                        <div class="ovs-widgets" data-ovs-widgets></div>
+                    </fieldset>
+
+                    <fieldset class="ovs-set ovs-set--row">
+                        <legend>look</legend>
+                        <label class="ovs-check"><input type="radio" name="theme" value="light" checked><span>light</span></label>
+                        <label class="ovs-check"><input type="radio" name="theme" value="dark"><span>dark</span></label>
+                    </fieldset>
+
+                    <label class="ovs-field">people poe should ignore <em>bots, say. handles, one per line or comma separated</em>
+                        <textarea name="ignore" rows="2" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+                    </label>
+                </form>
+
+                <section class="tile ovs-out" aria-labelledby="ovs-out-title">
+                    <h2 class="ovs-out__title" id="ovs-out-title">preview</h2>
+                    <!-- the overlay itself, with ?demo, over a pretend stream -->
+                    <div class="ovs-preview" data-ovs-preview>
+                        <iframe class="ovs-preview__frame" title="overlay preview" data-ovs-frame tabindex="-1"></iframe>
+                        <button type="button" class="ovs-preview__full" data-ovs-full aria-label="see the preview full screen">full screen</button>
+                    </div>
+                    <p class="ovs-out__saved" role="status" data-ovs-saved></p>
+                    <button type="button" class="btn btn--outline btn--sm" data-ovs-reconsent hidden>sign in again</button>
+
+                    <label class="ovs-field">your overlay URL <em>the same URL forever: change things here and it follows</em>
+                        <textarea class="ovs-url" rows="1" readonly data-ovs-url></textarea>
+                    </label>
+                    <div class="ovs-out__buttons">
+                        <button type="button" class="btn btn--primary btn--sm" data-ovs-copy>copy URL</button>
+                        <a class="btn btn--outline btn--sm" href="/overlay" target="_blank" rel="noopener" data-ovs-open>open it</a>
+                        <span class="ovs-out__status" role="status" data-ovs-status></span>
+                    </div>
+
+                    <h2 class="ovs-out__title">in OBS</h2>
+                    <ol class="ovs-steps">
+                        <li>sources, <strong>+</strong>, <strong>browser</strong>. paste the URL, width <strong>1920</strong>, height <strong>1080</strong></li>
+                        <li>tick <strong>control audio via OBS</strong> to hear poe's noises</li>
+                        <li>leave <strong>shutdown source when not visible</strong> off, so poe keeps listening between scenes</li>
+                        <li>put it at the top of your sources, over your camera and game</li>
+                    </ol>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>

@@ -75,11 +75,65 @@ weather moment  ──► droplet ──► bot  POST /weather/moment ──► 
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each, with the leaderboards under it (most flowers, most tending for other people's flowers, most pets for Poe, most kinds found, most visitors); signed in, it has a button to your own and shows your place on each board. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
 | `/about` | Who makes atpotato, and how it grew: a year to a layer of soil, newest on top, from dame's start in open social in 2021 to now |
 | `/settings` | Signed-in visitors can make Poe forget them |
+| `/overlay`, `/overlay/setup` | Poe and the weather for a livestream, as an OBS browser source (transparent), and a page that builds its URL with a preview; see [stream overlay](#stream-overlay) |
 
 The wordmark in the header sits in a little sky with the weather in it: a sun whose
 rays turn faster when the network is busy, and a cloud or two as the diversity index
 climbs. Poe's chat panel sits in the corner of every page. Click it, press `/` anywhere,
 or highlight a word in a guide to ask about it.
+
+### stream overlay
+
+`/overlay` is Poe and the atmosphere's weather on a transparent page, for streaming.
+**`/overlay/setup` is where you set it up**: sign in, pick and place the widgets, and
+your settings are saved to **your own repo** (`to.atpota.poe.overlay` at `self`,
+[`website/lexicons/to/atpota/poe/overlay.json`](website/lexicons/to/atpota/poe/overlay.json)),
+so they're the same on every device. The overlay reads that record and follows it live on
+Jetstream, so a change saved on your phone mid-stream shows up in OBS a second later. The
+URL never changes:
+
+```
+https://atpota.to/overlay?streamer=dame.is
+```
+
+In OBS add a **Browser** source with it, width 1920 and height 1080, tick *control audio
+via OBS* to hear Poe, and leave *shutdown source when not visible* off.
+
+- **Weather widgets**, each on or off, in one of six slots (the top or bottom corners or
+  middles; widgets in one slot stack) at 50% to 200%: the **card**, the **strip** (one slim
+  bar along the top or bottom), a little **badge**, the **busiest apps** outside Bluesky with
+  bars, the **forecast** for the next six hours, and the **pulse** (the last minute of the
+  firehose as a big line).
+- **Poe** sits along the bottom edge, left or right, facing into the screen (on the left
+  its faces are mirrored, with the @ on its tummy kept the right way round), at 50% to
+  200%. It blinks, glances and waves, bobs faster when the atmosphere is busy, dozes off
+  after a few quiet minutes, and says the `/weather` alerts in a speech bubble with a little
+  sound. Now and then one of the home page hero's **visitors** drops by: a butterfly that
+  sits on its head, a bird hopping along the bottom, a snail, a worm out of its hole, or by
+  night a moth.
+- **With `streamer=`** it watches that account's [stream.place](https://stream.place) chat,
+  follows and streams on Jetstream: a cheer when the stream goes live (with its title) and a
+  goodbye when it ends, a hello with their avatar to each new chatter, "welcome back" to
+  regulars, thanks and a hop for new followers, and the chat commands `!weather`,
+  `!forecast`, `!apps`, `!pet` and `!poe`. In dame.is's chat, `!pet` also counts on the
+  garden's pets leaderboard, one an hour (`garden/`). It only ever says handles, never
+  what people wrote.
+
+Settings in the URL override the saved ones, for that browser source only (the setup
+page's preview passes its whole draft this way):
+
+| param | does |
+| --- | --- |
+| `w=card:tl:100,apps:tr:80` | the widgets: kind, slot (`tl tc tr bl bc br`) and size in percent; `w=none` for none |
+| `poe=left:120`, `poe=off` | Poe's corner and size, or no Poe |
+| `chat=off`, `follows=off`, `alerts=off`, `visitors=off` | turn off hellos and commands, follower thanks, weather alerts or visitors |
+| `ignore=<handles or DIDs>` | people Poe never greets, thanks or answers (bots), comma separated |
+| `sound=off`, `volume=0-100` | Poe's noises (default 40) |
+| `nap=<minutes>`, `nap=off` | how long it's quiet before Poe naps (default 5) |
+| `theme=dark` | the dark theme's colours |
+| `demo` | example lines every 10 seconds and visitors more often, for placing things |
+
+The code is in `website/src/overlay/` (`config.ts` for the settings, `params.ts` for the URL).
 
 ### functions
 

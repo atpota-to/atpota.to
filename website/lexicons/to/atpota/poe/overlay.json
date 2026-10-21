@@ -1,0 +1,61 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.poe.overlay",
+  "description": "How you've set up Poe's stream overlay (atpota.to/overlay): which weather widgets show, where and how big, which side Poe sits on, and what it reacts to. One record per account, at the record key \"self\". The overlay reads it from your repo and follows changes live, so a stream's overlay changes as soon as you save.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "required": ["poe", "widgets", "createdAt", "updatedAt"],
+        "properties": {
+          "poe": { "type": "ref", "ref": "#poe" },
+          "widgets": {
+            "type": "array",
+            "maxLength": 12,
+            "description": "The weather widgets on screen, each kind at most once.",
+            "items": { "type": "ref", "ref": "#widget" }
+          },
+          "chat": { "type": "boolean", "description": "Poe says hello to chatters and answers chat commands." },
+          "follows": { "type": "boolean", "description": "Poe thanks new followers." },
+          "alerts": { "type": "boolean", "description": "Poe says weather alerts (storms, apps blowing in)." },
+          "visitors": { "type": "boolean", "description": "Now and then a butterfly, bird, snail, worm or moth visits Poe." },
+          "ignore": {
+            "type": "array",
+            "maxLength": 50,
+            "description": "Accounts Poe never greets, thanks or answers (bots).",
+            "items": { "type": "string", "format": "at-identifier" }
+          },
+          "volume": { "type": "integer", "minimum": 0, "maximum": 100, "description": "How loud Poe's noises are; 0 is silent." },
+          "nap": { "type": "integer", "minimum": 0, "maximum": 240, "description": "Minutes of quiet before Poe naps; 0 never." },
+          "theme": { "type": "string", "knownValues": ["light", "dark"] },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "poe": {
+      "type": "object",
+      "required": ["show", "side", "scale"],
+      "properties": {
+        "show": { "type": "boolean" },
+        "side": { "type": "string", "knownValues": ["left", "right"], "description": "Which bottom corner Poe sits in; it faces into the screen." },
+        "scale": { "type": "integer", "minimum": 50, "maximum": 200, "description": "Percent of its usual size." }
+      }
+    },
+    "widget": {
+      "type": "object",
+      "required": ["kind", "slot", "scale"],
+      "properties": {
+        "kind": { "type": "string", "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse"] },
+        "slot": {
+          "type": "string",
+          "knownValues": ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"],
+          "description": "Where on screen. Widgets in the same slot stack."
+        },
+        "scale": { "type": "integer", "minimum": 50, "maximum": 200, "description": "Percent of its usual size." }
+      }
+    }
+  }
+}

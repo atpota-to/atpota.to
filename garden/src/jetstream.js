@@ -1,8 +1,8 @@
 // jetstream.js
-// One Jetstream v2 connection at a time, filtered to the garden and Poe's pet counts:
+// One Jetstream v2 connection at a time, filtered to the garden, Poe's pet counts and stream chat (chat pets):
 //
 //   wss://<host>/xrpc/network.bsky.jetstream.subscribeEvents
-//     ?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&kinds=commit[&cursor=<seq>]
+//     ?collections=to.atpota.garden.*&collections=to.atpota.poe.pets&collections=place.stream.chat.message&kinds=commit[&cursor=<seq>]
 //
 // v2, like the mentions service, not the v1 the weather station reads. The differences
 // that matter (see mentions/src/jetstream.js for how each one bit):

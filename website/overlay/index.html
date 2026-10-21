@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" class="js">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>stream overlay · atpotato</title>
+    <meta name="description" content="poe and the atmosphere's weather, for your livestream: add this page to OBS as a browser source.">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/overlay.css">
+    <!-- /overlay?streamer=<handle>: the settings come from their repo (src/overlay/config.ts); src/overlay/params.ts lists the URL's overrides -->
+    <script type="module" src="/src/overlay/index.ts"></script>
+</head>
+<body data-page="overlay">
+    <!-- the slots (src/overlay/layout.ts puts each widget in its own) -->
+    <div class="ov-slot ov-slot--top-left" data-ov-slot="top-left" hidden></div>
+    <div class="ov-slot ov-slot--top-center" data-ov-slot="top-center" hidden></div>
+    <div class="ov-slot ov-slot--top-right" data-ov-slot="top-right" hidden></div>
+    <div class="ov-slot ov-slot--bottom-left" data-ov-slot="bottom-left" hidden></div>
+    <div class="ov-slot ov-slot--bottom-center" data-ov-slot="bottom-center" hidden></div>
+    <div class="ov-slot ov-slot--bottom-right" data-ov-slot="bottom-right" hidden></div>
+
+    <!-- the weather widgets (src/overlay/weather.ts); hidden until layout.ts places them -->
+    <section class="ov-weather" data-ov-widget="card" data-state="loading" aria-labelledby="ov-weather-title" hidden>
+        <div class="weather-sky" data-weather-sky aria-hidden="true"></div>
+        <div class="ov-weather__body">
+            <h2 class="ov-weather__title" id="ov-weather-title">atmospheric conditions</h2>
+            <div class="ov-weather__now">
+                <!-- @svg weather-sun.svg class="ov-weather__sun weather-sun" -->
+                <div class="ov-weather__reading">
+                    <p class="ov-weather__big"><span data-weather-records>&ndash;</span> <span class="ov-weather__unit">rec/sec</span></p>
+                    <p class="ov-weather__cond" data-weather-cond>checking the sky…</p>
+                </div>
+            </div>
+            <div class="weather-spark ov-weather__spark" data-weather-spark aria-hidden="true"></div>
+            <dl class="ov-weather__row">
+                <div><dt>posts</dt><dd data-weather-posts>&ndash;</dd></div>
+                <div><dt>likes</dt><dd data-weather-likes>&ndash;</dd></div>
+                <div><dt>reposts</dt><dd data-weather-reposts>&ndash;</dd></div>
+                <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
+            </dl>
+            <div class="ov-weather__mix" data-weather-mix>
+                <p class="ov-weather__mix-head">diversity index <strong data-weather-index>&ndash;</strong> <span class="ov-weather__level" data-weather-level></span></p>
+                <div class="weather-ratio" aria-hidden="true">
+                    <span class="weather-ratio__bsky" data-weather-bar-bsky></span><span class="weather-ratio__else" data-weather-bar-else></span>
+                </div>
+            </div>
+            <p class="ov-weather__app" data-ov-app hidden><span class="ov-weather__app-label">busy elsewhere</span> <strong data-ov-app-domain></strong> <span data-ov-app-rate></span></p>
+            <p class="ov-weather__foot">atpota.to/weather</p>
+        </div>
+    </section>
+
+    <section class="ov-strip" data-ov-widget="strip" data-state="loading" aria-label="atmospheric conditions" hidden>
+        <div class="weather-sky" data-weather-sky aria-hidden="true"></div>
+        <div class="ov-strip__body">
+            <!-- @svg weather-sun.svg class="ov-strip__sun weather-sun" -->
+            <p class="ov-strip__big"><span data-weather-records>&ndash;</span> <span class="ov-strip__unit">rec/sec</span></p>
+            <p class="ov-strip__cond" data-weather-cond>checking the sky…</p>
+            <div class="weather-spark ov-strip__spark" data-weather-spark aria-hidden="true"></div>
+            <dl class="ov-strip__row">
+                <div><dt>posts</dt><dd data-weather-posts>&ndash;</dd></div>
+                <div><dt>likes</dt><dd data-weather-likes>&ndash;</dd></div>
+                <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
+            </dl>
+            <p class="ov-strip__mix" data-weather-mix><span class="ov-strip__label">diversity</span> <strong data-weather-index>&ndash;</strong> <span class="ov-strip__level" data-weather-level></span></p>
+            <p class="ov-strip__app" data-ov-app hidden><span class="ov-strip__label">busy elsewhere</span> <strong data-ov-app-domain></strong> <span data-ov-app-rate></span></p>
+        </div>
+    </section>
+
+    <section class="ov-badge" data-ov-widget="badge" data-state="loading" aria-label="atmospheric conditions" hidden>
+        <!-- @svg weather-sun.svg class="ov-badge__sun weather-sun" -->
+        <p class="ov-badge__big"><span data-weather-records>&ndash;</span> <span class="ov-badge__unit">rec/sec</span></p>
+        <p class="ov-badge__word" data-ov-cond-word></p>
+    </section>
+
+    <section class="ov-panel ov-apps" data-ov-widget="apps" data-state="loading" aria-labelledby="ov-apps-title" hidden>
+        <h2 class="ov-panel__title" id="ov-apps-title">busy outside bluesky</h2>
+        <ol class="ov-apps__list" data-ov-apps></ol>
+        <p class="ov-panel__note" data-ov-apps-empty hidden>it's all bluesky out there right now</p>
+    </section>
+
+    <section class="ov-panel ov-fc" data-ov-widget="forecast" data-state="loading" aria-labelledby="ov-fc-title" hidden>
+        <h2 class="ov-panel__title" id="ov-fc-title">the forecast</h2>
+        <ol class="ov-fc__hours" data-ov-fc-hours></ol>
+        <p class="ov-panel__note" data-ov-fc-words>reading the sky…</p>
+    </section>
+
+    <section class="ov-panel ov-pulse" data-ov-widget="pulse" data-state="loading" aria-labelledby="ov-pulse-title" hidden>
+        <h2 class="ov-panel__title" id="ov-pulse-title">the pulse</h2>
+        <p class="ov-pulse__big"><span data-ov-pulse-rate>&ndash;</span> <span class="ov-pulse__unit">rec/sec</span></p>
+        <div class="weather-spark ov-pulse__line" data-ov-pulse-line aria-hidden="true" hidden></div>
+        <p class="ov-panel__note" data-ov-pulse-note>new records a second</p>
+    </section>
+
+    <!-- Poe (src/overlay/poe.ts fills it in; visitors.ts adds its visitors) -->
+    <div class="ov-poe" data-ov-poe></div>
+</body>
+</html>
