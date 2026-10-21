@@ -719,7 +719,7 @@ html[data-theme="dark"] .weather-hero {
 .weather-today__facts div {
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-today__facts dt {
@@ -792,7 +792,7 @@ html[data-theme="dark"] .weather-hero {
   margin: 0;
   padding: 14px 10px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
   list-style: none;
 }
 
@@ -900,8 +900,11 @@ html[data-theme="dark"] .weather-hero {
   text-wrap: balance;
 }
 
-/* An hour a column, like a weather app's strip; it scrolls sideways when it doesn't fit. */
+/* An hour a column, like a weather app's strip; it scrolls sideways when it doesn't fit.
+   Positioned, so each hour's visually hidden words are clipped with it: with the tile as
+   their containing block they'd hang off its edge and widen the whole page on a phone. */
 .weather-forecast__scroll {
+  position: relative;
   overflow-x: auto;
   margin: 0 calc(var(--tile-pad) * -1);
   padding: 0 var(--tile-pad);
@@ -914,7 +917,7 @@ html[data-theme="dark"] .weather-hero {
   min-width: calc(var(--hours) * 62px);
   padding: 12px 0 4px;
   border-radius: 20px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-forecast__hours {
@@ -979,10 +982,11 @@ html[data-theme="dark"] .weather-hero {
   font-weight: 700;
 }
 
+/* the rain's blue, deep enough to read as text on the cream strip */
 .weather-forecast__chance {
   font-size: 12px;
   font-weight: 700;
-  color: var(--weather-bsky);
+  color: var(--on-water-tint);
 }
 
 /* The line runs through the middle of each column; the band is where 8 runs in 10 land. */
@@ -1017,7 +1021,7 @@ html[data-theme="dark"] .weather-hero {
 .weather-forecast__sun-card {
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-forecast__sun-card dt {
@@ -1082,7 +1086,9 @@ html[data-theme="dark"] .weather-hero {
   font-weight: 700;
 }
 
+/* positioned for the same reason as the forecast's strip: the cells' hidden words stay inside */
 .weather-heat__scroll {
+  position: relative;
   overflow-x: auto;
 }
 
@@ -1308,7 +1314,7 @@ html[data-theme="dark"] .weather-hero {
 .weather-mix__legend div {
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-mix__legend dt {
@@ -1432,7 +1438,7 @@ html[data-theme="dark"] .weather-hero {
   margin: 0;
   padding: 14px 14px 8px;
   border-radius: 20px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-chart-card__title {
@@ -1671,7 +1677,8 @@ html[data-theme="dark"] .weather-hero {
   margin: 0;
 }
 
-/* the page's own cream, so each box stands out from the white card */
+/* The page's own cream, so each box stands out from the white card; every box inside a
+   card on this page (today's facts, the legend, the charts, the forecast) uses it too. */
 .weather-stats div {
   padding: 10px 14px;
   border-radius: 16px;
@@ -1705,7 +1712,7 @@ html[data-theme="dark"] .weather-hero {
   gap: 4px;
   padding: 12px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-readout dt {

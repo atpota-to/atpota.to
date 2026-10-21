@@ -84,10 +84,12 @@ const PAIRS: Array<[string, string, number]> = [
   ['sun', 'footer', UI],
   ['text', 'selection', TEXT],
   // the weather report's bars, on the sky tile and on cards
-  ...['sky', 'card', 'paper'].flatMap((bg): Array<[string, string, number]> => [
+  ...['sky', 'card', 'paper', 'bg'].flatMap((bg): Array<[string, string, number]> => [
     ['weather-bsky', bg, UI],
     ['weather-else', bg, UI],
   ]),
+  // the forecast's chance of a storm, on its cream strip
+  ['on-water-tint', 'bg', TEXT],
 ];
 
 describe.each([
