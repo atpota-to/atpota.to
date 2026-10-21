@@ -39,6 +39,8 @@
   --leaf: #006837;
   --leaf-strong: #00532C;
   --leaf-tint: #E2F0D6;
+  /* a green button sitting straight on --bg, where --leaf-tint would all but vanish */
+  --leaf-pill: #C4E0AC;
   --vine: #39B54A;
 
   /* tile tints and accents */
@@ -155,6 +157,7 @@ html[data-theme="dark"] {
   --leaf: #7FD18B;
   --leaf-strong: #A8E2B0;
   --leaf-tint: #1D3322;
+  --leaf-pill: #24432B;
   --vine: #39B54A;
 
   --sage: #1F3322;

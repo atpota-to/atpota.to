@@ -63,6 +63,8 @@ const PAIRS: Array<[string, string, number]> = [
   ['leaf-strong', 'leaf-tint', TEXT],
   ['leaf-tint', 'leaf-strong', TEXT],
   ['leaf-strong', 'card', TEXT],
+  // the ask poe button
+  ['leaf-strong', 'leaf-pill', TEXT],
   // blog account line notices sit on the post's end card
   ['ink', 'flesh-tint', TEXT],
   // the blog's email field: a brown outline on paper, inside the hero or the flesh-tint end card
