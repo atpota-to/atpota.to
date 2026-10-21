@@ -254,8 +254,8 @@ test("week: each UTC day, the week before and the month come from the station's 
   assert.equal(r.days[0].diversityIndex, 3.3);
   assert.equal(r.weekBefore.perSecond, 400);
   assert.equal(r.weekBefore.changePercent, 15);
-  // the days' diversity indexes, averaged: 3.3 to 3.9 this week, 2.6 to 3.2 the week before
-  assert.equal(r.weekBefore.mix, "about as mixed as the week before");
+  // the week before is from before the station listened live (the archive's days hear fewer accounts elsewhere)
+  assert.equal("mix" in r.weekBefore, false);
   assert.equal("diversityIndex" in r.weekBefore, false, "the week before's accounts can't be put together from its days");
   assert.equal(r.month.diversityIndex, 2.2);
   assert.equal(r.month.diversityLevel, "low");
@@ -324,8 +324,13 @@ test("the mix against usual and the week before goes by the diversity index, nev
   assert.equal("diversity" in usual(undefined), false);
   assert.equal(usual({ ...ALMANAC.normal.diversity, now: { index: 1.5, elsewhere: 700 } }).diversity.mix, "a little less mixed than usual");
   assert.equal("diversity" in usual({ ...ALMANAC.normal.diversity, weeks: { windows: 0, index: 0 } }), false, "no same weekday heard by the hour yet");
-  const week = (points) => lib.weekReport({ week: WEEK_HISTORY, month: { ...MONTH_HISTORY, accounts: { ...MONTH_HISTORY.accounts, points } } }, NOW, "UTC").weekBefore;
+  // three weeks on, when both weeks were heard live: each week's days' indexes, averaged
+  const later = 21 * DAY;
+  const shift = (p) => ({ ...p, t: isoAt(Date.parse(p.t) + later) });
+  const week = (points, now = NOW + later) => lib.weekReport({ week: WEEK_HISTORY,
+    month: { ...MONTH_HISTORY, points: MONTH_HISTORY.points.map(shift), accounts: { ...MONTH_HISTORY.accounts, points: points.map(shift) } } }, now, "UTC").weekBefore;
   const days = MONTH_HISTORY.accounts.points;
+  assert.equal(week(days).mix, "about as mixed as the week before", "3.3 to 3.9 this week, 2.6 to 3.2 the week before");
   assert.equal(week(days.map((p, k) => ({ ...p, index: k >= 23 ? 3 : 2 }))).mix, "a more mixed sky than the week before");
   assert.equal("mix" in week(days.map(({ index, ...p }) => p)), false, "no days' indexes, no mix");
 });

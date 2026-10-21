@@ -35,6 +35,13 @@ const WEEK = 7 * DAY;
 /** How long the station listens before an outlook means anything: one of every hour of the week. */
 const OUTLOOK_MIN_SECONDS = 6 * 86_400;
 const TOP = 10;
+/**
+ * The station has listened live since this; before, its days came from Jetstream's
+ * archive, which keeps few edits and so hears fewer accounts outside Bluesky. Their
+ * diversity index isn't comparable with a live day's (website/server/weather-almanac.ts
+ * LIVE_SINCE, the same date).
+ */
+const LIVE_SINCE = Date.parse("2026-10-20T16:50:00Z");
 
 /**
  * The weather words, as the website and the station have them (website/server/atmosphere.ts
@@ -638,11 +645,11 @@ export function weekReport(parts: Parts, now: number, tz: string) {
     const beforeHeard = heardPercent(before.seconds, WEEK);
     if (thisHeard >= 50 && beforeHeard >= 50) {
       const b = weatherOf(before);
-      // the mix by each week's days heard at least half, their diversity indexes averaged: a
-      // week's accounts would spread over more apps than any day's, and only days come back
+      // the mix by each week's days heard live and at least half, their diversity indexes
+      // averaged: a week's accounts would spread over more apps than any day's, and only days come back
       const daily = (from: number, to: number) => inside(from, to).flatMap((p) => {
         const index = accountsOn.get(p.t)?.index;
-        return p.seconds >= 43_200 && index !== undefined ? [index] : [];
+        return Date.parse(p.t) >= LIVE_SINCE && p.seconds >= 43_200 && index !== undefined ? [index] : [];
       });
       const [thisDays, beforeDays] = [daily(thisFrom, now), daily(beforeFrom, thisFrom)];
       const mix = thisDays.length >= 4 && beforeDays.length >= 4 ? mixWords(mean(thisDays), mean(beforeDays), "the week before") : null;

@@ -32,6 +32,14 @@ const DAY = 24 * HOUR;
 /** How many days back atmosphere_normal looks for "usual": each of the 6 days before, and the same weekday in each of the 8 weeks before. */
 export const USUAL_DAYS = [1, 2, 3, 4, 5, 6] as const;
 export const USUAL_WEEKS = [7, 14, 21, 28, 35, 42, 49, 56] as const;
+/**
+ * The station has listened live since this. Everything before came from Jetstream's
+ * archive (atmosphere/README.md), which keeps about a fifth of the edits the station hears
+ * (0.5 a second against 2.7), and other apps lean on edits, so it hears fewer accounts
+ * outside Bluesky: 0.29% of an hour's active accounts on average, against the station's
+ * 0.48%. Its hours' diversity index isn't comparable, so "usual" leaves them out.
+ */
+export const LIVE_SINCE = Date.parse('2026-10-20T16:50:00Z');
 /** How long the station listens before an app it hasn't heard counts as new. */
 export const WARMUP_MS = 7 * DAY;
 export const HEATMAP_MS = 8 * 7 * DAY;
@@ -180,7 +188,8 @@ export function toHeatmap(body: unknown): Heatmap | null {
  * _app_sketch, their `dids`: no sketch needs merging). Clock hours, not the last 60
  * minutes, since that's how the station keeps accounts. Each earlier hour's index on its
  * own, then their mean: adding the hours' accounts up first would spread them over more
- * apps than any one hour has. null when the last whole hour wasn't heard well enough.
+ * apps than any one hour has. Hours from before the station listened live (LIVE_SINCE)
+ * are left out. null when the last whole hour wasn't heard well enough.
  */
 export async function readDiversity(db: Supabase, at: number): Promise<NormalDiversity | null> {
   const hour = Math.floor(at / HOUR) * HOUR - HOUR;
@@ -200,8 +209,8 @@ export async function readDiversity(db: Supabase, at: number): Promise<NormalDiv
   for (const r of main) {
     const t = isRecord(r) ? iso(r.t) : null;
     const c = counts(r, ['seconds', 'dids', 'dids_elsewhere'] as const);
-    // heard at least half, and its apps still kept if anyone wrote elsewhere
-    if (!t || !c || c.seconds < 1800 || c.dids <= 0 || (c.dids_elsewhere > 0 && !apps.has(t))) continue;
+    // heard live and at least half, and its apps still kept if anyone wrote elsewhere
+    if (!t || Date.parse(t) < LIVE_SINCE || !c || c.seconds < 1800 || c.dids <= 0 || (c.dids_elsewhere > 0 && !apps.has(t))) continue;
     byHour.set(t, { ...diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: apps.get(t) ?? [] }), elsewhere: c.dids_elsewhere });
   }
   const now = byHour.get(new Date(hour).toISOString());

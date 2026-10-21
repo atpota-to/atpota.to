@@ -132,9 +132,10 @@ describe('the diversity index against usual', () => {
         everyone(1, 100_000, 500), // 0.5%, four even apps: 1
         everyone(2, 100_000, 500, 1200), // barely heard: left out
         everyone(7, 100_000, 1000), // 1%, one app: 1
+        everyone(14, 100_000, 300), // 2026-10-20 16:00, before the station listened live: left out
         everyone(42, 100_000, 1000), // its apps are no longer kept: left out
       ],
-      [...apps(0, 250, 250, 250, 250), ...apps(1, 125, 125, 125, 125), ...apps(2, 500), ...apps(7, 1000)],
+      [...apps(0, 250, 250, 250, 250), ...apps(1, 125, 125, 125, 125), ...apps(2, 500), ...apps(7, 1000), ...apps(14, 300)],
     );
     const got = await readDiversity(d, NOW);
     expect(got).toEqual({
