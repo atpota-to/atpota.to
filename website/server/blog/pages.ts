@@ -201,11 +201,6 @@ function altLinks(site: SiteInfo, afterForm: boolean): string {
   ], afterForm);
 }
 
-function tagList(tags: readonly string[], className: string): string {
-  if (!tags.length) return '';
-  return `<ul class="${className}" role="list" aria-label="tags">${tags.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>`;
-}
-
 // ---------- index ----------
 
 export function indexPage(site: SiteInfo, docs: readonly BlogDocument[], assets: Assets): Page {
@@ -373,7 +368,6 @@ export function postPage(input: PostInput): Page {
       ? `<span aria-hidden="true">·</span><span>updated <time datetime="${escapeAttr(doc.updatedAt)}">${escapeHtml(formatDate(doc.updatedAt))}</time></span>`
       : '') +
     `</p>` +
-    tagList(doc.tags, 'post__tags') +
     `</header>` +
     cover +
     `<div class="post__body">${body}</div>` +
