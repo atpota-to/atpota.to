@@ -20,6 +20,9 @@ export default defineTool({
     "for the first time, and the last 24 hours' busiest apps. \"week\" is the past 7 days for your " +
     "dispatch: the week's weather, the week before, the busiest and quietest hour, each day, the " +
     "busiest apps against the week before, the month, and an outlook from the station's usual week. " +
+    "Its weather (records a second, conditions, busiest and quietest) leaves out bursts: one app writing " +
+    "a flood of records in a minute, a bulk import. `bursts` lists those on their own, with the app when " +
+    "one made it. " +
     "Every report says how much of its window the station heard (heardPercent); its numbers cover " +
     "only that. A comparison it leaves out could not be made. `page` is the weather report's link.",
   inputSchema: z.object({

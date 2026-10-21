@@ -81,6 +81,8 @@ export interface HeatCell {
   seconds: number;
   posts: number;
   creates: number;
+  /** creates with any one-minute burst taken out (server/weather-almanac.ts): what "usual" goes by */
+  steady?: number;
 }
 
 // ---------- reading the answer ----------
@@ -128,9 +130,9 @@ export function readAlmanac(body: unknown): Almanac | null {
   if (obj(hm) && n(hm.seconds) && Array.isArray(hm.cells)) {
     out.heatmap = {
       seconds: hm.seconds,
-      cells: hm.cells.filter(
-        (c): c is HeatCell => obj(c) && n(c.dow) && n(c.hour) && n(c.seconds) && n(c.posts) && n(c.creates) && c.dow >= 1 && c.dow <= 7 && c.hour <= 23,
-      ),
+      cells: hm.cells
+        .filter((c): c is HeatCell => obj(c) && n(c.dow) && n(c.hour) && n(c.seconds) && n(c.posts) && n(c.creates) && c.dow >= 1 && c.dow <= 7 && c.hour <= 23)
+        .map(({ dow, hour, seconds, posts, creates, steady }) => ({ dow, hour, seconds, posts, creates, ...(n(steady) ? { steady } : {}) })),
     };
   }
   const rc = body.records;
@@ -611,7 +613,8 @@ export interface HeatSummary {
 
 export function summarizeHeat(h: NonNullable<Almanac['heatmap']>): HeatSummary {
   const rates = new Map<string, number>();
-  for (const c of h.cells) if (c.seconds >= HEAT_MIN_SECONDS) rates.set(`${c.dow}:${c.hour}`, c.creates / c.seconds);
+  // steady, so one app's bulk import doesn't make an hour look like the busiest of the week
+  for (const c of h.cells) if (c.seconds >= HEAT_MIN_SECONDS) rates.set(`${c.dow}:${c.hour}`, (c.steady ?? c.creates) / c.seconds);
   let busiest: HeatSummary['busiest'] = null;
   let quietest: HeatSummary['quietest'] = null;
   for (const [key, rate] of rates) {

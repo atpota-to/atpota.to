@@ -105,6 +105,13 @@ describe('weather almanac', () => {
     expect(toHeatmap({ seconds: 1, cells: [{ dow: 1, hour: 24, seconds: 1, posts: 1, creates: 1 }] })!.cells).toEqual([]);
   });
 
+  it('carries each cell\'s steady count when it comes, and leaves an odd one out', () => {
+    const cell = { dow: 6, hour: 0, seconds: 7200, posts: 300_000, creates: 6_500_000 };
+    expect(toHeatmap({ seconds: 7200, cells: [{ ...cell, steady: '2900000' }] })!.cells).toEqual([{ ...cell, steady: 2_900_000 }]);
+    expect(toHeatmap({ seconds: 7200, cells: [{ ...cell, steady: -1 }] })!.cells).toEqual([cell]);
+    expect(toHeatmap({ seconds: 7200, cells: [cell] })!.cells).toEqual([cell]);
+  });
+
   it('only takes GET and HEAD', async () => {
     expect((await api.POST(new Request('https://atpota.to/api/weather-almanac', { method: 'POST' }))).status).toBe(405);
   });

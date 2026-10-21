@@ -148,6 +148,8 @@ const LIVE = {
   series: [{ t: 1, creates: 421, bluesky: 414, elsewhere: 7, posts: 45 }],
 };
 
+const sumOf = (points) => points.reduce((n, p) => n + p.creates, 0);
+
 function fakeFetch(routes) {
   const calls = [];
   const impl = async (url) => {
@@ -305,6 +307,45 @@ test("week: a station that has only just started says so instead of comparing or
   assert.equal(r.outlook.readyAt, isoAt(start + WEEK));
   assert.equal(r.newAppsLast24Hours.warmingUp, true);
   assert.equal("appsPerDay" in r, false);
+});
+
+test("week: one app's bulk import is a burst, not the weather: not the busiest hour, day or usual hour", async () => {
+  // hour 120: 1,450 a second counted, from one minute of podping.at's 3.6 million records; 450 without it.
+  // Every other hour carries its steady count too, the same as what it counted.
+  const BURST = firstHour + 120 * HOUR;
+  const points = weekPoints.map((p) => (Date.parse(p.t) === BURST
+    ? { ...point(BURST, 3600, 1450), steady: 450 * 3600 }
+    : { ...p, steady: p.creates }));
+  const bursts = [
+    { t: isoAt(BURST), records: 3_600_000, app: { domain: "podping.at", minute: isoAt(BURST + 59 * 60_000), records: 3_570_000, collections: ["at.podping.records.podping"] } },
+    { t: isoAt(BURST + HOUR), records: 400_000 },
+    { t: "not a time", records: 1 },
+  ];
+  // the day it fell on: 470 a second counted, 430 without it
+  const days = monthPoints.map((p, k) => (k === 25 ? { ...point(Date.parse(p.t), 86_400, 600), steady: 430 * 86_400 } : { ...p, steady: p.creates }));
+  // the usual week: saturday 00:00 blown up by the same import, thursday 15:00 still the stormiest
+  const cells = heatCells.map((c) => (c.dow === 6 && c.hour === 0
+    ? { ...c, creates: 3000 * 28_800, steady: c.creates }
+    : { ...c, steady: c.creates }));
+  const { impl } = fakeFetch({
+    ...FULL,
+    "/api/weather-history?range=week": { ...WEEK_HISTORY, points, bursts },
+    "/api/weather-history?range=month": { ...MONTH_HISTORY, points: days },
+    "/api/weather-almanac?tz=UTC": { ...ALMANAC, heatmap: { ...ALMANAC.heatmap, cells } },
+  });
+  const r = await lib.readWeather("week", "UTC", impl, NOW);
+  assert.deepEqual(r.busiestHour, { hour: "saturday, oct 24, 23:00", perSecond: 620, condition: "stormy" }, "the stormy hour, not the import");
+  assert.equal(r.records.total, sumOf(points), "the record counts keep every record");
+  assert.ok(r.perSecond < 452, `the week's weather leaves the import out, got ${r.perSecond}`);
+  assert.equal(r.month.busiestDay.perSecond, 500, "the busy day, not the import's");
+  assert.deepEqual(r.outlook.busiestHours[0], { weekday: "thursday", hour: "15:00", perSecond: 600, condition: "stormy" });
+  assert.equal(r.outlook.busiestHours.some((h) => h.weekday === "saturday" && h.hour === "00:00"), false);
+  assert.deepEqual(r.bursts, [
+    { hour: "sunday, oct 25, 19:00", records: 3_600_000, app: "podping.at", minute: "sunday, oct 25, 19:59",
+      recordsThatMinute: 3_570_000, perSecond: 59_500, collections: ["at.podping.records.podping"] },
+    { hour: "sunday, oct 25, 20:00", records: 400_000 },
+  ]);
+  assert.equal("bursts" in (await lib.readWeather("week", "UTC", fakeFetch(FULL).impl, NOW)), false, "no bursts, nothing to say");
 });
 
 test("week: a part that can't be read is named, and the rest still comes back", async () => {

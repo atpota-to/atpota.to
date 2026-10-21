@@ -254,7 +254,7 @@ export function nowReport(body: unknown) {
 // ---------- the station's rows (/api/weather-history) ----------
 
 const POINT_KEYS = ["creates", "bluesky", "elsewhere", "posts", "likes", "reposts", "follows", "updates", "deletes", "identity", "account"] as const;
-export type Point = { t: string; seconds: number } & Record<(typeof POINT_KEYS)[number], number>;
+export type Point = { t: string; seconds: number; steady?: number } & Record<(typeof POINT_KEYS)[number], number>;
 /** Active accounts, and the diversity index they make when the website sent it. */
 type AccountTotals = { active: number; bluesky: number; elsewhere: number; index?: number };
 
@@ -269,7 +269,24 @@ function toPoint(x: unknown): Point | null {
   const t = iso(x.t);
   const seconds = count(x.seconds);
   const c = counts(x, POINT_KEYS);
-  return t && seconds && c ? { t, seconds, ...c } : null;
+  const steady = count(x.steady);
+  return t && seconds && c ? { t, seconds, ...c, ...(steady === null ? {} : { steady }) } : null;
+}
+
+/** An hour that ran far past its steady count: one app's bulk import, mostly (website/server/weather-history.ts). */
+type Burst = { t: string; records: number; app?: { domain: string; minute: string; records: number; collections: string[] } };
+
+function toBurst(x: unknown): Burst | null {
+  const t = isRecord(x) ? iso(x.t) : null;
+  const records = isRecord(x) ? count(x.records) : null;
+  if (!isRecord(x) || !t || records === null) return null;
+  const a = isRecord(x.app) ? x.app : null;
+  const domain = a ? domainOf(a.domain) : null;
+  const minute = a ? iso(a.minute) : null;
+  const appRecords = a ? count(a.records) : null;
+  return domain && minute && appRecords !== null
+    ? { t, records, app: { domain, minute, records: appRecords, collections: collectionsOf(a!.collections) } }
+    : { t, records };
 }
 
 export function parseHistory(body: unknown) {
@@ -318,7 +335,8 @@ export function parseHistory(body: unknown) {
       }).slice(0, TOP),
     };
   }
-  return { points, compare, apps, appsOverTime, accounts };
+  const bursts = list(body.bursts).map(toBurst).filter((b): b is Burst => b !== null).slice(0, TOP);
+  return { points, compare, apps, appsOverTime, accounts, bursts };
 }
 
 type History = NonNullable<ReturnType<typeof parseHistory>>;
@@ -330,12 +348,21 @@ export function sumPoints(points: Point[]): Point {
     total.seconds += p.seconds;
     for (const k of POINT_KEYS) total[k] += p[k];
   }
+  // only when every point has one, or it would come up short
+  if (points.length && points.every((p) => p.steady !== undefined)) total.steady = points.reduce((n, p) => n + p.steady!, 0);
   return total;
 }
 
+/**
+ * The records that make the weather: new records with any burst left out, when the station
+ * sent that (`steady`: no minute counts for more than 3 times its hour's median minute),
+ * else all of them. One app's bulk import is in the record counts, not in the sky.
+ */
+const busy = (p: { creates: number; steady?: number }) => p.steady ?? p.creates;
+
 /** A stretch of the station's rows, in weather words. */
-function weatherOf(p: { seconds: number; creates: number }) {
-  const perSecond = rate(p.creates, p.seconds);
+function weatherOf(p: { seconds: number; creates: number; steady?: number }) {
+  const perSecond = rate(busy(p), p.seconds);
   return { perSecond, condition: conditionFor(perSecond) };
 }
 
@@ -391,11 +418,8 @@ function accountsOf(h: History, spanMs: number, earlier: string) {
 function extremes(points: Point[], tz: string) {
   const heard = points.filter((p) => p.seconds >= 1800);
   if (!heard.length) return {};
-  const byRate = [...heard].sort((a, b) => b.creates / b.seconds - a.creates / a.seconds);
-  const describe = (p: Point) => {
-    const perSecond = rate(p.creates, p.seconds);
-    return { hour: hourAt(p.t, tz), perSecond, condition: conditionFor(perSecond) };
-  };
+  const byRate = [...heard].sort((a, b) => busy(b) / b.seconds - busy(a) / a.seconds);
+  const describe = (p: Point) => ({ hour: hourAt(p.t, tz), ...weatherOf(p) });
   return { busiestHour: describe(byRate[0]!), quietestHour: describe(byRate[byRate.length - 1]!) };
 }
 
@@ -454,7 +478,10 @@ export function parseAlmanac(body: unknown) {
     if (!isRecord(h) || !total) return null;
     const cells = list(h.cells).flatMap((c) => {
       const v = counts(c, ["dow", "hour", "seconds", "posts", "creates"] as const);
-      return v && Number.isInteger(v.dow) && v.dow >= 1 && v.dow <= 7 && Number.isInteger(v.hour) && v.hour <= 23 ? [v] : [];
+      const steady = isRecord(c) ? count(c.steady) : null;
+      return v && Number.isInteger(v.dow) && v.dow >= 1 && v.dow <= 7 && Number.isInteger(v.hour) && v.hour <= 23
+        ? [steady === null ? v : { ...v, steady }]
+        : [];
     });
     return { seconds: total.seconds, cells };
   })();
@@ -504,7 +531,7 @@ function outlookOf(heat: NonNullable<Almanac["heatmap"]>, historyStart: string |
   const byDay = WEEKDAYS.map((weekday, i) => {
     const cells = heat.cells.filter((c) => c.dow === i + 1);
     const seconds = cells.reduce((n, c) => n + c.seconds, 0);
-    return { weekday, seconds, creates: cells.reduce((n, c) => n + c.creates, 0), posts: cells.reduce((n, c) => n + c.posts, 0) };
+    return { weekday, seconds, records: cells.reduce((n, c) => n + busy(c), 0), posts: cells.reduce((n, c) => n + c.posts, 0) };
   });
   if (heat.seconds < OUTLOOK_MIN_SECONDS || byDay.some((d) => d.seconds < 12 * 3600)) {
     const readyAt = historyStart ? new Date(Date.parse(historyStart) + WEEK).toISOString() : null;
@@ -516,18 +543,18 @@ function outlookOf(heat: NonNullable<Almanac["heatmap"]>, historyStart: string |
     };
   }
   const hours = heat.cells.filter((c) => c.seconds >= 1800).map((c) => {
-    const perSecond = rate(c.creates, c.seconds);
+    const perSecond = rate(busy(c), c.seconds);
     return { weekday: WEEKDAYS[c.dow - 1]!, hour: `${String(c.hour).padStart(2, "0")}:00`, perSecond, condition: conditionFor(perSecond) };
   }).sort((a, b) => b.perSecond - a.perSecond);
   const conditions: Record<Condition, number> = { stormy: 0, gusty: 0, breezy: 0, light: 0, calm: 0 };
   for (const h of hours) conditions[h.condition]++;
-  const usualPerSecond = rate(heat.cells.reduce((n, c) => n + c.creates, 0), heat.seconds);
+  const usualPerSecond = rate(heat.cells.reduce((n, c) => n + busy(c), 0), heat.seconds);
   return {
     ready: true as const,
     timeZone: tz,
     heardDays: round1(heat.seconds / 86_400),
     usualPerSecond,
-    weekdays: byDay.map((d) => ({ weekday: d.weekday, perSecond: rate(d.creates, d.seconds), postsPerSecond: rate(d.posts, d.seconds) })),
+    weekdays: byDay.map((d) => ({ weekday: d.weekday, perSecond: rate(d.records, d.seconds), postsPerSecond: rate(d.posts, d.seconds) })),
     busiestHours: hours.slice(0, 3),
     quietestHours: hours.slice(-3).reverse(),
     // how many of a usual week's hours fall in each condition
@@ -591,7 +618,9 @@ export function todayReport(parts: Parts, now: number, tz: string) {
  * The past 7 days, for the dispatch: the week's weather, the week before, its busiest
  * and quietest hour, each day, the busiest apps against the week before, the month,
  * and an outlook. The week itself is the last 7×24 hours; the days, the week before and
- * the month are whole UTC days, the way the station keeps them.
+ * the month are whole UTC days, the way the station keeps them. Its weather words go by
+ * the records with bursts left out (busy), and the bursts come on their own (bursts): one
+ * app's bulk import is something that happened, not the sky, and not a usual week.
  */
 export function weekReport(parts: Parts, now: number, tz: string) {
   const week = parseHistory(parts.week);
@@ -635,6 +664,16 @@ export function weekReport(parts: Parts, now: number, tz: string) {
   const apps = appsOf(week, total, "the week before");
   if (week.apps) out.apps = apps;
   else unavailable.push("the busiest apps");
+  // hours that one app's bulk import, mostly, blew far past the weather: news, not weather
+  if (week.bursts.length) {
+    out.bursts = week.bursts.map((b) => ({
+      hour: hourAt(b.t, tz),
+      records: b.records,
+      ...(b.app
+        ? { app: b.app.domain, minute: hourAt(b.app.minute, tz), recordsThatMinute: b.app.records, perSecond: Math.round(b.app.records / 60), collections: b.app.collections }
+        : {}),
+    }));
+  }
 
   if (month && month.points.length) {
     const todayStart = Math.floor(now / DAY) * DAY;
@@ -677,7 +716,7 @@ export function weekReport(parts: Parts, now: number, tz: string) {
         heardPercent: beforeHeard,
         perSecond: b.perSecond,
         // this week's records a second against the week before's, both by whole UTC days
-        changePercent: changePercent(thisWeek.creates / thisWeek.seconds, before.creates / before.seconds),
+        changePercent: changePercent(busy(thisWeek) / thisWeek.seconds, busy(before) / before.seconds),
         ...(mix ? { mix } : {}),
       };
     } else {
@@ -686,8 +725,8 @@ export function weekReport(parts: Parts, now: number, tz: string) {
     const monthFrom = todayStart - 29 * DAY;
     const days30 = inside(monthFrom, now);
     const m = sumPoints(days30);
-    const wholeDays = days30.filter((p) => p.seconds >= 0.9 * 86_400).sort((a, b) => b.creates / b.seconds - a.creates / a.seconds);
-    const day = (p: Point) => ({ date: p.t.slice(0, 10), weekday: UTC_WEEKDAYS[new Date(Date.parse(p.t)).getUTCDay()], perSecond: rate(p.creates, p.seconds) });
+    const wholeDays = days30.filter((p) => p.seconds >= 0.9 * 86_400).sort((a, b) => busy(b) / b.seconds - busy(a) / a.seconds);
+    const day = (p: Point) => ({ date: p.t.slice(0, 10), weekday: UTC_WEEKDAYS[new Date(Date.parse(p.t)).getUTCDay()], perSecond: rate(busy(p), p.seconds) });
     out.month = {
       from: new Date(monthFrom).toISOString(),
       heardPercent: heardPercent(m.seconds, now - monthFrom),
