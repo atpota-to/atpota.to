@@ -4,6 +4,10 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { niceMax, segments } from '../src/scripts/weather-chart.js';
 import {
+  APPS_EMPTY,
+  APPS_TRICKLE,
+  LIST_TOP,
+  topBars,
   accountChange,
   accountSummary,
   bindExplainers,
@@ -64,6 +68,11 @@ describe('the atmosphere weather report', () => {
     expect(PAGE).toContain('<!-- @partial header -->');
     expect(PAGE).toContain('<link rel="canonical" href="https://atpota.to/weather">');
     expect(PAGE).toContain('/src/styles/weather.css');
+  });
+
+  it('puts when the sky is busiest right under the forecast', () => {
+    const tiles = [...report.querySelectorAll(':scope > .tile')].map((t) => t.getAttribute('aria-labelledby'));
+    expect(tiles.indexOf('weather-heat-title')).toBe(tiles.indexOf('weather-forecast-title') + 1);
   });
 
   it('fills every tile from one reading', () => {
@@ -451,5 +460,38 @@ describe("what's this? Poe explains", () => {
     const levels = EXPLAINERS.diversity!.answer;
     expect(levels).toContain('0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme');
     expect(DIVERSITY_SCALE.map(([, from]) => from)).toEqual([0, 3, 6, 8, 11]);
+  });
+});
+
+describe('the lists', () => {
+  it('show the busiest five, and leave out any that would read 0', () => {
+    const bar = (label: string, perSecond: number, value?: string) => ({ label, perSecond, count: perSecond * 60, value });
+    const bars = [bar('a', 9), bar('b', 0.04), bar('c', 7), bar('d', 0.06), bar('e', 3), bar('f', 2), bar('g', 1), bar('h', 0, '0')];
+    expect(topBars(bars).map((b) => b.label)).toEqual(['a', 'c', 'd', 'e', 'f']);
+    expect(LIST_TOP).toBe(5);
+  });
+
+  it('elsewhere and bluesky: the top five, none at 0, and the count says so', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ domain: `app${i}.com`, perSecond: 10 - i, count: (10 - i) * 5, collections: [] }));
+    renderReport(report, {
+      ...READING,
+      apps: many,
+      bluesky: [
+        { nsid: 'app.bsky.feed.like', perSecond: 308, count: 1540 },
+        { nsid: 'app.bsky.graph.starterpack', perSecond: 0.01, count: 1 },
+      ],
+    });
+    expect(report.querySelectorAll('[data-r-apps] li')).toHaveLength(5);
+    expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 5');
+    expect([...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent)).toEqual([BLUESKY_NAMES['app.bsky.feed.like']]);
+  });
+
+  it("says when other apps only wrote a trickle, rather than that nobody did", () => {
+    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 0.02, count: 1, collections: [] }] });
+    const empty = report.querySelector<HTMLElement>('[data-r-apps-empty]')!;
+    expect(empty.hidden).toBe(false);
+    expect(empty.textContent).toBe(APPS_TRICKLE);
+    renderReport(report, { ...READING, apps: [], diversity: { ...READING.diversity!, apps: 0 } });
+    expect(empty.textContent).toBe(APPS_EMPTY);
   });
 });

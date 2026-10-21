@@ -37,11 +37,14 @@
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
-import { alertsFor, createAlertDesk, newAppAlert, type AlertDesk, type Watch } from './weather-alerts';
-import { clock, initAlmanac, readerTimeZone, type Almanac } from './weather-almanac';
+import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, type Watch } from './weather-alerts';
+import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
+import { initForecast } from './weather-forecast';
+import { initSpan, showLive } from './weather-span';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { renderChart, type ChartPoint } from './weather-chart';
 import { explain, type PoeExplanation } from '../poe/say';
+import { airNow, clearedUp, initHero, RAINBOW_COOLDOWN_MS, renderAir, showRainbow } from './weather-hero';
 import { cloudCount, renderClouds } from './weather-sky';
 import { renderSpark } from './weather-spark';
 import {
@@ -49,9 +52,13 @@ import {
   ERROR_TEXT,
   LEVEL_TEXT,
   REFRESH_MS,
+  compactCount,
   countTo,
+  coverageWords,
   fetchReading,
+  formatCount,
   formatIndex,
+  formatRate,
   ratioText,
   recordsPerSecond,
   renderRatio,
@@ -59,6 +66,8 @@ import {
   storedReading,
   type Reading,
 } from './weather';
+
+export { compactCount, coverageWords, formatCount, formatRate };
 
 export const LIVE_REFRESH_MS = 5_000;
 export const HISTORY_ENDPOINT = '/api/weather-history';
@@ -86,19 +95,6 @@ export const BLUESKY_NAMES: Record<string, string> = {
   'app.bsky.notification.declaration': 'notification settings',
   'chat.bsky.actor.declaration': 'chat settings',
 };
-
-/** Records a second as people read them: one decimal under 100, whole after that. */
-export function formatRate(n: number): string {
-  return n < 100 ? n.toLocaleString('en-US', { maximumFractionDigits: 1 }) : Math.round(n).toLocaleString('en-US');
-}
-
-/** Accounts as people read them: 21,345. */
-export const formatCount = (n: number) => Math.round(n).toLocaleString('en-US');
-
-/** Accounts on an axis: 21k, 1.2m. */
-export function compactCount(n: number): string {
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n).toLowerCase();
-}
 
 export type Measure = 'records' | 'accounts';
 
@@ -178,6 +174,17 @@ export interface Bar {
   /** A short change beside the value ("↑ 42%"), and what it means in words for screen readers. */
   change?: { text: string; words: string; trend: 'up' | 'down' | 'steady' | 'new' };
 }
+
+/** How many rows each list shows: the busiest, and only ones with something to show. */
+export const LIST_TOP = 5;
+
+/** The busiest LIST_TOP bars, leaving out any whose number would read 0. */
+export function topBars(bars: Bar[]): Bar[] {
+  return bars.filter((b) => (b.value ?? formatRate(b.perSecond)) !== '0').slice(0, LIST_TOP);
+}
+
+export const APPS_EMPTY = 'nobody but bluesky was writing just then. other apps come and go, so check back in a minute.';
+export const APPS_TRICKLE = 'other apps only wrote a record or two just then, too few to make a bar. check back in a minute.';
 
 /**
  * A list of horizontal bars, each as long as its share of the busiest one, its value in
@@ -272,6 +279,11 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   const acct = r.accounts;
   const sky = $(report, '[data-weather-sky]');
   if (sky && r.diversity) renderClouds(sky, cloudCount(r.diversity.index));
+  // the weather you can see: wind, rain or snow (weather-hero.ts)
+  const hero = $(report, '[data-weather-hero]');
+  if (hero) hero.dataset.condition = r.condition;
+  const air = $(report, '[data-weather-air]');
+  if (air) renderAir(air, airNow(r.condition));
   const spark = $(report, '[data-r-spark]');
   if (spark) renderSpark(spark, r);
 
@@ -305,20 +317,20 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   // elsewhere, by records or by accounts
   const byAcct = measure === 'accounts' && acct !== undefined;
   const apps = r.apps ?? [];
+  const appsBars = topBars(
+    byAcct
+      ? acct.apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.accounts, count: a.accounts, value: formatCount(a.accounts) }))
+      : apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.perSecond, count: a.count })),
+  );
   const appsList = $(report, '[data-r-apps]');
-  if (appsList) {
-    if (byAcct) {
-      renderBars(
-        appsList,
-        acct.apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.accounts, count: a.accounts, value: formatCount(a.accounts) })),
-        undefined,
-      );
-    } else renderBars(appsList, apps.map((a) => ({ label: a.domain, sub: a.collections.join(', '), perSecond: a.perSecond, count: a.count })), r.seconds);
-  }
-  const shown = byAcct ? acct.apps.length : apps.length;
-  const empty = $(report, '[data-r-apps-empty]');
-  if (empty) empty.hidden = shown > 0;
+  if (appsList) renderBars(appsList, appsBars, byAcct ? undefined : r.seconds);
+  const shown = appsBars.length;
   const n = r.diversity?.apps ?? apps.length;
+  const empty = $(report, '[data-r-apps-empty]');
+  if (empty) {
+    empty.hidden = shown > 0;
+    empty.textContent = n > 0 ? APPS_TRICKLE : APPS_EMPTY;
+  }
   roll(report, '[data-r-apps-count]', n === 0 ? '' : `${n} app${n === 1 ? '' : 's'} heard${n > shown ? `, top ${shown}` : ''}`);
 
   // bluesky
@@ -326,16 +338,14 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   if (bskyList && r.bluesky) {
     renderBars(
       bskyList,
-      r.bluesky.map((b) => ({ label: BLUESKY_NAMES[b.nsid] ?? b.nsid, sub: b.nsid, perSecond: b.perSecond, count: b.count })),
+      topBars(r.bluesky.map((b) => ({ label: BLUESKY_NAMES[b.nsid] ?? b.nsid, sub: b.nsid, perSecond: b.perSecond, count: b.count }))),
       r.seconds,
     );
   }
 
-  // the last minute: each kind of event as a count, and who wrote (the station's reading only)
-  if (r.events) for (const [key, value] of Object.entries(r.events)) count(report, `[data-r-event="${key}"]`, value * 60, formatCount);
-  const minuteAccounts = $(report, '[data-r-minute-accounts]');
-  if (minuteAccounts) minuteAccounts.hidden = !acct;
-  count(report, '[data-r-active]', acct?.active, formatCount);
+  // the last minute, unless the reader has moved its tile on to an hour, a day or a week (weather-span.ts)
+  const minute = $(report, '[data-s-tile]');
+  if (minute) showLive(minute, r);
 
   if (report.dataset.state !== 'ready') setText(report, '[data-r-status]', `${CONDITION_TEXT[r.condition]}. diversity index ${r.diversity ? `${formatIndex(r.diversity.index)}, ${r.diversity.level}` : 'unknown'}.`);
   report.dataset.state = 'ready';
@@ -368,6 +378,33 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       'so a crowd spread over lots of apps scores higher than the same crowd piled into one.',
       '',
       "it reads like the uv index: 0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme. a usual minute sits around 2 right now, so it's mostly bluesky out there. for now (◕‿◕)",
+    ].join('\n'),
+  },
+  readouts: {
+    question: 'what do feels like, gusts, humidity and visibility mean?',
+    answer: [
+      "they're my take on a weather app's details, from the last minute. tap \"minute\" in the title for the last hour, day or week instead:",
+      '',
+      "- feels like: new posts a second. likes and follows are most of the records, but posts are what you actually feel when you scroll",
+      '- gusts: the busiest single second of the minute, or the busiest minute of the hour, or hour of the day or week. when a bot dumps a pile of records at once, it shows up here first',
+      '- humidity: edits and deletions as a share of everything written. a muggy minute is one where people are second-guessing themselves',
+      "- visibility: how many apps outside bluesky wrote anything. on a clear day you can see a long way past bluesky",
+      '',
+      "the little arrows say how each number did against the minute, hour, day or week before. none of these are official anything. i made them up, but the numbers are real (◕‿◕)",
+    ].join('\n'),
+  },
+  forecast: {
+    question: 'how does the forecast work?',
+    answer: [
+      "it's a real forecast, not just what's usual. three things go into it:",
+      '',
+      "- usual: what each hour of the day has looked like over the last two weeks, nudged toward that hour of the week once i've heard a few of them. i take the middle value, so one bot's burst doesn't become normal",
+      "- running: how far the last day has run from usual. if the whole network is having a busy day, the forecast stays busy too",
+      "- memory: how long a busy or quiet spell tends to last. right now's difference from usual fades out hour by hour, as fast as it has in the past",
+      '',
+      "then i play the next 12 hours forward a few hundred times, each hour wobbling by as much as my own past misses did. the shaded band is where 8 runs in 10 land, and the chance of a storm is how many runs went past 600 new records a second.",
+      '',
+      "network sunrise is when the usual day climbs past halfway between its quietest and busiest hours, and sunset is when it falls back. underneath, i keep score: how far off my forecasts for the next hour have been, against just going by usual (◕‿◕)",
     ].join('\n'),
   },
 };
@@ -561,20 +598,6 @@ export function ratesOf(p: HistoryPoint): { records: number | null; posts: numbe
   return { records: p.creates / p.seconds, posts: p.posts / p.seconds };
 }
 
-/** How much of a range the station covered, in words: "13 minutes", "2 days". */
-export function coverageWords(seconds: number): string {
-  const units: Array<[string, number]> = [
-    ['day', 86_400],
-    ['hour', 3600],
-    ['minute', 60],
-  ];
-  for (const [unit, size] of units) {
-    const n = Math.floor(seconds / size);
-    if (n >= 1) return `${n} ${unit}${n === 1 ? '' : 's'}`;
-  }
-  return 'under a minute';
-}
-
 export function trendSummary(h: History): string {
   const info = RANGE_INFO[h.range];
   const { records } = ratesOf(h.total);
@@ -644,14 +667,16 @@ function renderRecordTrends(section: HTMLElement, h: History, now: number, forma
       const changes = apps.map((a) => appChange(a, h.compare, info.earlier));
       renderBars(
         list,
-        apps.map((a, i) => ({
-          label: a.domain,
-          sub: a.collections.join(', '),
-          perSecond: a.creates / h.total.seconds,
-          count: a.creates,
-          value: a.creates.toLocaleString('en-US'),
-          change: changes[i] ?? undefined,
-        })),
+        topBars(
+          apps.map((a, i) => ({
+            label: a.domain,
+            sub: a.collections.join(', '),
+            perSecond: a.creates / h.total.seconds,
+            count: a.creates,
+            value: a.creates.toLocaleString('en-US'),
+            change: changes[i] ?? undefined,
+          })),
+        ),
         h.total.seconds,
       );
       setText(
@@ -693,7 +718,7 @@ function renderAccountTrends(section: HTMLElement, h: History, now: number, form
       const changes = a.apps.map((app) => accountChange(app, a, info.earlier));
       renderBars(
         list,
-        a.apps.map((app, i) => ({ label: app.domain, sub: app.collections.join(', '), perSecond: app.active, count: app.active, value: formatCount(app.active), change: changes[i] ?? undefined })),
+        topBars(a.apps.map((app, i) => ({ label: app.domain, sub: app.collections.join(', '), perSecond: app.active, count: app.active, value: formatCount(app.active), change: changes[i] ?? undefined }))),
         undefined,
       );
       setText(
@@ -795,6 +820,11 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   bindHush(root, desk);
   bindExplainers(root);
   let watch: Watch | null = null;
+  const hero = $(report, '[data-weather-hero]');
+  if (hero) initHero(hero);
+  let rainbowAt = -Infinity;
+  // the busiest minute on record, from the almanac, raised by any live minute that beats it
+  let record: number | null = null;
   const measure = createMeasure(root);
   let shown: Reading | null = null;
   measure.onChange((m) => {
@@ -811,9 +841,19 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     if (reading) {
       shown = reading;
       renderReport(report, reading, measure.get());
+      // a storm that clears leaves a rainbow, now and then
+      if (hero && clearedUp(watch?.condition, reading.condition) && Date.now() - rainbowAt >= RAINBOW_COOLDOWN_MS) {
+        rainbowAt = Date.now();
+        showRainbow(hero);
+      }
       const next = alertsFor(watch, reading);
       watch = next.watch;
       for (const a of next.alerts) desk.push(a);
+      const beaten = recordAlert(record, reading);
+      if (beaten) {
+        desk.push(beaten);
+        record = recordsPerSecond(reading);
+      }
     } else renderReportError(report);
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
   };
@@ -825,7 +865,15 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   void load().then(tick);
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, fetchImpl, measure);
-  initAlmanac(report, fetchImpl, watchNewApps(desk));
+  const newApps = watchNewApps(desk);
+  initAlmanac(report, fetchImpl, (a) => {
+    newApps(a);
+    const best = recordHigh(a)?.perSecond;
+    if (best !== undefined) record = Math.max(record ?? 0, best);
+  });
+  initForecast(report, fetchImpl, readerTimeZone());
+  const minute = $(report, '[data-s-tile]');
+  if (minute) initSpan(minute, fetchImpl);
 }
 
 /** Alerts for apps the almanac lists as new that it didn't list last time (the first load only sets the scene). */

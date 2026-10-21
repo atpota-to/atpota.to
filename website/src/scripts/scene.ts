@@ -42,11 +42,12 @@
 
 import { setMascotRest, type MascotFace } from './mascot';
 import { BIRD_COLOURS, drawStage, type BirdType, type Box, type Geometry } from './scene-art';
+import { SEASONS, seasonOf, TIMES, timeOfDay, type Season, type TimeOfDay } from './sky-clock';
 import { getTheme, type Theme } from './theme';
 import { readAtmosphere, type Condition } from './weather';
 
-export const TIMES = ['dawn', 'day', 'golden', 'night'] as const;
-export const SEASONS = ['plain', 'spring', 'summer', 'autumn', 'winter'] as const;
+// The reader's clock lives in sky-clock.ts, so the weather report's header can share it.
+export { SEASONS, seasonOf, TIMES, timeOfDay, type Season, type TimeOfDay };
 export const WEATHERS = ['calm', 'gusty', 'rain', 'snow'] as const;
 export const GROUNDS = ['meadow', 'deeper'] as const;
 export const EVENTS = ['none', 'halloween', 'newyear', 'dispatch'] as const;
@@ -63,8 +64,6 @@ export const TAKES = {
   beach: ['a', 'b'],
 } as const;
 
-export type TimeOfDay = (typeof TIMES)[number];
-export type Season = (typeof SEASONS)[number];
 export type SceneWeather = (typeof WEATHERS)[number];
 export type Ground = (typeof GROUNDS)[number];
 export type SceneEvent = (typeof EVENTS)[number];
@@ -98,23 +97,6 @@ export const DISPATCH_DAY_MS = 24 * 60 * 60 * 1000;
 /** A visitor waits this long for the weather and the dispatch before it picks without them. */
 export const WEATHER_WAIT_MS = 4000;
 export const SCENE_PARAM = 'scene';
-
-/** dawn 5–8, day 8–17, golden hour 17–19:30, night after that; the dark theme is always night. */
-export function timeOfDay(date: Date, theme: Theme = 'light'): TimeOfDay {
-  if (theme === 'dark') return 'night';
-  const h = date.getHours() + date.getMinutes() / 60;
-  if (h >= 5 && h < 8) return 'dawn';
-  if (h >= 8 && h < 17) return 'day';
-  if (h >= 17 && h < 19.5) return 'golden';
-  return 'night';
-}
-
-const MONTH_SEASONS: readonly Season[] = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'];
-
-/** Meteorological seasons, north of the equator. */
-export function seasonOf(date: Date): Season {
-  return MONTH_SEASONS[date.getMonth()] ?? 'plain';
-}
 
 /** The calendar's special days: halloween week at night and all of oct 31; new year's eve night. */
 export function eventOn(date: Date, time: TimeOfDay): SceneEvent {

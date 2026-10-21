@@ -1,6 +1,7 @@
 // Vercel Function (Node.js runtime, Web handlers): the weather report's almanac
-// (today's high and low, compared to usual, new apps, the week's heat map; see server/weather-almanac.ts).
-//   GET / HEAD ?tz=<IANA zone>  -> { tz, today?, normal?, newApps?, heatmap? }
+// (today's high and low, compared to usual, new apps, the week's heat map, the station's records;
+// see server/weather-almanac.ts).
+//   GET / HEAD ?tz=<IANA zone>  -> { tz, today?, normal?, newApps?, heatmap?, records? }
 //   anything else -> 405
 // Local imports end in ".js": Vercel runs the compiled files as native ESM.
 

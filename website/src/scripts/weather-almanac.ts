@@ -15,6 +15,9 @@
  *   when the sky is busiest
  *                         new records a second for every hour of the week, as a heat map;
  *                         it only names the busiest and quietest hours after a few weeks
+ *   records               in today so far: the busiest minute the station has heard and the
+ *                         most apps in a minute, since it started listening live; today's
+ *                         high says so when it's the record (recordHigh)
  *
  * Checks again every minute while the tab is visible; the numbers roll to each new answer
  * (roll.ts). App and collection names are other people's text and only reach the DOM
@@ -48,6 +51,7 @@ export interface Almanac {
   normal?: { historyStart: string | null; now: Sums; days: Sums & { windows: number }; weeks: Sums & { windows: number }; diversity?: NormalDiversity };
   newApps?: { historyStart: string | null; readyAt: string | null; warmingUp: boolean; heard: number; apps: NewApp[] };
   heatmap?: { seconds: number; cells: HeatCell[] };
+  records?: { since: string; busiest: Extreme | null; mostApps: { minute: string; apps: number } | null };
 }
 
 /** The diversity index of the last whole hour, and on average of the same hour on the days and weeks before (server/weather-almanac.ts readDiversity). */
@@ -127,6 +131,11 @@ export function readAlmanac(body: unknown): Almanac | null {
         (c): c is HeatCell => obj(c) && n(c.dow) && n(c.hour) && n(c.seconds) && n(c.posts) && n(c.creates) && c.dow >= 1 && c.dow <= 7 && c.hour <= 23,
       ),
     };
+  }
+  const rc = body.records;
+  if (obj(rc) && date(rc.since)) {
+    const most = rc.mostApps;
+    out.records = { since: rc.since, busiest: extreme(rc.busiest), mostApps: obj(most) && date(most.minute) && n(most.apps) ? { minute: most.minute, apps: most.apps } : null };
   }
   return out;
 }
@@ -384,6 +393,51 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
   tile.dataset.state = 'ready';
 }
 
+// ---------- records ----------
+
+/**
+ * The record for new records a second: the busiest minute on record, or today's high if
+ * that's beaten it (the high can count a minute the station heard 55 seconds of; the
+ * record only whole ones). `today` says the record is today's. null until there's either.
+ */
+export function recordHigh(a: Almanac): (Extreme & { today: boolean }) | null {
+  const best = a.records?.busiest ?? null;
+  const high = a.today?.high ?? null;
+  if (high && (!best || high.perSecond >= best.perSecond)) return { ...high, today: true };
+  return best ? { ...best, today: Date.parse(best.minute) >= Date.parse(a.today?.start ?? '') } : null;
+}
+
+/** "oct 20, 7:50 pm", or "today, 7:50 pm". */
+export function whenWords(iso: string, today: boolean, tz?: string): string {
+  const day = today ? 'today' : new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz }).toLowerCase();
+  return `${day}, ${clock(iso, tz)}`;
+}
+
+export function renderRecords(tile: HTMLElement, a: Almanac, tz?: string): void {
+  const wrap = $(tile, '[data-a-records]');
+  const best = recordHigh(a);
+  const apps = a.records?.mostApps ?? null;
+  if (wrap) wrap.hidden = !best && !apps;
+  if (best) {
+    roll(tile, '[data-a-record-busiest]', `${Math.round(best.perSecond)}`);
+    setText(tile, '[data-a-record-busiest-at]', `a second, ${whenWords(best.minute, best.today, tz)}`);
+  }
+  if (apps) {
+    const today = !!a.today && Date.parse(apps.minute) >= Date.parse(a.today.start);
+    roll(tile, '[data-a-record-apps]', `${apps.apps}`);
+    setText(tile, '[data-a-record-apps-at]', `apps, ${whenWords(apps.minute, today, tz)}`);
+  }
+  const since = a.records?.since;
+  setText(tile, '[data-a-records-since]', since ? `records since the station started listening live, ${new Date(since).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz }).toLowerCase()}.` : '');
+  // today's high, when it's the record (renderToday has just set both lines afresh)
+  const high = a.today?.high;
+  if (high && best?.today && best.minute === high.minute) {
+    setText(tile, '[data-a-high-at]', `high at ${clock(high.minute, tz)} · a record!`);
+    const said = $(tile, '[data-a-range-said]');
+    if (said) said.textContent += ' the high is the busiest minute on record.';
+  }
+}
+
 // ---------- new in the atmosphere ----------
 
 /** An app's lexicons in Aturi. Its namespace is its domain the other way round: mado.blue writes blue.mado.*. */
@@ -419,9 +473,22 @@ export function renderNewApps(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
 }
 
 /**
+ * Biggest in the middle, smallest at the ends: busiest first, then every other one either
+ * side of it. Wrapped into centred lines, the big names land on the middle lines and the
+ * small ones top and bottom, so the cloud bulges in the middle like a cloud.
+ */
+export function cloudOrder<T extends { domain: string; creates: number }>(apps: T[]): T[] {
+  const busiest = [...apps].sort((a, b) => b.creates - a.creates || (a.domain < b.domain ? -1 : 1));
+  const left = busiest.filter((_, i) => i % 2 === 1).reverse();
+  const right = busiest.filter((_, i) => i % 2 === 0);
+  return [...left, ...right];
+}
+
+/**
  * The new apps as a word cloud: each name sized by the records it's written (on a log
  * scale, so one busy app doesn't make the rest specks) and a link to its lexicons in
- * Aturi. It's only redrawn when the apps or their counts change, and a newcomer pops in.
+ * Aturi, the busiest in the middle (cloudOrder). It's only redrawn when the apps or their
+ * counts change, and a newcomer pops in.
  */
 function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: string): void {
   const drawn = apps.map((app) => `${app.domain} ${app.creates} ${app.firstSeen}`).join('\n');
@@ -432,7 +499,7 @@ function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: 
   if (tip) tip.hidden = true;
   const most = Math.log(Math.max(1, ...apps.map((app) => app.creates)));
   list.replaceChildren(
-    ...apps.map((app) => {
+    ...cloudOrder(apps).map((app) => {
       const li = document.createElement('li');
       li.className = before && !before.has(app.domain) ? 'weather-new__app is-new' : 'weather-new__app';
       li.style.setProperty('--w', (most > 0 ? Math.log(Math.max(1, app.creates)) / most : 0).toFixed(2));
@@ -658,6 +725,7 @@ export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch
       return;
     }
     if (today && (a.today || a.normal)) renderToday(today, a, now, tz);
+    if (today) renderRecords(today, a, tz);
     if (fresh) renderNewApps(fresh, a, now, tz);
     if (heat) renderHeatmap(heat, a, now, tz);
     onLoad?.(a);

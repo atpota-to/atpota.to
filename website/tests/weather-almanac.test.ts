@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   aturiFor,
+  cloudOrder,
   bigNumber,
   changeText,
   daypart,
@@ -13,13 +14,16 @@ import {
   hourWords,
   rangeAt,
   readAlmanac,
+  recordHigh,
   renderHeatmap,
   renderNewApps,
+  renderRecords,
   renderToday,
   roughly,
   summarizeHeat,
   USUAL_EDGES,
   usualText,
+  whenWords,
   type Almanac,
 } from '../src/scripts/weather-almanac.js';
 import { appChange } from '../src/scripts/weather-page.js';
@@ -178,8 +182,18 @@ describe('new in the atmosphere', () => {
   it('sizes names by their records, biggest for the busiest', () => {
     const app = (domain: string, creates: number) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates, collections: [] });
     renderNewApps(root.querySelector('[data-a-new]')!, { ...ALMANAC, newApps: { ...ALMANAC.newApps!, apps: [app('a.one', 1), app('b.two', 10), app('c.three', 100)] } }, NOW, TZ);
-    const sizes = [...root.querySelectorAll<HTMLElement>('[data-a-new-list] li')].map((li) => li.style.getPropertyValue('--w'));
-    expect(sizes).toEqual(['0.00', '0.50', '1.00']);
+    const sizes = Object.fromEntries([...root.querySelectorAll<HTMLElement>('[data-a-new-list] li')].map((li) => [li.textContent!.split(',')[0], li.style.getPropertyValue('--w')]));
+    expect(sizes).toEqual({ 'a.one': '0.00', 'b.two': '0.50', 'c.three': '1.00' });
+  });
+
+  it('puts the busiest in the middle of the cloud and the quietest at its ends, so it bulges like a cloud', () => {
+    const apps = [1, 7, 3, 9, 5, 2, 8].map((creates) => ({ domain: `app${creates}.com`, creates }));
+    expect(cloudOrder(apps).map((a) => a.creates)).toEqual([2, 5, 8, 9, 7, 3, 1]);
+    expect(cloudOrder([])).toEqual([]);
+    // the page draws it that way
+    const app = (domain: string, creates: number) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates, collections: [] });
+    renderNewApps(root.querySelector('[data-a-new]')!, { ...ALMANAC, newApps: { ...ALMANAC.newApps!, apps: [app('a.one', 1), app('b.two', 10), app('c.three', 100)] } }, NOW, TZ);
+    expect([...root.querySelectorAll<HTMLElement>('[data-a-new-list] [data-domain]')].map((el) => el.dataset.domain)).toEqual(['b.two', 'c.three', 'a.one']);
   });
 
   it('reads an app\'s namespace off its domain', () => {
@@ -283,5 +297,47 @@ describe('the mix against usual', () => {
     const body = { ...ALMANAC, normal: { ...ALMANAC.normal, diversity: diversity(2.8, 2) } };
     expect(readAlmanac(body)!.normal!.diversity).toEqual(diversity(2.8, 2));
     expect(readAlmanac({ ...body, normal: { ...body.normal, diversity: { ...diversity(2.8, 2), weeks: null } } })!.normal!.diversity).toBeUndefined();
+  });
+});
+
+describe('records', () => {
+  const RECORDS = { since: '2026-10-20T16:50:00.000Z', busiest: { minute: '2026-10-21T00:04:00.000Z', perSecond: 609.8 }, mostApps: { minute: '2026-11-03T15:31:00.000Z', apps: 41 } };
+
+  it('reads them, and drops a part that does not check out', () => {
+    expect(readAlmanac({ ...ALMANAC, records: RECORDS })!.records).toEqual(RECORDS);
+    expect(readAlmanac({ ...ALMANAC, records: { ...RECORDS, mostApps: { minute: 'nope', apps: 3 } } })!.records!.mostApps).toBeNull();
+  });
+
+  it("today's high is the record when it beats the busiest minute before today", () => {
+    expect(recordHigh({ ...ALMANAC, records: RECORDS })).toEqual({ ...ALMANAC.today!.high!, today: true });
+    const older = { ...RECORDS, busiest: { minute: '2026-10-21T00:04:00.000Z', perSecond: 702 } };
+    expect(recordHigh({ ...ALMANAC, records: older })).toEqual({ ...older.busiest, today: false });
+    expect(recordHigh({ ...ALMANAC, today: undefined, records: undefined })).toBeNull();
+  });
+
+  it('says when, in the reader\'s zone', () => {
+    expect(whenWords('2026-10-21T00:04:00.000Z', false, TZ)).toBe('oct 20, 8:04 pm');
+    expect(whenWords('2026-11-03T20:14:00.000Z', true, TZ)).toBe('today, 3:14 pm');
+  });
+
+  it('fills the records in the today tile, and marks today\'s high when it is one', () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    const a = { ...ALMANAC, records: RECORDS };
+    renderToday(tile, a, NOW, TZ);
+    renderRecords(tile, a, TZ);
+    expect(tile.querySelector<HTMLElement>('[data-a-records]')!.hidden).toBe(false);
+    expect(text('[data-a-record-busiest]')).toBe('642');
+    expect(text('[data-a-record-busiest-at]')).toBe('a second, today, 3:14 pm');
+    expect(text('[data-a-record-apps]')).toBe('41');
+    expect(text('[data-a-record-apps-at]')).toBe('apps, today, 10:31 am');
+    expect(text('[data-a-records-since]')).toBe('records since the station started listening live, oct 20.');
+    expect(text('[data-a-high-at]')).toBe('high at 3:14 pm · a record!');
+    expect(text('[data-a-range-said]')).toMatch(/ the high is the busiest minute on record\.$/);
+  });
+
+  it('stays hidden with no records to show', () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    renderRecords(tile, { ...ALMANAC, today: undefined, records: undefined }, TZ);
+    expect(tile.querySelector<HTMLElement>('[data-a-records]')!.hidden).toBe(true);
   });
 });

@@ -8,12 +8,15 @@
  *            about rise and fall; neither is news.
  *   new      the station hears an app for the very first time (the almanac's
  *            "new in the atmosphere", once the station has warmed up)
+ *   record   the live minute beats the busiest minute on record (recordAlert, with the
+ *            record from the almanac, weather-almanac.ts recordHigh)
  *   storm    new records a second climb into "stormy"
+ *   clear    a storm passes, and the header gets a rainbow (weather-hero.ts clearedUp)
  *   mixed    the diversity index climbs a level
  *
  * The first reading of a visit only sets the scene; alerts come from what changes after
  * it. Poe says one at a time, at least GAP_MS apart, each for ALERT_MS (held while it's
- * hovered or focused). A storm or a more mixed sky alerts at most once every COOLDOWN_MS,
+ * hovered or focused). A record, a storm, a clearing or a more mixed sky alerts at most once every COOLDOWN_MS,
  * so a sky sitting on a line doesn't keep on about it. A small queue keeps the most
  * important ones and waits while Poe is busy (its panel open, its nudge up) or the tab is
  * hidden, and lets go of any older than STALE_MS: by then it isn't news. The reader can
@@ -25,6 +28,7 @@
 
 import { say, type PoeLine, type PoeSpeech } from '../poe/say';
 import type { MascotFace } from './mascot';
+import { clearedUp } from './weather-hero';
 import { diversityText, formatIndex, ratioText, recordsPerSecond, type DiversityLevel, type Reading } from './weather';
 
 /** How long Poe's bubble stays up. */
@@ -42,7 +46,7 @@ export const RETRY_MS = 5000;
 export const MAX_QUEUE = 2;
 export const ALERTS_KEY = 'weather:alerts';
 
-export type AlertKind = 'arrival' | 'new' | 'storm' | 'mixed';
+export type AlertKind = 'arrival' | 'new' | 'record' | 'storm' | 'clear' | 'mixed';
 
 export interface WeatherAlert {
   kind: AlertKind;
@@ -52,10 +56,10 @@ export interface WeatherAlert {
 }
 
 /** Which alert wins a place in a full queue. */
-const RANK: Record<AlertKind, number> = { storm: 3, new: 2, mixed: 1, arrival: 0 };
+const RANK: Record<AlertKind, number> = { record: 4, storm: 3, new: 2, clear: 1, mixed: 1, arrival: 0 };
 /** Poe's face while it says each one. */
-const FACE: Record<AlertKind, MascotFace> = { storm: 'wow', new: 'happy', mixed: 'wink', arrival: 'kawaii' };
-const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['storm', 'mixed']);
+const FACE: Record<AlertKind, MascotFace> = { record: 'wow', storm: 'wow', new: 'happy', clear: 'happy', mixed: 'wink', arrival: 'kawaii' };
+const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['record', 'storm', 'clear', 'mixed']);
 const LEVELS: DiversityLevel[] = ['low', 'moderate', 'high', 'very high', 'extreme'];
 
 // ---------- what's worth an alert ----------
@@ -81,6 +85,9 @@ export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alert
   if (r.condition === 'stormy' && prev.condition !== 'stormy') {
     alerts.push({ kind: 'storm', label: 'storm warning', text: 'whoa, a storm just rolled in', sub: `${Math.round(recordsPerSecond(r))} new records a second. somebody said something.` });
   }
+  if (clearedUp(prev.condition, r.condition)) {
+    alerts.push({ kind: 'clear', label: 'weather alert', text: "the storm's passed. look up, a rainbow (◕‿◕)", sub: `back down to ${Math.round(recordsPerSecond(r))} new records a second.` });
+  }
   const level = r.diversity?.level;
   if (level && prev.level && LEVELS.indexOf(level) > LEVELS.indexOf(prev.level) && r.records) {
     const d = r.diversity!;
@@ -93,6 +100,21 @@ export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alert
     alerts.push({ kind: 'arrival', label: 'weather alert', text: `${app.domain} just blew in`, sub: app.collections[0] ? `${records}: ${app.collections[0]}` : records });
   }
   return { watch, alerts };
+}
+
+/**
+ * A record high: the station's live minute busier than `record` (new records a second, the
+ * busiest whole minute on record). Only live readings count; a sample is a few seconds.
+ */
+export function recordAlert(record: number | null, r: Reading): WeatherAlert | null {
+  const rate = recordsPerSecond(r);
+  if (record === null || r.source !== 'station' || rate <= record) return null;
+  return {
+    kind: 'record',
+    label: 'record high',
+    text: "a record high! the busiest minute i've ever heard",
+    sub: `${Math.round(rate).toLocaleString('en-US')} new records a second, past the old record of ${Math.round(record).toLocaleString('en-US')}.`,
+  };
 }
 
 /** An alert for an app the station has just heard for the very first time. */
@@ -177,6 +199,7 @@ export function createAlertDesk(win: Window = window, speak: (line: PoeLine) => 
       },
     };
     if (alert.kind === 'new') line.burst = 'leaves';
+    if (alert.kind === 'record') line.burst = 'petals';
     const said = speak(line);
     // Poe's busy: its panel is open, or its nudge is up.
     if (!said) return later(RETRY_MS);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-almanac.js';
-import { CACHE, createAlmanacHandlers, HEATMAP_MS, readDiversity, timeZone, toHeatmap, toNewApps, toNormal, toToday, WARMUP_MS } from '../server/weather-almanac.js';
+import { CACHE, createAlmanacHandlers, HEATMAP_MS, LIVE_SINCE, readDiversity, readRecords, timeZone, toHeatmap, toNewApps, toNormal, toToday, WARMUP_MS } from '../server/weather-almanac.js';
 
 // /api/weather-almanac against a scripted Supabase.
 
@@ -167,5 +167,44 @@ describe('the diversity index against usual', () => {
     const without = (await (await get(createAlmanacHandlers({ fetch: supabase().fetch, now: () => NOW, env: () => ({}), log: () => undefined }))).json()) as Record<string, any>;
     expect(without.normal.weeks.windows).toBe(2);
     expect('diversity' in without.normal).toBe(false);
+  });
+});
+
+describe("the station's records", () => {
+  const db = (answers: Record<string, unknown>) => {
+    const asked: string[] = [];
+    return {
+      asked,
+      get: async (path: string) => {
+        asked.push(path);
+        const by = /order=([a-z]+)\.desc/.exec(path)?.[1] ?? '';
+        if (!(by in answers)) throw new Error('nope');
+        return answers[by];
+      },
+      rpc: async () => {
+        throw new Error('no rpc here');
+      },
+    };
+  };
+
+  it('reads the busiest whole minute and the most apps in a minute, since it listened live', async () => {
+    const d = db({
+      creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 30_588, seconds_covered: 60 }],
+      apps: [{ minute: '2026-10-21T02:11:00+00:00', apps: 24 }],
+    });
+    expect(await readRecords(d)).toEqual({
+      since: new Date(LIVE_SINCE).toISOString(),
+      busiest: { minute: '2026-10-20T19:04:00.000Z', perSecond: 509.8 },
+      mostApps: { minute: '2026-10-21T02:11:00.000Z', apps: 24 },
+    });
+    expect(d.asked).toHaveLength(2);
+    for (const path of d.asked) expect(path).toContain(`minute=gte.${new Date(LIVE_SINCE).toISOString()}`);
+    expect(d.asked[0]).toContain('seconds_covered=eq.60');
+  });
+
+  it('has no record before it has heard a minute, and fails when Supabase does', async () => {
+    expect(await readRecords(db({ creates: [], apps: [] }))).toMatchObject({ busiest: null, mostApps: null });
+    await expect(readRecords(db({ creates: { not: 'rows' }, apps: [] }))).rejects.toThrow();
+    await expect(readRecords(db({ apps: [] }))).rejects.toThrow();
   });
 });

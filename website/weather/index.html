@@ -50,7 +50,9 @@
     <main id="main" class="weather-page" tabindex="-1">
         <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
         <div class="weather" data-weather-report data-state="loading">
-            <header class="tile weather-hero" aria-labelledby="weather-title">
+            <header class="tile weather-hero" aria-labelledby="weather-title" data-weather-hero>
+                <!-- the weather itself: wind, rain or snow, and now and then a rainbow (src/scripts/weather-hero.ts) -->
+                <div class="weather-air" aria-hidden="true" data-weather-air></div>
                 <!-- clouds that come with the diversity index (src/scripts/weather-sky.ts) -->
                 <div class="weather-sky" aria-hidden="true" data-weather-sky></div>
                 <div class="weather-hero__words">
@@ -58,7 +60,10 @@
                     <p class="weather-hero__lede">how the whole network is doing right now: how busy bluesky is, how much of the sky belongs to other apps, and who they are.</p>
                 </div>
                 <div class="weather-hero__now">
-                <!-- @svg weather-sun.svg class="weather-hero__sun weather-sun" -->
+                    <!-- a toy: spin it (weather-hero.ts bindSun); the rays turn with the reading -->
+                    <button type="button" class="weather-hero__sun" data-sun-spin aria-label="give the sun a spin">
+                        <!-- @svg weather-sun.svg class="weather-sun" aria-hidden="true" focusable="false" -->
+                    </button>
                     <div class="weather-hero__reading">
                         <p class="weather-hero__big"><span data-r-records>&ndash;</span> <span class="weather-hero__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
@@ -130,6 +135,14 @@
                     <div><dt>so far today</dt><dd><strong data-a-total>&ndash;</strong> new records</dd></div>
                     <div><dt>from other apps</dt><dd><strong data-a-else-share>&ndash;</strong> <span data-a-else-total></span></dd></div>
                 </dl>
+                <!-- the station's records (weather-almanac.ts renderRecords) -->
+                <div class="weather-records" data-a-records hidden>
+                    <dl class="weather-records__list">
+                        <div><dt>busiest minute on record</dt><dd><strong data-a-record-busiest>&ndash;</strong> <span data-a-record-busiest-at></span></dd></div>
+                        <div><dt>most apps in a minute</dt><dd><strong data-a-record-apps>&ndash;</strong> <span data-a-record-apps-at></span></dd></div>
+                    </dl>
+                    <p class="weather-tile__note" data-a-records-since></p>
+                </div>
             </section>
 
             <section class="tile weather-tile weather-new" aria-labelledby="weather-new-title" data-a-new data-state="loading">
@@ -142,6 +155,48 @@
                 <ul class="weather-new__list" role="list" data-a-new-list></ul>
                 <div class="weather-new__tip" data-a-new-tip aria-hidden="true" hidden></div>
                 <p class="weather-tile__note" data-a-new-note hidden>bigger names have written more records. pick one to explore its lexicons in aturi.</p>
+            </section>
+
+            <!-- The forecast (src/scripts/weather-forecast.ts, /api/weather-forecast): the next 12 hours, sunrise and sunset. -->
+            <section class="tile weather-tile weather-forecast" aria-labelledby="weather-forecast-title" data-f-forecast data-state="loading">
+                <div class="weather-tile__head">
+                    <div class="weather-tile__titled">
+                        <h2 class="weather-tile__title" id="weather-forecast-title">the forecast</h2>
+                        <button type="button" class="weather-info" data-poe-explain="forecast" aria-haspopup="dialog" aria-label="how does the forecast work? ask poe" title="what's this?">
+                            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
+                        </button>
+                    </div>
+                    <p class="weather-tile__aside">the next 12 hours · new records a second</p>
+                </div>
+                <p class="weather-forecast__lede" data-f-lede>reading the clouds…</p>
+                <!-- an hour a column, the forecast's line and likely range under them; each hour says it all in words -->
+                <div class="weather-forecast__scroll">
+                    <div class="weather-forecast__strip">
+                        <ol class="weather-forecast__hours" role="list" data-f-hours></ol>
+                        <div class="weather-forecast__chart" data-f-band aria-hidden="true"></div>
+                    </div>
+                </div>
+                <dl class="weather-forecast__sun" data-f-sun hidden></dl>
+                <p class="weather-tile__note" data-f-note></p>
+            </section>
+
+            <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading">
+                <div class="weather-tile__head">
+                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
+                    <p class="weather-tile__aside" data-a-heat-aside></p>
+                </div>
+                <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
+                <div class="weather-heat__scroll">
+                    <table class="weather-heat__grid" data-a-heat-grid>
+                        <caption class="visually-hidden">new records a second for each hour of the week, in your time</caption>
+                    </table>
+                </div>
+                <div class="weather-heat__legend" aria-hidden="true">
+                    <span data-a-heat-min>&ndash;</span>
+                    <span class="weather-heat__ramp"><i class="weather-heat__cell--1"></i><i class="weather-heat__cell--2"></i><i class="weather-heat__cell--3"></i><i class="weather-heat__cell--4"></i><i class="weather-heat__cell--5"></i></span>
+                    <span data-a-heat-max>&ndash;</span>
+                    <span class="weather-heat__legend-empty"><i class="weather-heat__cell--empty"></i> not heard yet</span>
+                </div>
             </section>
 
             <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
@@ -202,44 +257,57 @@
                 <p class="weather-tile__note">bluesky&#39;s busiest kinds of record, a second.</p>
             </section>
 
-            <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading">
-                <div class="weather-tile__head">
-                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
-                    <p class="weather-tile__aside" data-a-heat-aside></p>
+            <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second);
+                 "minute" moves it on to the last hour, day or week, each number with a chip against the one before (src/scripts/weather-span.ts) -->
+            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="minute">
+                <div class="weather-tile__titled">
+                    <h2 class="weather-tile__title" id="weather-minute-title">the last <button type="button" class="weather-span" data-s-toggle aria-describedby="weather-span-next"><span class="weather-span__word" data-s-word>minute</span><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M6.5 8 10 4.5 13.5 8M6.5 12l3.5 3.5 3.5-3.5"/></svg></button></h2>
+                    <button type="button" class="weather-info" data-poe-explain="readouts" aria-haspopup="dialog" aria-label="what do feels like, gusts, humidity and visibility mean? ask poe" title="what's this?">
+                        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
+                    </button>
                 </div>
-                <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
-                <div class="weather-heat__scroll">
-                    <table class="weather-heat__grid" data-a-heat-grid>
-                        <caption class="visually-hidden">new records a second for each hour of the week, in your time</caption>
-                    </table>
-                </div>
-                <div class="weather-heat__legend" aria-hidden="true">
-                    <span data-a-heat-min>&ndash;</span>
-                    <span class="weather-heat__ramp"><i class="weather-heat__cell--1"></i><i class="weather-heat__cell--2"></i><i class="weather-heat__cell--3"></i><i class="weather-heat__cell--4"></i><i class="weather-heat__cell--5"></i></span>
-                    <span data-a-heat-max>&ndash;</span>
-                    <span class="weather-heat__legend-empty"><i class="weather-heat__cell--empty"></i> not heard yet</span>
-                </div>
-            </section>
-
-            <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second) -->
-            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title">
-                <h2 class="weather-tile__title" id="weather-minute-title">the last minute</h2>
-                <dl class="weather-stats">
-                    <div data-r-minute-accounts hidden><dt>active accounts</dt><dd data-r-active>&ndash;</dd></div>
-                    <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd></div>
-                    <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd></div>
-                    <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd></div>
-                    <div><dt>handle changes</dt><dd data-r-event="identity">&ndash;</dd></div>
-                    <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd></div>
+                <p id="weather-span-next" data-s-next hidden>switch to the last hour</p>
+                <p class="visually-hidden" role="status" data-s-status></p>
+                <!-- the span as a weather app's details would put it (weather-span.ts renderFigures); Poe says what each one means -->
+                <dl class="weather-readouts">
+                    <div class="weather-readout">
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.75a2 2 0 0 0-2 2v6.7a3.6 3.6 0 1 0 4 0v-6.7a2 2 0 0 0-2-2z"/><path d="M10 9.5v4"/></svg>feels like</dt>
+                        <dd class="weather-readout__value"><strong data-r-feels>&ndash;</strong><span class="weather-readout__unit">posts a second</span><span class="weather-change" data-s-change="posts"></span></dd>
+                        <dd class="weather-readout__note">what scrolling feels like: the posts, not the likes and follows</dd>
+                    </div>
+                    <div class="weather-readout" data-r-gusts-wrap>
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 8h9.25a2.5 2.5 0 1 0-2.5-2.5"/><path d="M2.5 12h12a2.5 2.5 0 1 1-2.5 2.5"/></svg>gusts</dt>
+                        <dd class="weather-readout__value"><strong data-r-gusts>&ndash;</strong><span class="weather-readout__unit">records a second, at the peak</span><span class="weather-change" data-s-change="gust"></span></dd>
+                        <dd class="weather-readout__note" data-r-gusts-note>the busiest single second of the minute</dd>
+                    </div>
+                    <div class="weather-readout">
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.75c3.2 4.1 5 6.6 5 9.1a5 5 0 0 1-10 0c0-2.5 1.8-5 5-9.1z"/></svg>humidity</dt>
+                        <dd class="weather-readout__value"><strong data-r-humidity>&ndash;</strong><span class="weather-readout__unit">edits and deletions</span><span class="weather-change" data-s-change="humidity"></span></dd>
+                        <dd class="weather-readout__note">out of everything written</dd>
+                    </div>
+                    <div class="weather-readout">
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.25 10s2.9-5.25 7.75-5.25S17.75 10 17.75 10s-2.9 5.25-7.75 5.25S2.25 10 2.25 10z"/><circle cx="10" cy="10" r="2.4"/></svg>visibility</dt>
+                        <dd class="weather-readout__value"><strong data-r-visibility>&ndash;</strong><span class="weather-readout__unit" data-r-visibility-unit>apps</span><span class="weather-change" data-s-change="apps"></span></dd>
+                        <dd class="weather-readout__note">how far past bluesky you can see: apps outside it heard writing</dd>
+                    </div>
                 </dl>
+                <dl class="weather-stats">
+                    <div data-r-minute-accounts hidden><dt>active accounts</dt><dd data-r-active>&ndash;</dd><dd class="weather-change" data-s-change="active"></dd></div>
+                    <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd><dd class="weather-change" data-s-change="creates"></dd></div>
+                    <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd><dd class="weather-change" data-s-change="updates"></dd></div>
+                    <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd><dd class="weather-change" data-s-change="deletes"></dd></div>
+                    <div><dt>handle changes</dt><dd data-r-event="identity">&ndash;</dd><dd class="weather-change" data-s-change="identity"></dd></div>
+                    <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd><dd class="weather-change" data-s-change="account"></dd></div>
+                </dl>
+                <p class="weather-tile__note" data-s-note></p>
             </section>
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="weather-tile__title" id="weather-how-title">how i measure it</h2>
-                <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by. the numbers up top are the last minute, and they keep updating while you&#39;re here.</p>
-                <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. it&#39;s a close estimate, and i never keep track of who&#39;s who.</p>
-                <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in, once a minute at most (◕‿◕)</p>
-                <p>a quiet app can slip past me now and then, and one busy bot can tip things for a while. i&#39;m a potato, not a satellite! <a href="/">back home</a>.</p>
+                <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by, live while you&#39;re here.</p>
+                <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. i never keep track of who&#39;s who.</p>
+                <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in (◕‿◕)</p>
+                <p>i&#39;m a potato, not a satellite, so a quiet app can slip past me now and then. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>
         </div>

@@ -110,13 +110,318 @@ html[data-theme="dark"] {
 /* ---------- now: the hero ---------- */
 
 .weather-hero {
+  --hero-sky-top: var(--sky);
+  --hero-sky: var(--sky);
+  --hero-storm: rgba(96, 116, 130, 0.42);
+  --hero-rain: rgba(62, 92, 122, 0.55);
+  --hero-wind: rgba(255, 255, 255, 0.72);
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: 20px 32px;
-  background: var(--sky);
+  background: linear-gradient(to bottom, var(--hero-sky-top), var(--hero-sky));
   color: var(--weather-sky-text);
+}
+
+/* The reader's clock (weather-hero.ts setHeroTime), like Poe's hill on the home page. The
+   dark theme is always night and keeps its own sky; in the light theme, night is a deep
+   blue with light words over it and the moon for a sun. */
+html:not([data-theme="dark"]) .weather-hero[data-time="dawn"] {
+  --hero-sky-top: #D4D5F2;
+  --hero-sky: #FBDDC6;
+}
+
+html:not([data-theme="dark"]) .weather-hero[data-time="golden"] {
+  --hero-sky-top: #BCD9EC;
+  --hero-sky: #FFD4A3;
+}
+
+html:not([data-theme="dark"]) .weather-hero[data-time="night"] {
+  --hero-sky-top: #17203B;
+  --hero-sky: #2A3A62;
+  --hero-storm: rgba(6, 10, 20, 0.4);
+  --hero-rain: rgba(190, 205, 232, 0.5);
+  --hero-wind: rgba(255, 253, 247, 0.28);
+  --weather-cloud: rgba(255, 253, 247, 0.1);
+  --weather-sky-text: #F4EEDF;
+  --weather-sky-mono: #C9D3E8;
+}
+
+html:not([data-theme="dark"]) .weather-hero[data-time="night"] .weather-hero__title {
+  color: var(--weather-sky-text);
+}
+
+html[data-theme="dark"] .weather-hero {
+  --hero-storm: rgba(4, 12, 16, 0.45);
+  --hero-rain: rgba(169, 190, 223, 0.45);
+  --hero-wind: rgba(255, 253, 247, 0.22);
+}
+
+.weather-hero[data-time="night"] .weather-sun__day {
+  display: none;
+}
+
+.weather-hero[data-time="night"] .weather-sun__night {
+  display: inline;
+}
+
+/* A storm greys the sky (and its clouds) under the words. */
+.weather-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--hero-storm);
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+  pointer-events: none;
+}
+
+.weather-hero[data-condition="stormy"]::before {
+  opacity: 1;
+}
+
+.weather-hero[data-condition="stormy"] {
+  --weather-cloud: rgba(226, 233, 238, 0.82);
+}
+
+html:not([data-theme="dark"]) .weather-hero[data-time="night"][data-condition="stormy"],
+html[data-theme="dark"] .weather-hero[data-condition="stormy"] {
+  --weather-cloud: rgba(255, 253, 247, 0.1);
+}
+
+/* In a storm a grey cloud sits over the sun (or the moon), and it dims behind it. */
+.weather-hero__sun {
+  position: relative;
+}
+
+.weather-hero__sun::after {
+  content: "";
+  position: absolute;
+  right: -6%;
+  bottom: 14%;
+  width: 62%;
+  height: 22%;
+  border-radius: 999px;
+  background: var(--hero-storm-cloud, #DCE3E8);
+  box-shadow:
+    -18px -12px 0 2px var(--hero-storm-cloud, #DCE3E8),
+    6px -20px 0 6px var(--hero-storm-cloud, #DCE3E8);
+  opacity: 0;
+  scale: 0.8;
+  transform-origin: 70% 100%;
+  transition: opacity 1.2s var(--ease-out), scale 1.2s var(--ease-out);
+  pointer-events: none;
+}
+
+.weather-hero[data-condition="stormy"] .weather-hero__sun::after {
+  opacity: 1;
+  scale: 1;
+}
+
+.weather-hero[data-condition="stormy"] .weather-hero__sun svg {
+  filter: saturate(0.55) brightness(0.92);
+}
+
+.weather-hero .weather-hero__sun svg {
+  transition: filter 1.2s var(--ease-out);
+}
+
+html:not([data-theme="dark"]) .weather-hero[data-time="night"],
+html[data-theme="dark"] .weather-hero {
+  --hero-storm-cloud: #5B6478;
+}
+
+/* ---------- the header's air: wind, rain, snow and rainbows (weather-hero.ts) ---------- */
+
+/* Under the clouds and the words. Rain and snow are columns as tall as the sky, so moving one
+   by its own height carries its drop down; wind is a row as wide as the sky. Under reduced
+   motion each rests where it is. */
+.weather-air {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.weather-air__bit {
+  position: absolute;
+  left: var(--x);
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transform: translateY(var(--y));
+  transition: opacity 1.2s var(--ease-out);
+}
+
+.weather-air__bit.is-going {
+  opacity: 0;
+}
+
+.weather-air__bit::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -24px;
+}
+
+.weather-air__bit--rain::before {
+  width: 2.4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--hero-rain);
+  rotate: 14deg;
+}
+
+.weather-air__bit--snow::before {
+  width: calc(7px * var(--size));
+  height: calc(7px * var(--size));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Wind: a thin streak with a curl at its tail, zipping across. */
+.weather-air__bit--gust,
+.weather-air__bit--wisp {
+  left: 0;
+  right: 0;
+  top: var(--y);
+  bottom: auto;
+  width: auto;
+  height: 0;
+  transform: translateX(var(--x));
+}
+
+.weather-air__bit--gust::before,
+.weather-air__bit--wisp::before {
+  top: 0;
+  left: -160px;
+  width: calc(130px * var(--size));
+  height: 12px;
+  border: 2.5px solid var(--hero-wind);
+  border-color: var(--hero-wind) transparent transparent var(--hero-wind);
+  border-radius: 999px 0 0 0;
+  opacity: 0.9;
+}
+
+.weather-air__bit--wisp::before {
+  width: calc(170px * var(--size));
+  border-width: 2px;
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-air__bit {
+    animation: weather-air-fall var(--dur) linear var(--at) infinite;
+  }
+
+  .weather-air__bit--rain {
+    animation-name: weather-air-rain;
+  }
+
+  .weather-air__bit--snow::before {
+    animation: weather-air-flutter calc(var(--dur) / 3) ease-in-out var(--at) infinite alternate;
+  }
+
+  .weather-air__bit--gust,
+  .weather-air__bit--wisp {
+    animation: weather-air-blow var(--dur) cubic-bezier(0.4, 0, 0.6, 1) var(--at) infinite;
+  }
+}
+
+@keyframes weather-air-fall {
+  from {
+    transform: translateY(-4%);
+  }
+
+  to {
+    transform: translateY(104%);
+  }
+}
+
+@keyframes weather-air-rain {
+  from {
+    transform: translate(0, -6%);
+  }
+
+  to {
+    transform: translate(-48px, 104%);
+  }
+}
+
+@keyframes weather-air-flutter {
+  from {
+    translate: -12px 0;
+  }
+
+  to {
+    translate: 14px 0;
+  }
+}
+
+@keyframes weather-air-blow {
+  0% {
+    transform: translate(-10%, 0);
+    opacity: 0;
+  }
+
+  15%,
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(115%, -14px);
+    opacity: 0;
+  }
+}
+
+/* A rainbow (or by night a moonbow): a ring of colour as big as the sky is tall, rising
+   from behind the reading, fading out toward the ground. It comes after a storm, and for
+   readers who spin the sun. */
+.weather-air__rainbow {
+  position: absolute;
+  left: 46%;
+  top: 14%;
+  width: max(420px, 62%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 82%, #E8574B 82% 84%, #F2A33A 84% 86%, #F5D547 86% 88%, #6CBF6A 88% 90%, #4FA3D9 90% 92%, #8A6FD1 92% 94%, transparent 94%);
+  opacity: 0.4;
+  -webkit-mask-image: linear-gradient(to bottom, #000 22%, transparent 48%);
+  mask-image: linear-gradient(to bottom, #000 22%, transparent 48%);
+  transition: opacity 2s var(--ease-out);
+}
+
+.weather-hero[data-time="night"] .weather-air__rainbow {
+  filter: saturate(0.2) brightness(2.2);
+  opacity: 0.22;
+}
+
+.weather-air__rainbow.is-going {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-air__rainbow:not(.is-going) {
+    animation: weather-rainbow-in 2.4s var(--ease-out) both;
+  }
+}
+
+@keyframes weather-rainbow-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+@media (forced-colors: active) {
+  .weather-air,
+  .weather-hero::before {
+    display: none;
+  }
 }
 
 .weather-hero__title {
@@ -136,10 +441,39 @@ html[data-theme="dark"] {
   gap: 20px;
 }
 
+/* The sun is a toy (weather-hero.ts bindSun): a round button with nothing on it but the sun. */
 .weather-hero__sun {
   flex: none;
   width: 120px;
   height: 120px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.weather-hero__sun svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.weather-hero__sun:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-hero[data-time="night"] .weather-sun__star {
+    animation: weather-sun-twinkle 3.2s ease-in-out infinite alternate;
+  }
+
+  .weather-hero[data-time="night"] .weather-sun__star + .weather-sun__star {
+    animation-delay: -1.6s;
+  }
 }
 
 .weather-hero__reading {
@@ -385,7 +719,7 @@ html[data-theme="dark"] {
 .weather-today__facts div {
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-today__facts dt {
@@ -406,22 +740,66 @@ html[data-theme="dark"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* The station's records: two trophies, each with when it was set. */
+.weather-records {
+  display: grid;
+  gap: 6px;
+}
+
+.weather-records__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.weather-records__list div {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--butter);
+}
+
+.weather-records__list dt {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.weather-records__list dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.weather-records__list strong {
+  font-size: 22px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .weather-new__lede {
   color: var(--text-soft);
 }
 
 /* A word cloud (weather-almanac.ts renderCloud): each new app's name, bigger for more
-   records (--w, 0 to 1), on one baseline per line like a tag cloud, each a link to Aturi. */
+   records (--w, 0 to 1), on one baseline per line like a tag cloud, each a link to Aturi.
+   The busiest sit in the middle (cloudOrder), so the lines bulge there. It fills what the
+   tile has to spare beside today's tile, words centred in it, and the sizes follow the
+   cloud's own width: a wider cloud gets bigger names, a phone's still fits a few a line. */
 .weather-new__list {
+  container: new-cloud / inline-size;
+  flex: 1 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  align-content: center;
   justify-content: center;
-  gap: 2px 4px;
+  gap: 0 2px;
+  min-height: 180px;
   margin: 0;
-  padding: 14px 10px;
-  border-radius: 16px;
-  background: var(--paper);
+  padding: 18px 10px;
+  border-radius: 24px;
+  background: var(--bg);
   list-style: none;
 }
 
@@ -431,12 +809,12 @@ html[data-theme="dark"] {
 
 .weather-new__link {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 3px 6px;
   border-radius: var(--radius-pill);
   color: var(--text);
-  font-size: calc(15px + var(--w, 0) * 13px);
+  font-size: calc(clamp(13px, 3.2cqi, 17px) + var(--w, 0) * var(--w, 0) * clamp(16px, 7cqi, 34px));
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.15;
   text-decoration: none;
   overflow-wrap: anywhere;
   transition: background-color var(--dur) var(--ease-out);
@@ -516,6 +894,304 @@ html[data-theme="dark"] {
   opacity: 0.5;
 }
 
+/* ---------- the forecast (weather-forecast.ts) ---------- */
+
+/* A container, so the hours turn to rows whenever the strip wouldn't fit the tile. */
+.weather-forecast {
+  grid-column: 1 / -1;
+  container: forecast / inline-size;
+}
+
+.weather-forecast__lede {
+  min-height: 1lh;
+  font-size: 18px;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+/* An hour a column, like a weather app's strip, where it fits (rows otherwise, below).
+   Positioned, so each hour's visually hidden words are clipped with it: with the tile as
+   their containing block they'd hang off its edge and widen the whole page. */
+.weather-forecast__scroll {
+  position: relative;
+  overflow-x: auto;
+  margin: 0 calc(var(--tile-pad) * -1);
+  padding: 0 var(--tile-pad);
+  scrollbar-width: thin;
+}
+
+.weather-forecast__strip {
+  --hours: 13;
+  display: grid;
+  min-width: calc(var(--hours) * 62px);
+  padding: 12px 0 4px;
+  border-radius: 20px;
+  background: var(--bg);
+}
+
+.weather-forecast__hours {
+  display: grid;
+  grid-template-columns: repeat(var(--hours), minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weather-forecast__hour {
+  display: grid;
+  justify-items: center;
+  grid-template-rows: auto 34px auto 16px;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-forecast__time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.weather-forecast__hour.is-now .weather-forecast__time {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.weather-forecast__icon svg {
+  display: block;
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--text-soft);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.weather-forecast__icon .wf-sun {
+  fill: var(--weather-sun, #FFD978);
+  stroke: var(--weather-sun-ring, #F2AE3A);
+}
+
+.weather-forecast__icon .wf-moon {
+  fill: var(--weather-moon, #FFE7A3);
+  stroke: var(--weather-sun-ring, #F2AE3A);
+}
+
+.weather-forecast__icon .wf-cloud {
+  fill: var(--line);
+}
+
+.weather-forecast__icon .wf-rain {
+  stroke: var(--weather-bsky);
+}
+
+.weather-forecast__rate {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* the rain's blue, deep enough to read as text on the cream strip */
+.weather-forecast__chance {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--on-water-tint);
+}
+
+/* The line runs through the middle of each column; the band is where 8 runs in 10 land. */
+.weather-forecast__chart svg {
+  display: block;
+  width: 100%;
+  height: 56px;
+  overflow: visible;
+}
+
+.weather-forecast__band {
+  fill: var(--weather-bsky);
+  opacity: 0.14;
+}
+
+.weather-forecast__line {
+  fill: none;
+  stroke: var(--weather-bsky);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Network sunrise and sunset, the next of each. */
+.weather-forecast__sun {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.weather-forecast__sun-card {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.weather-forecast__sun-card dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.weather-forecast__sun-icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--weather-sun-ring, #F2AE3A);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.weather-forecast__sun-card dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.weather-forecast__sun-card strong {
+  font-size: 24px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Each hour's likely range, for the rows below: hidden in the strip, which has the band. */
+.weather-forecast__range {
+  display: none;
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+
+.weather-forecast__range i {
+  position: absolute;
+  inset: 0 calc((1 - var(--hi, 1)) * 100%) 0 calc(var(--lo, 0) * 100%);
+  min-width: 6px;
+  border-radius: 3px;
+  background: var(--weather-bsky);
+  opacity: 0.4;
+}
+
+.weather-forecast__range::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--v, 0) * 100%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--weather-bsky);
+  box-shadow: 0 0 0 2px var(--bg);
+  transform: translate(-50%, -50%);
+}
+
+/* Narrower than the strip (a phone, a narrow window): an hour a row, like a weather app's
+   days, no sideways scrolling. The chart's band becomes each row's bar. */
+@container forecast (max-width: 800px) {
+  .weather-forecast__scroll {
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+  }
+
+  .weather-forecast__strip {
+    min-width: 0;
+    padding: 4px 14px;
+  }
+
+  .weather-forecast__chart {
+    display: none;
+  }
+
+  .weather-forecast__hours {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* a storm's chance sits under its drawing, as a weather app has it */
+  .weather-forecast__hour {
+    grid-template-columns: 54px 32px minmax(0, 1fr) minmax(42px, auto);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "time icon range rate"
+      "time chance range rate";
+    align-items: center;
+    justify-items: start;
+    gap: 0 12px;
+    min-height: 46px;
+    padding: 4px 0;
+    border-top: 1px solid var(--line-strong);
+  }
+
+  .weather-forecast__hour:first-child {
+    border-top: 0;
+  }
+
+  .weather-forecast__time {
+    grid-area: time;
+    font-size: 14px;
+  }
+
+  .weather-forecast__icon {
+    grid-area: icon;
+  }
+
+  .weather-forecast__chance {
+    grid-area: chance;
+    justify-self: center;
+    line-height: 1;
+  }
+
+  .weather-forecast__icon {
+    justify-self: center;
+  }
+
+  .weather-forecast__range {
+    display: block;
+    grid-area: range;
+    justify-self: stretch;
+  }
+
+  .weather-forecast__rate {
+    grid-area: rate;
+    justify-self: end;
+  }
+}
+
+.weather-forecast[data-state="loading"] .weather-forecast__strip {
+  min-height: 150px;
+  opacity: 0.5;
+}
+
+@media (forced-colors: active) {
+  .weather-forecast__line {
+    stroke: CanvasText;
+  }
+
+  .weather-forecast__band {
+    fill: none;
+  }
+
+  .weather-forecast__range i,
+  .weather-forecast__range::after {
+    background: CanvasText;
+  }
+}
+
 /* ---------- when the sky is busiest: the week as a heat map ---------- */
 
 .weather-heat {
@@ -527,7 +1203,9 @@ html[data-theme="dark"] {
   font-weight: 700;
 }
 
+/* positioned for the same reason as the forecast's strip: the cells' hidden words stay inside */
 .weather-heat__scroll {
+  position: relative;
   overflow-x: auto;
 }
 
@@ -753,7 +1431,7 @@ html[data-theme="dark"] {
 .weather-mix__legend div {
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-mix__legend dt {
@@ -877,7 +1555,7 @@ html[data-theme="dark"] {
   margin: 0;
   padding: 14px 14px 8px;
   border-radius: 20px;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .weather-chart-card__title {
@@ -1015,26 +1693,31 @@ html[data-theme="dark"] {
   font-weight: 700;
 }
 
-/* How an app did against the earlier window (weather-page.ts appChange): an arrow and a
-   number, in words for screen readers; the tint only repeats what the arrow says. */
-.weather-bars__change {
+/* How an app did against the earlier window (weather-page.ts appChange), or a number in
+   the last-minute tile against the span before (weather-span.ts): an arrow and a number,
+   in words for screen readers; the tint only repeats what the arrow says. */
+.weather-bars__change,
+.weather-change {
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.weather-bars__change[data-trend] {
+.weather-bars__change[data-trend],
+.weather-change[data-trend] {
   padding: 1px 8px;
   border-radius: var(--radius-pill);
 }
 
-.weather-bars__change[data-trend="up"] {
+.weather-bars__change[data-trend="up"],
+.weather-change[data-trend="up"] {
   background: var(--leaf-tint);
   color: var(--leaf-strong);
 }
 
-.weather-bars__change[data-trend="down"] {
+.weather-bars__change[data-trend="down"],
+.weather-change[data-trend="down"] {
   background: var(--flesh-tint);
   color: var(--text);
 }
@@ -1044,8 +1727,14 @@ html[data-theme="dark"] {
   color: var(--text);
 }
 
-.weather-bars__change[data-trend="steady"] {
+.weather-bars__change[data-trend="steady"],
+.weather-change[data-trend="steady"] {
   color: var(--muted);
+}
+
+/* No chip yet (nothing to compare with): no gap where it goes. */
+.weather-change:empty {
+  display: none;
 }
 
 .weather-bars__value {
@@ -1116,7 +1805,8 @@ html[data-theme="dark"] {
   margin: 0;
 }
 
-/* the page's own cream, so each box stands out from the white card */
+/* The page's own cream, so each box stands out from the white card; every box inside a
+   card on this page (today's facts, the legend, the charts, the forecast) uses it too. */
 .weather-stats div {
   padding: 10px 14px;
   border-radius: 16px;
@@ -1133,6 +1823,132 @@ html[data-theme="dark"] {
   font-size: 24px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.weather-stats .weather-change {
+  width: fit-content;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+/* Feels like, gusts, humidity, visibility (weather-page.ts renderReadouts): a weather app's
+   details, each with a little drawing, its number, and what it means in a line. */
+.weather-readouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.weather-readout {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.weather-readout dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.weather-readout dt svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.weather-readout dd {
+  margin: 0;
+}
+
+/* The number on a line of its own, what it counts under it, then its chip: nothing to
+   wrap around the number in a phone's narrow column. */
+.weather-readout__value {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+
+.weather-readout__value strong {
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-readout__unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.weather-readout__value .weather-change {
+  margin-top: 4px;
+}
+
+/* "minute" in the title: tap it for the last hour, day or week (weather-span.ts). */
+.weather-span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: -4px 0;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline 2px dashed var(--dash);
+  text-underline-offset: 5px;
+  cursor: pointer;
+}
+
+.weather-span:hover {
+  text-decoration-color: var(--text-soft);
+}
+
+.weather-span:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.weather-span__word {
+  display: inline-block;
+}
+
+.weather-span svg {
+  flex: none;
+  width: 0.8em;
+  height: 0.8em;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A span still on its way: the last numbers stay, dimmed, until its own come. */
+.weather-minute[data-state="loading"] .weather-readout__value strong,
+.weather-minute[data-state="loading"] .weather-stats dd {
+  opacity: 0.4;
+}
+
+.weather-readout__note {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .weather-minute,

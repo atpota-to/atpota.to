@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoeLine, PoeSpeech } from '../src/poe/say.js';
-import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, RETRY_MS, STALE_MS, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
+import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, recordAlert, RETRY_MS, STALE_MS, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
 import { smoothPath } from '../src/scripts/weather-chart.js';
 import { watchNewApps } from '../src/scripts/weather-page.js';
 import { cloudCount, MAX_CLOUDS, renderClouds } from '../src/scripts/weather-sky.js';
@@ -297,5 +297,28 @@ describe('smooth lines', () => {
       [0, 0],
       [10, 5],
     ])).toBe('M0,0L10,5');
+  });
+});
+
+describe('record highs and storms clearing', () => {
+  it('a live minute past the record is a record high, and only a live one', () => {
+    const live: Reading = { ...READING, records: { perSecond: 642.6, bluesky: 640, elsewhere: 2.6 } };
+    expect(recordAlert(600, live)).toEqual({
+      kind: 'record',
+      label: 'record high',
+      text: "a record high! the busiest minute i've ever heard",
+      sub: '643 new records a second, past the old record of 600.',
+    });
+    expect(recordAlert(700, live)).toBeNull();
+    expect(recordAlert(642.6, live)).toBeNull();
+    expect(recordAlert(null, live)).toBeNull();
+    expect(recordAlert(600, { ...live, source: 'sample' })).toBeNull();
+  });
+
+  it('a storm passing brings out a rainbow; easing to gusty does not', () => {
+    const storm = alertsFor(null, READING).watch;
+    const { alerts } = alertsFor(storm, { ...READING, condition: 'breezy', records: { perSecond: 452, bluesky: 450, elsewhere: 2 } });
+    expect(alerts).toEqual([{ kind: 'clear', label: 'weather alert', text: "the storm's passed. look up, a rainbow (◕‿◕)", sub: 'back down to 452 new records a second.' }]);
+    expect(alertsFor(storm, { ...READING, condition: 'gusty' }).alerts).toEqual([]);
   });
 });
