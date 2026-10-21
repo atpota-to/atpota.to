@@ -173,7 +173,7 @@ describe('reading /api/weather-span', () => {
 describe('the tile', () => {
   it('has a chip for every number, and its title says the span', () => {
     for (const k of CHANGE_KEYS) expect(tile.querySelector(`[data-s-change="${k}"]`), k).not.toBeNull();
-    expect(text('#weather-minute-title')).toBe('the last minute');
+    expect(text('#weather-minute-title')).toBe('the last hour'); // the lens's default
     // the lens moves it on; the tile has no control of its own
     expect(tile.querySelector('#weather-minute-title button')).toBeNull();
   });

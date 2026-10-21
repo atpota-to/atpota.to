@@ -81,8 +81,8 @@
                 <div class="weather-lens__group" role="group" aria-labelledby="weather-lens-window">
                     <span class="weather-lens__label" id="weather-lens-window">over</span>
                     <div class="weather-seg">
-                        <button type="button" class="weather-seg__btn" data-lens-window="now" aria-pressed="true" aria-label="now: the last minute, live">now</button>
-                        <button type="button" class="weather-seg__btn" data-lens-window="hour" aria-pressed="false" aria-label="the last hour">1h</button>
+                        <button type="button" class="weather-seg__btn" data-lens-window="now" aria-pressed="false" aria-label="now: the last minute, live">now</button>
+                        <button type="button" class="weather-seg__btn" data-lens-window="hour" aria-pressed="true" aria-label="the last hour">1h</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="day" aria-pressed="false" aria-label="the last 24 hours">24h</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="week" aria-pressed="false" aria-label="the last 7 days">7d</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="month" aria-pressed="false" aria-label="the last 30 days">30d</button>
@@ -195,9 +195,9 @@
 
             <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second);
                  the lens moves it on to the last hour, 24 hours, 7 days or 30 days, each number with a chip against the one before (src/scripts/weather-span.ts) -->
-            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="minute">
+            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="hour">
                 <div class="weather-tile__titled">
-                    <h2 class="weather-tile__title" id="weather-minute-title">the last <span class="weather-span__word" data-s-word>minute</span></h2>
+                    <h2 class="weather-tile__title" id="weather-minute-title">the last <span class="weather-span__word" data-s-word>hour</span></h2>
                     <button type="button" class="weather-info" data-poe-explain="readouts" aria-haspopup="dialog" aria-label="what do feels like, gusts, humidity and visibility mean? ask poe" title="what's this?">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                     </button>
