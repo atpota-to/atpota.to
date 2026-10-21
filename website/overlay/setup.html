@@ -46,35 +46,47 @@
     <!-- @partial header -->
 
     <main id="main" class="ovs-page" tabindex="-1">
-        <!-- src/overlay/setup.ts: the form builds the overlay's URL (src/overlay/params.ts) and the preview shows it -->
-        <div class="ovs" data-ovs>
+        <!-- src/overlay/setup.ts: data-state is checking, unavailable, signed-out or signed-in. Settings are
+             saved to the signed-in account's own repo (to.atpota.poe.overlay), and the overlay follows them live. -->
+        <div class="ovs" data-ovs data-state="checking">
             <header class="tile ovs-head">
                 <img class="ovs-head__poe" data-mascot="happy" src="/src/assets/mascot/potato-happy.svg" alt="" width="110" height="90">
                 <div>
                     <p class="eyebrow">for streamers</p>
                     <h1 class="ovs-head__title">poe on your stream</h1>
-                    <p class="ovs-head__lede">a little potato and the atmosphere's weather for your livestream. poe says hi to your <a href="https://stream.place">stream.place</a> chat, thanks new followers, answers <code>!weather</code>, <code>!forecast</code>, <code>!apps</code>, <code>!pet</code> and <code>!poe</code>, and naps when it's quiet.</p>
+                    <p class="ovs-head__lede">a little potato and the atmosphere's weather for your livestream. poe says hi to your <a href="https://stream.place">stream.place</a> chat, thanks new followers, answers <code>!weather</code>, <code>!forecast</code>, <code>!apps</code>, <code>!pet</code> and <code>!poe</code>, gets the odd visitor, and naps when it's quiet.</p>
+                    <p class="ovs-head__who" data-ovs-who>checking who you are…</p>
                 </div>
             </header>
 
-            <div class="ovs-grid">
+            <section class="tile ovs-gate" data-ovs-signin hidden>
+                <h2 class="ovs-gate__title">sign in to set it up</h2>
+                <p>your overlay's settings live in your own repo, on your bluesky or atmosphere account, so they're the same on every computer and phone, and the overlay in OBS changes the moment you save.</p>
+                <button type="button" class="btn btn--primary" data-ovs-signin-button>sign in</button>
+            </section>
+
+            <section class="tile ovs-gate" data-ovs-unavailable hidden>
+                <h2 class="ovs-gate__title">sign in on atpota.to</h2>
+                <p>setting up the overlay needs a bluesky sign-in, which only works on <a href="https://atpota.to/overlay/setup">atpota.to</a> itself.</p>
+            </section>
+
+            <div class="ovs-grid" data-ovs-editor hidden>
                 <form class="tile ovs-form" data-ovs-form>
-                    <label class="ovs-field">your handle <em>whose stream.place chat poe watches</em>
-                        <input type="text" name="streamer" placeholder="dame.is" autocomplete="off" autocapitalize="off" spellcheck="false">
-                    </label>
-
-                    <fieldset class="ovs-set">
-                        <legend>show</legend>
-                        <label class="ovs-check"><input type="checkbox" name="show" value="poe" checked><span>poe</span></label>
-                        <label class="ovs-check"><input type="checkbox" name="show" value="weather" checked><span>the weather card <em>top corner</em></span></label>
-                        <label class="ovs-check"><input type="checkbox" name="show" value="strip"><span>the weather strip <em>a slim bar along the bottom</em></span></label>
-                    </fieldset>
-
                     <fieldset class="ovs-set">
                         <legend>poe</legend>
+                        <label class="ovs-check"><input type="checkbox" name="poe" checked><span>show poe <em>along the bottom, facing into the screen</em></span></label>
+                        <div class="ovs-set--row">
+                            <label class="ovs-check"><input type="radio" name="side" value="left"><span>bottom left</span></label>
+                            <label class="ovs-check"><input type="radio" name="side" value="right" checked><span>bottom right</span></label>
+                        </div>
+                        <label class="ovs-field ovs-field--row">size
+                            <input type="range" name="poeScale" min="50" max="200" step="10" value="100">
+                            <output name="poeScaleOut">100%</output>
+                        </label>
                         <label class="ovs-check"><input type="checkbox" name="chat" checked><span>hellos and chat commands</span></label>
                         <label class="ovs-check"><input type="checkbox" name="follows" checked><span>thanks for new followers</span></label>
                         <label class="ovs-check"><input type="checkbox" name="alerts" checked><span>weather alerts <em>storms, new apps blowing in</em></span></label>
+                        <label class="ovs-check"><input type="checkbox" name="visitors" checked><span>visitors <em>a butterfly, bird, snail, worm or moth now and then</em></span></label>
                         <label class="ovs-field ovs-field--row">naps after
                             <select name="nap">
                                 <option value="0">never</option>
@@ -92,10 +104,14 @@
                         </label>
                     </fieldset>
 
+                    <fieldset class="ovs-set">
+                        <legend>weather</legend>
+                        <!-- one row per widget (src/overlay/setup.ts builds them): on or off, where, how big -->
+                        <div class="ovs-widgets" data-ovs-widgets></div>
+                    </fieldset>
+
                     <fieldset class="ovs-set ovs-set--row">
                         <legend>look</legend>
-                        <label class="ovs-check"><input type="radio" name="side" value="right" checked><span>poe on the right</span></label>
-                        <label class="ovs-check"><input type="radio" name="side" value="left"><span>poe on the left</span></label>
                         <label class="ovs-check"><input type="radio" name="theme" value="light" checked><span>light</span></label>
                         <label class="ovs-check"><input type="radio" name="theme" value="dark"><span>dark</span></label>
                     </fieldset>
@@ -112,8 +128,10 @@
                         <iframe class="ovs-preview__frame" title="overlay preview" data-ovs-frame tabindex="-1"></iframe>
                         <button type="button" class="ovs-preview__full" data-ovs-full aria-label="see the preview full screen">full screen</button>
                     </div>
+                    <p class="ovs-out__saved" role="status" data-ovs-saved></p>
+                    <button type="button" class="btn btn--outline btn--sm" data-ovs-reconsent hidden>sign in again</button>
 
-                    <label class="ovs-field">your overlay URL
+                    <label class="ovs-field">your overlay URL <em>the same URL forever: change things here and it follows</em>
                         <textarea class="ovs-url" rows="1" readonly data-ovs-url></textarea>
                     </label>
                     <div class="ovs-out__buttons">

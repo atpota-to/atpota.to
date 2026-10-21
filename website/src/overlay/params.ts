@@ -1,107 +1,135 @@
 /**
- * The overlay's settings, read from its URL (/overlay?...), so each OBS browser source
- * can ask for its own piece. /overlay/setup builds the URL with a preview.
+ * The overlay's address: whose overlay it is, and any settings that override the ones saved
+ * in their repo (config.ts). Usually it's just
  *
- *   show=poe,weather   what to draw (default both): "poe", "weather" (the card) and
- *                      "strip" (the weather as one slim bar along the bottom), in any mix;
- *                      one piece per browser source lets each be placed and cropped alone
- *   streamer=dame.is   whose stream.place chat Poe watches (a handle or a DID); without
- *                      it Poe only talks about the weather
- *   chat=off           don't greet chatters or answer chat commands
- *   follows=off        don't cheer new followers
- *   alerts=off         don't say weather alerts (storms, apps blowing in, ...)
+ *   /overlay?streamer=dame.is
+ *
+ * and everything else comes from the streamer's to.atpota.poe.overlay record. Each of these
+ * overrides one setting, for this browser source only:
+ *
+ *   w=card:tl:100,apps:tr:80   the weather widgets: kind, slot (tl tc tr bl bc br) and size
+ *                              in percent; w=none for none. Kinds: card, strip, badge,
+ *                              apps, forecast, pulse
+ *   poe=left:120               Poe's bottom corner and size; poe=off hides it
+ *   chat=off follows=off alerts=off visitors=off
  *   ignore=a.bsky.social,did:plc:...
- *                      people Poe never greets, thanks or answers (bots, say)
- *   sound=off          no noises; volume=0-100 how loud they are (default 40)
- *   nap=10             minutes of quiet before Poe dozes off (default 5); nap=off never
- *   side=left          Poe in the bottom-left corner instead of the bottom-right
- *   theme=dark         the dark theme's colours on the weather
- *   demo               Poe runs through some example lines, for placing things in OBS
+ *   sound=off   volume=0-100   nap=10 | nap=off   theme=dark
+ *   demo                       Poe runs through example lines, for placing things
  *
- * Anything it doesn't know is left at its default.
+ * Older addresses still work: show=poe,weather,strip and side=left.
  */
 
-export type Piece = 'poe' | 'weather' | 'strip';
+import { actorOf, clampScale, cleanWidgets, DEFAULT_CONFIG, MAX_IGNORED, SLOTS, WIDGET_HOME, type ConfigOverrides, type OverlayConfig, type Slot, type Widget } from './config';
+
+export { actorOf } from './config';
 
 export interface OverlayParams {
-  show: Set<Piece>;
   /** A handle or a DID, unchecked beyond its shape: resolved later (index.ts). */
   streamer: string | null;
-  chat: boolean;
-  follows: boolean;
-  alerts: boolean;
-  /** Handles and DIDs, resolved later like the streamer. */
-  ignore: string[];
-  /** 0 is silent. */
-  volume: number;
-  /** Minutes of quiet before a nap; 0 never. */
-  nap: number;
-  side: 'left' | 'right';
-  theme: 'light' | 'dark';
   demo: boolean;
+  overrides: ConfigOverrides;
 }
 
-export const PIECES: readonly Piece[] = ['poe', 'weather', 'strip'];
-export const DEFAULT_PIECES: readonly Piece[] = ['poe', 'weather'];
-export const DEFAULT_VOLUME = 40;
-export const DEFAULT_NAP = 5;
-export const MAX_IGNORED = 50;
-/** A handle (dame.is) or a DID (did:plc:..., did:web:...). */
-const ACTOR_RE = /^(did:[a-z]+:[a-zA-Z0-9._:%-]{1,2000}|[a-zA-Z0-9][a-zA-Z0-9.-]{0,251}\.[a-zA-Z]{2,63})$/;
+const SLOT_CODES: Record<string, Slot> = { tl: 'top-left', tc: 'top-center', tr: 'top-right', bl: 'bottom-left', bc: 'bottom-center', br: 'bottom-right' };
+const CODE_OF = Object.fromEntries(Object.entries(SLOT_CODES).map(([code, slot]) => [slot, code])) as Record<Slot, string>;
 
 const off = (v: string | null) => v !== null && /^(off|no|false|0)$/i.test(v.trim());
+const on = (v: string | null) => v !== null && /^(on|yes|true|1)$/i.test(v.trim());
 
-/** A handle or a DID as the overlay keeps it ("@Dame.is" is "dame.is"), or null. */
-export function actorOf(raw: string): string | null {
-  const s = raw.trim().replace(/^@/, '');
-  return ACTOR_RE.test(s) ? s.toLowerCase() : null;
+function numberIn(v: string | null, min: number, max: number): number | undefined {
+  if (v === null || v.trim() === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(Math.max(min, Math.min(max, n))) : undefined;
 }
 
-function numberIn(v: string | null, min: number, max: number, fallback: number): number {
-  if (v === null || v.trim() === '') return fallback;
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+/** "card:tl:100,apps:tr:80" as widgets. */
+export function readWidgets(raw: string): Widget[] {
+  if (/^\s*none\s*$/i.test(raw)) return [];
+  return cleanWidgets(
+    raw
+      .split(',')
+      .map((part) => part.trim().toLowerCase().split(':'))
+      .map(([kind, slot, scale]) => ({ kind, slot: SLOT_CODES[slot ?? ''] ?? (SLOTS as readonly string[]).find((s) => s === slot), scale: scale ? Number(scale) : 100 })),
+  );
+}
+
+export function writeWidgets(widgets: Widget[]): string {
+  return widgets.length ? widgets.map((w) => `${w.kind}:${CODE_OF[w.slot]}:${w.scale}`).join(',') : 'none';
 }
 
 export function readParams(search: string): OverlayParams {
   const q = new URLSearchParams(search);
-  const asked = (q.get('show') ?? '')
-    .split(/[,\s]+/)
-    .map((s) => s.trim().toLowerCase())
-    .filter((s): s is Piece => (PIECES as readonly string[]).includes(s));
-  const ignore = [...new Set((q.get('ignore') ?? '').split(/[,\s]+/).map(actorOf).filter((a): a is string => a !== null))].slice(0, MAX_IGNORED);
-  return {
-    show: new Set(asked.length > 0 ? asked : DEFAULT_PIECES),
-    streamer: actorOf(q.get('streamer') ?? ''),
-    chat: !off(q.get('chat')),
-    follows: !off(q.get('follows')),
-    alerts: !off(q.get('alerts')),
-    ignore,
-    volume: off(q.get('sound')) ? 0 : numberIn(q.get('volume'), 0, 100, DEFAULT_VOLUME),
-    nap: off(q.get('nap')) ? 0 : numberIn(q.get('nap'), 1, 240, DEFAULT_NAP),
-    side: q.get('side')?.toLowerCase() === 'left' ? 'left' : 'right',
-    theme: q.get('theme')?.toLowerCase() === 'dark' ? 'dark' : 'light',
-    demo: q.has('demo') && !off(q.get('demo')),
-  };
+  const o: ConfigOverrides = {};
+  const poe: Partial<OverlayConfig['poe']> = {};
+
+  // the older address: show=poe,weather,strip and side=left
+  const show = q.get('show');
+  if (show !== null) {
+    const asked = show.toLowerCase().split(/[,\s]+/);
+    if (asked.some((s) => ['poe', 'weather', 'strip'].includes(s))) {
+      poe.show = asked.includes('poe');
+      o.widgets = [];
+      if (asked.includes('weather')) o.widgets.push({ kind: 'card', slot: WIDGET_HOME.card, scale: 100 });
+      if (asked.includes('strip')) o.widgets.push({ kind: 'strip', slot: WIDGET_HOME.strip, scale: 100 });
+    }
+  }
+  const side = q.get('side')?.toLowerCase();
+  if (side === 'left' || side === 'right') poe.side = side;
+
+  const w = q.get('w');
+  if (w !== null) o.widgets = readWidgets(w);
+  const p = q.get('poe');
+  if (p !== null) {
+    if (off(p)) poe.show = false;
+    else {
+      const [where, size] = p.toLowerCase().split(':');
+      poe.show = true;
+      if (where === 'left' || where === 'right') poe.side = where;
+      if (size) poe.scale = clampScale(Number(size));
+    }
+  }
+  if (Object.keys(poe).length) o.poe = poe;
+
+  for (const key of ['chat', 'follows', 'alerts', 'visitors'] as const) {
+    const v = q.get(key);
+    if (off(v)) o[key] = false;
+    else if (on(v)) o[key] = true;
+  }
+  const ignore = q.get('ignore');
+  if (ignore !== null) o.ignore = [...new Set(ignore.split(/[,\s]+/).map(actorOf).filter((a): a is string => a !== null))].slice(0, MAX_IGNORED);
+  if (off(q.get('sound'))) o.volume = 0;
+  else {
+    const volume = numberIn(q.get('volume'), 0, 100);
+    if (volume !== undefined) o.volume = volume;
+  }
+  if (off(q.get('nap'))) o.nap = 0;
+  else {
+    const nap = numberIn(q.get('nap'), 1, 240);
+    if (nap !== undefined) o.nap = nap;
+  }
+  const theme = q.get('theme')?.toLowerCase();
+  if (theme === 'dark' || theme === 'light') o.theme = theme;
+
+  return { streamer: actorOf(q.get('streamer') ?? ''), demo: q.has('demo') && !off(q.get('demo')), overrides: o };
 }
 
-/** The settings as a URL query, leaving out anything at its default (the setup page). */
-export function toSearch(p: OverlayParams): string {
+/** A whole config as an address, leaving out what's at its default (the setup page's preview). */
+export function toSearch(c: OverlayConfig, extra: { streamer?: string | null; demo?: boolean } = {}): string {
+  const d = DEFAULT_CONFIG;
   const q = new URLSearchParams();
-  const pieces = PIECES.filter((x) => p.show.has(x));
-  if (pieces.join() !== DEFAULT_PIECES.join()) q.set('show', pieces.join(','));
-  if (p.streamer) q.set('streamer', p.streamer);
-  if (!p.chat) q.set('chat', 'off');
-  if (!p.follows) q.set('follows', 'off');
-  if (!p.alerts) q.set('alerts', 'off');
-  if (p.ignore.length) q.set('ignore', p.ignore.join(','));
-  if (p.volume <= 0) q.set('sound', 'off');
-  else if (p.volume !== DEFAULT_VOLUME) q.set('volume', String(Math.round(p.volume)));
-  if (p.nap <= 0) q.set('nap', 'off');
-  else if (p.nap !== DEFAULT_NAP) q.set('nap', String(p.nap));
-  if (p.side !== 'right') q.set('side', p.side);
-  if (p.theme !== 'light') q.set('theme', p.theme);
-  if (p.demo) q.set('demo', '');
+  if (extra.streamer) q.set('streamer', extra.streamer);
+  const widgets = writeWidgets(c.widgets);
+  if (widgets !== writeWidgets(d.widgets)) q.set('w', widgets);
+  if (!c.poe.show) q.set('poe', 'off');
+  else if (c.poe.side !== d.poe.side || c.poe.scale !== d.poe.scale) q.set('poe', `${c.poe.side}:${c.poe.scale}`);
+  for (const key of ['chat', 'follows', 'alerts', 'visitors'] as const) if (!c[key]) q.set(key, 'off');
+  if (c.ignore.length) q.set('ignore', c.ignore.join(','));
+  if (c.volume <= 0) q.set('sound', 'off');
+  else if (c.volume !== d.volume) q.set('volume', String(c.volume));
+  if (c.nap <= 0) q.set('nap', 'off');
+  else if (c.nap !== d.nap) q.set('nap', String(c.nap));
+  if (c.theme !== d.theme) q.set('theme', c.theme);
+  if (extra.demo) q.set('demo', '');
   const s = q.toString().replace(/demo=(&|$)/, 'demo$1').replace(/%2C/g, ',').replace(/%3A/g, ':');
   return s ? `?${s}` : '';
 }

@@ -15,12 +15,20 @@
     <link rel="stylesheet" href="/src/styles/tokens.css">
     <link rel="stylesheet" href="/src/styles/components.css">
     <link rel="stylesheet" href="/src/styles/overlay.css">
-    <!-- src/overlay/params.ts lists the URL's settings (?show=, ?streamer=, ?side=, ...) -->
+    <!-- /overlay?streamer=<handle>: the settings come from their repo (src/overlay/config.ts); src/overlay/params.ts lists the URL's overrides -->
     <script type="module" src="/src/overlay/index.ts"></script>
 </head>
 <body data-page="overlay">
-    <!-- the weather card (src/overlay/weather.ts): the home page's weather tile, for a stream -->
-    <section class="ov-weather" data-ov-card data-state="loading" aria-labelledby="ov-weather-title">
+    <!-- the slots (src/overlay/layout.ts puts each widget in its own) -->
+    <div class="ov-slot ov-slot--top-left" data-ov-slot="top-left" hidden></div>
+    <div class="ov-slot ov-slot--top-center" data-ov-slot="top-center" hidden></div>
+    <div class="ov-slot ov-slot--top-right" data-ov-slot="top-right" hidden></div>
+    <div class="ov-slot ov-slot--bottom-left" data-ov-slot="bottom-left" hidden></div>
+    <div class="ov-slot ov-slot--bottom-center" data-ov-slot="bottom-center" hidden></div>
+    <div class="ov-slot ov-slot--bottom-right" data-ov-slot="bottom-right" hidden></div>
+
+    <!-- the weather widgets (src/overlay/weather.ts); hidden until layout.ts places them -->
+    <section class="ov-weather" data-ov-widget="card" data-state="loading" aria-labelledby="ov-weather-title" hidden>
         <div class="weather-sky" data-weather-sky aria-hidden="true"></div>
         <div class="ov-weather__body">
             <h2 class="ov-weather__title" id="ov-weather-title">atmospheric conditions</h2>
@@ -49,8 +57,7 @@
         </div>
     </section>
 
-    <!-- the weather strip (?show=strip): the card's reading in one slim bar along the bottom -->
-    <section class="ov-strip" data-ov-strip data-state="loading" aria-label="atmospheric conditions" hidden>
+    <section class="ov-strip" data-ov-widget="strip" data-state="loading" aria-label="atmospheric conditions" hidden>
         <div class="weather-sky" data-weather-sky aria-hidden="true"></div>
         <div class="ov-strip__body">
             <!-- @svg weather-sun.svg class="ov-strip__sun weather-sun" -->
@@ -67,7 +74,32 @@
         </div>
     </section>
 
-    <!-- Poe (src/overlay/poe.ts fills it in) -->
+    <section class="ov-badge" data-ov-widget="badge" data-state="loading" aria-label="atmospheric conditions" hidden>
+        <!-- @svg weather-sun.svg class="ov-badge__sun weather-sun" -->
+        <p class="ov-badge__big"><span data-weather-records>&ndash;</span> <span class="ov-badge__unit">rec/sec</span></p>
+        <p class="ov-badge__word" data-ov-cond-word></p>
+    </section>
+
+    <section class="ov-panel ov-apps" data-ov-widget="apps" data-state="loading" aria-labelledby="ov-apps-title" hidden>
+        <h2 class="ov-panel__title" id="ov-apps-title">busy outside bluesky</h2>
+        <ol class="ov-apps__list" data-ov-apps></ol>
+        <p class="ov-panel__note" data-ov-apps-empty hidden>it's all bluesky out there right now</p>
+    </section>
+
+    <section class="ov-panel ov-fc" data-ov-widget="forecast" data-state="loading" aria-labelledby="ov-fc-title" hidden>
+        <h2 class="ov-panel__title" id="ov-fc-title">the forecast</h2>
+        <ol class="ov-fc__hours" data-ov-fc-hours></ol>
+        <p class="ov-panel__note" data-ov-fc-words>reading the sky…</p>
+    </section>
+
+    <section class="ov-panel ov-pulse" data-ov-widget="pulse" data-state="loading" aria-labelledby="ov-pulse-title" hidden>
+        <h2 class="ov-panel__title" id="ov-pulse-title">the pulse</h2>
+        <p class="ov-pulse__big"><span data-ov-pulse-rate>&ndash;</span> <span class="ov-pulse__unit">rec/sec</span></p>
+        <div class="weather-spark ov-pulse__line" data-ov-pulse-line aria-hidden="true" hidden></div>
+        <p class="ov-panel__note" data-ov-pulse-note>new records a second</p>
+    </section>
+
+    <!-- Poe (src/overlay/poe.ts fills it in; visitors.ts adds its visitors) -->
     <div class="ov-poe" data-ov-poe></div>
 </body>
 </html>

@@ -3,8 +3,10 @@
  * chat (place.stream.chat.message records whose `streamer` is them), new follows of the
  * streamer (app.bsky.graph.follow records whose `subject` is them), and the streamer's own
  * place.stream.livestream records: a new one is a stream going live, and one updated with
- * an `endedAt` is that stream over. All of them are public records in people's own repos,
- * so the overlay needs no sign-in and no stream.place API.
+ * an `endedAt` is that stream over. And the streamer's own overlay settings
+ * (to.atpota.poe.overlay), so a change saved on the setup page shows on stream at once. All
+ * of them are public records in people's own repos, so the overlay needs no sign-in and no
+ * stream.place API.
  *
  * Jetstream only filters by collection, so the follows come for the whole network (tens a
  * second, a few KB) and are picked out here. With follows off it asks for chat alone.
@@ -16,6 +18,8 @@
 export const CHAT = 'place.stream.chat.message';
 export const FOLLOW = 'app.bsky.graph.follow';
 export const LIVESTREAM = 'place.stream.livestream';
+/** The streamer's overlay settings (config.ts): a save shows on stream straight away. */
+export const OVERLAY = 'to.atpota.poe.overlay';
 
 /** Bluesky's us-east hosts share one address, so the fallback is in us-west (as server/atmosphere.ts). */
 export const JETSTREAMS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe'] as const;
@@ -33,7 +37,9 @@ export type StreamEvent =
   | { kind: 'follow'; did: string }
   /** The streamer's stream: `rkey` tells one stream from the next; the title is theirs. */
   | { kind: 'live'; rkey: string; title: string | null }
-  | { kind: 'ended'; rkey: string };
+  | { kind: 'ended'; rkey: string }
+  /** The streamer saved new overlay settings (unchecked: config.ts fromRecord checks them). */
+  | { kind: 'config'; value: unknown };
 
 const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
@@ -49,6 +55,9 @@ export function eventFor(message: unknown, streamer: string): StreamEvent | null
   const commit = message.commit;
   if (!obj(commit) || !obj(commit.record)) return null;
   const record = commit.record;
+  if (commit.collection === OVERLAY) {
+    return message.did === streamer && commit.rkey === 'self' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'config', value: record } : null;
+  }
   if (commit.collection === LIVESTREAM && message.did === streamer && typeof commit.rkey === 'string') {
     if (commit.operation === 'create' && record.endedAt === undefined) return { kind: 'live', rkey: commit.rkey, title: typeof record.title === 'string' && record.title.trim() ? record.title.trim().slice(0, 140) : null };
     if (commit.operation === 'update' && typeof record.endedAt === 'string') return { kind: 'ended', rkey: commit.rkey };
@@ -68,6 +77,7 @@ export function jetstreamUrl(host: string, follows: boolean, cursor?: number): s
   const url = new URL(host);
   url.searchParams.append('wantedCollections', CHAT);
   url.searchParams.append('wantedCollections', LIVESTREAM);
+  url.searchParams.append('wantedCollections', OVERLAY);
   if (follows) url.searchParams.append('wantedCollections', FOLLOW);
   if (cursor !== undefined) url.searchParams.set('cursor', String(cursor));
   return url.toString();

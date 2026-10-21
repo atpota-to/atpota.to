@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "atpotato",
-      "detail": "Plant and tend flowers in the gardens on atpota.to, keep a garden of your own, save how many times you've petted Poe, and let Poe know it's you (or forget you, when you ask).",
+      "detail": "Plant and tend flowers in the gardens on atpota.to, keep a garden of your own, save how many times you've petted Poe, save how Poe's stream overlay is set up, and let Poe know it's you (or forget you, when you ask).",
       "permissions": [
         {
           "type": "permission",
@@ -29,6 +29,12 @@
           "type": "permission",
           "resource": "repo",
           "collection": ["to.atpota.poe.pets"],
+          "action": ["create", "update"]
+        },
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": ["to.atpota.poe.overlay"],
           "action": ["create", "update"]
         },
         {

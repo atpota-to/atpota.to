@@ -2,12 +2,17 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHAT, FOLLOW, HANDLE_MAX, LIVESTREAM, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
+import { CHAT, FOLLOW, HANDLE_MAX, LIVESTREAM, OVERLAY, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
 import { appsLine, createGate, endedLine, followLine, forecastLine, helloLine, liveLine, petLine, weatherLine } from '../src/overlay/lines.js';
-import { readParams, toSearch } from '../src/overlay/params.js';
+import { readParams, readWidgets, toSearch, writeWidgets } from '../src/overlay/params.js';
+import { DEFAULT_CONFIG, fromRecord, OVERLAY_NSID, SLOTS, toRecord, WIDGET_HOME, WIDGET_KINDS, withOverrides, type OverlayConfig } from '../src/overlay/config.js';
+import { createLayout } from '../src/overlay/layout.js';
+import { AT_CENTER_X, mirrorSvg, VIEW_WIDTH } from '../src/overlay/mirror.js';
+import { didDocumentUrl, pdsOf, readPublicConfig } from '../src/overlay/store.js';
+import { createVisitors, pathFor, place, VISITOR_KINDS, visitorsFor } from '../src/overlay/visitors.js';
 import { LINE_GAP_MS, LINE_MS, MAX_LINES, bobMs, enqueue, mountOverlayPoe } from '../src/overlay/poe.js';
 import { AGAIN_MS, createRegulars } from '../src/overlay/regulars.js';
-import { init as initSetup, overlayUrl, paramsFrom } from '../src/overlay/setup.js';
+import { buildWidgetRows, configFrom, fillForm, init as initSetup, SAVE_DELAY_MS } from '../src/overlay/setup.js';
 import { TUNES } from '../src/overlay/sounds.js';
 import { WAKE_MS } from '../src/poe/idle.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
@@ -19,39 +24,174 @@ const STREAMER = 'did:plc:gq4fo3u6tqzzdkjlwzpb23tj';
 const commit = (did: string, collection: string, record: Record<string, unknown>, operation = 'create', rkey = '3m4abc') => ({ kind: 'commit', did, time_us: 1, commit: { operation, collection, rkey, record } });
 const who = (handle: string | null, avatar: string | null = null) => ({ handle, avatar });
 
-describe('overlay params', () => {
-  it('shows both pieces, on the right, in the light theme, by default', () => {
+describe('overlay config and its address', () => {
+  it('has no overrides without settings, so the record or the defaults rule', () => {
     const p = readParams('');
-    expect([...p.show].sort()).toEqual(['poe', 'weather']);
-    expect(p).toMatchObject({ streamer: null, chat: true, follows: true, alerts: true, ignore: [], volume: 40, nap: 5, side: 'right', theme: 'light', demo: false });
+    expect(p).toEqual({ streamer: null, demo: false, overrides: {} });
+    expect(withOverrides(DEFAULT_CONFIG, p.overrides)).toEqual(DEFAULT_CONFIG);
   });
 
-  it('reads sound, naps and who to ignore', () => {
-    expect(readParams('?sound=off').volume).toBe(0);
-    expect(readParams('?volume=250').volume).toBe(100);
-    expect(readParams('?volume=nope').volume).toBe(40);
-    expect(readParams('?nap=off').nap).toBe(0);
-    expect(readParams('?nap=12').nap).toBe(12);
-    expect(readParams('?ignore=@Bot.bsky.social,did:plc:abc,,<x>,bot.bsky.social').ignore).toEqual(['bot.bsky.social', 'did:plc:abc']);
-    expect([...readParams('?show=strip,poe').show]).toEqual(['strip', 'poe']);
+  it('reads widgets with their slot and size, each kind once, the strip on an edge', () => {
+    expect(readWidgets('card:tl:120,apps:tr:80,card:br:100,cats:tl:100,strip:tr:100')).toEqual([
+      { kind: 'card', slot: 'top-left', scale: 120 },
+      { kind: 'apps', slot: 'top-right', scale: 80 },
+      { kind: 'strip', slot: 'top-center', scale: 100 },
+    ]);
+    expect(readWidgets('none')).toEqual([]);
+    expect(readWidgets('pulse:nowhere:9000')).toEqual([{ kind: 'pulse', slot: WIDGET_HOME.pulse, scale: 200 }]);
+    expect(writeWidgets(readWidgets('badge:bc:70'))).toBe('badge:bc:70');
   });
 
-  it('writes settings back as a URL, leaving defaults out', () => {
-    expect(toSearch(readParams(''))).toBe('');
-    const search = '?show=poe,strip&streamer=dame.is&follows=off&ignore=bot.bsky.social&volume=70&nap=off&side=left&theme=dark';
-    expect(toSearch(readParams(search))).toBe(search);
-    expect(toSearch({ ...readParams(''), demo: true, volume: 0 })).toBe('?sound=off&demo');
-    const again = readParams(toSearch(readParams(search)));
-    expect(again).toEqual(readParams(search));
-  });
-
-  it('reads each setting, and ignores what it does not know', () => {
-    const p = readParams('?show=poe,cats&streamer=@Dame.is&follows=off&alerts=no&side=left&theme=dark&demo');
-    expect([...p.show]).toEqual(['poe']);
-    expect(p).toMatchObject({ streamer: 'dame.is', chat: true, follows: false, alerts: false, side: 'left', theme: 'dark', demo: true });
-    expect(readParams(`?streamer=${STREAMER}`).streamer).toBe(STREAMER);
+  it('reads Poe, sound, naps and who to ignore, and the older show= and side=', () => {
+    expect(readParams('?poe=left:120').overrides.poe).toEqual({ show: true, side: 'left', scale: 120 });
+    expect(readParams('?poe=off').overrides.poe).toEqual({ show: false });
+    expect(readParams('?sound=off').overrides.volume).toBe(0);
+    expect(readParams('?volume=250').overrides.volume).toBe(100);
+    expect(readParams('?volume=nope').overrides.volume).toBeUndefined();
+    expect(readParams('?nap=off').overrides.nap).toBe(0);
+    expect(readParams('?visitors=off&chat=on').overrides).toMatchObject({ visitors: false, chat: true });
+    expect(readParams('?ignore=@Bot.bsky.social,did:plc:abc,,<x>,bot.bsky.social').overrides.ignore).toEqual(['bot.bsky.social', 'did:plc:abc']);
+    const old = readParams('?show=poe,strip&side=left&theme=dark&streamer=@Dame.is&demo');
+    expect(old.streamer).toBe('dame.is');
+    expect(old.demo).toBe(true);
+    expect(withOverrides(DEFAULT_CONFIG, old.overrides)).toMatchObject({ poe: { show: true, side: 'left', scale: 100 }, widgets: [{ kind: 'strip', slot: 'bottom-center', scale: 100 }], theme: 'dark' });
     expect(readParams('?streamer=<script>').streamer).toBeNull();
-    expect(readParams('?show=nothing').show.size).toBe(2);
+  });
+
+  it('writes a whole config as an address and reads it back the same', () => {
+    expect(toSearch(DEFAULT_CONFIG)).toBe('');
+    const c: OverlayConfig = {
+      poe: { show: true, side: 'left', scale: 140 },
+      widgets: [
+        { kind: 'apps', slot: 'top-right', scale: 90 },
+        { kind: 'strip', slot: 'bottom-center', scale: 100 },
+      ],
+      chat: true,
+      follows: false,
+      alerts: true,
+      visitors: false,
+      ignore: ['bot.bsky.social'],
+      volume: 70,
+      nap: 0,
+      theme: 'dark',
+    };
+    const search = toSearch(c, { streamer: 'dame.is', demo: true });
+    expect(search).toBe('?streamer=dame.is&w=apps:tr:90,strip:bc:100&poe=left:140&follows=off&visitors=off&ignore=bot.bsky.social&volume=70&nap=off&theme=dark&demo');
+    expect(withOverrides(DEFAULT_CONFIG, readParams(search).overrides)).toEqual(c);
+  });
+
+  it('keeps what checks out of a record, and the defaults for the rest', () => {
+    const c = fromRecord({ poe: { show: false, side: 'sideways', scale: 9000 }, widgets: [{ kind: 'pulse', slot: 'top-center', scale: 60 }, { kind: 'evil' }], volume: 1.5, nap: 10, theme: 'dark', ignore: ['@A.bsky.social', 42, '<x>'] });
+    expect(c).toEqual({ ...DEFAULT_CONFIG, poe: { show: false, side: 'right', scale: 200 }, widgets: [{ kind: 'pulse', slot: 'top-center', scale: 60 }], nap: 10, theme: 'dark', ignore: ['a.bsky.social'] });
+    expect(fromRecord('junk')).toEqual(DEFAULT_CONFIG);
+    expect(fromRecord({}).widgets).toEqual(DEFAULT_CONFIG.widgets);
+  });
+
+  it("saves a record the lexicon's required fields are all in", () => {
+    const lexicon = JSON.parse(read('../lexicons/to/atpota/poe/overlay.json'));
+    expect(lexicon.id).toBe(OVERLAY_NSID);
+    expect(lexicon.defs.main.key).toBe('literal:self');
+    const record = toRecord(DEFAULT_CONFIG, '2026-10-21T00:00:00.000Z', new Date('2026-10-22T00:00:00Z'));
+    for (const field of lexicon.defs.main.record.required) expect(record).toHaveProperty(field);
+    expect(record).toMatchObject({ $type: OVERLAY_NSID, createdAt: '2026-10-21T00:00:00.000Z', updatedAt: '2026-10-22T00:00:00.000Z' });
+    expect(fromRecord(record)).toEqual(DEFAULT_CONFIG);
+    expect(lexicon.defs.widget.properties.kind.knownValues).toEqual([...WIDGET_KINDS]);
+    expect(lexicon.defs.widget.properties.slot.knownValues).toEqual([...SLOTS]);
+  });
+});
+
+describe('the record in the repo', () => {
+  const doc = { id: STREAMER, service: [{ id: '#atproto_pds', type: 'AtprotoPersonalDataServer', serviceEndpoint: 'https://pds.atpota.to' }] };
+  const fetchWith = (record: { status: number; body: unknown }) =>
+    vi.fn(async (url: string) => (url.startsWith('https://plc.directory/') ? new Response(JSON.stringify(doc)) : new Response(JSON.stringify(record.body), { status: record.status }))) as unknown as typeof fetch;
+
+  it('reads anyone\'s settings from the PDS their DID document names', async () => {
+    const f = fetchWith({ status: 200, body: { value: { poe: { show: true, side: 'left', scale: 100 }, widgets: [], createdAt: '2026-10-01T00:00:00Z' } } });
+    const saved = await readPublicConfig(STREAMER, f);
+    expect(saved?.config.poe.side).toBe('left');
+    expect(saved?.createdAt).toBe('2026-10-01T00:00:00Z');
+    expect(String((f as unknown as { mock: { calls: string[][] } }).mock.calls[1]![0])).toBe(`https://pds.atpota.to/xrpc/com.atproto.repo.getRecord?repo=${encodeURIComponent(STREAMER)}&collection=to.atpota.poe.overlay&rkey=self`);
+  });
+
+  it('is null without a record, and undefined when it cannot be read', async () => {
+    expect(await readPublicConfig(STREAMER, fetchWith({ status: 400, body: { error: 'RecordNotFound' } }))).toBeNull();
+    expect(await readPublicConfig(STREAMER, fetchWith({ status: 500, body: {} }))).toBeUndefined();
+    expect(await readPublicConfig('did:nope:x', fetchWith({ status: 200, body: {} }))).toBeUndefined();
+    expect(pdsOf({ ...doc, service: [{ ...doc.service[0], serviceEndpoint: 'http://insecure.example' }] }, STREAMER)).toBeNull();
+    expect(didDocumentUrl('did:web:example.com')).toBe('https://example.com/.well-known/did.json');
+  });
+});
+
+describe('poe facing right', () => {
+  it('mirrors every part but the tummy @, which moves over and still reads right', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 515 419"><path fill="#39b54a" d="M1"/><path fill="#a58650" d="M2"/><path fill="#725b36" d="M3"/><path fill="#a58650" d="M4"/></svg>';
+    const out = new DOMParser().parseFromString(mirrorSvg(svg), 'image/svg+xml').documentElement;
+    const [mirrored, at] = [...out.children];
+    expect(mirrored!.getAttribute('transform')).toBe('matrix(-1 0 0 1 515 0)');
+    expect([...mirrored!.children].map((p) => p.getAttribute('d'))).toEqual(['M1', 'M2', 'M3']);
+    expect(at!.getAttribute('transform')).toBe(`translate(${(VIEW_WIDTH - 2 * AT_CENTER_X).toFixed(1)} 0)`);
+    expect([...at!.children].map((p) => p.getAttribute('d'))).toEqual(['M4']);
+  });
+
+  it('mirrors a drawing without a face whole (the arm)', () => {
+    const out = mirrorSvg('<svg xmlns="http://www.w3.org/2000/svg"><path fill="#39b54a" d="M1"/></svg>');
+    expect(out).toContain('matrix(-1 0 0 1 515 0)');
+    expect(out).not.toContain('translate(');
+  });
+});
+
+describe('the layout', () => {
+  it('puts each widget in its slot at its size, hides the rest, and sets Poe\'s corner', () => {
+    document.body.innerHTML = read('../overlay/index.html').split('<body')[1]!.replace(/^[^>]*>/, '');
+    const layout = createLayout(document);
+    const shown = layout.apply({ ...DEFAULT_CONFIG, poe: { show: true, side: 'left', scale: 150 }, widgets: [{ kind: 'apps', slot: 'top-right', scale: 80 }, { kind: 'badge', slot: 'top-right', scale: 100 }] });
+    expect([...shown]).toEqual(['apps', 'badge']);
+    const slot = document.querySelector<HTMLElement>('[data-ov-slot="top-right"]')!;
+    expect([...slot.children].map((c) => (c as HTMLElement).dataset.ovWidget)).toEqual(['apps', 'badge']);
+    expect(slot.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>('[data-ov-slot="top-left"]')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>('[data-ov-widget="card"]')!.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>('[data-ov-widget="apps"]')!.style.getPropertyValue('zoom')).toBe('0.8');
+    expect(document.body.dataset.side).toBe('left');
+    expect(document.documentElement.style.getPropertyValue('--ov-poe-width')).toBe('450px');
+  });
+});
+
+describe('visitors', () => {
+  it('come by day or by night as they would on the hill', () => {
+    expect(visitorsFor(new Date(2026, 9, 21, 23))).toContain('moth');
+    expect(visitorsFor(new Date(2026, 9, 21, 12))).not.toContain('moth');
+    expect(visitorsFor(new Date(2026, 9, 21, 12))).toContain('butterfly');
+  });
+
+  it('follow a path from start to end, from the side facing into the screen', () => {
+    for (const kind of VISITOR_KINDS) {
+      const { steps, visit } = pathFor(kind, 300, () => 0.5);
+      expect(steps[0]!.at).toBe(0);
+      expect(steps[steps.length - 1]!.at).toBe(1);
+      for (let i = 1; i < steps.length; i++) expect(steps[i]!.at).toBeGreaterThanOrEqual(steps[i - 1]!.at);
+      expect(visit.notice).toBeLessThan(visit.ms);
+    }
+    // into the screen is to the left of a right-hand Poe, and to the right of a left-hand one
+    expect(place({ x: 600, y: 0, face: -1, at: 0 }, 300, 'right', 40)).toBe('translate(-320.0px, 0.0px) scaleX(1)');
+    expect(place({ x: 600, y: 0, face: -1, at: 0 }, 300, 'left', 40)).toBe('translate(580.0px, 0.0px) scaleX(-1)');
+  });
+
+  it('visit, and Poe notices', () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div data-ov-poe></div>';
+    const corner = document.querySelector<HTMLElement>('[data-ov-poe]')!;
+    const react = vi.fn();
+    const v = createVisitors({ corner, react, side: 'right', scale: 1, now: () => new Date(2026, 9, 21, 12) });
+    v.visit('worm');
+    expect(corner.querySelector('.ov-visit--worm')).not.toBeNull();
+    vi.advanceTimersByTime(2000);
+    expect(react).toHaveBeenCalledWith('happy', 3500);
+    vi.advanceTimersByTime(10_000);
+    expect(corner.querySelector('.ov-visit--worm')).toBeNull();
+    v.setEnabled(false);
+    expect(corner.querySelector<HTMLElement>('.ov-visitors')!.hidden).toBe(true);
+    vi.useRealTimers();
   });
 });
 
@@ -90,11 +230,19 @@ describe('the stream', () => {
     expect(eventFor(commit('did:plc:other', LIVESTREAM, { title: 'x' }), STREAMER)).toBeNull();
   });
 
-  it('asks Jetstream for chat and streams, and follows only when wanted', () => {
+  it('asks Jetstream for chat, streams and overlay settings, and follows only when wanted', () => {
     const both = new URL(jetstreamUrl('wss://j.example/subscribe', true, 42));
-    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, FOLLOW]);
+    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, FOLLOW]);
     expect(both.searchParams.get('cursor')).toBe('42');
-    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM]);
+    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY]);
+  });
+
+  it("hears the streamer's own saved settings, and nobody else's", () => {
+    const value = { poe: { show: true, side: 'left', scale: 100 } };
+    expect(eventFor(commit(STREAMER, OVERLAY, value, 'update', 'self'), STREAMER)).toEqual({ kind: 'config', value });
+    expect(eventFor(commit(STREAMER, OVERLAY, value, 'create', 'self'), STREAMER)).toEqual({ kind: 'config', value });
+    expect(eventFor(commit('did:plc:other', OVERLAY, value, 'update', 'self'), STREAMER)).toBeNull();
+    expect(eventFor(commit(STREAMER, OVERLAY, value, 'update', 'other'), STREAMER)).toBeNull();
   });
 
   it('listens, hands over events, and reconnects to the other host after a drop', () => {
@@ -278,27 +426,79 @@ describe('regulars', () => {
 });
 
 describe('the setup page', () => {
-  it('turns the form into the overlay URL', () => {
-    document.body.innerHTML = read('../overlay/setup.html').split('<body')[1]!.replace(/^[^>]*>/, '');
-    const form = document.querySelector<HTMLFormElement>('[data-ovs-form]')!;
-    expect(overlayUrl(paramsFrom(form), 'https://atpota.to')).toBe('https://atpota.to/overlay');
-    form.querySelector<HTMLInputElement>('[name="streamer"]')!.value = '@Dame.is';
-    form.querySelector<HTMLInputElement>('[value="strip"]')!.checked = true;
-    form.querySelector<HTMLInputElement>('[value="weather"]')!.checked = false;
-    form.querySelector<HTMLInputElement>('[name="follows"]')!.checked = false;
-    form.querySelector<HTMLInputElement>('[name="side"][value="left"]')!.checked = true;
-    form.querySelector<HTMLInputElement>('[name="volume"]')!.value = '0';
-    form.querySelector<HTMLSelectElement>('[name="nap"]')!.value = '10';
-    form.querySelector<HTMLTextAreaElement>('[name="ignore"]')!.value = 'bot.bsky.social\n@other.bsky.social, nonsense!';
-    expect(overlayUrl(paramsFrom(form), 'https://atpota.to')).toBe('https://atpota.to/overlay?show=poe,strip&streamer=dame.is&follows=off&ignore=bot.bsky.social,other.bsky.social&sound=off&nap=10&side=left');
-  });
-});
-
-describe('the setup page on a phone', () => {
-  it('opens the preview full screen, and closes it with the button, a tap or Escape', () => {
+  const page = () => {
     vi.stubGlobal('ResizeObserver', class { observe() {} });
     document.body.innerHTML = read('../overlay/setup.html').split('<body')[1]!.replace(/^[^>]*>/, '');
-    initSetup(document);
+    return document.querySelector<HTMLElement>('[data-ovs]')!;
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('puts a config in the form and reads the same one back', () => {
+    page();
+    buildWidgetRows(document.querySelector<HTMLElement>('[data-ovs-widgets]')!);
+    const form = document.querySelector<HTMLFormElement>('[data-ovs-form]')!;
+    const c: OverlayConfig = { ...DEFAULT_CONFIG, poe: { show: true, side: 'left', scale: 120 }, widgets: [{ kind: 'card', slot: 'top-right', scale: 90 }, { kind: 'strip', slot: 'top-center', scale: 100 }], follows: false, ignore: ['bot.bsky.social'], volume: 0, nap: 10, theme: 'dark' };
+    fillForm(form, c);
+    expect(configFrom(form)).toEqual(c);
+  });
+
+  it("can't be used without signing in", async () => {
+    const root = page();
+    await initSetup({ auth: null });
+    expect(root.dataset.state).toBe('unavailable');
+    const again = page();
+    await initSetup({ auth: { eager: false } as never });
+    expect(again.dataset.state).toBe('signed-out');
+    expect(document.querySelector<HTMLElement>('[data-ovs-editor]')!.hidden).toBe(true);
+  });
+
+  it('signed in, loads the saved settings, gives the URL, and saves changes to the repo', async () => {
+    const root = page();
+    const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
+    const fetchImpl = vi.fn(async (url: string) =>
+      url.includes('getRecord')
+        ? new Response(JSON.stringify({ value: { poe: { show: true, side: 'left', scale: 100 }, widgets: [{ kind: 'badge', slot: 'top-right', scale: 100 }], createdAt: '2026-10-01T00:00:00.000Z' } }))
+        : new Response(JSON.stringify({ did: STREAMER, handle: 'dame.is', displayName: 'dame' })),
+    ) as unknown as typeof fetch;
+    const save = vi.fn(async () => undefined);
+    await initSetup({ auth: { eager: true, start: async () => ({ session, callback: false, error: null }) } as never, fetchImpl, save });
+    expect(root.dataset.state).toBe('signed-in');
+    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is`);
+    const form = document.querySelector<HTMLFormElement>('[data-ovs-form]')!;
+    expect(configFrom(form).poe.side).toBe('left');
+    expect(configFrom(form).widgets).toEqual([{ kind: 'badge', slot: 'top-right', scale: 100 }]);
+    vi.useFakeTimers();
+    form.querySelector<HTMLInputElement>('[name="w-pulse"]')!.checked = true;
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(save).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
+    expect(save).toHaveBeenCalledTimes(1);
+    const [, config, createdAt] = save.mock.calls[0] as unknown as [unknown, OverlayConfig, string];
+    expect(config.widgets.map((w) => w.kind)).toEqual(['badge', 'pulse']);
+    expect(createdAt).toBe('2026-10-01T00:00:00.000Z');
+    expect(document.querySelector('[data-ovs-saved]')!.textContent).toContain('saved');
+  });
+
+  it('asks to sign in again when the sign-in is from before it could save', async () => {
+    page();
+    const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: 'RecordNotFound' }), { status: 400 })) as unknown as typeof fetch;
+    const save = vi.fn(async () => {
+      throw Object.assign(new Error('forbidden'), { status: 403 });
+    });
+    await initSetup({ auth: { eager: true, start: async () => ({ session, callback: false, error: null }) } as never, fetchImpl, save });
+    vi.useFakeTimers();
+    document.querySelector<HTMLFormElement>('[data-ovs-form]')!.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
+    expect(document.querySelector<HTMLElement>('[data-ovs-reconsent]')!.hidden).toBe(false);
+  });
+
+  it('opens the preview full screen, and closes it with the button, a tap or Escape', async () => {
+    page();
+    await initSetup({ auth: null });
     const preview = document.querySelector<HTMLElement>('[data-ovs-preview]')!;
     const full = document.querySelector<HTMLButtonElement>('[data-ovs-full]')!;
     full.click();
@@ -314,7 +514,6 @@ describe('the setup page on a phone', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(preview.classList.contains('is-full')).toBe(false);
     expect(document.documentElement.classList.contains('ovs-full-open')).toBe(false);
-    vi.unstubAllGlobals();
   });
 });
 
@@ -382,7 +581,7 @@ describe('the overlay page', () => {
     expect(read('../vite.config.ts')).toContain("overlay: r('./overlay/index.html')");
     const html = read('../overlay/index.html');
     expect(html).toContain('<meta name="robots" content="noindex">');
-    for (const hook of ['data-ov-card', 'data-ov-strip', 'data-weather-records', 'data-weather-cond', 'data-weather-spark', 'data-weather-sky', 'data-weather-index', 'data-ov-app', 'data-ov-poe']) expect(html).toContain(hook);
+    for (const hook of ['data-ov-widget="card"', 'data-ov-widget="strip"', 'data-ov-widget="badge"', 'data-ov-widget="apps"', 'data-ov-widget="forecast"', 'data-ov-widget="pulse"', 'data-ov-slot="top-left"', 'data-weather-records', 'data-weather-cond', 'data-weather-spark', 'data-weather-sky', 'data-weather-index', 'data-ov-app', 'data-ov-poe']) expect(html).toContain(hook);
   });
 
   it('has a setup page, built and wired to its page module', () => {

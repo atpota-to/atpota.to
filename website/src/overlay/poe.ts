@@ -18,8 +18,9 @@
  */
 
 import { burst, type BurstKind } from '../scripts/burst';
-import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL, preloadFaces, type MascotFace } from '../scripts/mascot';
+import { type MascotFace } from '../scripts/mascot';
 import { BLINK_GAP_MS, BLINK_MS, CHEER_MS, GLANCE_MS, MAX_WAVES, WAKE_MS, WAVE_MS, idleGap, nextBeat, startIdle, type IdleBeat } from '../poe/idle';
+import { RIGHT_FACES, type Faces } from './mirror';
 import { SILENT, type Sound, type Sounds } from './sounds';
 
 export interface OverlayLine {
@@ -78,9 +79,18 @@ export interface OverlayPoe {
   /** Something happened on the stream: no nap yet, and wake up if napping. */
   stir(): void;
   setPace(recordsPerSecond: number): void;
+  /** The drawings to use (mirror.ts: facing right from the bottom-left corner). */
+  setFaces(faces: Faces): void;
+  setNap(ms: number): void;
+  setSounds(sounds: Sounds): void;
+  /** The potato, for visitors to find (visitors.ts). */
+  readonly potato: HTMLElement;
+  /** Pulls a face for a while, unless Poe is talking (a visitor arriving). */
+  react(face: MascotFace, ms: number): void;
 }
 
 export interface OverlayPoeOptions {
+  faces?: Faces;
   sounds?: Sounds;
   /** Quiet this long and Poe naps; 0 never. */
   napMs?: number;
@@ -95,7 +105,10 @@ function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, cls: s
 }
 
 export function mountOverlayPoe(host: HTMLElement, options: OverlayPoeOptions = {}): OverlayPoe {
-  const { sounds = SILENT, napMs = NAP_MS, win = window, now = () => Date.now() } = options;
+  const { win = window, now = () => Date.now() } = options;
+  let sounds = options.sounds ?? SILENT;
+  let napMs = options.napMs ?? NAP_MS;
+  let faces = options.faces ?? RIGHT_FACES;
   const doc = host.ownerDocument;
   const bubble = el(doc, 'div', 'ov-bubble');
   bubble.hidden = true;
@@ -113,24 +126,25 @@ export function mountOverlayPoe(host: HTMLElement, options: OverlayPoeOptions = 
 
   const potato = el(doc, 'div', 'ov-potato');
   const arm = el(doc, 'img', 'ov-potato__arm');
-  arm.src = MASCOT_ARM_URL;
+  arm.src = faces.arm;
   arm.alt = '';
   const img = el(doc, 'img', 'ov-potato__img');
-  img.src = MASCOT_URLS.normal;
+  img.src = faces.face.normal;
   img.alt = 'poe, the atpotato potato';
   const zzz = el(doc, 'span', 'ov-potato__zzz');
   zzz.setAttribute('aria-hidden', 'true');
   for (let i = 0; i < 3; i++) zzz.append(Object.assign(doc.createElement('i'), { textContent: 'z' }));
   potato.append(arm, img, zzz);
   host.append(bubble, potato);
-  preloadFaces();
 
   // ---------- faces ----------
   let talkFace: MascotFace | null = null;
+  let reactFace: MascotFace | null = null;
+  let reactTimer: number | undefined;
   let beatSrc: string | null = null;
   let napping = false;
   const show = () => {
-    const src = beatSrc ?? (talkFace ? MASCOT_URLS[talkFace] : napping ? MASCOT_URLS.sleepy : MASCOT_URLS.normal);
+    const src = beatSrc ?? faces.face[talkFace ?? reactFace ?? (napping ? 'sleepy' : 'normal')];
     if (img.getAttribute('src') !== src) img.src = src;
   };
 
@@ -161,12 +175,12 @@ export function mountOverlayPoe(host: HTMLElement, options: OverlayPoeOptions = 
     };
     step(0);
   };
-  const wave = () => play([[MASCOT_WAVE_URL, WAVE_MS]], 'waving');
-  const hop = (face: MascotFace) => play([[MASCOT_URLS[face], CHEER_MS]], 'hopping');
+  const wave = () => play([[faces.wave, WAVE_MS]], 'waving');
+  const hop = (face: MascotFace) => play([[faces.face[face], CHEER_MS]], 'hopping');
   const playBeat = (beat: IdleBeat) => {
-    const shut = MASCOT_URLS.sleepy;
+    const shut = faces.face.sleepy;
     if (beat.kind === 'wave') return wave();
-    if (beat.kind === 'glance') return play([[MASCOT_URLS[beat.face], GLANCE_MS]]);
+    if (beat.kind === 'glance') return play([[faces.face[beat.face], GLANCE_MS]]);
     play(
       beat.times === 2
         ? [
@@ -190,14 +204,14 @@ export function mountOverlayPoe(host: HTMLElement, options: OverlayPoeOptions = 
     if (!napping) return false;
     napping = false;
     delete potato.dataset.napping;
-    play([[MASCOT_URLS.wow, WAKE_MS]], 'startled');
+    play([[faces.face.wow, WAKE_MS]], 'startled');
     return true;
   };
   const idle = () => {
     const gap = idleGap();
     win.setTimeout(() => {
       idle();
-      if (busy || talkFace || napping) return;
+      if (busy || talkFace || reactFace || napping) return;
       if (napMs > 0 && now() - lastStir >= napMs) return nap();
       // On stream there's no "once they've found it": keep waving every minute or so.
       if (plan.waves >= MAX_WAVES) plan.waves = 0;
@@ -259,6 +273,28 @@ export function mountOverlayPoe(host: HTMLElement, options: OverlayPoeOptions = 
     },
     setPace(rate) {
       potato.style.setProperty('--bob', `${bobMs(rate)}ms`);
+    },
+    setFaces(next) {
+      faces = next;
+      arm.src = faces.arm;
+      show();
+    },
+    setNap(ms) {
+      napMs = ms;
+    },
+    setSounds(next) {
+      sounds = next;
+    },
+    potato,
+    react(face, ms) {
+      wake();
+      win.clearTimeout(reactTimer);
+      reactFace = face;
+      show();
+      reactTimer = win.setTimeout(() => {
+        reactFace = null;
+        show();
+      }, ms);
     },
   };
 }

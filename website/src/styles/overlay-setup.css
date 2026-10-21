@@ -68,6 +68,31 @@
   }
 }
 
+.ovs-head__who {
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--leaf);
+}
+
+/* signed out, or on a host without sign-in */
+.ovs-gate {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.ovs-gate__title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.ovs-gate p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
 /* ---------- the form ---------- */
 
 .ovs-form {
@@ -209,6 +234,38 @@
   }
 }
 
+/* one row per weather widget: on or off, where, how big */
+.ovs-widgets {
+  display: grid;
+  gap: 8px;
+}
+
+.ovs-widget {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+}
+
+.ovs-widget .ovs-check {
+  grid-column: 1 / -1;
+}
+
+.ovs-widget .ovs-field--row {
+  font-size: 14px;
+}
+
+.ovs-widget select {
+  flex: 1 1 auto;
+}
+
+.ovs-widget.is-off .ovs-widget__where,
+.ovs-widget.is-off .ovs-widget__size {
+  opacity: 0.45;
+}
+
 /* ---------- the preview and the URL ---------- */
 
 .ovs-out {
@@ -305,6 +362,13 @@ html.ovs-full-open {
   field-sizing: content;
   word-break: break-all;
   line-height: 1.4;
+}
+
+.ovs-out__saved {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 14px;
+  color: var(--leaf);
 }
 
 .ovs-out__buttons {
