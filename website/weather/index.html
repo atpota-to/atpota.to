@@ -50,7 +50,7 @@
     <main id="main" class="weather-page" tabindex="-1">
         <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
         <div class="weather" data-weather-report data-state="loading">
-            <header class="tile weather-hero" aria-labelledby="weather-title" data-weather-hero>
+            <header class="tile weather-hero" aria-labelledby="weather-title" data-weather-hero data-lensed>
                 <!-- the weather itself: wind, rain or snow, and now and then a rainbow (src/scripts/weather-hero.ts) -->
                 <div class="weather-air" aria-hidden="true" data-weather-air></div>
                 <!-- clouds that come with the diversity index (src/scripts/weather-sky.ts) -->
@@ -65,22 +65,57 @@
                         <!-- @svg weather-sun.svg class="weather-sun" aria-hidden="true" focusable="false" -->
                     </button>
                     <div class="weather-hero__reading">
-                        <p class="weather-hero__big"><span data-r-records>&ndash;</span> <span class="weather-hero__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
+                        <!-- the number is in the lens's unit (weather-lens.ts); a tap on "rec/sec" moves it on to a minute, an hour, a day and totals -->
+                        <p class="weather-hero__big"><span data-r-records>&ndash;</span> <button type="button" class="weather-hero__unit" data-r-unit data-lens-cycle-unit aria-label="a second. change to a minute">rec/sec</button><span class="visually-hidden" data-r-unit-words>new records a second</span></p>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
-                        <!-- new records a second over the station's 60 seconds, when it's live; the number above says it in words -->
+                        <!-- new records a second over the station's 60 seconds, when it's live, or the window's line; the number above says it in words -->
                         <div class="weather-spark" data-r-spark aria-hidden="true"></div>
                     </div>
                 </div>
                 <p class="visually-hidden" role="status" data-r-status></p>
             </header>
 
-            <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
+            <!-- The lens (src/scripts/weather-lens.ts): what every tile below it shows, down to the stats.
+                 It's kept in the address (?w=24h&m=accounts&u=hour) and in this browser. -->
+            <nav class="tile weather-lens" aria-label="what the report shows">
+                <div class="weather-lens__group" role="group" aria-labelledby="weather-lens-window">
+                    <span class="weather-lens__label" id="weather-lens-window">over</span>
+                    <div class="weather-seg">
+                        <button type="button" class="weather-seg__btn" data-lens-window="now" aria-pressed="true" aria-label="now: the last minute, live">now</button>
+                        <button type="button" class="weather-seg__btn" data-lens-window="hour" aria-pressed="false" aria-label="the last hour">1h</button>
+                        <button type="button" class="weather-seg__btn" data-lens-window="day" aria-pressed="false" aria-label="the last 24 hours">24h</button>
+                        <button type="button" class="weather-seg__btn" data-lens-window="week" aria-pressed="false" aria-label="the last 7 days">7d</button>
+                        <button type="button" class="weather-seg__btn" data-lens-window="month" aria-pressed="false" aria-label="the last 30 days">30d</button>
+                    </div>
+                </div>
+                <div class="weather-lens__group" role="group" aria-labelledby="weather-lens-measure">
+                    <span class="weather-lens__label" id="weather-lens-measure">counting</span>
+                    <div class="weather-seg">
+                        <button type="button" class="weather-seg__btn" data-lens-measure="records" aria-pressed="true" aria-label="new records">records</button>
+                        <button type="button" class="weather-seg__btn" data-lens-measure="accounts" aria-pressed="false" aria-label="active accounts">accounts</button>
+                    </div>
+                </div>
+                <div class="weather-lens__group">
+                    <label class="weather-lens__label" for="weather-lens-unit">per</label>
+                    <select class="weather-lens__select" id="weather-lens-unit" data-lens-unit aria-describedby="weather-lens-unit-note">
+                        <option value="second">second</option>
+                        <option value="minute">minute</option>
+                        <option value="hour">hour</option>
+                        <option value="day">day</option>
+                        <option value="total">in all</option>
+                    </select>
+                    <span class="weather-lens__note" id="weather-lens-unit-note" data-lens-unit-note hidden>accounts count once a window</span>
+                </div>
+            </nav>
+
+            <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title" data-lensed>
                 <div class="weather-tile__titled">
                     <h2 class="weather-tile__title" id="weather-diversity-title">diversity index</h2>
                     <!-- Poe explains it in its chat (weather-page.ts EXPLAINERS, src/poe/say.ts explain) -->
                     <button type="button" class="weather-info" data-poe-explain="diversity" aria-haspopup="dialog" aria-label="what's the diversity index? ask poe" title="what's this?">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                     </button>
+                    <span class="weather-tag" data-tag hidden></span>
                 </div>
                 <div class="weather-diversity__now">
                     <p class="weather-diversity__index" data-r-index>&ndash;</p>
@@ -96,18 +131,118 @@
                 <p class="weather-diversity__accounts" data-r-acct-index hidden></p>
             </section>
 
-            <section class="tile weather-tile weather-mix" aria-labelledby="weather-mix-title">
-                <h2 class="weather-tile__title" id="weather-mix-title">bluesky and everyone else</h2>
+            <section class="tile weather-tile weather-mix" aria-labelledby="weather-mix-title" data-lensed>
+                <div class="weather-tile__titled">
+                    <h2 class="weather-tile__title" id="weather-mix-title">bluesky and everyone else</h2>
+                    <span class="weather-tag" data-tag hidden></span>
+                </div>
                 <p class="weather-mix__ratio" data-r-ratio>&ndash;</p>
                 <div class="weather-ratio weather-mix__bar" aria-hidden="true">
                     <span class="weather-ratio__bsky" data-r-bar-bsky></span><span class="weather-ratio__else" data-r-bar-else></span>
                 </div>
                 <dl class="weather-mix__legend">
-                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>bluesky</dt><dd><span data-r-bsky>&ndash;</span> a second <span class="weather-mix__share" data-r-bsky-share></span></dd></div>
-                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>elsewhere</dt><dd><span data-r-else>&ndash;</span> a second <span class="weather-mix__share" data-r-else-share></span></dd></div>
+                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>bluesky</dt><dd><span data-r-bsky>&ndash;</span> <span data-r-mix-unit>a second</span> <span class="weather-mix__share" data-r-bsky-share></span></dd></div>
+                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>elsewhere</dt><dd><span data-r-else>&ndash;</span> <span data-r-mix-unit>a second</span> <span class="weather-mix__share" data-r-else-share></span></dd></div>
                 </dl>
-                <p class="weather-mix__total"><span data-r-total>&ndash;</span> new records a second in all, across <span data-r-collections>&ndash;</span> collections.</p>
+                <p class="weather-mix__total"><span data-r-total>&ndash;</span> <span data-r-total-words>new records a second in all</span><span data-r-collections-wrap>, across <span data-r-collections>&ndash;</span> collections</span>.</p>
             </section>
+
+            <section class="tile weather-tile weather-apps" aria-labelledby="weather-apps-title" data-lensed>
+                <div class="weather-tile__head">
+                    <div class="weather-tile__titled">
+                        <h2 class="weather-tile__title" id="weather-apps-title">elsewhere in the atmosphere</h2>
+                        <span class="weather-tag" data-tag hidden></span>
+                    </div>
+                    <p class="weather-tile__aside" data-r-apps-count></p>
+                </div>
+                <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
+                <ol class="weather-bars weather-bars--changes" role="list" data-r-apps></ol>
+                <p class="weather-tile__note" data-r-apps-note></p>
+            </section>
+
+            <section class="tile weather-tile weather-bsky" aria-labelledby="weather-bsky-title" data-lensed>
+                <div class="weather-tile__titled">
+                    <h2 class="weather-tile__title" id="weather-bsky-title">bluesky</h2>
+                    <span class="weather-tag" data-tag hidden></span>
+                </div>
+                <ol class="weather-bars weather-bars--bsky" role="list" data-r-bsky-list></ol>
+                <p class="weather-tile__note" data-r-bsky-note>bluesky&#39;s busiest kinds of record, a second.</p>
+            </section>
+
+            <!-- the lens's window over time (weather-page.ts initTrends); on now, the last hour -->
+            <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
+                <div class="weather-tile__head">
+                    <h2 class="weather-tile__title" id="weather-trends-title">trends</h2>
+                    <p class="weather-tile__aside" data-t-range>the last hour</p>
+                </div>
+                <!-- loading and errors show here; once the charts are drawn it's only read out, for screen readers -->
+                <p class="weather-trends__summary" data-t-summary aria-live="polite">digging through the records…</p>
+                <div class="weather-trends__charts">
+                    <figure class="weather-chart-card">
+                        <figcaption class="weather-chart-card__title" data-t-chart-title="records">new records a second</figcaption>
+                        <div class="weather-chart" data-t-chart="records"></div>
+                    </figure>
+                    <figure class="weather-chart-card">
+                        <figcaption class="weather-chart-card__title" data-t-chart-title="index">diversity index</figcaption>
+                        <div class="weather-chart" data-t-chart="index"></div>
+                    </figure>
+                    <figure class="weather-chart-card" hidden>
+                        <figcaption class="weather-chart-card__title" data-t-apps-chart-title>apps heard</figcaption>
+                        <div class="weather-chart" data-t-chart="apps"></div>
+                    </figure>
+                </div>
+            </section>
+
+            <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second);
+                 the lens moves it on to the last hour, 24 hours, 7 days or 30 days, each number with a chip against the one before (src/scripts/weather-span.ts) -->
+            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="minute">
+                <div class="weather-tile__titled">
+                    <h2 class="weather-tile__title" id="weather-minute-title">the last <span class="weather-span__word" data-s-word>minute</span></h2>
+                    <button type="button" class="weather-info" data-poe-explain="readouts" aria-haspopup="dialog" aria-label="what do feels like, gusts, humidity and visibility mean? ask poe" title="what's this?">
+                        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
+                    </button>
+                </div>
+                <p class="visually-hidden" role="status" data-s-status></p>
+                <!-- the span as a weather app's details would put it (weather-span.ts renderFigures); Poe says what each one means -->
+                <dl class="weather-readouts">
+                    <div class="weather-readout">
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.75a2 2 0 0 0-2 2v6.7a3.6 3.6 0 1 0 4 0v-6.7a2 2 0 0 0-2-2z"/><path d="M10 9.5v4"/></svg>feels like</dt>
+                        <dd class="weather-readout__value"><strong data-r-feels>&ndash;</strong><span class="weather-readout__unit" data-s-unit="posts">posts a second</span><span class="weather-change" data-s-change="posts"></span></dd>
+                        <dd class="weather-readout__note">what scrolling feels like: the posts, not the likes and follows</dd>
+                    </div>
+                    <div class="weather-readout" data-r-gusts-wrap>
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 8h9.25a2.5 2.5 0 1 0-2.5-2.5"/><path d="M2.5 12h12a2.5 2.5 0 1 1-2.5 2.5"/></svg>gusts</dt>
+                        <dd class="weather-readout__value"><strong data-r-gusts>&ndash;</strong><span class="weather-readout__unit" data-s-unit="gust">records a second, at the peak</span><span class="weather-change" data-s-change="gust"></span></dd>
+                        <dd class="weather-readout__note" data-r-gusts-note>the busiest single second of the minute</dd>
+                    </div>
+                    <div class="weather-readout">
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.75c3.2 4.1 5 6.6 5 9.1a5 5 0 0 1-10 0c0-2.5 1.8-5 5-9.1z"/></svg>humidity</dt>
+                        <dd class="weather-readout__value"><strong data-r-humidity>&ndash;</strong><span class="weather-readout__unit">edits and deletions</span><span class="weather-change" data-s-change="humidity"></span></dd>
+                        <dd class="weather-readout__note">out of everything written</dd>
+                    </div>
+                    <div class="weather-readout">
+                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.25 10s2.9-5.25 7.75-5.25S17.75 10 17.75 10s-2.9 5.25-7.75 5.25S2.25 10 2.25 10z"/><circle cx="10" cy="10" r="2.4"/></svg>visibility</dt>
+                        <dd class="weather-readout__value"><strong data-r-visibility>&ndash;</strong><span class="weather-readout__unit" data-r-visibility-unit>apps</span><span class="weather-change" data-s-change="apps"></span></dd>
+                        <dd class="weather-readout__note">how far past bluesky you can see: apps outside it heard writing</dd>
+                    </div>
+                </dl>
+                <dl class="weather-stats">
+                    <div data-r-minute-accounts hidden><dt>active accounts</dt><dd data-r-active>&ndash;</dd><dd class="weather-change" data-s-change="active"></dd></div>
+                    <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd><dd class="weather-change" data-s-change="creates"></dd></div>
+                    <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd><dd class="weather-change" data-s-change="updates"></dd></div>
+                    <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd><dd class="weather-change" data-s-change="deletes"></dd></div>
+                    <div><dt>handle changes</dt><dd data-r-event="identity">&ndash;</dd><dd class="weather-change" data-s-change="identity"></dd></div>
+                    <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd><dd class="weather-change" data-s-change="account"></dd></div>
+                </dl>
+                <p class="weather-tile__note" data-s-note></p>
+            </section>
+
+            <!-- These keep their own times whatever the lens's window, and always count new records;
+                 only its unit reaches them (weather-almanac.ts, weather-forecast.ts). -->
+            <div class="weather-group">
+                <h2 class="weather-group__title">patterns and outlook</h2>
+                <p class="weather-group__note">these keep their own times and always count new records. only the unit up top reaches them.</p>
+            </div>
 
             <!-- The almanac (src/scripts/weather-almanac.ts, /api/weather-almanac): today so far, and new apps. -->
             <section class="tile weather-tile weather-today" aria-labelledby="weather-today-title" data-a-today data-state="loading">
@@ -120,7 +255,7 @@
                 <p class="weather-today__detail" data-a-usual-detail></p>
                 <!-- today's low and high, like a weather app's, with a dot for the last hour; the sentence under it says the same in words -->
                 <div class="weather-dayrange">
-                    <p class="weather-dayrange__title">today&#39;s range <span>new records a second</span></p>
+                    <p class="weather-dayrange__title">today&#39;s range <span data-a-range-unit>new records a second</span></p>
                     <div class="weather-dayrange__scale" aria-hidden="true" data-a-range>
                         <span class="weather-dayrange__now" data-a-now hidden></span>
                         <strong class="weather-dayrange__value weather-dayrange__value--low" data-a-low>&ndash;</strong>
@@ -166,7 +301,7 @@
                             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                         </button>
                     </div>
-                    <p class="weather-tile__aside">the next 12 hours · new records a second</p>
+                    <p class="weather-tile__aside">the next 12 hours · <span data-f-unit>new records a second</span></p>
                 </div>
                 <p class="weather-forecast__lede" data-f-lede>reading the clouds…</p>
                 <!-- an hour a column, the forecast's line and likely range under them; each hour says it all in words -->
@@ -199,112 +334,10 @@
                 </div>
             </section>
 
-            <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
-                <div class="weather-tile__head">
-                    <h2 class="weather-tile__title" id="weather-trends-title">trends</h2>
-                    <div class="weather-range" role="group" aria-label="time range">
-                        <button type="button" class="weather-range__btn" data-range="hour" aria-pressed="false" aria-label="last hour">1h</button>
-                        <button type="button" class="weather-range__btn" data-range="day" aria-pressed="true" aria-label="last 24 hours">1d</button>
-                        <button type="button" class="weather-range__btn" data-range="week" aria-pressed="false" aria-label="last 7 days">1w</button>
-                        <button type="button" class="weather-range__btn" data-range="month" aria-pressed="false" aria-label="last 30 days">30d</button>
-                    </div>
-                </div>
-                <!-- records or accounts, for this tile alone (weather-page.ts createMeasure) -->
-                <button type="button" class="weather-measure" data-measure-toggle="trends" data-measure="accounts">
-                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="accounts"><circle cx="10" cy="6.75" r="3.25"/><path d="M3.75 17c.6-3.4 3.1-5.25 6.25-5.25s5.65 1.85 6.25 5.25"/></svg>
-                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="records"><rect x="4.25" y="2.75" width="11.5" height="14.5" rx="2"/><path d="M7.25 7h5.5M7.25 10h5.5M7.25 13h3.5"/></svg>
-                </button>
-                <!-- loading and errors show here; once the charts are drawn it's only read out, for screen readers -->
-                <p class="weather-trends__summary" data-t-summary aria-live="polite">digging through the records…</p>
-                <div class="weather-trends__charts">
-                    <figure class="weather-chart-card">
-                        <figcaption class="weather-chart-card__title" data-t-chart-title="records">new records a second</figcaption>
-                        <div class="weather-chart" data-t-chart="records"></div>
-                    </figure>
-                    <figure class="weather-chart-card">
-                        <figcaption class="weather-chart-card__title" data-t-chart-title="index">diversity index</figcaption>
-                        <div class="weather-chart" data-t-chart="index"></div>
-                    </figure>
-                    <figure class="weather-chart-card" hidden>
-                        <figcaption class="weather-chart-card__title" data-t-apps-chart-title>apps heard</figcaption>
-                        <div class="weather-chart" data-t-chart="apps"></div>
-                    </figure>
-                </div>
-                <div class="weather-trends__apps" data-t-apps-wrap hidden>
-                    <h3 class="weather-trends__apps-title" data-t-apps-title>busiest apps elsewhere</h3>
-                    <ol class="weather-bars weather-bars--changes" role="list" data-t-apps></ol>
-                    <p class="weather-tile__note" data-t-apps-note></p>
-                </div>
-            </section>
-
-            <section class="tile weather-tile weather-apps" aria-labelledby="weather-apps-title">
-                <div class="weather-tile__head">
-                    <h2 class="weather-tile__title" id="weather-apps-title">elsewhere in the atmosphere</h2>
-                    <p class="weather-tile__aside" data-r-apps-count></p>
-                </div>
-                <button type="button" class="weather-measure" data-measure-toggle="apps" data-measure="accounts">
-                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="accounts"><circle cx="10" cy="6.75" r="3.25"/><path d="M3.75 17c.6-3.4 3.1-5.25 6.25-5.25s5.65 1.85 6.25 5.25"/></svg>
-                    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" data-measure-icon="records"><rect x="4.25" y="2.75" width="11.5" height="14.5" rx="2"/><path d="M7.25 7h5.5M7.25 10h5.5M7.25 13h3.5"/></svg>
-                </button>
-                <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
-                <ol class="weather-bars" role="list" data-r-apps></ol>
-            </section>
-
-            <section class="tile weather-tile weather-bsky" aria-labelledby="weather-bsky-title">
-                <h2 class="weather-tile__title" id="weather-bsky-title">bluesky</h2>
-                <ol class="weather-bars weather-bars--bsky" role="list" data-r-bsky-list></ol>
-                <p class="weather-tile__note">bluesky&#39;s busiest kinds of record, a second.</p>
-            </section>
-
-            <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second);
-                 "minute" moves it on to the last hour, day or week, each number with a chip against the one before (src/scripts/weather-span.ts) -->
-            <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="minute">
-                <div class="weather-tile__titled">
-                    <h2 class="weather-tile__title" id="weather-minute-title">the last <button type="button" class="weather-span" data-s-toggle aria-describedby="weather-span-next"><span class="weather-span__word" data-s-word>minute</span><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M6.5 8 10 4.5 13.5 8M6.5 12l3.5 3.5 3.5-3.5"/></svg></button></h2>
-                    <button type="button" class="weather-info" data-poe-explain="readouts" aria-haspopup="dialog" aria-label="what do feels like, gusts, humidity and visibility mean? ask poe" title="what's this?">
-                        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
-                    </button>
-                </div>
-                <p id="weather-span-next" data-s-next hidden>switch to the last hour</p>
-                <p class="visually-hidden" role="status" data-s-status></p>
-                <!-- the span as a weather app's details would put it (weather-span.ts renderFigures); Poe says what each one means -->
-                <dl class="weather-readouts">
-                    <div class="weather-readout">
-                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.75a2 2 0 0 0-2 2v6.7a3.6 3.6 0 1 0 4 0v-6.7a2 2 0 0 0-2-2z"/><path d="M10 9.5v4"/></svg>feels like</dt>
-                        <dd class="weather-readout__value"><strong data-r-feels>&ndash;</strong><span class="weather-readout__unit">posts a second</span><span class="weather-change" data-s-change="posts"></span></dd>
-                        <dd class="weather-readout__note">what scrolling feels like: the posts, not the likes and follows</dd>
-                    </div>
-                    <div class="weather-readout" data-r-gusts-wrap>
-                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 8h9.25a2.5 2.5 0 1 0-2.5-2.5"/><path d="M2.5 12h12a2.5 2.5 0 1 1-2.5 2.5"/></svg>gusts</dt>
-                        <dd class="weather-readout__value"><strong data-r-gusts>&ndash;</strong><span class="weather-readout__unit">records a second, at the peak</span><span class="weather-change" data-s-change="gust"></span></dd>
-                        <dd class="weather-readout__note" data-r-gusts-note>the busiest single second of the minute</dd>
-                    </div>
-                    <div class="weather-readout">
-                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2.75c3.2 4.1 5 6.6 5 9.1a5 5 0 0 1-10 0c0-2.5 1.8-5 5-9.1z"/></svg>humidity</dt>
-                        <dd class="weather-readout__value"><strong data-r-humidity>&ndash;</strong><span class="weather-readout__unit">edits and deletions</span><span class="weather-change" data-s-change="humidity"></span></dd>
-                        <dd class="weather-readout__note">out of everything written</dd>
-                    </div>
-                    <div class="weather-readout">
-                        <dt><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.25 10s2.9-5.25 7.75-5.25S17.75 10 17.75 10s-2.9 5.25-7.75 5.25S2.25 10 2.25 10z"/><circle cx="10" cy="10" r="2.4"/></svg>visibility</dt>
-                        <dd class="weather-readout__value"><strong data-r-visibility>&ndash;</strong><span class="weather-readout__unit" data-r-visibility-unit>apps</span><span class="weather-change" data-s-change="apps"></span></dd>
-                        <dd class="weather-readout__note">how far past bluesky you can see: apps outside it heard writing</dd>
-                    </div>
-                </dl>
-                <dl class="weather-stats">
-                    <div data-r-minute-accounts hidden><dt>active accounts</dt><dd data-r-active>&ndash;</dd><dd class="weather-change" data-s-change="active"></dd></div>
-                    <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd><dd class="weather-change" data-s-change="creates"></dd></div>
-                    <div><dt>edits</dt><dd data-r-event="updates">&ndash;</dd><dd class="weather-change" data-s-change="updates"></dd></div>
-                    <div><dt>deletions</dt><dd data-r-event="deletes">&ndash;</dd><dd class="weather-change" data-s-change="deletes"></dd></div>
-                    <div><dt>handle changes</dt><dd data-r-event="identity">&ndash;</dd><dd class="weather-change" data-s-change="identity"></dd></div>
-                    <div><dt>account changes</dt><dd data-r-event="account">&ndash;</dd><dd class="weather-change" data-s-change="account"></dd></div>
-                </dl>
-                <p class="weather-tile__note" data-s-note></p>
-            </section>
-
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="weather-tile__title" id="weather-how-title">how i measure it</h2>
                 <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by, live while you&#39;re here.</p>
-                <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. i never keep track of who&#39;s who.</p>
+                <p>the bar up top picks what you&#39;re looking at: right now or the last hour, day, week or month, and what a rate is per. switch it to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. i never keep track of who&#39;s who.</p>
                 <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in (◕‿◕)</p>
                 <p>i&#39;m a potato, not a satellite, so a quiet app can slip past me now and then. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>

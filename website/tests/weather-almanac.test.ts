@@ -106,6 +106,22 @@ describe('today so far', () => {
     expect(text('[data-a-range-said]')).toBe("today's low was 263 new records a second, at 4:02 am, and the high 642, at 3:14 pm. the last hour averaged 468.");
   });
 
+  it("follows the lens's unit, an hour for in all, since it keeps its own times", () => {
+    const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
+    renderToday(tile, ALMANAC, NOW, TZ, 'minute');
+    expect(text('[data-a-high]')).toBe('38.5k');
+    expect(text('[data-a-now]')).toBe('last hour 28.1k');
+    expect(text('[data-a-range-unit]')).toBe('new records a minute');
+    expect(text('[data-a-range-said]')).toMatch(/^today's low was 15\.8k new records a minute/);
+    expect(text('[data-a-usual-detail]')).toMatch(/^28\.1k new records a minute over the last hour/);
+    renderRecords(tile, ALMANAC, TZ, 'hour');
+    expect(text('[data-a-record-busiest-at]')).toMatch(/^an hour, /);
+    // a second reads as it always has
+    renderToday(tile, ALMANAC, NOW, TZ);
+    expect(text('[data-a-high]')).toBe('642');
+    expect(text('[data-a-range-unit]')).toBe('new records a second');
+  });
+
   it('leaves the dot off until it has a low and a high', () => {
     renderToday(root.querySelector('[data-a-today]')!, { ...ALMANAC, today: { ...ALMANAC.today!, high: null, low: null } }, NOW, TZ);
     expect(text('[data-a-high]')).toBe('–');
@@ -225,6 +241,14 @@ describe('when the sky is busiest', () => {
     expect(rows[2]!.querySelectorAll('td')[3]!.className).toContain('--empty');
     expect(text('[data-a-heat-lede]')).toBe('busiest on tuesdays around 1 pm, quietest on sundays around 5 am.');
     expect(root.querySelector('[data-a-heat-grid] caption')).not.toBeNull();
+  });
+
+  it("says each hour in the lens's unit", () => {
+    renderHeatmap(root.querySelector('[data-a-heat]')!, ALMANAC, NOW, TZ, 'hour');
+    const tue1pm = root.querySelectorAll('[data-a-heat-grid] tbody tr')[1]!.querySelectorAll('td')[13]!;
+    expect(tue1pm.title).toBe('tuesdays at 1 pm: 1.9m new records an hour');
+    expect(text('[data-a-heat-max]')).toMatch(/new records an hour$/);
+    expect(root.querySelector('[data-a-heat-grid] caption')!.textContent).toBe('new records an hour for each hour of the week, in your time');
   });
 
   it('waits a few weeks before naming the busiest hour', () => {

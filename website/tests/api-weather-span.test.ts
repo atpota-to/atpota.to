@@ -178,6 +178,21 @@ describe('/api/weather-span', () => {
     expect(asked).not.toContain('atmosphere_minute_app');
   });
 
+  it('30 days: hours, a page at a time, against the 30 days before', async () => {
+    const now = T('2027-01-10T12:30:00Z');
+    const start = T('2026-11-11T13:00:00Z'); // 1,440 hours back: two stretches of 720
+    const hours = Array.from({ length: 1440 }, (_, i) => ({ hour: at(start + i * HOUR), ...counts(i < 720 ? 400 : 450, 3600) }));
+    const db = station({ atmosphere_hour: hours, atmosphere_day_app: [], atmosphere_hour_app: [], atmosphere_account_sketch: [] });
+    const res = await get(handlers(db, now), 'month');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(SPANS.month.cache);
+    const { now: n, before: b } = (await res.json()) as Record<string, Record<string, number | string>>;
+    expect(n).toMatchObject({ since: at(start + 720 * HOUR), until: at(now), seconds: 720 * 3600, creates: 450 * 720 * 3600, gust: 450 });
+    expect(b).toMatchObject({ since: at(start), until: at(start + 720 * HOUR), seconds: 720 * 3600, creates: 400 * 720 * 3600 });
+    // more hours than a page holds
+    expect(db.asked.filter((u) => u.pathname.endsWith('/atmosphere_hour')).map((u) => u.searchParams.get('offset'))).toEqual(['0', '1000']);
+  });
+
   it("only counts what the station heard live: a stretch from before has nothing, and asks for nothing", async () => {
     expect(LIVE_FLOOR).toBe(T('2026-10-20T16:00:00Z'));
     const now = T('2026-10-21T14:39:00Z');
@@ -208,7 +223,7 @@ describe('/api/weather-span', () => {
     expect(logged).toContain('span_error');
   });
 
-  it("takes minute, hour, day or week; anything else is a 400, and only GET and HEAD", async () => {
+  it("takes minute, hour, day, week or month; anything else is a 400, and only GET and HEAD", async () => {
     const res = await get(handlers(station({}), Date.now()), 'year');
     expect(res.status).toBe(400);
     const post = await api.POST(new Request('https://atpota.to/api/weather-span', { method: 'POST' }));

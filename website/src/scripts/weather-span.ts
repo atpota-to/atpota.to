@@ -1,35 +1,42 @@
 /**
- * The weather report's "last minute" tile (weather/index.html) over a longer span: the
- * title's "minute" is a button, and each tap moves it on to the last hour, day and week,
- * then back round. Every number gets a chip for how it did against the span before it.
+ * The weather report's "the last minute" tile (weather/index.html) over the lens's window
+ * (weather-lens.ts): the last minute, hour, 24 hours, 7 days or 30 days, the title saying
+ * which. Every number gets a chip for how it did against the span before it.
  *
- *   minute            the live reading, handed over by weather-page.ts (showLive), against
- *                     the station's minute before it from /api/weather-span
- *   hour, day, week   /api/weather-span's stretch and the one before it
- *                     (server/weather-span.ts)
+ *   minute                    the live reading, handed over by weather-page.ts (showLive),
+ *                             against the station's minute before it from /api/weather-span
+ *   hour, day, week, month    /api/weather-span's stretch and the one before it
+ *                             (server/weather-span.ts)
  *
  * The chips compare rates, not counts, so a stretch the station heard less of doesn't
  * pass for a quiet one. Apps and accounts don't scale with time (an hour has far fewer
  * than 60 minutes' worth), so they're compared only when the station heard both
  * stretches about as well. Humidity is a percent already, so its chip is in points.
  *
- * The rest of the page stays live; only this tile moves to the span. Numbers roll
- * (roll.ts), and big counts shorten ("1.6m") to fit a phone's two columns.
+ * Feels like and gusts are rates, in the lens's unit; with "total", feels like is the
+ * span's posts, and gusts, a peak, stay a second. The counts under them are counts
+ * whatever the unit. Numbers roll (roll.ts), and big counts shorten ("1.6m") to fit a
+ * phone's two columns.
  */
 
 import { motionOK, rollText } from './roll';
-import { compactCount, countTo, coverageWords, formatCount, formatRate, type Reading } from './weather';
+import { compactCount, countTo, coverageWords, formatCount, type Reading } from './weather';
+import { formatAmount, perUnit, UNIT_INFO, type Unit, type Window } from './weather-lens';
 
-export type Span = 'minute' | 'hour' | 'day' | 'week';
-export const SPANS: readonly Span[] = ['minute', 'hour', 'day', 'week'];
+export type Span = 'minute' | 'hour' | 'day' | 'week' | 'month';
+export const SPANS: readonly Span[] = ['minute', 'hour', 'day', 'week', 'month'];
 export const SPAN_ENDPOINT = '/api/weather-span';
 
-export const SPAN_INFO: Record<Span, { seconds: number; before: string; gust: string; refreshMs: number }> = {
-  minute: { seconds: 60, before: 'the minute before', gust: 'the busiest single second of the minute', refreshMs: 60_000 },
-  hour: { seconds: 3600, before: 'the hour before', gust: 'the busiest minute of the hour', refreshMs: 60_000 },
-  day: { seconds: 86_400, before: 'the day before', gust: 'the busiest hour of the day', refreshMs: 5 * 60_000 },
-  week: { seconds: 7 * 86_400, before: 'the week before', gust: 'the busiest hour of the week', refreshMs: 15 * 60_000 },
+export const SPAN_INFO: Record<Span, { seconds: number; words: string; title: string; before: string; gust: string; refreshMs: number }> = {
+  minute: { seconds: 60, words: 'the last minute', title: 'minute', before: 'the minute before', gust: 'the busiest single second of the minute', refreshMs: 60_000 },
+  hour: { seconds: 3600, words: 'the last hour', title: 'hour', before: 'the hour before', gust: 'the busiest minute of the hour', refreshMs: 60_000 },
+  day: { seconds: 86_400, words: 'the last 24 hours', title: '24 hours', before: 'the 24 hours before', gust: 'the busiest hour of the day', refreshMs: 5 * 60_000 },
+  week: { seconds: 7 * 86_400, words: 'the last 7 days', title: '7 days', before: 'the week before', gust: 'the busiest hour of the week', refreshMs: 15 * 60_000 },
+  month: { seconds: 30 * 86_400, words: 'the last 30 days', title: '30 days', before: 'the 30 days before', gust: 'the busiest hour of the 30 days', refreshMs: 30 * 60_000 },
 };
+
+/** The span for the lens's window: "now" is the live minute. */
+export const spanFor = (window: Window): Span => (window === 'now' ? 'minute' : window);
 
 export const EVENTS = ['creates', 'updates', 'deletes', 'identity', 'account'] as const;
 export type EventKey = (typeof EVENTS)[number];
@@ -211,7 +218,7 @@ export function changesOf(now: Figures, before: Figures | null, span: Span): Rec
 /** The line under the tile: what the arrows compare with, and how much the station heard. */
 export function spanNote(span: Span, now: Figures | null, before: Figures | null, failed = false): string {
   const info = SPAN_INFO[span];
-  const words = `the last ${span}`;
+  const words = info.words;
   if (!now) return failed ? `${words} is hard to read right now. try again in a bit.` : `reading ${words}…`;
   const heard = span !== 'minute' && now.seconds < info.seconds * 0.9 ? ` the station has heard ${coverageWords(now.seconds)} of ${words} so far.` : '';
   const arrows = before ? `arrows compare with ${info.before}.` : span === 'minute' ? '' : `once the station has heard ${info.before}, arrows say what's up and down.`;
@@ -255,9 +262,22 @@ function chip(el: HTMLElement, c: Change | null): void {
   el.replaceChildren(shown, said);
 }
 
+/** Feels like's and gusts' units: "posts a second", "records an hour, at the peak", "posts in all". */
+export function unitWords(unit: Unit): { posts: string; gust: string } {
+  return {
+    posts: unit === 'total' ? 'posts in all' : `posts ${UNIT_INFO[unit].words}`,
+    gust: `records ${UNIT_INFO[unit === 'total' ? 'second' : unit].words}, at the peak`,
+  };
+}
+
 /** The tile for a span: its readouts and counts, each with its chip, and the note. null while it loads. */
-export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null, before: Figures | null, failed = false): void {
+export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null, before: Figures | null, failed = false, unit: Unit = 'second'): void {
   tile.dataset.span = span;
+  const words = unitWords(unit);
+  const postsUnit = $(tile, '[data-s-unit="posts"]');
+  if (postsUnit) postsUnit.textContent = words.posts;
+  const gustUnit = $(tile, '[data-s-unit="gust"]');
+  if (gustUnit) gustUnit.textContent = words.gust;
   tile.dataset.state = now ? 'ready' : failed ? 'error' : 'loading';
   const note = $(tile, '[data-s-note]');
   if (note) note.textContent = spanNote(span, now, before, failed);
@@ -267,15 +287,16 @@ export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null
   for (const el of tile.querySelectorAll<HTMLElement>('[data-s-change]')) chip(el, changes?.[el.dataset.sChange as ChangeKey] ?? null);
   // loading: the last numbers stay, dimmed, until the span's come
   if (!now && !failed) return;
-  show(tile, '[data-r-feels]', now?.posts, formatRate);
+  const rate = unit === 'total' ? 'second' : unit;
+  show(tile, '[data-r-feels]', now ? (unit === 'total' ? now.posts * now.seconds : perUnit(now.posts, unit)) : undefined, formatAmount);
   const gusts = $(tile, '[data-r-gusts-wrap]');
   if (gusts) gusts.hidden = now?.gust === null;
-  show(tile, '[data-r-gusts]', now?.gust, formatCount);
+  show(tile, '[data-r-gusts]', now?.gust == null ? now?.gust : perUnit(now.gust, rate), formatAmount);
   const humidity = $(tile, '[data-r-humidity]');
   if (humidity) rollText(humidity, now?.humidity == null ? '–' : percent(now.humidity));
   show(tile, '[data-r-visibility]', now?.apps, formatCount);
-  const unit = $(tile, '[data-r-visibility-unit]');
-  if (unit) unit.textContent = now?.apps === 1 ? 'app' : 'apps';
+  const apps = $(tile, '[data-r-visibility-unit]');
+  if (apps) apps.textContent = now?.apps === 1 ? 'app' : 'apps';
   const accounts = $(tile, '[data-r-minute-accounts]');
   if (accounts) accounts.hidden = now?.active === null;
   show(tile, '[data-r-active]', now?.active, tileCount);
@@ -284,6 +305,7 @@ export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null
 
 interface TileState {
   span: Span;
+  unit: Unit;
   live: Figures | null;
   answers: Partial<Record<Span, SpanAnswer>>;
   failed: Partial<Record<Span, boolean>>;
@@ -293,7 +315,7 @@ const states = new WeakMap<HTMLElement, TileState>();
 
 function stateOf(tile: HTMLElement): TileState {
   let s = states.get(tile);
-  if (!s) states.set(tile, (s = { span: 'minute', live: null, answers: {}, failed: {} }));
+  if (!s) states.set(tile, (s = { span: 'minute', unit: 'second', live: null, answers: {}, failed: {} }));
   return s;
 }
 
@@ -301,7 +323,7 @@ function draw(tile: HTMLElement, s: TileState): void {
   const answer = s.answers[s.span];
   const now = s.span === 'minute' ? s.live : answer?.now ? figuresOf(answer.now) : null;
   const before = answer?.before ? figuresOf(answer.before) : null;
-  renderFigures(tile, s.span, now, before, s.span !== 'minute' && !answer && !!s.failed[s.span]);
+  renderFigures(tile, s.span, now, before, s.span !== 'minute' && !answer && !!s.failed[s.span], s.unit);
 }
 
 /** A live reading for the tile: drawn when it's on the minute, kept for when it comes back. */
@@ -311,18 +333,19 @@ export function showLive(tile: HTMLElement, r: Reading): void {
   if (s.span === 'minute') draw(tile, s);
 }
 
-/** The span after this one, round and back to the minute. */
-export const nextSpan = (span: Span): Span => SPANS[(SPANS.indexOf(span) + 1) % SPANS.length]!;
+export interface SpanTile {
+  /** Moves the tile to a span (the title says which), loading it if it isn't already. */
+  setSpan(span: Span): void;
+  setUnit(unit: Unit): void;
+}
 
-/** The title's button, the first load and a refresh while the tab is visible (SPAN_INFO's refreshMs). */
-export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch): void {
-  if (tile.dataset.spanBound === 'true') return;
-  tile.dataset.spanBound = 'true';
+/** The tile's first load and a refresh while the tab is visible (SPAN_INFO's refreshMs); the lens moves it on (weather-page.ts). */
+export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch, start: { span?: Span; unit?: Unit } = {}): SpanTile {
   const s = stateOf(tile);
-  const button = $<HTMLButtonElement>(tile, '[data-s-toggle]');
   const word = $(tile, '[data-s-word]');
-  const next = $(tile, '[data-s-next]');
   const status = $(tile, '[data-s-status]');
+  if (start.unit) s.unit = start.unit;
+  if (start.span) s.span = start.span;
   const load = async () => {
     const span = s.span;
     const answer = await fetchSpan(span, fetchImpl);
@@ -333,19 +356,8 @@ export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch): vo
     if (span === s.span) draw(tile, s);
   };
   const label = () => {
-    if (word) word.textContent = s.span;
-    if (next) next.textContent = `switch to the last ${nextSpan(s.span)}`;
+    if (word) word.textContent = SPAN_INFO[s.span].title;
   };
-  label();
-  button?.addEventListener('click', () => {
-    s.span = nextSpan(s.span);
-    label();
-    if (word && motionOK()) word.animate?.([{ opacity: 0, transform: 'translateY(40%)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' });
-    if (status) status.textContent = `showing the last ${s.span}`;
-    draw(tile, s);
-    void load();
-    schedule();
-  });
   let timer: number | undefined;
   const schedule = () => {
     window.clearTimeout(timer);
@@ -354,6 +366,25 @@ export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch): vo
       schedule();
     }, SPAN_INFO[s.span].refreshMs);
   };
+  label();
+  draw(tile, s);
   void load();
   schedule();
+  return {
+    setSpan(span) {
+      if (span === s.span) return;
+      s.span = span;
+      label();
+      if (word && motionOK()) word.animate?.([{ opacity: 0, transform: 'translateY(40%)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' });
+      if (status) status.textContent = `showing ${SPAN_INFO[span].words}`;
+      draw(tile, s);
+      void load();
+      schedule();
+    },
+    setUnit(unit) {
+      if (unit === s.unit) return;
+      s.unit = unit;
+      draw(tile, s);
+    },
+  };
 }

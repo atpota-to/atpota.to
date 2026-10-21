@@ -1483,87 +1483,6 @@ html[data-theme="dark"] .weather-hero {
   grid-column: 1 / -1;
 }
 
-.weather-range {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.weather-range__btn {
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  background: var(--paper);
-  color: var(--text);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.weather-range__btn:hover {
-  border-color: var(--dash);
-}
-
-.weather-range__btn[aria-pressed="true"] {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--card);
-}
-
-.weather-range__btn:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* Records or accounts (weather-page.ts createMeasure): an icon in the top right of the trends
-   and of the apps elsewhere, each tile its own. It shows what the tile is counting; a tap swaps it. */
-.weather-measure {
-  position: absolute;
-  top: calc(var(--tile-pad) - 4px);
-  right: calc(var(--tile-pad) - 6px);
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  background: var(--paper);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.weather-measure svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.weather-measure[data-measure="accounts"] [data-measure-icon="records"],
-.weather-measure[data-measure="records"] [data-measure-icon="accounts"] {
-  display: none;
-}
-
-.weather-measure:hover {
-  border-color: var(--dash);
-}
-
-.weather-measure:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* room for it beside the title */
-.weather-tile:has(> .weather-measure) > .weather-tile__head {
-  padding-right: 44px;
-}
-
 .weather-apps .weather-tile__aside {
   margin-right: auto;
 }
@@ -1697,18 +1616,6 @@ html[data-theme="dark"] .weather-hero {
   .weather-chart__area {
     fill: none;
   }
-}
-
-.weather-trends__apps {
-  display: grid;
-  gap: 12px;
-}
-
-.weather-trends__apps-title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
 }
 
 /* ---------- bars: apps elsewhere, bluesky's collections ---------- */
@@ -1938,46 +1845,9 @@ html[data-theme="dark"] .weather-hero {
   margin-top: 4px;
 }
 
-/* "minute" in the title: tap it for the last hour, day or week (weather-span.ts). */
-.weather-span {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin: -4px 0;
-  padding: 4px 2px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-decoration: underline 2px dashed var(--dash);
-  text-underline-offset: 5px;
-  cursor: pointer;
-}
-
-.weather-span:hover {
-  text-decoration-color: var(--text-soft);
-}
-
-.weather-span:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
+/* The lens's window in the title (weather-span.ts), stepping in when it changes. */
 .weather-span__word {
   display: inline-block;
-}
-
-.weather-span svg {
-  flex: none;
-  width: 0.8em;
-  height: 0.8em;
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 /* A span still on its way: the last numbers stay, dimmed, until its own come. */
@@ -2002,6 +1872,173 @@ html[data-theme="dark"] .weather-hero {
 
 .weather-how p {
   max-width: 72ch;
+}
+
+/* ---------- the lens (weather-lens.ts): what every tile under it shows ---------- */
+
+/* Under the header, and along at the top of the screen while the tiles that follow it scroll by. */
+.weather-lens {
+  --tile-pad: 12px 16px;
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  border: 1.5px solid var(--line-strong);
+  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.weather-lens__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.weather-lens__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.weather-lens__note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Buttons side by side in one pill: the window, records or accounts. */
+.weather-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+}
+
+.weather-seg__btn {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.weather-seg__btn:hover {
+  color: var(--text);
+}
+
+.weather-seg__btn[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--card);
+}
+
+.weather-seg__btn:focus-visible,
+.weather-lens__select:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.weather-lens__select {
+  min-height: 36px;
+  padding: 6px 30px 6px 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M6 8l4 4 4-4' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center / 14px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  appearance: none;
+  cursor: pointer;
+}
+
+.weather-lens__select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The header's unit ("rec/sec"): a tap moves it on, like °C and °F. */
+button.weather-hero__unit {
+  margin: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--weather-sky-mono);
+  text-decoration: underline 2px dashed color-mix(in srgb, var(--weather-sky-mono) 45%, transparent);
+  text-underline-offset: 5px;
+  cursor: pointer;
+}
+
+button.weather-hero__unit:hover {
+  text-decoration-color: currentColor;
+}
+
+button.weather-hero__unit:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+button.weather-hero__unit:disabled {
+  text-decoration: none;
+  cursor: default;
+}
+
+/* What a tile counts, when it isn't what the lens asks for: "by records". */
+.weather-tag {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* A window on its way: the tiles that follow the lens keep their numbers, dimmed, until it comes. */
+.weather [data-lensed] :is(.weather-hero__reading, .weather-diversity__now, .weather-scale, .weather-mix__ratio, .weather-ratio, .weather-mix__legend, .weather-mix__total, .weather-bars) {
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.weather[data-lens-state="loading"] [data-lensed] :is(.weather-hero__reading, .weather-diversity__now, .weather-scale, .weather-mix__ratio, .weather-ratio, .weather-mix__legend, .weather-mix__total, .weather-bars) {
+  opacity: 0.5;
+}
+
+/* The tiles that keep their own times, under their own heading. */
+.weather-group {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin-top: 12px;
+  padding: 0 6px;
+}
+
+.weather-group__title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.weather-group__note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 /* ---------- loading and error ---------- */
@@ -2032,6 +2069,21 @@ html[data-theme="dark"] .weather-hero {
 @media (max-width: 640px) {
   .weather {
     gap: var(--grid-gap);
+  }
+
+  .weather-lens {
+    --tile-pad: 10px 12px;
+    top: 4px;
+    gap: 8px 14px;
+  }
+
+  .weather-seg__btn {
+    min-width: 40px;
+    padding: 6px 10px;
+  }
+
+  button.weather-hero__unit {
+    font-size: 18px;
   }
 
   .weather-hero__sun {

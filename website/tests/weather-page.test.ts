@@ -16,20 +16,26 @@ import {
   BLUESKY_NAMES,
   compactCount,
   coverageWords,
-  createMeasure,
+  createHistoryFeed,
   fetchHistory,
   formatRate,
-  MEASURE_KEY,
+  levelOf,
   ratesOf,
   renderReport,
   renderReportError,
   renderTrends,
+  renderWindow,
+  skyOfHistory,
+  trendsRange,
   trendSummary,
   type History,
   type HistoryAccounts,
 } from '../src/scripts/weather-page.js';
 import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
+import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
+
+const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, ...change });
 
 // /weather: the atmosphere weather report, filled from one /api/atmosphere reading.
 
@@ -203,28 +209,31 @@ describe('trends', () => {
     expect(summary.classList.contains('visually-hidden')).toBe(true);
   });
 
-  it('offers the last hour, day, week and 30 days', () => {
-    const buttons = [...report.querySelectorAll<HTMLButtonElement>('[data-range]')];
-    expect(buttons.map((b) => [b.dataset.range, b.textContent])).toEqual([
-      ['hour', '1h'],
-      ['day', '1d'],
-      ['week', '1w'],
-      ['month', '30d'],
-    ]);
-    expect(buttons.every((b) => b.getAttribute('aria-label')?.startsWith('last '))).toBe(true);
+  it('follows the lens: now is the last hour, a window its own range', () => {
+    expect(trendsRange('now')).toBe('hour');
+    expect(trendsRange('week')).toBe('week');
+    // no range buttons or apps list of its own: the lens and the apps elsewhere have them
+    const section = report.querySelector<HTMLElement>('[data-r-trends]')!;
+    expect(section.querySelector('[data-range], [data-measure-toggle], [data-t-apps]')).toBeNull();
+    renderTrends(section, HISTORY, NOW);
+    expect(section.querySelector('[data-t-range]')!.textContent).toBe('the last hour');
   });
 
-  it('lists the busiest apps over the range, when there are any', () => {
+  it("draws records in the lens's unit, or each bucket's count for in all", () => {
     const section = report.querySelector<HTMLElement>('[data-r-trends]')!;
-    const wrap = section.querySelector<HTMLElement>('[data-t-apps-wrap]')!;
-    renderTrends(section, HISTORY, NOW);
-    expect(wrap.hidden).toBe(true);
-    renderTrends(section, { ...HISTORY, apps: [{ domain: 'tangled.sh', creates: 300, collections: ['sh.tangled.repo'] }] }, NOW);
-    expect(wrap.hidden).toBe(false);
-    expect(section.querySelector('[data-t-apps-title]')!.textContent).toBe('busiest apps elsewhere, the last hour: new records');
-    const row = section.querySelector('[data-t-apps] li')!;
-    expect(row.querySelector('.weather-bars__label')!.textContent).toBe('tangled.sh');
-    expect(row.querySelector('.weather-bars__value')!.textContent).toBe('300');
+    const newest = () => {
+      const host = section.querySelector('[data-t-chart="records"]')!;
+      host.querySelector('svg')!.dispatchEvent(new FocusEvent('focus'));
+      return host.querySelector('.weather-chart__tip')!.children[0]!.textContent;
+    };
+    renderTrends(section, HISTORY, NOW, 'records', 'minute');
+    expect(section.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('new records a minute');
+    expect(newest()).toBe('26,400');
+    expect(trendSummary(HISTORY, 'minute')).toBe('the last hour (from 2 minutes of readings so far): 26,400 new records a minute.');
+    renderTrends(section, HISTORY, NOW, 'records', 'total');
+    expect(section.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('new records each minute');
+    expect(newest()).toBe('13,200'); // the newest minute, half heard
+    expect(trendSummary(HISTORY, 'total')).toBe('the last hour (from 2 minutes of readings so far): 66,000 new records.');
   });
 
   it('reads points with the arrow keys', () => {
@@ -316,17 +325,21 @@ describe('records or accounts', () => {
   });
 
   it('ranks the apps elsewhere by accounts, or by records when the reading has no accounts', () => {
-    renderReport(report, LIVE, 'accounts');
+    renderReport(report, LIVE, lens({ measure: 'accounts' }));
     const labels = () => [...report.querySelectorAll('[data-r-apps] .weather-bars__label')].map((l) => l.textContent);
     expect(labels()).toEqual(['whtwnd.com', 'tangled.sh']);
     expect(report.querySelector('[data-r-apps] .weather-bars__value')!.textContent).toBe('140');
-    renderReport(report, LIVE, 'records');
+    renderReport(report, LIVE, lens({ measure: 'records' }));
     expect(labels()).toEqual(['tangled.sh', 'whtwnd.com']);
-    renderReport(report, READING, 'accounts');
+    // no accounts in a sampled reading: records, and the tile says so
+    renderReport(report, READING, lens({ measure: 'accounts' }));
     expect(labels()).toEqual(['tangled.sh', 'whtwnd.com']);
+    const tag = report.querySelector<HTMLElement>('.weather-apps [data-tag]')!;
+    expect(tag.hidden).toBe(false);
+    expect(tag.textContent).toBe('by records');
   });
 
-  it('draws the trends by accounts: each bucket, the range as a union, and apps by accounts', () => {
+  it('draws the trends by accounts: each bucket, and the range as a union', () => {
     renderTrends(section(), HISTORY, NOW, 'accounts');
     const s = section();
     expect(s.dataset.measure).toBe('accounts');
@@ -345,13 +358,6 @@ describe('records or accounts', () => {
     expect(newest('records')[1]).not.toMatch(/so far/); // 16:59 is over at 17:00
     renderTrends(section(), HISTORY, NOW - 30_000, 'accounts');
     expect(newest('records')[1]).toMatch(/\(so far\)$/);
-    renderTrends(section(), HISTORY, NOW, 'accounts');
-    expect(s.querySelector('[data-t-apps-title]')!.textContent).toBe('busiest apps elsewhere, the last hour: active accounts');
-    const rows = [...s.querySelectorAll('[data-t-apps] li')];
-    expect(rows.map((r) => [r.querySelector('.weather-bars__label')!.textContent, r.querySelector('.weather-bars__value')!.textContent, r.querySelector('.weather-bars__change')!.getAttribute('data-trend')])).toEqual([
-      ['whtwnd.com', '300', 'up'],
-      ['tangled.sh', '280', 'new'],
-    ]);
 
     // and back: records put their own titles back, and the diversity index comes from the accounts
     renderTrends(section(), HISTORY, NOW, 'records');
@@ -365,7 +371,6 @@ describe('records or accounts', () => {
     expect(accountSummary({ ...HISTORY, accounts: undefined })).toBe('the account counts are hard to read right now. the records are still here.');
     expect(accountSummary({ ...HISTORY, accounts: { ...acct, seconds: 0, points: [], apps: [], total: { active: 0, bluesky: 0, elsewhere: 0 } } })).toMatch(/^no account counts yet for the last hour/);
     renderTrends(section(), { ...HISTORY, accounts: undefined }, NOW, 'accounts');
-    expect(section().querySelector<HTMLElement>('[data-t-apps-wrap]')!.hidden).toBe(true);
     expect(section().querySelector('[data-t-summary]')!.textContent).toBe('the account counts are hard to read right now. the records are still here.');
   });
 
@@ -386,30 +391,6 @@ describe('records or accounts', () => {
     expect(got!.accounts!.points).toHaveLength(3);
     expect(got!.accounts!.apps).toHaveLength(2);
     expect((await fetchHistory('hour', answer({ ...HISTORY, accounts: { ...acct, total: null } })))!.accounts).toBeUndefined();
-  });
-
-  it('a toggle for each tile, accounts first, each remembered on its own', () => {
-    const keys = ['trends', 'apps'].map((t) => `${MEASURE_KEY}-${t}`);
-    for (const k of keys) localStorage.removeItem(k);
-    const button = (t: string) => document.querySelector<HTMLButtonElement>(`[data-measure-toggle="${t}"]`)!;
-    expect(document.querySelectorAll('[data-measure-toggle]')).toHaveLength(2); // the trends and the apps elsewhere
-    const trends = createMeasure(button('trends'));
-    const apps = createMeasure(button('apps'));
-    expect([trends.get(), apps.get()]).toEqual(['accounts', 'accounts']);
-    const seen: string[] = [];
-    trends.onChange((m) => seen.push(`trends ${m}`));
-    apps.onChange((m) => seen.push(`apps ${m}`));
-    button('trends').click();
-    expect(seen).toEqual(['trends records']);
-    expect([trends.get(), apps.get()]).toEqual(['records', 'accounts']);
-    expect(button('trends').dataset.measure).toBe('records');
-    expect(button('trends').getAttribute('aria-label')).toMatch(/^counting new records/);
-    expect(button('apps').getAttribute('aria-label')).toMatch(/^counting active accounts/);
-    expect(localStorage.getItem(keys[0]!)).toBe('records');
-    expect(localStorage.getItem(keys[1]!)).toBeNull();
-    expect(createMeasure(button('trends')).get()).toBe('records');
-    expect(createMeasure(button('apps')).get()).toBe('accounts');
-    for (const k of keys) localStorage.removeItem(k);
   });
 
   it('axis numbers stay short', () => {
@@ -501,5 +482,218 @@ describe('the lists', () => {
     expect(empty.textContent).toBe(APPS_TRICKLE);
     renderReport(report, { ...READING, apps: [], diversity: { ...READING.diversity!, apps: 0 } });
     expect(empty.textContent).toBe(APPS_EMPTY);
+  });
+});
+
+describe('the lens', () => {
+  beforeEach(() => {
+    localStorage.removeItem(LENS_KEY);
+    history.replaceState(null, '', '/weather');
+  });
+
+  it('sits under the header, before every tile that follows it', () => {
+    const kids = [...report.children];
+    const bar = report.querySelector('.weather-lens')!;
+    expect(kids.indexOf(bar)).toBe(kids.indexOf(report.querySelector('[data-weather-hero]')!) + 1);
+    expect([...bar.querySelectorAll<HTMLElement>('[data-lens-window]')].map((b) => [b.dataset.lensWindow, b.textContent])).toEqual([
+      ['now', 'now'],
+      ['hour', '1h'],
+      ['day', '24h'],
+      ['week', '7d'],
+      ['month', '30d'],
+    ]);
+    expect([...bar.querySelectorAll<HTMLElement>('[data-lens-measure]')].map((b) => b.textContent)).toEqual(['records', 'accounts']);
+    expect([...bar.querySelectorAll('option')].map((o) => o.value)).toEqual(['second', 'minute', 'hour', 'day', 'total']);
+    // the old per-tile toggles are gone
+    expect(report.querySelector('[data-measure-toggle], [data-range], [data-s-toggle]')).toBeNull();
+    // the tiles that keep their own times come after their own heading
+    const group = kids.indexOf(report.querySelector('.weather-group')!);
+    for (const id of ['weather-today-title', 'weather-forecast-title', 'weather-heat-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeGreaterThan(group);
+    for (const id of ['weather-trends-title', 'weather-apps-title', 'weather-minute-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeLessThan(group);
+  });
+
+  it('starts from the address, else this browser, else now, records, a second', () => {
+    expect(createLens('').get()).toEqual(LENS_DEFAULT);
+    expect(createLens('?w=24h&m=accounts&u=hour').get()).toEqual({ window: 'day', measure: 'accounts', unit: 'hour' });
+    expect(createLens('?w=lots&u=fortnight').get()).toEqual(LENS_DEFAULT);
+    localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'week', measure: 'accounts', unit: 'nope' }));
+    expect(createLens('').get()).toEqual({ window: 'week', measure: 'accounts', unit: 'second' });
+    expect(createLens('?w=1h').get().window).toBe('hour');
+  });
+
+  it('keeps each change in the address and this browser, and only says so when something changed', () => {
+    const l = createLens('');
+    const seen: string[] = [];
+    l.onChange((now, was) => seen.push(`${was.window}→${now.window} ${now.unit}`));
+    l.set({ window: 'day' });
+    l.set({ window: 'day' });
+    l.set({ unit: 'total' });
+    expect(seen).toEqual(['now→day second', 'day→day total']);
+    expect(location.search).toBe('?w=24h&u=total');
+    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'records', unit: 'total' });
+    l.set({ window: 'now', unit: 'second' });
+    expect(location.search).toBe('');
+  });
+
+  it('the bar and the header\'s unit drive it, and the unit stands aside for accounts', () => {
+    const l = createLens('');
+    bindLens(report, l);
+    report.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
+    expect(l.get().window).toBe('week');
+    expect(report.querySelector('[data-lens-window="week"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(report.querySelector('[data-lens-window="now"]')!.getAttribute('aria-pressed')).toBe('false');
+    expect(report.dataset.window).toBe('week');
+    const select = report.querySelector<HTMLSelectElement>('[data-lens-unit]')!;
+    select.value = 'day';
+    select.dispatchEvent(new Event('change'));
+    expect(l.get().unit).toBe('day');
+    // a tap on "rec/sec" moves the unit on, round to totals and back
+    report.querySelector<HTMLButtonElement>('[data-r-unit]')!.click();
+    expect(l.get().unit).toBe('total');
+    report.querySelector<HTMLButtonElement>('[data-r-unit]')!.click();
+    expect(l.get().unit).toBe('second');
+    report.querySelector<HTMLButtonElement>('[data-lens-measure="accounts"]')!.click();
+    expect(select.disabled).toBe(true);
+    expect(report.querySelector<HTMLElement>('[data-lens-unit-note]')!.hidden).toBe(false);
+  });
+});
+
+describe('in the lens', () => {
+  const LIVE: Reading = {
+    ...READING,
+    source: 'station',
+    seconds: 60,
+    accounts: { active: 21_345, bluesky: 21_100, elsewhere: 620, index: 2.9, apps: [{ domain: 'whtwnd.com', accounts: 140, collections: [] }] },
+  };
+  const point = (t: string, seconds: number, creates: number) => ({ t, seconds, creates, bluesky: creates - creates / 100, elsewhere: creates / 100, posts: creates / 10 });
+  const DAY: History = {
+    range: 'day',
+    points: [point('2026-10-20T15:00:00.000Z', 3600, 1_440_000), point('2026-10-20T16:00:00.000Z', 3600, 1_800_000)],
+    total: { ...point('2026-10-20T17:00:00.000Z', 86_400, 38_016_000), likes: 20_000_000, reposts: 3_000_000, follows: 2_000_000 },
+    apps: [
+      { domain: 'tangled.sh', creates: 86_400, prevCreates: 43_200, collections: ['sh.tangled.repo'] },
+      { domain: 'whtwnd.com', creates: 8640, prevCreates: 0, collections: [] },
+    ],
+    compare: { seconds: 86_400, prevSeconds: 86_400, lagMs: 86_400_000 },
+    accounts: {
+      seconds: 86_400,
+      prevSeconds: 86_400,
+      total: { active: 2_000_000, bluesky: 1_990_000, elsewhere: 60_000, index: 4.2 },
+      points: [
+        { t: '2026-10-20T15:00:00.000Z', seconds: 3600, active: 300_000, bluesky: 299_000, elsewhere: 5000, index: 3.9 },
+        { t: '2026-10-20T16:00:00.000Z', seconds: 3600, active: 320_000, bluesky: 318_000, elsewhere: 6000, index: 4.1 },
+      ],
+      apps: [{ domain: 'tangled.sh', active: 9000, prevActive: 6000, collections: [] }],
+    },
+  };
+  const bars = (sel: string) => [...report.querySelectorAll(`${sel} li`)].map((li) => [li.querySelector('.weather-bars__label')!.textContent, li.querySelector('.weather-bars__value')!.textContent]);
+
+  it("puts the header's number in the lens's unit, or totals, and says what it is", () => {
+    renderReport(report, LIVE, lens({ unit: 'minute' }));
+    expect(text('[data-r-records]')).toBe('26,640');
+    expect(text('[data-r-unit]')).toBe('rec/min');
+    expect(text('[data-r-unit-words]')).toBe('new records a minute');
+    expect(report.querySelector('[data-r-unit]')!.getAttribute('aria-label')).toBe('a minute. change to an hour');
+    expect(text('[data-r-cond]')).toBe(CONDITION_TEXT.stormy); // now is still the weather
+    renderReport(report, LIVE, lens({ unit: 'day' }));
+    expect(text('[data-r-records]')).toBe('38.4m');
+    renderReport(report, LIVE, lens({ unit: 'total' }));
+    expect(text('[data-r-records]')).toBe('26,640');
+    expect(text('[data-r-unit]')).toBe('records');
+    expect(text('[data-r-unit-words]')).toBe('new records in the last minute');
+    renderReport(report, LIVE, lens({ measure: 'accounts', unit: 'hour' }));
+    expect(text('[data-r-records]')).toBe('21,345');
+    expect(text('[data-r-unit]')).toBe('accounts');
+    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.disabled).toBe(true);
+    expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true); // its line is records
+  });
+
+  it('bluesky and everyone else in the unit, or by accounts', () => {
+    renderReport(report, LIVE, lens({ unit: 'hour' }));
+    expect(text('[data-r-bsky]')).toBe('1.6m');
+    expect([...report.querySelectorAll('[data-r-mix-unit]')].map((u) => u.textContent)).toEqual(['an hour', 'an hour']);
+    expect(text('[data-r-total-words]')).toBe('new records an hour in all');
+    expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(false);
+    renderReport(report, LIVE, lens({ measure: 'accounts' }));
+    expect(text('[data-r-ratio]')).toBe('1 in 34 active accounts wrote outside bluesky');
+    expect(text('[data-r-else]')).toBe('620');
+    expect(text('[data-r-else-share]')).toBe('(2.9%)');
+    expect([...report.querySelectorAll('[data-r-mix-unit]')].map((u) => u.textContent)).toEqual(['accounts', 'accounts']);
+    expect(text('[data-r-total]')).toBe('21,345');
+    expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
+  });
+
+  it('the diversity index is always by accounts, and says so when the lens counts records', () => {
+    renderReport(report, LIVE);
+    const tag = report.querySelector<HTMLElement>('.weather-diversity [data-tag]')!;
+    expect([tag.hidden, tag.textContent]).toEqual([false, 'by accounts']);
+    renderReport(report, LIVE, lens({ measure: 'accounts' }));
+    expect(tag.hidden).toBe(true);
+    // bluesky's collections are always records
+    expect(report.querySelector<HTMLElement>('.weather-bsky [data-tag]')!.hidden).toBe(false);
+  });
+
+  it('a window: the whole of it, from its history', () => {
+    const sky = skyOfHistory(DAY);
+    expect(sky.records!.perSecond).toBe(440);
+    expect(sky.diversity).toEqual({ index: 4.2, level: 'moderate', share: 3 });
+    expect(sky.coverage).toBe('');
+    expect(sky.bluesky.map((b) => b.nsid)).toEqual(['app.bsky.feed.like', 'app.bsky.feed.post', 'app.bsky.feed.repost', 'app.bsky.graph.follow']);
+    expect(levelOf(0)).toBe('low');
+    expect(levelOf(11.5)).toBe('extreme');
+
+    renderReport(report, LIVE, lens({ window: 'day' })); // the live reading leaves a window's tiles be
+    expect(text('[data-r-records]')).toBe('–');
+    renderWindow(report, DAY, lens({ window: 'day' }));
+    expect(text('[data-r-records]')).toBe('440');
+    expect(text('[data-r-cond]')).toBe('on average over the last 24 hours');
+    expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(false);
+    expect(text('[data-r-index]')).toBe('4.2');
+    expect(text('[data-r-level]')).toBe('moderate');
+    expect(text('[data-r-acct-index]')).toBe('3.0% of 2,000,000 active accounts over the last 24 hours wrote outside bluesky.');
+    expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
+    expect(bars('[data-r-apps]')).toEqual([
+      ['tangled.sh', '1'],
+      ['whtwnd.com', '0.1'],
+    ]);
+    expect(report.querySelector('[data-r-apps] .weather-bars__change')!.getAttribute('data-trend')).toBe('up');
+    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the day before.');
+    expect(text('[data-r-apps-count]')).toBe('top 2');
+    expect(bars('[data-r-bsky-list]')[0]).toEqual(['likes', '231']);
+    expect(text('[data-r-bsky-note]')).toBe('posts, likes, reposts and follows over the last 24 hours, a second.');
+
+    renderWindow(report, DAY, lens({ window: 'day', unit: 'total' }));
+    expect(text('[data-r-records]')).toBe('38m');
+    expect(text('[data-r-cond]')).toBe('new records in the last 24 hours');
+    expect(bars('[data-r-apps]')[0]).toEqual(['tangled.sh', '86,400']);
+
+    renderWindow(report, DAY, lens({ window: 'day', measure: 'accounts' }));
+    expect(text('[data-r-records]')).toBe('2,000,000');
+    expect(text('[data-r-cond]')).toBe('different accounts wrote something in the last 24 hours');
+    expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
+    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
+  });
+
+  it('says how much of a window the station has heard, and when there are no account counts for it', () => {
+    const young: History = { ...DAY, total: { ...DAY.total, seconds: 7200, creates: 3_168_000 }, accounts: undefined };
+    renderWindow(report, young, lens({ window: 'day' }));
+    expect(text('[data-r-cond]')).toBe('on average over the last 24 hours (from 2 hours of readings so far)');
+    expect(text('[data-r-index]')).toBe('–');
+    expect(text('[data-r-level-text]')).toBe('no account counts for the last 24 hours yet.');
+    // accounts asked for, none to give: records, and the tiles say so
+    renderWindow(report, young, lens({ window: 'day', measure: 'accounts' }));
+    expect(text('[data-r-cond]')).toMatch(/^on average over/);
+    expect(report.querySelector('.weather-mix [data-tag]')!.textContent).toBe('by records');
+  });
+
+  it('one request for a range, however many tiles ask', async () => {
+    let asked = 0;
+    const feed = createHistoryFeed((async () => (asked++, Response.json(DAY))) as typeof fetch);
+    const [a, b] = await Promise.all([feed.get('day'), feed.get('day')]);
+    expect(a).toBe(b);
+    await feed.get('day');
+    expect(asked).toBe(1);
+    await feed.get('day', 0);
+    expect(asked).toBe(2);
   });
 });
