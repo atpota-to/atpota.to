@@ -53,11 +53,13 @@ export type Issue = {
 export type OwnPost = { text: string; createdAt: string; link: string };
 
 /**
- * How busy Poe has been answering on Bluesky: replies in the last week, counted from one
- * page of its repo. `complete` is false when the page ends inside the week, so the count
- * is a floor. A count, never the replies themselves: those are other people's threads.
+ * How busy Poe has been answering on Bluesky: replies in the last week, and how many of
+ * them since midnight UTC, counted from one page of its repo. `complete` is false when the
+ * page ends inside the week, so the week's count is a floor; today's is exact unless the
+ * page ends inside today too. A count, never the replies themselves: those are other
+ * people's threads.
  */
-export type Activity = { repliesThisWeek: number; complete: boolean };
+export type Activity = { repliesThisWeek: number; repliesToday: number; complete: boolean };
 
 type Entry = { uri?: unknown; value?: unknown };
 type Fetch = typeof fetch;
@@ -146,16 +148,21 @@ export function parseActivity(records: unknown, now: number): Activity | null {
   if (!Array.isArray(records)) return null;
   const prefix = `at://${POE_DID}/app.bsky.feed.post/`;
   let replies = 0;
+  let today = 0;
   let oldest = Infinity;
+  const midnight = Math.floor(now / 86_400_000) * 86_400_000;
   for (const record of records as Entry[]) {
     if (typeof record?.uri !== "string" || !record.uri.startsWith(prefix) || !record.value || typeof record.value !== "object") continue;
     const v = record.value as Record<string, unknown>;
     const created = Date.parse(typeof v.createdAt === "string" ? v.createdAt : "");
     if (!Number.isFinite(created)) continue;
     oldest = Math.min(oldest, created);
-    if (v.reply !== undefined && created <= now + 5 * 60_000 && now - created <= WEEK_MS) replies++;
+    if (v.reply !== undefined && created <= now + 5 * 60_000 && now - created <= WEEK_MS) {
+      replies++;
+      if (created >= midnight) today++;
+    }
   }
-  return { repliesThisWeek: replies, complete: records.length < POST_PAGE || oldest < now - WEEK_MS };
+  return { repliesThisWeek: replies, repliesToday: today, complete: records.length < POST_PAGE || oldest < now - WEEK_MS };
 }
 
 async function getJson(fetchImpl: Fetch, url: string): Promise<unknown> {
@@ -265,7 +272,9 @@ export function presenceNote(presence: Presence, now: number): string | null {
   if (activity && activity.repliesThisWeek > 0) {
     if (lines.length) lines.push("");
     const n = activity.repliesThisWeek;
-    lines.push(`On Bluesky you have replied to people ${activity.complete ? "" : "at least "}${n} ${n === 1 ? "time" : "times"} in the last 7 days.`);
+    const t = activity.repliesToday ?? 0;
+    const today = t > 0 ? `${t} of them today` : "none of them today";
+    lines.push(`On Bluesky you have replied to people ${activity.complete ? "" : "at least "}${n} ${n === 1 ? "time" : "times"} in the last 7 days, ${today} (UTC).`);
   }
   if (!lines.length) return null;
   return [

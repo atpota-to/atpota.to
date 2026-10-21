@@ -96,17 +96,17 @@ test("a week of replies is counted, and only ever counted", () => {
   const reply = (rkey, createdAt) => post(rkey, { reply: { root: {}, parent: {} }, createdAt, text: "someone else's thread" });
   const week = [reply("3r1", "2026-10-20T08:00:00Z"), reply("3r2", "2026-10-14T13:00:00Z"), reply("3r3", "2026-10-13T11:00:00Z"),
     post("3top", { createdAt: "2026-10-19T00:00:00Z" })];
-  assert.deepEqual(lib.parseActivity(week, NOW), { repliesThisWeek: 2, complete: true });
+  assert.deepEqual(lib.parseActivity(week, NOW), { repliesThisWeek: 2, repliesToday: 1, complete: true });
   // A full page that ends inside the week is a floor.
   const busy = Array.from({ length: 100 }, (_, i) => reply(`3b${i}`, new Date(NOW - i * 3_600_000).toISOString()));
-  assert.deepEqual(lib.parseActivity(busy, NOW), { repliesThisWeek: 100, complete: false });
+  assert.deepEqual(lib.parseActivity(busy, NOW), { repliesThisWeek: 100, repliesToday: 13, complete: false });
   assert.equal(lib.parseActivity("nope", NOW), null);
-  const note = lib.presenceNote({ issues: [], posts: [], activity: { repliesThisWeek: 100, complete: false } }, NOW);
-  assert.match(note, /replied to people at least 100 times in the last 7 days/);
+  const note = lib.presenceNote({ issues: [], posts: [], activity: { repliesThisWeek: 100, repliesToday: 13, complete: false } }, NOW);
+  assert.match(note, /replied to people at least 100 times in the last 7 days, 13 of them today \(UTC\)\./);
   assert.equal(note.includes("someone else's thread"), false);
-  assert.match(lib.presenceNote({ issues: [], posts: [], activity: { repliesThisWeek: 1, complete: true } }, NOW),
-    /replied to people 1 time in the last 7 days\./);
-  assert.equal(lib.presenceNote({ issues: [], posts: [], activity: { repliesThisWeek: 0, complete: true } }, NOW), null);
+  assert.match(lib.presenceNote({ issues: [], posts: [], activity: { repliesThisWeek: 1, repliesToday: 0, complete: true } }, NOW),
+    /replied to people 1 time in the last 7 days, none of them today \(UTC\)\./);
+  assert.equal(lib.presenceNote({ issues: [], posts: [], activity: { repliesThisWeek: 0, repliesToday: 0, complete: true } }, NOW), null);
 });
 
 test("the recalled note carries titles, dates and Poe's words, never a link", () => {
@@ -129,7 +129,7 @@ test("presence is cached, and each half survives the other failing", async () =>
   const first = await lib.readPresence(ok.impl, NOW);
   assert.equal(first.issues.length, 2);
   assert.equal(first.posts.length, 2);
-  assert.deepEqual(first.activity, { repliesThisWeek: 1, complete: true });
+  assert.deepEqual(first.activity, { repliesThisWeek: 1, repliesToday: 0, complete: true });
   assert.ok(ok.calls.some((c) => c.includes("collection=app.bsky.feed.post") && c.includes("limit=100")));
   assert.ok(ok.calls.some((c) => c.startsWith("https://pds.example/xrpc/com.atproto.repo.listRecords?")));
   const before = ok.calls.length;
@@ -163,6 +163,7 @@ test("the recall slot is recall-only, and a replayed operation gets its first an
     const first = await slot.provider.recall["turn.started"]({ operationId: "op-1" });
     assert.equal(first.messages.length, 1);
     assert.equal(first.messages[0].id, "presence");
+    assert.match(first.messages[0].content, /^Today is \d{4}-\d{2}-\d{2} \(UTC\)\.\n\n/);
     assert.match(first.messages[0].content, /attie sites/);
 
     lib.resetPresenceCache();
@@ -173,7 +174,8 @@ test("the recall slot is recall-only, and a replayed operation gets its first an
 
     lib.resetPresenceCache();
     globalThis.fetch = async () => { throw new Error("offline"); };
-    assert.equal(await slot.provider.recall["turn.started"]({ operationId: "op-3" }), null, "a failed read never fails the turn");
+    const offline = await slot.provider.recall["turn.started"]({ operationId: "op-3" });
+    assert.match(offline.messages[0].content, /^Today is \d{4}-\d{2}-\d{2} \(UTC\)\.$/, "a failed read never fails the turn, and the date still comes through");
   } finally {
     globalThis.fetch = original;
     lib.resetPresenceCache();
