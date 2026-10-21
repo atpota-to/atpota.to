@@ -161,14 +161,72 @@ function checkForgetKey(slot: string, key: string, did: string): void {
   console.error("forgetNotes would miss this person's notes: lib/memory-key.ts no longer matches eve's key");
 }
 
-// Both slots use the existing private Blob store, but only person memory
-// hands writes to the droplet. The slot namespace keeps their documents apart.
-export function privateFileMemory(): MemoryProvider {
-  return fileMemory({ backend: store });
+/**
+ * eve's fileMemory keeps a note as bare text, with no record of when it was
+ * saved, so on 2026-10-21 Poe could not tell an operator whether anything in
+ * its journals was from today. The private slots now open each new note with
+ * the UTC day it was saved. Notes from before have no date and keep none.
+ */
+const DATE_PREFIX = /^\[?\d{4}-\d{2}-\d{2}\]?:?\s+/;
+const DATES_HINT = "A note that opens with a [YYYY-MM-DD] date was saved that day (UTC). " +
+  "A note without one was saved before dates were kept, so when it happened is unknown.";
+
+/** The note as saved: the model's text, without any date it wrote itself, after today's. */
+export function datedNote(text: string, now = Date.now()): string {
+  return `[${new Date(now).toISOString().slice(0, 10)}] ${text.trim().replace(DATE_PREFIX, "")}`;
 }
 
+/**
+ * Room for a journal Poe writes in most days: about 80 notes of the usual
+ * length, against eve's default of 4,000 characters, about 25. A full journal
+ * refuses the save until Poe removes a note.
+ */
+export const JOURNAL_MAX_CHARACTERS = 12_000;
+
+// Both slots use the existing private Blob store, but only person memory
+// hands writes to the droplet. The slot namespace keeps their documents apart.
+export function privateFileMemory(options: { maxCharacters?: number } = {}): MemoryProvider {
+  const base = fileMemory({ backend: store, maxCharacters: options.maxCharacters });
+  return defineMemoryProvider({
+    recall: {
+      async "turn.started"(ctx) {
+        return withDatesHint(await base.recall["turn.started"](ctx));
+      },
+      async "compaction.completed"(ctx) {
+        return withDatesHint(await base.recall["compaction.completed"]!(ctx));
+      },
+    },
+    async tools(ctx) {
+      const tools = await base.tools?.(ctx);
+      if (!tools?.save_memory) return tools ?? null;
+      const save = tools.save_memory;
+      return {
+        ...tools,
+        save_memory: {
+          ...save,
+          execute: (input: { text: string }, context) => save.execute({ ...input, text: datedNote(input.text) } as never, context),
+        },
+      };
+    },
+  });
+}
+
+type Recalled = Awaited<ReturnType<MemoryProvider["recall"]["turn.started"]>>;
+
+function withDatesHint(result: Recalled): Recalled {
+  if (!result) return result;
+  return {
+    ...result,
+    messages: result.messages.map((m) =>
+      typeof m.content === "string" && !m.content.includes("No memories are saved")
+        ? { ...m, content: `${m.content}\n\n${DATES_HINT}` } : m),
+  };
+}
+
+// Person notes stay undated: each one is published as written, and must fit
+// in 300 graphemes (unpublishableNote, below).
 export function publishedFileMemory(): MemoryProvider {
-  const base = privateFileMemory();
+  const base = fileMemory({ backend: store });
   return defineMemoryProvider({
     recall: {
       async "turn.started"(ctx) {

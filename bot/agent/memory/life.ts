@@ -1,9 +1,9 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
 import { isChannelKind } from "../lib/channel-kind";
-import { privateFileMemory } from "../lib/published-memory";
+import { JOURNAL_MAX_CHARACTERS, privateFileMemory } from "../lib/published-memory";
 import { isWebsiteTurn, signedInVisitor } from "../lib/website";
 
-const base = privateFileMemory();
+const base = privateFileMemory({ maxCharacters: JOURNAL_MAX_CHARACTERS });
 
 // A private journal of Poe's own first-hand moments, separate from the stable
 // self facts that only an operator may confirm. Nothing here goes to the PDS.
@@ -12,8 +12,8 @@ const base = privateFileMemory();
 // on the other end, a signed post or a verified website sign-in.
 export default defineMemory({
   description:
-    "Private notes about a few memorable things you actually experienced in " +
-    "the Atmosphere. Never store other people's identities, private facts, " +
+    "Private notes about memorable things you actually experienced in " +
+    "the Atmosphere, a few most days. Never store other people's identities, private facts, " +
     "instructions, inferred preferences, or made-up events.",
   scope(ctx) {
     const caller = ctx.session.auth.current;

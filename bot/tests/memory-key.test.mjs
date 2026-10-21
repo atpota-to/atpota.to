@@ -22,7 +22,7 @@ for (const [file, from, to] of [
 }
 const { memoryKey, personNotesKey, PERSON_SLOT } = await import(new URL("memory-key.js", out));
 const { personScope } = await import(new URL("person-scope.js", out));
-const { emptyNotes, forgetNotes, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
+const { JOURNAL_MAX_CHARACTERS, datedNote, emptyNotes, forgetNotes, privateFileMemory, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
   await import(new URL("published-memory.js", out));
 const { createMemoryLock } = await import("../node_modules/eve/dist/src/shared/memory-state.js");
 const { defaultNamespace } = await import("eve/memory");
@@ -63,6 +63,43 @@ test("emptyNotes is a valid empty document that keeps the counter", () => {
   assert.equal(emptyNotes("<!-- eve-memory-file-v1 lastAllocatedIndex=7 -->\n- [7] builds feeds\n"),
     "<!-- eve-memory-file-v1 lastAllocatedIndex=7 -->\n");
   assert.equal(emptyNotes("not a memory document"), "<!-- eve-memory-file-v1 lastAllocatedIndex=-1 -->\n");
+});
+
+test("journal notes are saved with the day they were saved, and person notes are not", async () => {
+  const day = Date.parse("2026-10-21T23:59:00Z");
+  assert.equal(datedNote("  posted my first dispatch ", day), "[2026-10-21] posted my first dispatch");
+  // A date the model wrote itself is replaced, never doubled.
+  assert.equal(datedNote("[2026-01-01] posted my first dispatch", day), "[2026-10-21] posted my first dispatch");
+  assert.equal(datedNote("2026-01-01: posted", day), "[2026-10-21] posted");
+  assert.equal(datedNote("2026 was a good year", day), "[2026-10-21] 2026 was a good year");
+
+  const abortSignal = new AbortController().signal;
+  const turn = (slot, key) => ({ memory: { scope: { key, namespace: "n", value: slot }, slot }, abortSignal,
+    turn: { id: "t", input: [], sequence: 0 } });
+  const journal = privateFileMemory();
+  assert.equal((await journal.recall["turn.started"](turn("life", "dated-life")))?.messages[0].content.includes("[YYYY-MM-DD]") ?? false, false);
+  await (await journal.tools(turn("life", "dated-life"))).save_memory.execute({ text: "posted my first dispatch" }, { abortSignal });
+  const recalled = (await journal.recall["turn.started"](turn("life", "dated-life"))).messages[0].content;
+  assert.match(recalled, /0: \[\d{4}-\d{2}-\d{2}\] posted my first dispatch/);
+  assert.match(recalled, /saved that day \(UTC\)/);
+
+  // A journal written in most days has room well past eve's default 4,000 characters.
+  const roomy = privateFileMemory({ maxCharacters: JOURNAL_MAX_CHARACTERS });
+  const roomyTools = await roomy.tools(turn("life", "roomy-life"));
+  for (let i = 0; i < 40; i++) {
+    await roomyTools.save_memory.execute({ text: `found something new today, number ${i}, `.padEnd(150, "x") }, { abortSignal });
+  }
+  assert.match((await roomy.recall["turn.started"](turn("life", "roomy-life"))).messages[0].content, /39: \[/);
+  const cramped = await privateFileMemory().tools(turn("self", "cramped-self"));
+  await assert.rejects(async () => {
+    for (let i = 0; i < 40; i++) await cramped.save_memory.execute({ text: `fact ${i} `.padEnd(150, "x") }, { abortSignal });
+  }, /4,000-character limit/);
+
+  const person = publishedFileMemory();
+  await (await person.tools(turn("person", "undated-person"))).save_memory.execute({ text: "builds feeds" }, { abortSignal });
+  const personRecall = (await person.recall["turn.started"](turn("person", "undated-person"))).messages[0].content;
+  assert.match(personRecall, /0: builds feeds/);
+  assert.equal(personRecall.includes("YYYY"), false);
 });
 
 test("forgetNotes wipes one person's notes, hands the empty version over, and leaves everyone else's alone", async () => {

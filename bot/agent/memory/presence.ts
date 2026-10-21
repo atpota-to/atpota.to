@@ -4,11 +4,11 @@ import { presenceNote, readPresence } from "../lib/presence";
 // eve may replay a recall with the same operationId and fails the turn if the
 // result differs, so a replay in this instance gets the note it got the first
 // time, whatever the cache has learned since.
-const recalled = new Map<string, string | null>();
+const recalled = new Map<string, string>();
 const MAX_REMEMBERED = 500;
 
 /**
- * Recall only: the newest dispatch issues and Poe's own newest Bluesky posts,
+ * Recall only: today's date, the newest dispatch issues and Poe's own newest Bluesky posts,
  * on every channel, so the potato in a website chat or an operator DM knows
  * what the potato on Bluesky has been up to (lib/presence.ts). There are no
  * tools and no write path; the records themselves are the source.
@@ -25,11 +25,13 @@ export default defineMemory({
         let content = recalled.get(ctx.operationId);
         if (content === undefined) {
           const now = Date.now();
-          content = await readPresence(fetch, now).then((presence) => presenceNote(presence, now), () => null);
+          const note = await readPresence(fetch, now).then((presence) => presenceNote(presence, now), () => null);
+          // Nothing else tells Poe the date, and the dates on its journal notes mean little without it.
+          content = `Today is ${new Date(now).toISOString().slice(0, 10)} (UTC).${note ? `\n\n${note}` : ""}`;
           if (recalled.size >= MAX_REMEMBERED) recalled.delete(recalled.keys().next().value!);
           recalled.set(ctx.operationId, content);
         }
-        return content ? { messages: [{ id: "presence", content }] } : null;
+        return { messages: [{ id: "presence", content }] };
       },
     },
   }),
