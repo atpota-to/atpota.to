@@ -228,6 +228,8 @@ test('accounts: who committed in the window, by the same coverage and replay rul
   assert.equal(r.accounts.elsewhere, 4);
   assert.equal(r.accounts.index, 10);
   assert.deepEqual(r.accounts.apps, [{ domain: 'tangled.sh', accounts: 4, collections: [] }]);
+  // the diversity index is theirs: a tenth of them elsewhere, all in one app
+  assert.deepEqual([r.diversity.index, r.diversity.share, r.diversity.spread], [10, 10, 1]);
   // a minute's accounts come with its tally
   const m = s.minute(T0 - 60);
   assert.equal(m.accounts.all.estimate(), 40);

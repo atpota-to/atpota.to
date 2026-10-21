@@ -19,8 +19,9 @@
 //
 // Accounts. Each second also keeps who committed (accounts.js), by the same coverage and
 // replay rules, so a window or a minute can say how many different accounts were active.
+// The reading's diversity index is worked out from them.
 
-import { addAccount, emptyAccounts, sketchAccounts, summarizeAccounts } from './accounts.js';
+import { addAccount, crowdOf, emptyAccounts, sketchAccounts, summarizeAccounts } from './accounts.js';
 import { addEvent, COLLECTIONS, emptyTally, mergeTally, splitOf, summarize } from './atmosphere.js';
 
 export const RETAIN_SECONDS = 3600;
@@ -172,8 +173,9 @@ export class Station {
   reading(nowMs = this.now()) {
     const w = this.window(nowMs);
     if (w.seconds < MIN_COVERED) return null;
-    const reading = summarize(w.tally, w.seconds, iso(w.to));
-    reading.accounts = summarizeAccounts(this.accounts(w.from, w.to), w.tally);
+    const sketches = this.accounts(w.from, w.to);
+    const reading = summarize(w.tally, w.seconds, iso(w.to), crowdOf(sketches));
+    reading.accounts = summarizeAccounts(sketches, w.tally);
     reading.window = { from: iso(w.from), to: iso(w.to) };
     reading.series = w.series;
     return reading;

@@ -181,10 +181,10 @@ describe('active accounts in the trends', () => {
           earlier
             ? [{ domain: 'tangled.sh', sketch: sk(7) }]
             : [
-                { t: '2026-10-20T16:58:00+00:00', domain: 'tangled.sh', sketch: sk(3) },
-                { t: '2026-10-20T16:59:00+00:00', domain: 'tangled.sh', sketch: sk(3, 5) },
-                { t: '2026-10-20T16:59:00+00:00', domain: 'whtwnd.com', sketch: sk(5) },
-                { t: '2026-10-20T16:59:00+00:00', domain: '<b>x</b>', sketch: sk(9, 10, 11) },
+                { t: '2026-10-20T16:58:00+00:00', domain: 'tangled.sh', dids: 1, sketch: sk(3) },
+                { t: '2026-10-20T16:59:00+00:00', domain: 'tangled.sh', dids: 2, sketch: sk(3, 5) },
+                { t: '2026-10-20T16:59:00+00:00', domain: 'whtwnd.com', dids: 1, sketch: sk(5) },
+                { t: '2026-10-20T16:59:00+00:00', domain: '<b>x</b>', dids: 3, sketch: sk(9, 10, 11) },
               ],
         );
       if (table === 'atmosphere_minute' && q.get('select')?.startsWith('seconds:')) return Response.json([{ seconds: 60 }, { seconds: 30 }]);
@@ -202,11 +202,12 @@ describe('active accounts in the trends', () => {
     expect(body.accounts).toEqual({
       seconds: 120,
       prevSeconds: 90,
-      // registers 1, 2, 4 on Bluesky and 3, 5 elsewhere: a union, not 2 + 2 or 3 + 4
-      total: { active: 5, bluesky: 3, elsewhere: 2 },
+      // registers 1, 2, 4 on Bluesky and 3, 5 elsewhere: a union, not 2 + 2 or 3 + 4;
+      // over the hour, tangled.sh had both accounts elsewhere and whtwnd.com one of them
+      total: { active: 5, bluesky: 3, elsewhere: 2, share: 40, spread: 1.89, index: 54.99 },
       points: [
-        { t: '2026-10-20T16:58:00.000Z', seconds: 60, active: 3, bluesky: 2, elsewhere: 1 },
-        { t: '2026-10-20T16:59:00.000Z', seconds: 60, active: 4, bluesky: 2, elsewhere: 2 },
+        { t: '2026-10-20T16:58:00.000Z', seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
+        { t: '2026-10-20T16:59:00.000Z', seconds: 60, active: 4, bluesky: 2, elsewhere: 2, share: 50, spread: 1.89, index: 68.74 },
       ],
       apps: [
         { domain: 'tangled.sh', active: 2, prevActive: 1, collections: ['sh.tangled.repo'] },

@@ -2,8 +2,9 @@
  * /api/atmosphere: the "atmospheric conditions" on the home page and the full weather
  * report at /weather. It listens to the whole firehose through Jetstream for a few
  * seconds and answers with rates per second: Bluesky's posts, likes, reposts and follows,
- * how many new records came from outside Bluesky (the diversity index), which apps wrote
- * them, and how many edits, deletions, identity and account events went by.
+ * how many new records came from outside Bluesky and which apps wrote them, how much of
+ * the atmosphere isn't Bluesky by who's writing (the diversity index, diversityOf), and
+ * how many edits, deletions, identity and account events went by.
  *
  * The reading comes from the weather station (atmosphere/SPEC.md), an always-on consumer on
  * the droplet that keeps a rolling 60 seconds: GET STATION_URL with the shared secret in
@@ -21,6 +22,8 @@
  * The station's reading also says how many different accounts (DIDs) wrote anything in
  * its 60 seconds (`accounts`, counted with HyperLogLog sketches; see atmosphere/src/
  * accounts.js). The sample doesn't: a few seconds of accounts don't add up to a minute's.
+ * It does count them exactly, while it listens, for its diversity index (nothing is
+ * kept), which therefore reads a little low: a few seconds hear fewer apps than a minute.
  *
  * If neither can be read, the answer is 503 and the tile says so.
  */
@@ -74,8 +77,9 @@ export const CONDITIONS = [
 export type Condition = 'calm' | (typeof CONDITIONS)[number][0];
 
 /**
- * The diversity index is the share of new records, in percent, written outside Bluesky's
- * lexicons. Like the UV index, it comes with a level; each starts at the given index.
+ * The diversity index (diversityOf) at which each level starts, like the UV index. A
+ * usual minute in October 2026 was about 2: half a percent of active accounts wrote
+ * outside Bluesky, spread across about 15 apps' worth.
  */
 export const DIVERSITY_LEVELS = [
   ['extreme', 11],
@@ -124,6 +128,21 @@ export interface Accounts {
   apps: AccountApp[];
 }
 
+/**
+ * Who wrote in a stretch of the firehose, which is what the diversity index is worked out
+ * from. NOBODY is a stretch with no accounts in it.
+ */
+export interface Crowd {
+  /** Different accounts active. */
+  active: number;
+  /** How many of them wrote outside Bluesky. */
+  elsewhere: number;
+  /** Each app's accounts, in any order. */
+  apps: readonly number[];
+}
+
+export const NOBODY: Crowd = Object.freeze({ active: 0, elsewhere: 0, apps: Object.freeze([]) });
+
 export interface Reading {
   measuredAt: string;
   /** Seconds actually counted. */
@@ -134,9 +153,13 @@ export interface Reading {
   /** New records a second, in any collection. */
   records: { perSecond: number; bluesky: number; elsewhere: number };
   diversity: {
-    /** Percent of new records written outside Bluesky, two decimals (it is often under one). */
+    /** How much of the atmosphere isn't Bluesky, by who's writing (diversityOf), two decimals. */
     index: number;
     level: DiversityLevel;
+    /** Percent of active accounts that wrote outside Bluesky, two decimals. */
+    share: number;
+    /** How many apps they're spread across, as an effective number (spreadOf), two decimals. */
+    spread: number;
     /** Apps (namespaces) outside Bluesky that wrote anything. */
     apps: number;
     /** Distinct collections that got a new record. */
@@ -188,6 +211,40 @@ export function diversityLevel(index: number): DiversityLevel {
   return 'low';
 }
 
+/**
+ * How many apps a crowd is spread across, as an effective number: e to the Shannon
+ * entropy of their accounts over apps. Ten apps with as many accounts each is 10; one
+ * app with nearly everyone is close to 1, however many others have an account or two.
+ * 0 for nobody.
+ */
+export function spreadOf(accounts: Iterable<number>): number {
+  let total = 0;
+  for (const n of accounts) if (n > 0) total += n;
+  if (total <= 0) return 0;
+  let entropy = 0;
+  for (const n of accounts) if (n > 0) entropy -= (n / total) * Math.log(n / total);
+  return Math.exp(entropy);
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** The diversity index from its parts: the share of active accounts that wrote elsewhere (percent) times the square root of their spread. */
+export function diversityIndex(share: number, spread: number): number {
+  return round2(share * Math.sqrt(spread));
+}
+
+/**
+ * The diversity index of a crowd: how much of the atmosphere isn't Bluesky, by who's
+ * writing rather than how much gets written. One account writing a thousand records
+ * counts once, and forty accounts across ten apps count for more than forty in one.
+ * Each part two decimals.
+ */
+export function diversityOf(crowd: Crowd): { index: number; share: number; spread: number } {
+  const share = crowd.active > 0 ? round2(Math.min(100, (100 * crowd.elsewhere) / crowd.active)) : 0;
+  const spread = share > 0 ? round2(spreadOf(crowd.apps)) : 0;
+  return { index: diversityIndex(share, spread), share, spread };
+}
+
 /** The whole firehose: no wantedCollections. */
 export function jetstreamUrl(base: string): string {
   return base;
@@ -216,21 +273,76 @@ export type Event =
   | { kind: 'create'; collection: string }
   | { kind: 'update' | 'delete' | 'identity' | 'account' };
 
-/** What a Jetstream message is, or null for anything unreadable. */
-export function eventOf(data: unknown): Event | null {
+type Message = { kind?: unknown; did?: unknown; commit?: { operation?: unknown; collection?: unknown } } | null;
+
+function parse(data: unknown): Message {
   if (typeof data !== 'string') return null;
-  let m: { kind?: unknown; commit?: { operation?: unknown; collection?: unknown } };
   try {
-    m = JSON.parse(data);
+    return JSON.parse(data);
   } catch {
     return null;
   }
+}
+
+/** What a Jetstream message is, or null for anything unreadable. */
+export function eventOf(data: unknown): Event | null {
+  return eventOfMessage(parse(data));
+}
+
+function eventOfMessage(m: Message): Event | null {
   if (m?.kind === 'identity' || m?.kind === 'account') return { kind: m.kind };
   if (m?.kind !== 'commit') return null;
   const op = m.commit?.operation;
   if (op === 'update' || op === 'delete') return { kind: op };
   if (op !== 'create' || typeof m.commit?.collection !== 'string' || !isNsid(m.commit.collection)) return null;
   return { kind: 'create', collection: m.commit.collection };
+}
+
+/** A DID as Jetstream gives it (did:plc:…, did:web:…). */
+const DID_RE = /^did:[a-z]+:[a-zA-Z0-9._:%-]{1,2048}$/;
+
+export interface Account {
+  did: string;
+  /** Its app, or null for Bluesky's collections. */
+  app: string | null;
+}
+
+/** Whose a Jetstream message is: any commit to an NSID, by the station's rules (atmosphere/src/accounts.js accountOf); null for anything else. */
+export function accountOf(data: unknown): Account | null {
+  return accountOfMessage(parse(data));
+}
+
+function accountOfMessage(m: Message): Account | null {
+  if (m?.kind !== 'commit' || typeof m.did !== 'string' || !DID_RE.test(m.did)) return null;
+  const op = m.commit?.operation;
+  const collection = m.commit?.collection;
+  if ((op !== 'create' && op !== 'update' && op !== 'delete') || typeof collection !== 'string' || !isNsid(collection)) return null;
+  return { did: m.did, app: isBluesky(collection) ? null : appDomain(collection) };
+}
+
+/** Who wrote while a sample listens: different DIDs, exactly, kept only while it listens. */
+export interface CrowdTally {
+  all: Set<string>;
+  elsewhere: Set<string>;
+  /** Each app's DIDs; past MAX_COLLECTIONS apps, a DID still counts for elsewhere. */
+  apps: Map<string, Set<string>>;
+}
+
+export function emptyCrowd(): CrowdTally {
+  return { all: new Set(), elsewhere: new Set(), apps: new Map() };
+}
+
+export function addAccount(crowd: CrowdTally, account: Account): void {
+  crowd.all.add(account.did);
+  if (account.app === null) return;
+  crowd.elsewhere.add(account.did);
+  const dids = crowd.apps.get(account.app);
+  if (dids) dids.add(account.did);
+  else if (crowd.apps.size < MAX_COLLECTIONS) crowd.apps.set(account.app, new Set([account.did]));
+}
+
+export function crowdOf(crowd: CrowdTally): Crowd {
+  return { active: crowd.all.size, elsewhere: crowd.elsewhere.size, apps: [...crowd.apps.values()].map((dids) => dids.size) };
 }
 
 /** The metric a Jetstream message counts toward: a new record in one of COLLECTIONS. */
@@ -266,8 +378,8 @@ export function addEvent(tally: Tally, event: Event): void {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-/** A tally over `seconds`, as a Reading. */
-export function summarize(tally: Tally, seconds: number, measuredAt: string): Reading {
+/** A tally over `seconds`, and who wrote it (NOBODY when that isn't known), as a Reading. */
+export function summarize(tally: Tally, seconds: number, measuredAt: string, crowd: Crowd = NOBODY): Reading {
   const rate = (count: number) => round1(count / seconds);
   let bluesky = 0;
   let elsewhere = tally.unnamed;
@@ -287,7 +399,7 @@ export function summarize(tally: Tally, seconds: number, measuredAt: string): Re
     apps.set(domain, app);
   }
   const total = bluesky + elsewhere;
-  const index = total ? Math.round((elsewhere / total) * 10_000) / 100 : 0;
+  const { index, share, spread } = diversityOf(crowd);
   const busiest = <T extends { count: number }>(a: T, b: T) => b.count - a.count;
   const perSecond = Object.fromEntries(Object.entries(COLLECTIONS).map(([metric, nsid]) => [metric, rate(tally.creates.get(nsid) ?? 0)])) as Record<Metric, number>;
   return {
@@ -296,7 +408,7 @@ export function summarize(tally: Tally, seconds: number, measuredAt: string): Re
     perSecond,
     condition: conditionFor(rate(total)),
     records: { perSecond: rate(total), bluesky: rate(bluesky), elsewhere: rate(elsewhere) },
-    diversity: { index, level: diversityLevel(index), apps: apps.size, collections: tally.creates.size },
+    diversity: { index, level: diversityLevel(index), share, spread, apps: apps.size, collections: tally.creates.size },
     apps: [...apps]
       .map(([domain, a]) => ({
         domain,
@@ -334,19 +446,42 @@ function counts<K extends string>(x: unknown, keys: readonly K[]): Record<K, num
 }
 const isoOrNull = (x: unknown) => (typeof x === 'string' && Number.isFinite(Date.parse(x)) ? new Date(x).toISOString() : null);
 
+/** A station reading's `accounts`, checked, or undefined. */
+function accountsOf(x: unknown): Accounts | undefined {
+  const a = counts(x, ['active', 'bluesky', 'elsewhere', 'index'] as const);
+  if (!a || !isRecord(x) || !Array.isArray(x.apps)) return undefined;
+  return {
+    ...a,
+    index: Math.min(a.index, 100),
+    apps: x.apps
+      .filter((y): y is Record<string, unknown> => isRecord(y) && typeof y.domain === 'string' && DOMAIN_RE.test(y.domain) && isCount(y.accounts))
+      .slice(0, TOP_APPS)
+      .map((y) => ({
+        domain: y.domain as string,
+        accounts: y.accounts as number,
+        collections: (Array.isArray(y.collections) ? y.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
+      })),
+  };
+}
+
 /**
  * A station answer as a Reading, or null if any required part is off. Rebuilt from known
- * fields only, names re-checked (they are someone else's text), condition and level
- * worked out here from the numbers, so the two sources always agree on the words.
+ * fields only, names re-checked (they are someone else's text), condition, diversity
+ * index and level worked out here from the numbers, so the two sources always agree on
+ * the words.
  */
 export function fromStation(body: unknown): Reading | null {
   if (!isRecord(body)) return null;
   const measuredAt = isoOrNull(body.measuredAt);
   const perSecond = counts(body.perSecond, ['posts', 'likes', 'reposts', 'follows'] as const);
   const records = counts(body.records, ['perSecond', 'bluesky', 'elsewhere'] as const);
-  const diversity = counts(body.diversity, ['index', 'apps', 'collections'] as const);
+  const diversity = counts(body.diversity, ['apps', 'collections'] as const);
   const events = counts(body.events, ['creates', 'updates', 'deletes', 'identity', 'account'] as const);
-  if (!measuredAt || !isCount(body.seconds) || body.seconds === 0 || !perSecond || !records || !diversity || !events) return null;
+  const accounts = accountsOf(body.accounts);
+  // A station from before the index went by accounts sends no share or spread: its
+  // accounts stand in (only its top apps, so the spread reads a little low).
+  const parts = counts(body.diversity, ['share', 'spread'] as const) ?? (accounts ? { share: accounts.index, spread: round2(spreadOf(accounts.apps.map((x) => x.accounts))) } : null);
+  if (!measuredAt || !isCount(body.seconds) || body.seconds === 0 || !perSecond || !records || !diversity || !parts || !events) return null;
   if (!Array.isArray(body.apps) || !Array.isArray(body.bluesky)) return null;
   const apps: App[] = body.apps
     .filter((a): a is Record<string, unknown> => isRecord(a) && typeof a.domain === 'string' && DOMAIN_RE.test(a.domain) && isCount(a.perSecond) && isCount(a.count))
@@ -361,33 +496,21 @@ export function fromStation(body: unknown): Reading | null {
     .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b.nsid === 'string' && isNsid(b.nsid) && isBluesky(b.nsid) && isCount(b.perSecond) && isCount(b.count))
     .slice(0, TOP_BLUESKY)
     .map((b) => ({ nsid: b.nsid as string, perSecond: b.perSecond as number, count: b.count as number }));
+  const share = Math.min(parts.share, 100);
+  const index = diversityIndex(share, parts.spread);
   const reading: Reading = {
     measuredAt,
     seconds: body.seconds,
     perSecond,
     condition: conditionFor(records.perSecond),
     records,
-    diversity: { ...diversity, level: diversityLevel(diversity.index) },
+    diversity: { index, level: diversityLevel(index), share, spread: parts.spread, ...diversity },
     apps,
     bluesky,
     events,
     source: 'station',
   };
-  const a = counts(body.accounts, ['active', 'bluesky', 'elsewhere', 'index'] as const);
-  if (a && isRecord(body.accounts) && Array.isArray(body.accounts.apps)) {
-    reading.accounts = {
-      ...a,
-      index: Math.min(a.index, 100),
-      apps: body.accounts.apps
-        .filter((x): x is Record<string, unknown> => isRecord(x) && typeof x.domain === 'string' && DOMAIN_RE.test(x.domain) && isCount(x.accounts))
-        .slice(0, TOP_APPS)
-        .map((x) => ({
-          domain: x.domain as string,
-          accounts: x.accounts as number,
-          collections: (Array.isArray(x.collections) ? x.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
-        })),
-    };
-  }
+  if (accounts) reading.accounts = accounts;
   const w = isRecord(body.window) ? { from: isoOrNull(body.window.from), to: isoOrNull(body.window.to) } : null;
   if (w?.from && w.to) reading.window = { from: w.from, to: w.to };
   if (Array.isArray(body.series)) {
@@ -406,6 +529,7 @@ export function fromStation(body: unknown): Reading | null {
 export function sample(open: OpenSocket, url: string, now: () => number, sampleMs = SAMPLE_MS, connectMs = CONNECT_TIMEOUT_MS): Promise<Reading> {
   return new Promise((resolve, reject) => {
     const tally = emptyTally();
+    const crowd = emptyCrowd();
     let started = 0;
     let opened = false;
     let seen = 0;
@@ -424,7 +548,7 @@ export function sample(open: OpenSocket, url: string, now: () => number, sampleM
       if (error) return reject(error);
       if (seen === 0) return reject(new Error('jetstream was silent'));
       const seconds = Math.max(0.5, (now() - started) / 1000);
-      resolve(summarize(tally, seconds, new Date(now()).toISOString()));
+      resolve(summarize(tally, seconds, new Date(now()).toISOString(), crowdOf(crowd)));
     };
     try {
       socket = open(url);
@@ -444,8 +568,11 @@ export function sample(open: OpenSocket, url: string, now: () => number, sampleM
     socket.onmessage = (event) => {
       if (done || !opened) return;
       seen += 1;
-      const e = eventOf(event.data);
+      const m = parse(event.data);
+      const e = eventOfMessage(m);
       if (e) addEvent(tally, e);
+      const a = accountOfMessage(m);
+      if (a) addAccount(crowd, a);
     };
     socket.onerror = () => finish(new Error('jetstream error'));
     socket.onclose = () => finish(opened ? null : new Error('jetstream closed'));

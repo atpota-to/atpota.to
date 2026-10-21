@@ -2,8 +2,9 @@
  * The atmosphere weather report (weather/index.html, /weather): the home page's
  * "atmospheric conditions" tile, at full size. One reading from /api/atmosphere
  * (server/atmosphere.ts) fills every tile: how busy Bluesky is, the diversity index (the
- * share of new records written outside Bluesky) on a UV-index-style scale, the split as a
- * bar, the busiest apps elsewhere, Bluesky's busiest collections, and the last minute:
+ * share of active accounts writing outside Bluesky, scaled by how many apps they're spread
+ * across) on a UV-index-style scale, the split of new records as a bar, the busiest apps
+ * elsewhere, Bluesky's busiest collections, and the last minute:
  * every kind of event and the accounts active, as counts. When the reading is the weather station's rolling 60 seconds it checks
  * again every 5 seconds (with a sparkline of those 60 seconds, weather-spark.ts), otherwise
  * once a minute, always only while the tab is visible; a failed check keeps the last
@@ -15,7 +16,8 @@
  *
  * Trends come from /api/weather-history (server/weather-history.ts): the station's
  * minute rows for the last hour, 24 hours, 7 days or 30 days, as three charts
- * (weather-chart.ts: records a second, the diversity index, apps heard), and the busiest
+ * (weather-chart.ts: records a second, the diversity index from the station's accounts,
+ * apps heard), and the busiest
  * apps over the range, each with an arrow for how it did against the same span a day
  * (or a week, or 30 days) earlier.
  *
@@ -281,11 +283,11 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
     if (marker) marker.style.left = `${(Math.min(r.diversity.index, SCALE_MAX) / SCALE_MAX) * 100}%`;
     roll(report, '[data-r-collections]', r.diversity.collections.toLocaleString('en-US'));
   }
-  const byAccounts = $(report, '[data-r-acct-index]');
-  if (byAccounts) {
-    byAccounts.hidden = !acct || acct.active <= 0;
-    if (acct && acct.active > 0)
-      rollText(byAccounts, `by accounts: ${formatIndex(acct.index)}% of the ${formatCount(acct.active)} accounts active just now wrote somewhere other than bluesky.`);
+  const parts = $(report, '[data-r-acct-index]');
+  if (parts) {
+    const d = r.diversity;
+    parts.hidden = d?.share === undefined || d.spread === undefined;
+    if (d?.share !== undefined && d.spread !== undefined) rollText(parts, diversityParts(d.share, d.spread, acct?.active));
   }
 
   // bluesky and everyone else
@@ -338,6 +340,14 @@ export function renderReport(report: HTMLElement, r: Reading, measure: Measure =
   report.dataset.state = 'ready';
 }
 
+/** What a diversity index is made of, in words: its share of accounts, and how spread out they are. */
+export function diversityParts(share: number, spread: number, active?: number): string {
+  const who = active ? `of the ${formatCount(active)} accounts active just now` : 'of the accounts heard just now';
+  if (share <= 0) return `none ${who} wrote somewhere other than bluesky.`;
+  const apps = Math.max(1, Math.round(spread));
+  return `${formatIndex(share)}% ${who} wrote somewhere other than bluesky, ${apps === 1 ? 'all in about one app' : `spread across about ${apps} apps' worth`}.`;
+}
+
 // ---------- trends ----------
 
 export type Range = 'hour' | 'day' | 'week' | 'month';
@@ -377,6 +387,8 @@ export interface AccountCounts {
   active: number;
   bluesky: number;
   elsewhere: number;
+  /** The diversity index these accounts make (server/weather-accounts.ts), when the server sent it. */
+  index?: number;
 }
 
 export interface HistoryAccounts {
@@ -459,14 +471,17 @@ function toAccounts(x: unknown): HistoryAccounts | null {
   const r = x as Record<string, unknown> | undefined;
   const isCounts = (c: unknown): c is AccountCounts => typeof c === 'object' && c !== null && n((c as AccountCounts).active) && n((c as AccountCounts).bluesky) && n((c as AccountCounts).elsewhere);
   if (typeof r !== 'object' || r === null || !n(r.seconds) || !n(r.prevSeconds) || !isCounts(r.total) || !Array.isArray(r.points) || !Array.isArray(r.apps)) return null;
+  const withIndex = (c: AccountCounts): AccountCounts => ({ active: c.active, bluesky: c.bluesky, elsewhere: c.elsewhere, ...(n(c.index) ? { index: c.index } : {}) });
   return {
     seconds: r.seconds,
     prevSeconds: r.prevSeconds,
-    total: { active: r.total.active, bluesky: r.total.bluesky, elsewhere: r.total.elsewhere },
-    points: r.points.filter((p): p is HistoryAccounts['points'][number] => {
-      const v = p as Record<string, unknown>;
-      return isCounts(p) && typeof v.t === 'string' && Number.isFinite(Date.parse(v.t)) && n(v.seconds);
-    }),
+    total: withIndex(r.total),
+    points: r.points
+      .filter((p): p is HistoryAccounts['points'][number] => {
+        const v = p as Record<string, unknown>;
+        return isCounts(p) && typeof v.t === 'string' && Number.isFinite(Date.parse(v.t)) && n(v.seconds);
+      })
+      .map((p) => ({ t: p.t, seconds: p.seconds, ...withIndex(p) })),
     apps: r.apps
       .filter((a): a is HistoryAccounts['apps'][number] => {
         const v = a as Record<string, unknown>;
@@ -504,10 +519,10 @@ export function appChange(app: HistoryApp, compare: History['compare'], earlier:
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
 
-/** Records a second and the diversity index of a point (null when it covers nothing). */
-export function ratesOf(p: HistoryPoint): { records: number | null; posts: number | null; index: number | null } {
-  if (p.seconds <= 0) return { records: null, posts: null, index: null };
-  return { records: p.creates / p.seconds, posts: p.posts / p.seconds, index: p.creates > 0 ? (p.elsewhere / p.creates) * 100 : null };
+/** Records and posts a second of a point (null when it covers nothing). */
+export function ratesOf(p: HistoryPoint): { records: number | null; posts: number | null } {
+  if (p.seconds <= 0) return { records: null, posts: null };
+  return { records: p.creates / p.seconds, posts: p.posts / p.seconds };
 }
 
 /** How much of a range the station covered, in words: "13 minutes", "2 days". */
@@ -526,10 +541,11 @@ export function coverageWords(seconds: number): string {
 
 export function trendSummary(h: History): string {
   const info = RANGE_INFO[h.range];
-  const { records, index } = ratesOf(h.total);
+  const { records } = ratesOf(h.total);
   if (records === null) return `no readings yet for ${info.words}. the station fills this in as it goes.`;
   const covered = h.total.seconds < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(h.total.seconds)} of readings so far)` : '';
-  const idx = index === null ? '' : `, diversity index ${formatIndex(index)}`;
+  const index = h.accounts && h.accounts.seconds > 0 ? h.accounts.total.index : undefined;
+  const idx = index === undefined ? '' : `, diversity index ${formatIndex(index)}`;
   return `${info.words}${covered}: ${formatRate(records)} new records a second${idx}.`;
 }
 
@@ -574,12 +590,14 @@ function renderRecordTrends(section: HTMLElement, h: History, now: number, forma
   setText(section, '[data-t-summary]', trendSummary(h));
   setChartTitle(section, 'records', 'new records a second');
   setChartTitle(section, 'index', 'diversity index');
-  const rows = h.points.map((p) => ({ t: Date.parse(p.t), ...ratesOf(p) }));
-  const pts = (key: 'records' | 'index'): ChartPoint[] => [...lead(h, rows[0]?.t, now, info.stepMs), ...rows.map((r) => ({ t: r.t, v: r[key] }))];
+  const rows = h.points.map((p) => ({ t: Date.parse(p.t), v: ratesOf(p).records }));
+  // the index goes by accounts, which come in buckets of their own
+  const step = BUCKET_MS[BUCKET_OF[h.range]];
+  const indexes = (h.accounts?.points ?? []).map((p) => ({ t: Date.parse(p.t), v: p.index ?? null }));
   const records = $(section, '[data-t-chart="records"]');
   const index = $(section, '[data-t-chart="index"]');
-  if (records) renderChart(records, pts('records'), { label: 'new records a second', color: 'var(--weather-bsky)', format: formatRate, formatTime, stepMs: info.stepMs });
-  if (index) renderChart(index, pts('index'), { label: 'diversity index', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: info.stepMs });
+  if (records) renderChart(records, [...lead(h, rows[0]?.t, now, info.stepMs), ...rows], { label: 'new records a second', color: 'var(--weather-bsky)', format: formatRate, formatTime, stepMs: info.stepMs });
+  if (index) renderChart(index, [...lead(h, indexes[0]?.t, now, step), ...indexes], { label: 'diversity index', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
   const wrap = $(section, '[data-t-apps-wrap]');
   const list = $(section, '[data-t-apps]');
   const apps = h.apps ?? [];

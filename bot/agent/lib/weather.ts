@@ -1,7 +1,8 @@
 /**
  * The Atmosphere's weather, as the weather report at atpota.to/weather tells it: how
- * many new records a second the whole network writes, how much of that comes from apps
- * other than Bluesky (the diversity index), which apps are busiest, and how it compares
+ * many new records a second the whole network writes, how much of the network isn't
+ * Bluesky (the diversity index: the share of active accounts writing elsewhere, scaled by
+ * how many apps they're spread across), which apps are busiest, and how it compares
  * with usual. Not the weather outside.
  *
  * The numbers come from the weather station (atmosphere/ in this repo), an always-on
@@ -158,13 +159,13 @@ function percentWords(pct: number, earlier: string): string {
   return `about the same as ${earlier}`;
 }
 
-/** Diversity against an earlier window, as the weather page words it. */
+/** The share of new records from other apps against an earlier window, as the weather page words it (records, not the diversity index). */
 function mixWords(now: { elsewhere: number; creates: number }, before: { elsewhere: number; creates: number }, earlier: string): string | null {
   if (now.elsewhere < 50 || before.elsewhere < 50 || now.creates <= 0 || before.creates <= 0) return null;
   const mix = now.elsewhere / now.creates / (before.elsewhere / before.creates);
-  if (mix >= 1.3) return `a more mixed sky than ${earlier}`;
-  if (mix <= 0.77) return `a little less mixed than ${earlier}`;
-  return `about as mixed as ${earlier}`;
+  if (mix >= 1.3) return `more of the new records from other apps than ${earlier}`;
+  if (mix <= 0.77) return `fewer of the new records from other apps than ${earlier}`;
+  return `about the same share of new records from other apps as ${earlier}`;
 }
 
 // ---------- fetching ----------
@@ -196,6 +197,7 @@ export function nowReport(body: unknown) {
   const perSecond = counts(body.perSecond, ["posts", "likes", "reposts", "follows"] as const);
   const diversity = counts(body.diversity, ["index", "apps", "collections"] as const);
   if (!measuredAt || !seconds || !records || !perSecond || !diversity) return null;
+  const parts = counts(body.diversity, ["share", "spread"] as const);
   const events = counts(body.events, ["updates", "deletes", "identity", "account"] as const);
   const apps = list(body.apps).flatMap((a) => {
     const domain = isRecord(a) ? domainOf(a.domain) : null;
@@ -227,7 +229,14 @@ export function nowReport(body: unknown) {
     records: { perSecond: records.perSecond, blueskyPerSecond: records.bluesky, elsewherePerSecond: records.elsewhere },
     bluesky: { postsPerSecond: perSecond.posts, likesPerSecond: perSecond.likes, repostsPerSecond: perSecond.reposts, followsPerSecond: perSecond.follows },
     ...(events ? { events: { updatesPerSecond: events.updates, deletesPerSecond: events.deletes, identityPerSecond: events.identity, accountPerSecond: events.account } } : {}),
-    diversity: { index: diversity.index, level: diversityLevel(diversity.index), apps: diversity.apps, collections: diversity.collections },
+    diversity: {
+      index: diversity.index,
+      level: diversityLevel(diversity.index),
+      // what the index is made of: the percent of active accounts that wrote elsewhere, and how many apps' worth they're spread across
+      ...(parts ? { accountSharePercent: Math.min(parts.share, 100), spreadAcrossApps: round1(parts.spread) } : {}),
+      apps: diversity.apps,
+      collections: diversity.collections,
+    },
     apps,
     ...(accounts ? { accounts } : {}),
   };
@@ -237,7 +246,14 @@ export function nowReport(body: unknown) {
 
 const POINT_KEYS = ["creates", "bluesky", "elsewhere", "posts", "likes", "reposts", "follows", "updates", "deletes", "identity", "account"] as const;
 export type Point = { t: string; seconds: number } & Record<(typeof POINT_KEYS)[number], number>;
-type AccountTotals = { active: number; bluesky: number; elsewhere: number };
+/** Active accounts, and the diversity index they make when the website sent it. */
+type AccountTotals = { active: number; bluesky: number; elsewhere: number; index?: number };
+
+/** `c` with the index on `x`, when there is one. */
+function withIndex<T extends object>(x: unknown, c: T): T & { index?: number } {
+  const index = isRecord(x) ? count(x.index) : null;
+  return index === null ? c : { ...c, index };
+}
 
 function toPoint(x: unknown): Point | null {
   if (!isRecord(x)) return null;
@@ -276,11 +292,11 @@ export function parseHistory(body: unknown) {
   if (acc && accCover && accTotal) {
     accounts = {
       ...accCover,
-      total: accTotal,
+      total: withIndex(acc?.total, accTotal),
       points: list(acc.points).flatMap((p) => {
         const t = isRecord(p) ? iso(p.t) : null;
         const c = counts(p, ["seconds", "active", "bluesky", "elsewhere"] as const);
-        return t && c ? [{ t, ...c }] : [];
+        return t && c ? [withIndex(p, { t, ...c })] : [];
       }),
       apps: list(acc.apps).flatMap((a) => {
         const domain = isRecord(a) ? domainOf(a.domain) : null;
@@ -305,10 +321,14 @@ export function sumPoints(points: Point[]): Point {
 }
 
 /** A stretch of the station's rows, in weather words. */
-function weatherOf(p: { seconds: number; creates: number; elsewhere: number }) {
+function weatherOf(p: { seconds: number; creates: number }) {
   const perSecond = rate(p.creates, p.seconds);
-  const index = indexOf(p.elsewhere, p.creates);
-  return { perSecond, condition: conditionFor(perSecond), diversityIndex: index, diversityLevel: diversityLevel(index) };
+  return { perSecond, condition: conditionFor(perSecond) };
+}
+
+/** The diversity index over a range, with its level, from the range's accounts (none without them). */
+function diversityOf(a: { index?: number } | undefined) {
+  return a?.index === undefined ? {} : { diversityIndex: a.index, diversityLevel: diversityLevel(a.index) };
 }
 
 /** The busiest apps outside Bluesky over a range, each against the window before it. */
@@ -500,9 +520,9 @@ export function todayReport(parts: Parts, now: number, tz: string) {
       perSecond: w.perSecond,
       condition: w.condition,
       postsPerSecond: rate(t.posts, t.seconds),
-      diversityIndex: w.diversityIndex,
-      diversityLevel: w.diversityLevel,
       records: t.creates,
+      // the share of today's new records written outside Bluesky: not the diversity index, which goes by accounts (see last24Hours)
+      recordsElsewherePercent: indexOf(t.elsewhere, t.creates),
       // the busiest and quietest whole minute, new records a second
       ...(t.high ? { high: { minute: hourAt(t.high.minute, tz), perSecond: t.high.perSecond, condition: conditionFor(t.high.perSecond) } } : {}),
       ...(t.low ? { low: { minute: hourAt(t.low.minute, tz), perSecond: t.low.perSecond, condition: conditionFor(t.low.perSecond) } } : {}),
@@ -518,6 +538,7 @@ export function todayReport(parts: Parts, now: number, tz: string) {
     out.last24Hours = {
       heardPercent: heardPercent(total.seconds, DAY),
       ...weatherOf(total),
+      ...diversityOf(day.accounts?.total),
       apps: appsOf(day, total, "the 24 hours before"),
       ...(accounts ? { accounts } : {}),
     };
@@ -563,9 +584,11 @@ export function weekReport(parts: Parts, now: number, tz: string) {
       follows: total.follows,
     },
     edits: { updates: total.updates, deletes: total.deletes },
-    diversity: { index: w.diversityIndex, level: w.diversityLevel },
     ...extremes(week.points, tz),
   };
+  const index = week.accounts?.total.index;
+  if (index !== undefined) out.diversity = { index, level: diversityLevel(index) };
+  else unavailable.push("the diversity index");
   const accounts = accountsOf(week, WEEK, "the week before");
   if (accounts) out.accounts = accounts;
   else unavailable.push("active accounts");
@@ -578,19 +601,19 @@ export function weekReport(parts: Parts, now: number, tz: string) {
     const thisFrom = todayStart - 6 * DAY;
     const beforeFrom = todayStart - 13 * DAY;
     const inside = (from: number, to: number) => month.points.filter((p) => Date.parse(p.t) >= from && Date.parse(p.t) < to);
-    const activeOn = new Map((month.accounts?.points ?? []).map((p) => [p.t, p.active]));
+    const accountsOn = new Map((month.accounts?.points ?? []).map((p) => [p.t, p]));
     out.days = inside(thisFrom, now).map((p) => {
       const d = weatherOf(p);
       const start = Date.parse(p.t);
-      const active = activeOn.get(p.t);
+      const a = accountsOn.get(p.t);
       return {
         date: p.t.slice(0, 10),
         weekday: UTC_WEEKDAYS[new Date(start).getUTCDay()],
         perSecond: d.perSecond,
         condition: d.condition,
         postsPerSecond: rate(p.posts, p.seconds),
-        diversityIndex: d.diversityIndex,
-        ...(active !== undefined ? { activeAccounts: active } : {}),
+        ...(a?.index !== undefined ? { diversityIndex: a.index } : {}),
+        ...(a ? { activeAccounts: a.active } : {}),
         heardPercent: heardPercent(p.seconds, Math.min(DAY, now - start)),
       };
     });
@@ -606,7 +629,6 @@ export function weekReport(parts: Parts, now: number, tz: string) {
         to: new Date(thisFrom).toISOString(),
         heardPercent: beforeHeard,
         perSecond: b.perSecond,
-        diversityIndex: b.diversityIndex,
         // this week's records a second against the week before's, both by whole UTC days
         changePercent: changePercent(thisWeek.creates / thisWeek.seconds, before.creates / before.seconds),
         ...(mix ? { mix } : {}),
@@ -623,6 +645,8 @@ export function weekReport(parts: Parts, now: number, tz: string) {
       from: new Date(monthFrom).toISOString(),
       heardPercent: heardPercent(m.seconds, now - monthFrom),
       ...weatherOf(m),
+      // over the station's last 30 days
+      ...diversityOf(month.accounts?.total),
       ...(wholeDays.length >= 2 ? { busiestDay: day(wholeDays[0]!), quietestDay: day(wholeDays[wholeDays.length - 1]!) } : {}),
     };
     const perDay = (month.appsOverTime ?? []).filter((p) => Date.parse(p.t) >= thisFrom);
