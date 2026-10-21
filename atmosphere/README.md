@@ -232,8 +232,8 @@ segments, about 2 TB. Almost all of that (about 1.9 TB, 2026-10-02 to 2026-10-06
 13:37Z) is a one-time crawl of every repo: records that already existed, stamped when
 they were crawled. That's no history of activity, so `archive.js` refuses any range
 that reaches into it. Since then the archive is the live stream, about 3.5 GB a day.
-So the earliest it can fill is **2026-10-06 14:00Z**; before that, nothing official
-has the history.
+So the earliest it can fill is **2026-10-06 14:00Z**. Before that, `src/crawl.js` rebuilds
+the weather from the crawl itself (next section).
 
 **Why archive minutes run a little low.** The server periodically rewrites older
 segments to remove records that were deleted since (a like taken back, a post
@@ -309,6 +309,69 @@ needed.
 `--host` picks another v2 instance (default `https://jetstream.us-east.bsky.network`),
 and `JETSTREAM_SDK_DIR` another SDK folder.
 
+## Rebuilding older weather from the crawl
+
+`src/crawl.js` turns the crawl at the start of the archive (the 1.9 TB `archive.js`
+refuses) into history back to November 2022. A crawled record is stamped when it was
+crawled, but its rkey is a TID minted when it was written, so counted by that the crawl
+says when everything that still exists was made. Records without a TID rkey (profiles,
+say) go by their `createdAt`.
+
+**What it is, and isn't.** It's a different measurement from the station's and the
+archive's, and anything before 2026-10-06T14:00Z came from it:
+
+- **Only records that still exist.** Likes taken back, deleted posts and deleted accounts
+  aren't in the crawl, so the past reads low, and lower the further back.
+- **Only creates.** Updates, deletes, identity and account events leave nothing behind,
+  so those columns are 0.
+- **The time a record claims.** An import that backdated its rkeys shows up when it says.
+  Anything claiming to be from before 2022-11-01 is left out.
+- **The minutes' `dids` are left null** (a sketch a minute for four years would be about
+  17 GB). Hours, days and months get account sketches as usual, and apps get day and
+  month sketches. The minutes' `collections` and `apps` are estimates; every other number
+  is an exact count of what survived.
+
+By default it stops at the UTC midnight before the crawl began (2026-10-02), since a repo
+crawled on day four is missing what it wrote on days one to three. The days from then to
+2026-10-06 14:00Z are left empty. `--to` can go up to the crawl's end, with a warning.
+
+**What it takes.** The whole crawl: about 1.9 TB of downloads against the key's
+allowance and around 20 billion records, so plan on a day or more of reading (`--probe`
+says how long on your machine). The crawl is in repo order, not time order, so nothing is
+finished until all of it is read. Everything is added up in memory, about 600 MB plus
+growth, so the machine needs 1.5 to 2 GB free. That's more than the droplet should give
+up next to the station. On 2026-10-21 the archive backfill alone slowed the station enough
+that it fell behind ("Falling behind", below). A short-lived bigger machine works just as
+well, since all it needs is Node 22, the SDK, the key and the Supabase keys.
+
+It saves where it got to in `--state` (default `crawl-state.bin`, about 500 MB) every
+30 minutes and on Ctrl-C (press it again to quit without saving). Running the same
+command again carries on from there. When the crawl is read, the state is marked complete
+and the rows are written. Every write is an insert that leaves existing rows alone, so
+writing twice changes nothing, and nothing the station or `archive.js` wrote can be
+replaced. If writing fails partway, run it again.
+
+**What it adds to Supabase**, for 2022-11-01 to 2026-10-02: about 2.06 million minute
+rows (roughly 400 MB, like the station's 100 MB a year), the apps' hour and day roll-ups
+(`atmosphere_hour_app`, `atmosphere_day_app`; no minute app rows), about 34,000 hour
+sketches (up to 280 MB), and the day and month sketches. That's under 1 GB of the
+project's 8 GB, with no schema changes.
+
+```bash
+# first: what the crawl holds, from a million events of it (a few hundred MB); writes nothing
+cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
+  /root/atpota-live/atmosphere/src/crawl.js --probe
+
+# then the run, in tmux; --dry-run prints a line a month instead of writing
+cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --max-old-space-size=3072 --env-file=.env \
+  /root/atpota-live/atmosphere/src/crawl.js
+```
+
+The probe prints how many events it read and how fast, the share it could date, the
+years the records say they're from, how many non-creates and live events are mixed into
+the crawl, and how long the whole crawl would take at that pace. `--from` and `--to` take
+UTC midnights; `--host` and `JETSTREAM_SDK_DIR` work as for `archive.js`.
+
 ## Config
 
 `/root/atpotato-weather/.env` on the droplet, mode 600. Start from
@@ -326,7 +389,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 80 tests, about a second, no network
+npm test                                         # node:test, 117 tests, a few seconds, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -369,6 +432,7 @@ src/rollup.js      accounts by hour, day and month: merged in memory, written ev
 src/supabase.js    PostgREST upserts and paged reads
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
+src/crawl.js       rebuild the weather before the archive, from its crawl of every repo
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line
