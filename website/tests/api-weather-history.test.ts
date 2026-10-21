@@ -221,9 +221,37 @@ describe('active accounts in the trends', () => {
     expect(now!.searchParams.get('period')).toBe('eq.minute');
     expect(now!.searchParams.getAll('t')).toEqual(['gte.2026-10-20T16:00:00.000Z', 'lt.2026-10-20T17:00:00.000Z']);
     expect(earlier!.searchParams.get('domain')).toBe('in.(tangled.sh,whtwnd.com)');
+    // minute sketches of everyone don't last a day, so the same hour yesterday has no diversity index
+    expect('prev' in (body.accounts as object)).toBe(false);
     expect(earlier!.searchParams.getAll('t')).toEqual(['gte.2026-10-19T16:00:00.000Z', 'lt.2026-10-19T17:00:00.000Z']);
     // the earlier hour's coverage from the minute rows, since minute sketches don't last a day
     expect(asked('atmosphere_minute').some((u) => u.searchParams.get('dids') === 'not.is.null')).toBe(true);
+  });
+
+  it('gives a longer range the earlier window\'s everyone and diversity index, over every app', async () => {
+    const urls: URL[] = [];
+    const fetch = (async (input: string) => {
+      const url = new URL(input);
+      urls.push(url);
+      const table = url.pathname.split('/').pop();
+      const earlier = (url.searchParams.get('t') ?? '').startsWith('gte.2026-10-18');
+      if (table === 'atmosphere_account_sketch')
+        return Response.json(
+          earlier
+            ? [{ t: '2026-10-18T18:00:00+00:00', seconds: 3600, bluesky: sk(1, 2, 3), elsewhere: sk(4) }]
+            : [{ t: '2026-10-19T18:00:00+00:00', seconds: 3600, dids: 4, dids_bluesky: 2, dids_elsewhere: 2, bluesky: sk(1, 2), elsewhere: sk(3, 5) }],
+        );
+      if (table === 'atmosphere_account_app_sketch')
+        return Response.json(earlier ? [{ domain: 'whtwnd.com', sketch: sk(4) }] : [{ t: '2026-10-19T18:00:00+00:00', domain: 'tangled.sh', dids: 2, sketch: sk(3, 5) }]);
+      if (url.pathname.includes('/rpc/')) return new Response('no', { status: 404 });
+      return Response.json([]);
+    }) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=day'))).json()) as { accounts: { prev: unknown } };
+    // registers 1-3 on Bluesky and 4 elsewhere, all of it whtwnd.com's, which isn't in the top apps now
+    expect(body.accounts.prev).toEqual({ seconds: 3600, active: 4, bluesky: 3, elsewhere: 1, share: 25, spread: 1, index: 25 });
+    const earlier = urls.filter((u) => u.pathname.endsWith('/atmosphere_account_app_sketch') && u.searchParams.get('t')?.startsWith('gte.2026-10-18'));
+    expect(earlier[0]!.searchParams.get('domain')).toBeNull();
   });
 
   it('reads longer ranges from hour, day and month sketches, and pages through them', async () => {

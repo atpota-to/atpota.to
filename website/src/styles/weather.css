@@ -1327,6 +1327,11 @@ html[data-theme="dark"] .weather-hero {
   font-weight: 700;
 }
 
+.weather-diversity__change {
+  width: fit-content;
+  margin-block: 4px;
+}
+
 .weather-diversity__blurb {
   color: var(--text-soft);
 }

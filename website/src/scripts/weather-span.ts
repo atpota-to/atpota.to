@@ -246,7 +246,8 @@ function show(tile: HTMLElement, sel: string, v: number | null | undefined, form
   } else countTo(el, v, format);
 }
 
-function chip(el: HTMLElement, c: Change | null): void {
+/** A number's chip: the arrow and percent on screen, in words for screen readers; nothing without a change. */
+export function chip(el: HTMLElement, c: Change | null): void {
   if (!c) {
     delete el.dataset.trend;
     el.replaceChildren();

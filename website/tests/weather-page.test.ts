@@ -9,6 +9,7 @@ import {
   LIST_TOP,
   topBars,
   accountChange,
+  indexChange,
   accountSummary,
   bindExplainers,
   diversityParts,
@@ -382,6 +383,15 @@ describe('records or accounts', () => {
     expect(accountChange({ ...app, active: 100 }, acct, 'yesterday')!.trend).toBe('down');
     expect(accountChange(app, { ...acct, prevSeconds: 90 }, 'yesterday')).toBeNull();
     expect(accountChange(app, { ...acct, prevSeconds: 400 }, 'yesterday')).toBeNull();
+  });
+
+  it('compares the diversity index with the earlier window\'s only when both were heard about as well', () => {
+    const withPrev = { ...acct, total: { ...acct.total, index: 6.6 }, prev: { seconds: 180, active: 38_000, bluesky: 37_600, elsewhere: 700, index: 6 } };
+    expect(indexChange(withPrev, 'the day before')).toEqual({ text: '↑ 10%', words: 'up 10% on the day before', trend: 'up' });
+    expect(indexChange({ ...withPrev, total: { ...withPrev.total, index: 4.5 } }, 'x')!.text).toBe('↓ 25%');
+    expect(indexChange(acct, 'x')).toBeNull();
+    expect(indexChange({ ...withPrev, prev: { ...withPrev.prev, seconds: 90 } }, 'x')).toBeNull();
+    expect(indexChange({ ...withPrev, prev: { ...withPrev.prev, index: undefined } }, 'x')).toBeNull();
   });
 
   it('only accepts well-formed accounts in a history', async () => {

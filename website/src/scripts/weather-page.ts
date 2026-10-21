@@ -48,7 +48,7 @@
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initForecast } from './weather-forecast';
-import { initSpan, showLive, spanFor } from './weather-span';
+import { chip, initSpan, percentChange, showLive, spanFor, type Change } from './weather-span';
 import {
   bindLens,
   createLens,
@@ -279,7 +279,7 @@ export interface Sky {
   records: { perSecond: number; bluesky: number; elsewhere: number } | null;
   /** Different accounts over the window. */
   accounts: { active: number; bluesky: number; elsewhere: number } | null;
-  diversity: { index: number; level: DiversityLevel; share?: number; spread?: number } | null;
+  diversity: { index: number; level: DiversityLevel; share?: number; spread?: number; change?: Change } | null;
   /** Apps outside Bluesky heard, and collections written to, when the sky knows. */
   appsHeard: number | null;
   collections: number | null;
@@ -345,7 +345,7 @@ export function skyOfHistory(h: History): Sky {
     seconds: secs,
     records: secs > 0 ? { perSecond: t.creates / secs, bluesky: t.bluesky / secs, elsewhere: t.elsewhere / secs } : null,
     accounts: a ? { active: a.total.active, bluesky: a.total.bluesky, elsewhere: a.total.elsewhere } : null,
-    diversity: a && a.total.index !== undefined ? { index: a.total.index, level: levelOf(a.total.index), share } : null,
+    diversity: a && a.total.index !== undefined ? { index: a.total.index, level: levelOf(a.total.index), share, change: indexChange(a, info.earlier) ?? undefined } : null,
     appsHeard: null,
     collections: null,
     apps:
@@ -427,6 +427,8 @@ function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
     count(report, '[data-r-index]', d.index, formatIndex);
     setText(report, '[data-r-level]', d.level);
     setText(report, '[data-r-level-text]', LEVEL_TEXT[d.level]);
+    const change = $(report, '[data-r-index-change]');
+    if (change) chip(change, d.change ?? null);
     if (marker) {
       marker.hidden = false;
       marker.style.left = `${(Math.min(d.index, SCALE_MAX) / SCALE_MAX) * 100}%`;
@@ -439,6 +441,8 @@ function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
     }
     setText(report, '[data-r-level]', '');
     setText(report, '[data-r-level-text]', `no account counts for ${WINDOW_INFO[sky.window].words} yet.`);
+    const change = $(report, '[data-r-index-change]');
+    if (change) chip(change, null);
     if (marker) marker.hidden = true;
   }
   const parts = $(report, '[data-r-acct-index]');
@@ -692,6 +696,8 @@ export interface HistoryAccounts {
   prevSeconds: number;
   /** Everyone active over the whole range: fewer than the buckets add up to. */
   total: AccountCounts;
+  /** Everyone active in the earlier window, and the seconds the station heard of it, when it kept their sketches. */
+  prev?: AccountCounts & { seconds: number };
   points: Array<AccountCounts & { t: string; seconds: number }>;
   apps: Array<{ domain: string; active: number; prevActive: number; collections: string[] }>;
 }
@@ -767,10 +773,13 @@ function toAccounts(x: unknown): HistoryAccounts | null {
   const isCounts = (c: unknown): c is AccountCounts => typeof c === 'object' && c !== null && n((c as AccountCounts).active) && n((c as AccountCounts).bluesky) && n((c as AccountCounts).elsewhere);
   if (typeof r !== 'object' || r === null || !n(r.seconds) || !n(r.prevSeconds) || !isCounts(r.total) || !Array.isArray(r.points) || !Array.isArray(r.apps)) return null;
   const withIndex = (c: AccountCounts): AccountCounts => ({ active: c.active, bluesky: c.bluesky, elsewhere: c.elsewhere, ...(n(c.index) ? { index: c.index } : {}) });
+  const prevSeconds = typeof r.prev === 'object' && r.prev !== null ? (r.prev as Record<string, unknown>).seconds : undefined;
+  const prev = isCounts(r.prev) && n(prevSeconds) ? { seconds: prevSeconds, ...withIndex(r.prev) } : null;
   return {
     seconds: r.seconds,
     prevSeconds: r.prevSeconds,
     total: withIndex(r.total),
+    ...(prev ? { prev } : {}),
     points: r.points
       .filter((p): p is HistoryAccounts['points'][number] => {
         const v = p as Record<string, unknown>;
@@ -798,6 +807,17 @@ export function accountChange(app: HistoryAccounts['apps'][number], a: HistoryAc
   if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
   if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
+}
+
+/**
+ * The diversity index against the earlier window's, in percent. Like accounts, only when
+ * the station heard both windows about as well; null otherwise.
+ */
+export function indexChange(a: HistoryAccounts, earlier: string): Change | null {
+  const p = a.prev;
+  if (!p || a.total.index === undefined || p.index === undefined) return null;
+  if (a.seconds <= 0 || p.seconds < a.seconds * 0.9 || p.seconds > a.seconds * 1.1) return null;
+  return percentChange(a.total.index, p.index, earlier);
 }
 
 /**
