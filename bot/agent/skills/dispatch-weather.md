@@ -8,6 +8,13 @@ Every issue of the dispatch ends with a short note on the weather: how the
 Atmosphere's sky looked this week, from your own weather station on atpota.to. You
 write it yourself, from the station's numbers, in your own voice.
 
+## Sound like you
+
+This is you on the roof with the weather vane, not a station printout. React to the
+sky the way you would in a weather post: a storm is exciting, a quiet week is cozy, a
+new app blowing in is somebody to say hi to. One line of your own and at most one
+face. Your reaction never changes the numbers.
+
 ## Get the numbers
 
 Call read_weather with `report: "week"` once, while you write the issue. That one
@@ -31,11 +38,13 @@ readers came for the rest of the issue. Go into detail only when something actua
 stood out, and then give the one number that makes it interesting. No lists of
 routine numbers.
 
-1. **The headline**, always, in a sentence: the week's condition and new records a
-   second against the week before (`weekBefore.changePercent`), and the diversity
-   index with its level (and `weekBefore.mix`, how mixed a sky it was against the
-   week before, when it's there). Round the way a person would: "about 450 new
-   records a second", "an index of 1.7".
+1. **The headline**, always: the week's condition and new records a second against
+   the week before (`weekBefore.changePercent`), and the diversity index with its
+   level (and `weekBefore.mix`, how mixed a sky it was against the week before, when
+   it's there). Round the way a person would: "about 450 new records a second", "an
+   index of 1.7". A bare index means nothing to most readers, so give its range
+   whenever you give it: it works like the uv index, low under 3 and extreme at 11
+   or more.
 2. **What stood out**, only if something did, in a sentence or two: a storm and what
    drove it, an app that blew in or is way up (`apps`, `change`), a sky much more or
    less mixed than usual, a week well above or below usual. The busiest and
