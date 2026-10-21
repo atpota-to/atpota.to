@@ -17,6 +17,8 @@
   --home-sheet-shot: #D7F2FE;
   --home-bubble: #FFFFFF;
   --home-mound: var(--skin);
+  --home-garden-path: color-mix(in srgb, var(--sage) 55%, #8C7146);
+  --home-garden-seed: #8C7146;
   /* night sky on the sunburst tile (dark theme only) */
   --home-night: #26304A;
   --home-night-deep: #1E273D;
@@ -42,6 +44,8 @@ html[data-theme="dark"] {
   --home-sheet-shot: #2A4752;
   --home-bubble: var(--card);
   --home-mound: #6E5634;
+  --home-garden-path: #3A2F20;
+  --home-garden-seed: #4A3820;
   --home-weather-cell: rgba(255, 253, 247, 0.07);
   --home-weather-wait: rgba(255, 253, 247, 0.08);
   --home-weather-wait-shine: rgba(255, 253, 247, 0.18);
@@ -2868,28 +2872,49 @@ html:not(.js) .home-weather {
   color: var(--home-sage-mono);
 }
 
-/* one of each kind, on its mound (drawn by garden-teaser.ts; empty without JavaScript) */
-.home-garden__row {
+/* the open patch in miniature, every plot of it (drawn by garden-teaser.ts; empty without
+   JavaScript). --teaser-cols comes from the patch. */
+.home-garden__patch {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(var(--teaser-cols, 12), minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--home-garden-path);
 }
 
-.home-garden__row:empty {
+.home-garden__patch:empty {
   display: none;
 }
 
-.home-garden__mound {
+.home-garden__plot {
   display: grid;
   place-items: center;
   aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 42%, var(--home-mound) 0 62%, color-mix(in srgb, var(--home-mound) 80%, #000) 100%);
+  min-width: 0;
+  border-radius: 22%;
+  background: var(--home-mound);
 }
 
-.home-garden__mound .home-flower {
-  width: 92%;
-  height: 92%;
+/* an empty plot shows where a seed would go */
+.home-garden__plot:not(.home-garden__plot--planted)::after {
+  content: "";
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--home-garden-seed);
+}
+
+.home-garden__sway {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.home-garden__sway .home-flower {
+  width: 96%;
+  height: 96%;
   overflow: visible;
 }
 
@@ -2906,40 +2931,56 @@ html:not(.js) .home-weather {
   font-weight: 600;
 }
 
-/* On hover the flowers nod, one after another. */
-@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  .home-garden:hover .home-garden__mound .home-flower {
-    animation: home-garden-nod 700ms var(--ease-spring) both;
+/* Once the tile is on screen, the flowers come up one after another, each with its own
+   little lean, then sway in the breeze at their own pace. On hover they all bob. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js .home-garden__sway {
+    transform-origin: 50% 85%;
+    animation:
+      home-garden-grow 900ms var(--ease-spring) var(--grow-delay, 0ms) both paused,
+      home-garden-sway var(--sway-time, 4s) ease-in-out var(--sway-delay, 0s) infinite paused;
   }
 
-  .home-garden__mound:nth-child(2) .home-flower {
-    animation-delay: 60ms;
+  html.js .home-garden[data-seen] .home-garden__sway {
+    animation-play-state: running;
   }
 
-  .home-garden__mound:nth-child(3) .home-flower {
-    animation-delay: 120ms;
-  }
-
-  .home-garden__mound:nth-child(4) .home-flower {
-    animation-delay: 180ms;
-  }
-
-  .home-garden__mound:nth-child(5) .home-flower {
-    animation-delay: 240ms;
-  }
-
-  .home-garden__mound:nth-child(6) .home-flower {
-    animation-delay: 300ms;
+  .home-garden__sway .home-flower {
+    transition: transform var(--dur-spring) var(--ease-spring);
   }
 }
 
-@keyframes home-garden-nod {
-  40% {
-    transform: rotate(14deg) scale(1.08);
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .home-garden:hover .home-garden__sway .home-flower {
+    transform: scale(1.12) rotate(8deg);
+  }
+}
+
+@keyframes home-garden-grow {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(var(--grow-tilt, 0deg));
+  }
+
+  30% {
+    opacity: 1;
   }
 
   100% {
+    opacity: 1;
     transform: none;
+  }
+}
+
+/* sways only rotate the wrapper's flower, so they don't fight the grow-in's scale */
+@keyframes home-garden-sway {
+  0%,
+  100% {
+    rotate: -4deg;
+  }
+
+  50% {
+    rotate: 4deg;
   }
 }
 
