@@ -12,22 +12,23 @@ import {
   gustOf,
   humidityOf,
   initSpan,
-  nextSpan,
   percentChange,
   pointsChange,
   readSpan,
   renderFigures,
   showLive,
+  spanFor,
   spanNote,
   tileCount,
+  unitWords,
   type Figures,
   type SpanAnswer,
   type Stretch,
 } from '../src/scripts/weather-span.js';
 import type { Reading } from '../src/scripts/weather.js';
 
-// The last-minute tile on /weather: the live minute, or the last hour, day or week, each
-// number with a chip against the span before.
+// The last-minute tile on /weather: the live minute, or the lens's window (the last hour,
+// 24 hours, 7 days or 30 days), each number with a chip against the span before.
 
 const PAGE = readFileSync(resolve(process.cwd(), 'weather/index.html'), 'utf8');
 const MAIN = PAGE.slice(PAGE.indexOf('<main'), PAGE.indexOf('</main>') + '</main>'.length);
@@ -143,10 +144,11 @@ describe('the chips', () => {
   it('a note says what they compare with, and how much of a long span the station has heard', () => {
     const now = figuresOf(stretch(440));
     expect(spanNote('hour', now, now)).toBe('arrows compare with the hour before.');
-    expect(spanNote('day', figuresOf(stretch(440, { seconds: 70_000 })), null)).toBe("once the station has heard the day before, arrows say what's up and down. the station has heard 19 hours of the last day so far.");
+    expect(spanNote('day', figuresOf(stretch(440, { seconds: 70_000 })), null)).toBe("once the station has heard the 24 hours before, arrows say what's up and down. the station has heard 19 hours of the last 24 hours so far.");
     expect(spanNote('minute', now, null)).toBe('');
-    expect(spanNote('week', null, null)).toBe('reading the last week…');
-    expect(spanNote('week', null, null, true)).toBe('the last week is hard to read right now. try again in a bit.');
+    expect(spanNote('week', null, null)).toBe('reading the last 7 days…');
+    expect(spanNote('week', null, null, true)).toBe('the last 7 days is hard to read right now. try again in a bit.');
+    expect(spanNote('month', figuresOf(stretch(440)), figuresOf(stretch(400)))).toBe('arrows compare with the 30 days before. the station has heard 1 hour of the last 30 days so far.');
   });
 });
 
@@ -172,7 +174,30 @@ describe('the tile', () => {
   it('has a chip for every number, and its title says the span', () => {
     for (const k of CHANGE_KEYS) expect(tile.querySelector(`[data-s-change="${k}"]`), k).not.toBeNull();
     expect(text('#weather-minute-title')).toBe('the last minute');
-    expect(tile.querySelector('#weather-minute-title button[data-s-toggle]')!.getAttribute('aria-describedby')).toBe('weather-span-next');
+    // the lens moves it on; the tile has no control of its own
+    expect(tile.querySelector('#weather-minute-title button')).toBeNull();
+  });
+
+  it('follows the lens: now is the live minute, a window its own span', () => {
+    expect(spanFor('now')).toBe('minute');
+    expect(spanFor('day')).toBe('day');
+    expect(spanFor('month')).toBe('month');
+  });
+
+  it("puts feels like and gusts in the lens's unit, and the counts stay counts", () => {
+    const now = figuresOf(stretch(440));
+    renderFigures(tile, 'hour', now, null, false, 'minute');
+    expect(text('[data-r-feels]')).toBe('2,640'); // 44 posts a second
+    expect(text('[data-s-unit="posts"]')).toBe('posts a minute');
+    expect(text('[data-r-gusts]')).toBe('39,600');
+    expect(text('[data-s-unit="gust"]')).toBe('records a minute, at the peak');
+    expect(text('[data-r-event="creates"]')).toBe('1.6m');
+    // in all: the span's posts, and a peak stays a second
+    renderFigures(tile, 'hour', now, null, false, 'total');
+    expect(text('[data-r-feels]')).toBe('158.4k');
+    expect(text('[data-s-unit="posts"]')).toBe('posts in all');
+    expect(text('[data-r-gusts]')).toBe('660');
+    expect(unitWords('total').gust).toBe('records a second, at the peak');
   });
 
   it('shows the live minute, each number on its own with what it counts under it', () => {
@@ -211,7 +236,7 @@ describe('the tile', () => {
     expect(Object.values(chips()).every((v) => v === '')).toBe(true);
   });
 
-  it("moves on to the hour, day and week and round again; the live minute doesn't write over them", async () => {
+  it("moves on with the lens, to the hour, 24 hours, 7 days and 30 days and back; the live minute doesn't write over them", async () => {
     vi.useFakeTimers();
     const asked: string[] = [];
     const answers: Record<string, SpanAnswer> = {
@@ -219,6 +244,7 @@ describe('the tile', () => {
       hour: { span: 'hour', now: stretch(440), before: stretch(400) },
       day: { span: 'day', now: stretch(430, { seconds: 86_400, creates: 430 * 86_400, posts: 43 * 86_400 }), before: null },
       week: { span: 'week', now: stretch(420), before: stretch(420) },
+      month: { span: 'month', now: stretch(410), before: null },
     };
     const fetchImpl = (async (url: string) => {
       const span = new URL(url, 'https://atpota.to').searchParams.get('span')!;
@@ -226,43 +252,43 @@ describe('the tile', () => {
       return Response.json(answers[span]);
     }) as typeof fetch;
     showLive(tile, READING);
-    initSpan(tile, fetchImpl);
+    const span = initSpan(tile, fetchImpl);
     await vi.waitFor(() => expect(chips().creates).toBe('↑ 11%'));
     expect(text('[data-s-note]')).toBe('arrows compare with the minute before.');
-    const button = tile.querySelector<HTMLButtonElement>('[data-s-toggle]')!;
-    const next = tile.querySelector('[data-s-next]')!;
-    expect(next.textContent).toBe('switch to the last hour');
 
-    button.click();
+    span.setSpan('hour');
     expect(text('#weather-minute-title')).toBe('the last hour');
     expect(tile.dataset.state).toBe('loading');
     expect(text('[data-s-status]')).toBe('showing the last hour');
     await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
     expect(text('[data-r-feels]')).toBe('44');
     expect(chips().posts).toBe('↑ 10%');
-    expect(next.textContent).toBe('switch to the last day');
     // a live reading while on the hour leaves the hour be
     showLive(tile, { ...READING, perSecond: { ...READING.perSecond, posts: 99 } });
     expect(text('[data-r-feels]')).toBe('44');
 
-    button.click();
-    await vi.waitFor(() => expect(tile.dataset.span).toBe('day'));
+    span.setSpan('day');
+    expect(text('#weather-minute-title')).toBe('the last 24 hours');
     await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
-    expect(text('[data-s-note]')).toBe("once the station has heard the day before, arrows say what's up and down.");
-    button.click();
+    expect(text('[data-s-note]')).toBe("once the station has heard the 24 hours before, arrows say what's up and down.");
+    span.setSpan('week');
     await vi.waitFor(() => expect(text('[data-r-gusts-note]')).toBe('the busiest hour of the week'));
-    button.click();
-    expect(nextSpan('week')).toBe('minute');
+    span.setSpan('month');
+    expect(text('#weather-minute-title')).toBe('the last 30 days');
+    await vi.waitFor(() => expect(text('[data-r-gusts-note]')).toBe('the busiest hour of the 30 days'));
+    span.setSpan('minute');
     expect(text('#weather-minute-title')).toBe('the last minute');
     // back on the minute: the last live reading, at once
     expect(text('[data-r-feels]')).toBe('99');
-    expect(asked.slice(0, 4)).toEqual(['minute', 'hour', 'day', 'week']);
+    // and a new unit redraws what's there
+    span.setUnit('hour');
+    expect(text('[data-r-feels]')).toBe('356.4k');
+    expect(asked.slice(0, 5)).toEqual(['minute', 'hour', 'day', 'week', 'month']);
   });
 
   it('says so when a span is hard to read', async () => {
     const fetchImpl = (async (url: string) => (url.includes('span=hour') ? new Response('', { status: 503 }) : Response.json({ span: 'minute', before: null }))) as typeof fetch;
-    initSpan(tile, fetchImpl);
-    tile.querySelector<HTMLButtonElement>('[data-s-toggle]')!.click();
+    initSpan(tile, fetchImpl).setSpan('hour');
     await vi.waitFor(() => expect(tile.dataset.state).toBe('error'));
     expect(text('[data-s-note]')).toBe('the last hour is hard to read right now. try again in a bit.');
     expect(text('[data-r-feels]')).toBe('–');
@@ -270,7 +296,7 @@ describe('the tile', () => {
 
   it("Poe's explainer tells you about the spans and the arrows", () => {
     const said = EXPLAINERS.readouts!.answer;
-    expect(said).toContain('last hour, day or week');
+    expect(said).toContain('the last hour, day, week or month');
     expect(said).toContain('arrows');
   });
 });

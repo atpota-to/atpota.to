@@ -19,6 +19,7 @@
 import { rollText } from './roll';
 import { timeOfDay } from './sky-clock';
 import type { Condition } from './weather';
+import { rateUnit, recordsPer, wholeRate, type Lens, type RateUnit } from './weather-lens';
 
 export const FORECAST_ENDPOINT = '/api/weather-forecast';
 export const FORECAST_REFRESH_MS = 5 * 60_000;
@@ -181,7 +182,7 @@ function nightAt(iso: string, tz?: string): boolean {
 type Scale = (v: number) => number;
 
 /** One hour of the strip, its words for screen readers in the same item. */
-function hourItem(label: string, h: { perSecond: number; condition: Condition; low?: number; high?: number; storm?: number }, night: boolean, scale: Scale, now = false): HTMLLIElement {
+function hourItem(label: string, h: { perSecond: number; condition: Condition; low?: number; high?: number; storm?: number }, night: boolean, scale: Scale, now = false, unit: RateUnit = 'second'): HTMLLIElement {
   const li = document.createElement('li');
   li.className = now ? 'weather-forecast__hour is-now' : 'weather-forecast__hour';
   li.dataset.condition = h.condition;
@@ -194,7 +195,7 @@ function hourItem(label: string, h: { perSecond: number; condition: Condition; l
   icon.innerHTML = iconFor(h.condition, night);
   const rate = document.createElement('span');
   rate.className = 'weather-forecast__rate';
-  rate.textContent = String(Math.round(h.perSecond));
+  rate.textContent = wholeRate(h.perSecond, unit);
   rate.setAttribute('aria-hidden', 'true');
   const chance = document.createElement('span');
   chance.className = 'weather-forecast__chance';
@@ -202,9 +203,9 @@ function hourItem(label: string, h: { perSecond: number; condition: Condition; l
   if (h.storm !== undefined && h.storm >= STORM_SHOWN) chance.textContent = chanceWords(h.storm);
   const said = document.createElement('span');
   said.className = 'visually-hidden';
-  const range = h.low !== undefined && h.high !== undefined ? ` (likely ${Math.round(h.low)} to ${Math.round(h.high)})` : '';
+  const range = h.low !== undefined && h.high !== undefined ? ` (likely ${wholeRate(h.low, unit)} to ${wholeRate(h.high, unit)})` : '';
   const storm = h.storm !== undefined && h.storm >= STORM_SHOWN ? `, a ${chanceWords(h.storm)} chance of a storm` : '';
-  said.textContent = `${label}: ${CONDITION_WORDS[h.condition]}, about ${Math.round(h.perSecond)} new records a second${range}${storm}`;
+  said.textContent = `${label}: ${CONDITION_WORDS[h.condition]}, about ${wholeRate(h.perSecond, unit)} ${recordsPer(unit)}${range}${storm}`;
   // on a phone each hour is a row, like a weather app's days: its likely range as a bar
   // across the forecast's whole range, with a dot for the forecast itself
   const band = document.createElement('span');
@@ -253,7 +254,9 @@ export function renderBand(host: HTMLElement, points: Array<{ v: number; low: nu
   host.replaceChildren(svg);
 }
 
-export function renderForecast(tile: HTMLElement, f: Forecast, nowMs = Date.now(), tz?: string): void {
+export function renderForecast(tile: HTMLElement, f: Forecast, nowMs = Date.now(), tz?: string, unit: RateUnit = 'second'): void {
+  const unitWords = $(tile, '[data-f-unit]');
+  if (unitWords) unitWords.textContent = recordsPer(unit);
   const lede = $(tile, '[data-f-lede]');
   const list = $(tile, '[data-f-hours]');
   const band = $(tile, '[data-f-band]');
@@ -273,8 +276,8 @@ export function renderForecast(tile: HTMLElement, f: Forecast, nowMs = Date.now(
     const lo = Math.min(...values);
     const span = Math.max(...values) - lo || 1;
     const scale: Scale = (v) => Math.min(1, Math.max(0, (v - lo) / span));
-    const items = hours.map((h) => hourItem(hourLabel(h.t, tz), { ...h, storm: h.chance.storm }, nightAt(h.t, tz), scale));
-    if (f.now) items.unshift(hourItem('now', f.now, nightAt(new Date(nowMs).toISOString(), tz), scale, true));
+    const items = hours.map((h) => hourItem(hourLabel(h.t, tz), { ...h, storm: h.chance.storm }, nightAt(h.t, tz), scale, false, unit));
+    if (f.now) items.unshift(hourItem('now', f.now, nightAt(new Date(nowMs).toISOString(), tz), scale, true, unit));
     list.replaceChildren(...items);
     list.style.setProperty('--hours', String(items.length));
   }
@@ -322,13 +325,22 @@ function sunCard(e: Forecast['sun'][number], tz?: string): HTMLElement {
   return div;
 }
 
-/** The tile, a first load, and a check every FORECAST_REFRESH_MS while the tab is visible. */
-export function initForecast(root: ParentNode = document, fetchImpl: typeof fetch = fetch, tz?: string): void {
+/**
+ * The tile, a first load, and a check every FORECAST_REFRESH_MS while the tab is visible.
+ * It follows the lens's unit (an hour for "total"), drawn again when that changes.
+ */
+export function initForecast(root: ParentNode = document, fetchImpl: typeof fetch = fetch, tz?: string, lens?: Lens): void {
   const tile = $(root, '[data-f-forecast]');
   if (!tile) return;
+  let shown: Forecast | null = null;
+  const unit = () => rateUnit(lens?.get().unit ?? 'second');
+  lens?.onChange((l, was) => {
+    if (shown && l.unit !== was.unit) renderForecast(tile, shown, Date.now(), tz, unit());
+  });
   const load = async () => {
     const f = await fetchForecast(fetchImpl);
-    if (f) renderForecast(tile, f, Date.now(), tz);
+    if (f) shown = f;
+    if (f) renderForecast(tile, f, Date.now(), tz, unit());
     else if (tile.dataset.state !== 'ready') {
       tile.dataset.state = 'error';
       const lede = $(tile, '[data-f-lede]');

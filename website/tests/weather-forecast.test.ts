@@ -161,6 +161,15 @@ describe('the forecast tile', () => {
     expect(tile.querySelectorAll('[data-f-hours] > li')).toHaveLength(6);
   });
 
+  it("says each hour in the lens's unit", () => {
+    renderForecast(tile, FORECAST, NOW, TZ, 'minute');
+    expect(tile.querySelector('[data-f-unit]')!.textContent).toBe('new records a minute');
+    const said = tile.querySelectorAll('[data-f-hours] > li')[1]!.querySelector('.visually-hidden')!.textContent;
+    expect(said).toMatch(/new records a minute/);
+    renderForecast(tile, FORECAST, NOW, TZ);
+    expect(tile.querySelector('[data-f-unit]')!.textContent).toBe('new records a second');
+  });
+
   it('says it is still learning, and hides the sun, until it can forecast', () => {
     renderForecast(tile, { madeAt: FORECAST.madeAt, basis: { hours: 20, days: 0 }, learning: true, hours: [], sun: [] }, NOW, TZ);
     expect(tile.dataset.state).toBe('learning');

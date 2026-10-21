@@ -8,6 +8,7 @@
  *                            ?span=hour     the last 60 whole minutes, and the 60 before
  *                            ?span=day      the last 24 hours (this one so far), and the 24 before
  *                            ?span=week     the last 7 days, by the hour the same way, and the 7 before
+ *                            ?span=month    the last 30 days, by the hour the same way, and the 30 before
  *   ->  { span, now?: Stretch, before: Stretch | null }
  *
  * A stretch is raw counts with the seconds the station heard, never rates, like
@@ -52,6 +53,7 @@ export const SPANS = {
   hour: { stretchMs: HOUR, cache: 'public, max-age=0, s-maxage=60, stale-while-revalidate=300' },
   day: { stretchMs: DAY, cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
   week: { stretchMs: 7 * DAY, cache: 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600' },
+  month: { stretchMs: 30 * DAY, cache: 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400' },
 } as const;
 
 export type Span = keyof typeof SPANS;
@@ -71,7 +73,7 @@ const at = (t: number) => new Date(t).toISOString();
 
 /**
  * The two stretches for a span at `now`, as [since, until) in ms, earliest first. An hour
- * is whole minutes, up to the one going on; a day or week is hours, up to and including
+ * is whole minutes, up to the one going on; a day, week or month is hours, up to and including
  * the one going on, so each ends now.
  */
 export function stretches(span: Exclude<Span, 'minute'>, now: number): { now: [number, number]; before: [number, number] } {
@@ -199,7 +201,7 @@ export function createSpanHandlers(deps: SpanDeps = {}) {
 
   async function GET(request: Request): Promise<Response> {
     const span = new URL(request.url).searchParams.get('span') ?? 'minute';
-    if (!isSpan(span)) return json(request, 400, { error: 'span must be minute, hour, day or week' }, 'no-store');
+    if (!isSpan(span)) return json(request, 400, { error: 'span must be minute, hour, day, week or month' }, 'no-store');
     const db = supabase(env(), fetchImpl);
     const t = now();
     const { cache } = SPANS[span];
@@ -248,8 +250,8 @@ export function createSpanHandlers(deps: SpanDeps = {}) {
     let rows: Row[] = [];
     if (all) {
       try {
-        const got = await db.get(`${table}?select=${key},seconds_covered,${SPAN_COUNTS.join(',')}&${between(key, all[0], all[1])}&order=${key}.asc&limit=1000`);
-        if (!Array.isArray(got)) throw new Error('supabase answered something other than rows');
+        // two months of hours is more than a page of rows
+        const got = await getAll(db, `${table}?select=${key},seconds_covered,${SPAN_COUNTS.join(',')}&${between(key, all[0], all[1])}&order=${key}.asc`);
         rows = got.map((r) => toRow(r, key)).filter((r): r is Row => r !== null);
       } catch (error) {
         return fail(error);

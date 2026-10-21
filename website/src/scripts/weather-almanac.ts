@@ -25,6 +25,7 @@
  */
 
 import { rollText } from './roll';
+import { rateUnit, recordsPer, UNIT_INFO, wholeRate, type Lens, type RateUnit } from './weather-lens';
 
 export const ALMANAC_ENDPOINT = '/api/weather-almanac';
 export const ALMANAC_REFRESH_MS = 60_000;
@@ -216,7 +217,7 @@ export const USUAL_EDGES = [0.8, 0.93, 1.08, 1.25] as const;
  * heard one; "days" (the same hour on other days) before that; null with a reason when
  * there's nothing to compare with yet.
  */
-export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number, tz?: string): Usual {
+export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number, tz?: string, unit: RateUnit = 'second'): Usual {
   const now = normal.now;
   const basis = normal.weeks.windows > 0 ? 'weeks' : normal.days.windows > 0 ? 'days' : null;
   const listening = normal.historyStart ? nowMs - Date.parse(normal.historyStart) : 0;
@@ -247,7 +248,7 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
   const when = basis === 'weeks' ? `for a ${weekday} ${daypart(hour % 24)}` : 'for this time of day';
   const over =
     basis === 'weeks' ? (base.windows === 1 ? `last ${weekday}` : `the last ${base.windows} ${weekday}s`) : base.windows === 1 ? 'yesterday' : `the last ${base.windows} days`;
-  let detail = `${Math.round(rate)} new records a second over the last hour; usually about ${Math.round(usual)} at this hour (${over}).`;
+  let detail = `${wholeRate(rate, unit)} ${recordsPer(unit)} over the last hour; usually about ${wholeRate(usual, unit)} at this hour (${over}).`;
   // The diversity index against usual, by the hour, when both sides have enough to say.
   const d = normal.diversity;
   const was = d?.[basis];
@@ -352,9 +353,11 @@ export function renderGauge(host: HTMLElement, ratio: number | null): void {
   if (change) change.textContent = changeText(ratio);
 }
 
-export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string): void {
+export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string, unit: RateUnit = 'second'): void {
+  const r = (v: number) => wholeRate(v, unit);
+  setText(tile, '[data-a-range-unit]', recordsPer(unit));
   if (a.normal) {
-    const usual = usualText(a.normal, nowMs, tz);
+    const usual = usualText(a.normal, nowMs, tz, unit);
     setText(tile, '[data-a-usual]', usual.headline);
     setText(tile, '[data-a-usual-detail]', usual.detail);
     const gauge = $(tile, '[data-a-gauge]');
@@ -363,9 +366,9 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
   const t = a.today;
   if (t) {
     const { high, low } = t;
-    roll(tile, '[data-a-high]', high ? `${Math.round(high.perSecond)}` : '–');
+    roll(tile, '[data-a-high]', high ? r(high.perSecond) : '–');
     setText(tile, '[data-a-high-at]', high ? `high at ${clock(high.minute, tz)}` : 'high');
-    roll(tile, '[data-a-low]', low ? `${Math.round(low.perSecond)}` : '–');
+    roll(tile, '[data-a-low]', low ? r(low.perSecond) : '–');
     setText(tile, '[data-a-low-at]', low ? `low at ${clock(low.minute, tz)}` : 'low');
     // the last hour on the range, once the station has heard enough of it to say
     const now = a.normal && a.normal.now.seconds >= 600 ? a.normal.now.creates / a.normal.now.seconds : null;
@@ -376,13 +379,13 @@ export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), t
     if (dot) dot.hidden = !placed;
     if (placed) {
       $(tile, '[data-a-range]')?.style.setProperty('--at', rangeAt(now, low.perSecond, high.perSecond).toFixed(3));
-      roll(tile, '[data-a-now]', `last hour ${Math.round(now)}`);
+      roll(tile, '[data-a-now]', `last hour ${r(now)}`);
     }
     setText(
       tile,
       '[data-a-range-said]',
       high && low
-        ? `today's low was ${Math.round(low.perSecond)} new records a second, at ${clock(low.minute, tz)}, and the high ${Math.round(high.perSecond)}, at ${clock(high.minute, tz)}.${placed ? ` the last hour averaged ${Math.round(now)}.` : ''}`
+        ? `today's low was ${r(low.perSecond)} ${recordsPer(unit)}, at ${clock(low.minute, tz)}, and the high ${r(high.perSecond)}, at ${clock(high.minute, tz)}.${placed ? ` the last hour averaged ${r(now)}.` : ''}`
         : 'no whole minute heard yet today.',
     );
     roll(tile, '[data-a-total]', bigNumber(t.creates));
@@ -413,14 +416,14 @@ export function whenWords(iso: string, today: boolean, tz?: string): string {
   return `${day}, ${clock(iso, tz)}`;
 }
 
-export function renderRecords(tile: HTMLElement, a: Almanac, tz?: string): void {
+export function renderRecords(tile: HTMLElement, a: Almanac, tz?: string, unit: RateUnit = 'second'): void {
   const wrap = $(tile, '[data-a-records]');
   const best = recordHigh(a);
   const apps = a.records?.mostApps ?? null;
   if (wrap) wrap.hidden = !best && !apps;
   if (best) {
-    roll(tile, '[data-a-record-busiest]', `${Math.round(best.perSecond)}`);
-    setText(tile, '[data-a-record-busiest-at]', `a second, ${whenWords(best.minute, best.today, tz)}`);
+    roll(tile, '[data-a-record-busiest]', wholeRate(best.perSecond, unit));
+    setText(tile, '[data-a-record-busiest-at]', `${UNIT_INFO[unit].words}, ${whenWords(best.minute, best.today, tz)}`);
   }
   if (apps) {
     const today = !!a.today && Date.parse(apps.minute) >= Date.parse(a.today.start);
@@ -633,7 +636,7 @@ export function heatStep(rate: number, min: number, max: number): number {
   return Math.min(5, 1 + Math.floor(((rate - min) / (max - min)) * 5));
 }
 
-export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string): void {
+export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string, unit: RateUnit = 'second'): void {
   const h = a.heatmap;
   const table = $(tile, '[data-a-heat-grid]');
   if (!h || !table) return;
@@ -673,22 +676,23 @@ export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
     for (let hour = 0; hour < 24; hour++) {
       const td = document.createElement('td');
       const rate = s.rate(dow, hour);
-      const words = rate === null ? 'not heard yet' : `${Math.round(rate)} new records a second`;
+      const words = rate === null ? 'not heard yet' : `${wholeRate(rate, unit)} ${recordsPer(unit)}`;
       td.className = `weather-heat__cell${rate === null ? ' weather-heat__cell--empty' : ` weather-heat__cell--${heatStep(rate, s.min, s.max)}`}${dow === nowDow && hour === nowHour ? ' weather-heat__cell--now' : ''}`;
       td.title = `${day}s at ${hourWords(hour)}: ${words}`;
       const v = document.createElement('span');
       v.className = 'visually-hidden';
-      v.textContent = rate === null ? 'not heard yet' : String(Math.round(rate));
+      v.textContent = rate === null ? 'not heard yet' : wholeRate(rate, unit);
       td.append(v);
       tr.append(td);
     }
     body.append(tr);
   });
   const caption = table.querySelector('caption');
+  if (caption) caption.textContent = `${recordsPer(unit)} for each hour of the week, in your time`;
   table.replaceChildren(...(caption ? [caption] : []), head, body);
 
-  setText(tile, '[data-a-heat-min]', s.heard ? String(Math.round(s.min)) : '–');
-  setText(tile, '[data-a-heat-max]', s.heard ? `${Math.round(s.max)} new records a second` : '–');
+  setText(tile, '[data-a-heat-min]', s.heard ? wholeRate(s.min, unit) : '–');
+  setText(tile, '[data-a-heat-max]', s.heard ? `${wholeRate(s.max, unit)} ${recordsPer(unit)}` : '–');
   if (s.weeks >= HEAT_READY_WEEKS && s.busiest && s.quietest) {
     setText(
       tile,
@@ -710,13 +714,25 @@ export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
 /**
  * The three tiles, a first load, and a check every minute while the tab is visible.
  * `onLoad` hears every almanac that arrives (the weather alerts watch it for new apps).
+ * They keep their own times, but follow the lens's unit (an hour for "total": their
+ * buckets are hours), drawn again from the almanac they have when it changes.
  */
-export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch = fetch, onLoad?: (a: Almanac) => void): void {
+export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch = fetch, onLoad?: (a: Almanac) => void, lens?: Lens): void {
   const today = $(root, '[data-a-today]');
   const fresh = $(root, '[data-a-new]');
   const heat = $(root, '[data-a-heat]');
   if (!today && !fresh && !heat) return;
   const tz = readerTimeZone();
+  let shown: Almanac | null = null;
+  const unit = () => rateUnit(lens?.get().unit ?? 'second');
+  const rates = (a: Almanac, now: number) => {
+    if (today && (a.today || a.normal)) renderToday(today, a, now, tz, unit());
+    if (today) renderRecords(today, a, tz, unit());
+    if (heat) renderHeatmap(heat, a, now, tz, unit());
+  };
+  lens?.onChange((l, was) => {
+    if (shown && l.unit !== was.unit) rates(shown, Date.now());
+  });
   const load = async () => {
     const a = await fetchAlmanac(tz, fetchImpl);
     const now = Date.now();
@@ -724,10 +740,9 @@ export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch
       for (const tile of [today, fresh, heat]) if (tile && tile.dataset.state !== 'ready') tile.dataset.state = 'error';
       return;
     }
-    if (today && (a.today || a.normal)) renderToday(today, a, now, tz);
-    if (today) renderRecords(today, a, tz);
+    shown = a;
+    rates(a, now);
     if (fresh) renderNewApps(fresh, a, now, tz);
-    if (heat) renderHeatmap(heat, a, now, tz);
     onLoad?.(a);
   };
   void load();
