@@ -15,8 +15,10 @@
 --                                   it's exact; a minute row is only deleted once its
 --                                   hour is in here.
 --   atmosphere_day_app              each app, each day, forever (atmosphere_almanac.sql)
---   atmosphere_account_sketch       active accounts: minutes 2 hours; hours, days and
---                                   months forever (hours were 8 days; ~50 MB a year)
+--   atmosphere_account_sketch       active accounts: minutes 26 hours (the last hour's
+--                                   diversity index is compared with the same hour
+--                                   yesterday; were 2 hours, ~12 MB more); hours, days
+--                                   and months forever (hours were 8 days; ~50 MB a year)
 --   atmosphere_account_app_sketch   each app's: minutes 26 hours, hours 30 days, days and
 --                                   months forever
 
@@ -100,7 +102,8 @@ as $$
 $$;
 revoke all on function public.atmosphere_prune_minute_apps() from public, anon, authenticated;
 
--- Account sketches (atmosphere_accounts.sql): hours of everyone are kept now; apps' hours 30 days.
+-- Account sketches (atmosphere_accounts.sql): minutes 26 hours, everyone's and apps'; hours of
+-- everyone are kept now; apps' hours 30 days.
 create or replace function public.atmosphere_prune_sketches()
 returns integer
 language sql
@@ -110,7 +113,7 @@ set search_path = ''
 as $$
   with a as (
     delete from public.atmosphere_account_sketch
-    where period = 'minute' and t < now() - interval '2 hours'
+    where period = 'minute' and t < now() - interval '26 hours'
     returning 1
   ),
   b as (

@@ -172,6 +172,7 @@ describe('active accounts in the trends', () => {
       const table = url.pathname.split('/').pop();
       const q = url.searchParams;
       const earlier = (q.get('t') ?? q.get('minute') ?? '').startsWith('gte.2026-10-19');
+      if (table === 'atmosphere_account_sketch' && earlier) return Response.json([{ t: '2026-10-19T16:30:00+00:00', seconds: 60, bluesky: sk(1, 6), elsewhere: sk(7) }]);
       if (table === 'atmosphere_account_sketch')
         return Response.json([
           { t: '2026-10-20T16:58:00+00:00', seconds: 60, dids: 3, dids_bluesky: 2, dids_elsewhere: 1, bluesky: sk(1, 2), elsewhere: sk(3) },
@@ -207,6 +208,8 @@ describe('active accounts in the trends', () => {
       // registers 1, 2, 4 on Bluesky and 3, 5 elsewhere: a union, not 2 + 2 or 3 + 4;
       // over the hour, tangled.sh had both accounts elsewhere and whtwnd.com one of them
       total: { active: 5, bluesky: 3, elsewhere: 2, share: 40, spread: 1.89, index: 54.99 },
+      // the same hour yesterday, from the minute sketches still kept: one of three accounts elsewhere, all tangled.sh's
+      prev: { seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
       points: [
         { t: '2026-10-20T16:58:00.000Z', seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
         { t: '2026-10-20T16:59:00.000Z', seconds: 60, active: 4, bluesky: 2, elsewhere: 2, share: 50, spread: 1.89, index: 68.74 },
@@ -220,9 +223,7 @@ describe('active accounts in the trends', () => {
     const [now, earlier] = asked('atmosphere_account_app_sketch');
     expect(now!.searchParams.get('period')).toBe('eq.minute');
     expect(now!.searchParams.getAll('t')).toEqual(['gte.2026-10-20T16:00:00.000Z', 'lt.2026-10-20T17:00:00.000Z']);
-    expect(earlier!.searchParams.get('domain')).toBe('in.(tangled.sh,whtwnd.com)');
-    // minute sketches of everyone don't last a day, so the same hour yesterday has no diversity index
-    expect('prev' in (body.accounts as object)).toBe(false);
+    expect(earlier!.searchParams.get('domain')).toBeNull();
     expect(earlier!.searchParams.getAll('t')).toEqual(['gte.2026-10-19T16:00:00.000Z', 'lt.2026-10-19T17:00:00.000Z']);
     // the earlier hour's coverage from the minute rows, since minute sketches don't last a day
     expect(asked('atmosphere_minute').some((u) => u.searchParams.get('dids') === 'not.is.null')).toBe(true);

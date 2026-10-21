@@ -164,19 +164,16 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
   const top = apps
     .sort((a, b) => b.active - a.active || (a.domain < b.domain ? -1 : 1))
     .slice(0, w.maxApps);
-  const domains = top.map((a) => a.domain).join(',');
 
-  // minute sketches of everyone are only kept a couple of hours, so an hour's earlier window (the same hour
-  // yesterday) has no diversity index, and its coverage comes from the minute rows; longer ranges have both,
-  // and their earlier diversity index spreads its accounts over every app, not only the top ones
-  const byMinute = period === 'minute';
-  const [prevRows, prevCoverage, collections] = await Promise.all([
-    byMinute && !top.length
-      ? []
-      : getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.${period}&${range(prev_since, prev_until)}${byMinute ? `&domain=in.(${domains})` : ''}&order=t.asc,domain.asc`),
-    byMinute
+  // the earlier window's diversity index spreads its accounts over every app, not only the top ones
+  const [prevRows, prevCoverage, prevSketches, collections] = await Promise.all([
+    getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc,domain.asc`),
+    // minute sketches of everyone may not reach back to the earlier window (they're kept 26 hours), so its coverage
+    // comes from the minute rows, and the seconds its sketches cover go with its diversity index
+    period === 'minute'
       ? getAll(db, `atmosphere_minute?select=seconds:seconds_covered&minute=gte.${prev_since}&minute=lt.${prev_until}&dids=not.is.null&order=minute.asc`)
-      : getAll(db, `atmosphere_account_sketch?select=seconds,bluesky,elsewhere&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
+      : null,
+    getAll(db, `atmosphere_account_sketch?select=seconds,bluesky,elsewhere&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
     // each app's busiest collections lately, as the records' apps have them
     Promise.all(
       top.map(async (a) => {
@@ -186,8 +183,8 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     ),
   ]);
   const prev = mergeApps(prevRows);
-  const prevSeconds = prevCoverage.reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
-  const prevTotal = byMinute ? null : everyoneOf(prevCoverage, prev);
+  const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
+  const prevTotal = everyoneOf(prevSketches, prev);
 
   return {
     seconds,
