@@ -312,6 +312,12 @@ catch { /* column already present */ }
 // The lesson's record key in the potato's repo, once it is published there.
 try { db.exec('ALTER TABLE lessons ADD COLUMN rkey TEXT'); }
 catch { /* column already present */ }
+// JSON: when each note was first seen here, by its text. Added 2026-10-21;
+// every record then goes back to the sweep, so the repo gains the dates.
+try {
+  db.exec('ALTER TABLE memory_docs ADD COLUMN noted_at TEXT');
+  db.exec('UPDATE memory_docs SET published_at = NULL');
+} catch { /* column already present */ }
 
 export const nowIso = () => new Date().toISOString();
 
@@ -547,14 +553,14 @@ export function lessonsOutOfStep() {
 export function getMemoryDoc(did) {
   return db.prepare(`SELECT * FROM memory_docs WHERE did = ?`).get(did);
 }
-export function saveMemoryDoc(did, content, notes, heldBack) {
+export function saveMemoryDoc(did, content, notes, heldBack, notedAt = {}) {
   db.prepare(`
-    INSERT INTO memory_docs (did, content, notes, held_back, updated_at, published_at, publish_note)
-    VALUES (?,?,?,?,?,NULL,NULL)
+    INSERT INTO memory_docs (did, content, notes, held_back, noted_at, updated_at, published_at, publish_note)
+    VALUES (?,?,?,?,?,?,NULL,NULL)
     ON CONFLICT(did) DO UPDATE SET content = excluded.content, notes = excluded.notes,
-      held_back = excluded.held_back, updated_at = excluded.updated_at,
+      held_back = excluded.held_back, noted_at = excluded.noted_at, updated_at = excluded.updated_at,
       published_at = NULL, publish_note = NULL
-  `).run(did, content, JSON.stringify(notes), heldBack, nowIso());
+  `).run(did, content, JSON.stringify(notes), heldBack, JSON.stringify(notedAt), nowIso());
 }
 export function markMemoryPublished(did, note = null) {
   db.prepare(`UPDATE memory_docs SET published_at = ?, publish_note = ? WHERE did = ?`).run(nowIso(), note, did);

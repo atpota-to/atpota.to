@@ -62,6 +62,34 @@ test('a saved version is kept, then published as one record per person, keyed by
   assert.ok(db.getMemoryDoc(did).published_at);
 });
 
+test('each published note carries the date it was first saved, which a later save keeps', async (t) => {
+  const did = freshDid();
+  const api = fakeApi();
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-01T10:00:00Z') });
+  storeMemory(did, doc('builds a labeler'));
+  await publishMemory(did, { api, didResolves: resolves });
+  t.mock.timers.setTime(Date.parse('2026-10-21T09:00:00Z'));
+  storeMemory(did, doc('builds a labeler', 'their blog is https://example.com/me', 'likes short answers'));
+  await publishMemory(did, { api, didResolves: resolves });
+  const record = api.calls.at(-1)[3];
+  assert.deepEqual(record.notes, ['builds a labeler', 'likes short answers']);
+  assert.deepEqual(record.notedAt, ['2026-10-01T10:00:00.000Z', '2026-10-21T09:00:00.000Z']);
+  assert.equal(record.updatedAt, '2026-10-21T09:00:00.000Z');
+});
+
+test('a note kept from before dates were recorded is dated by its stored version', async (t) => {
+  const did = freshDid();
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-24T16:54:46Z') });
+  storeMemory(did, doc('builds a labeler'));
+  db.db.prepare('UPDATE memory_docs SET noted_at = NULL WHERE did = ?').run(did);
+  t.mock.timers.setTime(Date.parse('2026-10-21T09:00:00Z'));
+  storeMemory(did, doc('builds a labeler', 'likes short answers'));
+  assert.deepEqual(JSON.parse(db.getMemoryDoc(did).noted_at), {
+    'builds a labeler': '2026-09-24T16:54:46.000Z',
+    'likes short answers': '2026-10-21T09:00:00.000Z',
+  });
+});
+
 test('the same version again is not republished', async () => {
   const did = freshDid();
   const api = fakeApi();
