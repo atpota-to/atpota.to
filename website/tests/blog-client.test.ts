@@ -30,8 +30,17 @@ import {
   rememberAdded,
   safeReturnTo,
 } from '../src/blog/state.js';
-import { COPY, EMAIL_RETURN, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY, PREPARED_TTL_MS } from '../src/blog/ui.js';
-import { altLinksHtml, blueskySubscribeHtml, EMAIL_RETURN_PARAM, EMAIL_RETURN_VALUE, emailFormHtml, SUBSCRIBE_COPY } from '../server/blog/subscribe.js';
+import { COPY, EMAIL_RETURN, EMAIL_RETURN_COOKIE, isAuthError, mountBlog, normalizeHandle, NOTICE_KEY, PREPARED_TTL_MS } from '../src/blog/ui.js';
+import {
+  altLinksHtml,
+  blueskySubscribeHtml,
+  EMAIL_RETURN_COOKIE as SERVER_RETURN_COOKIE,
+  EMAIL_RETURN_PARAM,
+  EMAIL_RETURN_VALUE,
+  emailFormHtml,
+  LEAFLET_RETURN_PATH,
+  SUBSCRIBE_COPY,
+} from '../server/blog/subscribe.js';
 import { createStore, type KeyValueStore } from '../src/poe/storage.js';
 
 // The blog's reader actions in the browser (src/blog/). The OAuth library is never
@@ -730,6 +739,22 @@ describe('email subscribe forms', () => {
   it('uses the labels and return marker the server renders', () => {
     expect(COPY.subscribe).toBe(SUBSCRIBE_COPY.bluesky);
     expect(EMAIL_RETURN).toEqual({ param: EMAIL_RETURN_PARAM, value: EMAIL_RETURN_VALUE });
+    expect(EMAIL_RETURN_COOKIE).toMatchObject({ name: SERVER_RETURN_COOKIE, path: LEAFLET_RETURN_PATH });
+  });
+
+  it('notes the page for the way back from Leaflet, with or without sign-in here', async () => {
+    const written = vi.spyOn(document, 'cookie', 'set');
+    const note = `blog_email_return=${encodeURIComponent('/blog/3doc#subscribe')}; Path=/receive_auth_callback; Max-Age=86400; SameSite=Lax`;
+    await setup({ start: null }).mounted;
+    expect(submit().defaultPrevented).toBe(false);
+    expect(written).toHaveBeenLastCalledWith(note);
+
+    document.body.innerHTML = postPage({ email: true });
+    const win = { location: { pathname: '/blog/3doc', protocol: 'https:' } } as unknown as Window;
+    await mountBlog({ doc: document, win, auth: null, sessionStore: memory(), localStore: memory() });
+    submit();
+    expect(written).toHaveBeenLastCalledWith(`${note}; Secure`);
+    written.mockRestore();
   });
 
   it('signed out: no box, and the form goes straight to Leaflet', async () => {

@@ -24,7 +24,7 @@ import { postBody, readingMinutes, siteInfo } from '../server/blog/pages.js';
 import { findDocument, normalizePath, toDocument, type BlogDocument } from '../server/blog/records.js';
 import { FootnoteList, renderRichText } from '../server/blog/richtext.js';
 import { fillShell, parseShell } from '../server/blog/shell.js';
-import { emailAction, emailFormHtml } from '../server/blog/subscribe.js';
+import { emailAction, emailFormHtml, LEAFLET_RETURN_PATH } from '../server/blog/subscribe.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const ID = { did: POE_DID, pds: 'https://pds.test', handle: 'poe.atpota.to' };
@@ -465,6 +465,7 @@ describe('dev rewrites mirror vercel.json', () => {
     expect(route('/blog/feed.xml')).toEqual({ view: 'feed' });
     expect(route('/blog/3mabc')).toEqual({ view: 'post', path: '3mabc' });
     expect(route('/.well-known/site.standard.publication/blog')).toEqual({ view: 'well-known' });
+    expect(route(LEAFLET_RETURN_PATH)).toEqual({ view: 'email-return' });
     expect(route('/shells/blog')).toBeNull();
     expect(route('/guides/bluesky-for-brands')).toBeNull();
   });
@@ -487,7 +488,8 @@ describe('email subscribe form', () => {
     expect(form.getAttribute('method')).toBe('get');
     expect(form.id).toBe('subscribe');
     expect(form.querySelector<HTMLInputElement>('input[name="action"]')!.value).toBe(SNIPPET_ACTION);
-    expect(form.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog?subscribed=email#subscribe');
+    // No return marker: Leaflet's "back" link goes here before anything is confirmed.
+    expect(form.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog#subscribe');
     const email = form.querySelector<HTMLInputElement>('input[name="email"]')!;
     expect(email.type).toBe('email');
     expect(email.required).toBe(true);
@@ -500,7 +502,7 @@ describe('email subscribe form', () => {
     const c = ctx({ signup: { publication: DEFAULT_PUBLICATION_URI, redirect: 'https://atpota.to/blog/3doc' } });
     const first = renderBlock(B('signup'), null, c);
     expect(first).toContain('id="signup"');
-    expect(first).toContain('value="https://atpota.to/blog/3doc?subscribed=email#signup"');
+    expect(first).toContain('value="https://atpota.to/blog/3doc#signup"');
     expect(first).toContain('<button type="button" class="blog-alt__link" data-blog-subscribe aria-pressed="false" hidden>');
     expect(renderBlock(B('signup'), null, c)).toContain('id="signup-2"');
     const plain = renderBlock(B('signup'), null, ctx());

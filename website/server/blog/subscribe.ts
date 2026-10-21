@@ -4,8 +4,10 @@
  *
  *   by email     Leaflet's embeddable subscribe form (publication settings -> Embeddable
  *                Subscribe Form). A plain GET form to leaflet.pub: the reader confirms their
- *                address there, and Leaflet sends them back to `redirect`. Works without
- *                JavaScript. Leaflet keeps the email list; atpota.to never sees the address.
+ *                address there, and Leaflet sends them back to LEAFLET_RETURN_PATH on
+ *                atpota.to, which forwards them to the page they came from (see
+ *                emailReturnLocation). Works without JavaScript, landing on the index then.
+ *                Leaflet keeps the email list; atpota.to never sees the address.
  *                Leaflet's address goes on the button (formaction), not the form: Safari reads
  *                a lone email field in a form posting to ".../auth/email-login" as a sign-in,
  *                puts the cursor in it as the page loads and offers saved passwords.
@@ -17,12 +19,25 @@
  * email left empty). While the box is there, the bluesky link under that form steps aside.
  */
 
+import { BLOG_PATH, SITE_ORIGIN } from './config.js';
 import { escapeAttr, escapeHtml } from './html.js';
 
 export const LEAFLET_EMAIL_LOGIN = 'https://leaflet.pub/api/auth/email-login';
-/** Added to `redirect`, so the page can say the email subscription went through. */
+/** Added on the way back from Leaflet, so the page can say the email subscription went through. */
 export const EMAIL_RETURN_PARAM = 'subscribed';
 export const EMAIL_RETURN_VALUE = 'email';
+
+/**
+ * Once the reader has confirmed, Leaflet doesn't send them to `redirect` itself: it sends
+ * them to this path on redirect's site, with a token only Leaflet can read (its own custom
+ * domains take a sign-in there). atpota.to answers it (handler.ts, view=email-return).
+ */
+export const LEAFLET_RETURN_PATH = '/receive_auth_callback';
+/**
+ * The page to go back to, set by src/blog/ui.ts as an email form goes to Leaflet: the
+ * form's `redirect` (path and #form), percent-encoded. Only sent to LEAFLET_RETURN_PATH.
+ */
+export const EMAIL_RETURN_COOKIE = 'blog_email_return';
 
 export const SUBSCRIBE_COPY = {
   emailLabel: 'your email',
@@ -74,13 +89,45 @@ export function emailAction(publication: string): string {
   return encodeURIComponent(JSON.stringify({ action: 'subscribe', publication, source: { placement: 'embed' } }));
 }
 
-/** `url` with the return marker added, pointing at the form the reader used. */
+/**
+ * `url` pointing at the form the reader used. No return marker: Leaflet's "back" link on
+ * its confirm page goes here too, before anything is confirmed.
+ */
 export function emailRedirect(url: string, formId: string): string {
   const u = new URL(url);
-  u.searchParams.set(EMAIL_RETURN_PARAM, EMAIL_RETURN_VALUE);
   u.hash = formId;
   return u.toString();
 }
+
+function readCookie(header: string | null, name: string): string | null {
+  for (const part of header?.split(';') ?? []) {
+    const eq = part.indexOf('=');
+    if (eq !== -1 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+/**
+ * Where LEAFLET_RETURN_PATH sends a reader back from Leaflet: the blog page in their
+ * EMAIL_RETURN_COOKIE, else the index's form; with the return marker. Same-site path only.
+ */
+export function emailReturnLocation(cookieHeader: string | null): string {
+  let back = new URL(`${BLOG_PATH}#subscribe`, SITE_ORIGIN);
+  const saved = readCookie(cookieHeader, EMAIL_RETURN_COOKIE);
+  if (saved) {
+    try {
+      const u = new URL(decodeURIComponent(saved), SITE_ORIGIN);
+      if (u.origin === SITE_ORIGIN && (u.pathname === BLOG_PATH || u.pathname.startsWith(`${BLOG_PATH}/`))) back = u;
+    } catch {
+      // malformed: the index it is
+    }
+  }
+  back.searchParams.set(EMAIL_RETURN_PARAM, EMAIL_RETURN_VALUE);
+  return `${back.pathname}${back.search}${back.hash}`;
+}
+
+/** Clears EMAIL_RETURN_COOKIE once it has been used. */
+export const EMAIL_RETURN_COOKIE_CLEARED = `${EMAIL_RETURN_COOKIE}=; Path=${LEAFLET_RETURN_PATH}; Max-Age=0; Secure; SameSite=Lax`;
 
 /** `id` must be unique on the page: the reader comes back to #id. */
 export function emailFormHtml(signup: EmailSignup, id: string): string {

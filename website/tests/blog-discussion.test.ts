@@ -400,12 +400,12 @@ describe('/api/blog with reader actions', () => {
     const index = await page(h(), 'view=index');
     const hero = index.querySelector<HTMLFormElement>('.blog-hero form[data-blog-email]')!;
     expect(hero.id).toBe('subscribe');
-    expect(hero.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog?subscribed=email#subscribe');
+    expect(hero.querySelector<HTMLInputElement>('input[name="redirect"]')!.value).toBe('https://atpota.to/blog#subscribe');
     expect(JSON.parse(decodeURIComponent(hero.querySelector<HTMLInputElement>('input[name="action"]')!.value))).toEqual({ action: 'subscribe', publication: PUB, source: { placement: 'embed' } });
     expect(index.querySelector('.blog-hero .blog-alt [data-blog-subscribe-label]')!.textContent).toBe('subscribe with bluesky');
 
     const post = await page(h(), 'view=post&path=3doc');
-    expect(post.querySelector<HTMLInputElement>('.post-end form[data-blog-email] input[name="redirect"]')!.value).toBe('https://atpota.to/blog/3doc?subscribed=email#subscribe');
+    expect(post.querySelector<HTMLInputElement>('.post-end form[data-blog-email] input[name="redirect"]')!.value).toBe('https://atpota.to/blog/3doc#subscribe');
     expect(post.querySelectorAll('#subscribe')).toHaveLength(1);
     expect(post.querySelector('.post-end__title')!.textContent).toBe('want the next one?');
 
