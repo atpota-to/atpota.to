@@ -67,32 +67,8 @@
                 <p class="visually-hidden" role="status" data-r-status></p>
             </header>
 
-            <!-- The almanac (src/scripts/weather-almanac.ts, /api/weather-almanac): today so far, and new apps. -->
-            <section class="tile weather-tile weather-today" aria-labelledby="weather-today-title" data-a-today data-state="loading">
-                <h2 class="eyebrow" id="weather-today-title">today so far</h2>
-                <p class="weather-today__usual" data-a-usual>checking what usual looks like…</p>
-                <p class="weather-today__detail" data-a-usual-detail></p>
-                <dl class="weather-today__facts">
-                    <div><dt>today&#39;s high</dt><dd><strong data-a-high>&ndash;</strong> <span data-a-high-at></span></dd></div>
-                    <div><dt>today&#39;s low</dt><dd><strong data-a-low>&ndash;</strong> <span data-a-low-at></span></dd></div>
-                    <div><dt>so far</dt><dd><strong data-a-total>&ndash;</strong> <span data-a-total-note>new records</span></dd></div>
-                </dl>
-            </section>
-
-            <section class="tile weather-tile weather-new" aria-labelledby="weather-new-title" data-a-new data-state="loading">
-                <div class="weather-tile__head">
-                    <h2 class="eyebrow" id="weather-new-title">new in the atmosphere</h2>
-                    <p class="weather-tile__aside" data-a-new-count></p>
-                </div>
-                <p class="weather-new__lede" data-a-new-lede>listening for new arrivals…</p>
-                <!-- a word cloud, each app a link to its lexicons in aturi; the card is for the mouse, the links say the same in words -->
-                <ul class="weather-new__list" role="list" data-a-new-list></ul>
-                <div class="weather-new__tip" data-a-new-tip aria-hidden="true" hidden></div>
-                <p class="weather-tile__note" data-a-new-note hidden>bigger names have written more records. pick one to explore its lexicons in aturi.</p>
-            </section>
-
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
-                <h2 class="eyebrow" id="weather-diversity-title">diversity index</h2>
+                <h2 class="weather-tile__title" id="weather-diversity-title">diversity index</h2>
                 <div class="weather-diversity__now">
                     <p class="weather-diversity__index" data-r-index>&ndash;</p>
                     <div>
@@ -109,7 +85,7 @@
             </section>
 
             <section class="tile weather-tile weather-mix" aria-labelledby="weather-mix-title">
-                <h2 class="eyebrow" id="weather-mix-title">bluesky and everyone else</h2>
+                <h2 class="weather-tile__title" id="weather-mix-title">bluesky and everyone else</h2>
                 <p class="weather-mix__ratio" data-r-ratio>&ndash;</p>
                 <div class="weather-ratio weather-mix__bar" aria-hidden="true">
                     <span class="weather-ratio__bsky" data-r-bar-bsky></span><span class="weather-ratio__else" data-r-bar-else></span>
@@ -121,9 +97,49 @@
                 <p class="weather-mix__total"><span data-r-total>&ndash;</span> new records a second in all, across <span data-r-collections>&ndash;</span> collections.</p>
             </section>
 
+            <!-- The almanac (src/scripts/weather-almanac.ts, /api/weather-almanac): today so far, and new apps. -->
+            <section class="tile weather-tile weather-today" aria-labelledby="weather-today-title" data-a-today data-state="loading">
+                <h2 class="weather-tile__title" id="weather-today-title">today so far</h2>
+                <div class="weather-today__usual-row">
+                    <!-- a barometer: the last hour against usual (weather-almanac.ts renderGauge); the headline says it in words -->
+                    <div class="weather-gauge" data-a-gauge aria-hidden="true"></div>
+                    <p class="weather-today__usual" data-a-usual>checking what usual looks like…</p>
+                </div>
+                <p class="weather-today__detail" data-a-usual-detail></p>
+                <!-- today's low and high, like a weather app's, with a dot for the last hour; the sentence under it says the same in words -->
+                <div class="weather-dayrange">
+                    <p class="weather-dayrange__title">today&#39;s range <span>new records a second</span></p>
+                    <div class="weather-dayrange__scale" aria-hidden="true" data-a-range>
+                        <span class="weather-dayrange__now" data-a-now hidden></span>
+                        <strong class="weather-dayrange__value weather-dayrange__value--low" data-a-low>&ndash;</strong>
+                        <span class="weather-dayrange__track"><i class="weather-dayrange__dot" data-a-now-dot hidden></i></span>
+                        <strong class="weather-dayrange__value weather-dayrange__value--high" data-a-high>&ndash;</strong>
+                        <span class="weather-dayrange__at weather-dayrange__at--low" data-a-low-at>low</span>
+                        <span class="weather-dayrange__at weather-dayrange__at--high" data-a-high-at>high</span>
+                    </div>
+                    <p class="visually-hidden" data-a-range-said></p>
+                </div>
+                <dl class="weather-today__facts">
+                    <div><dt>so far today</dt><dd><strong data-a-total>&ndash;</strong> new records</dd></div>
+                    <div><dt>from other apps</dt><dd><strong data-a-else-share>&ndash;</strong> <span data-a-else-total></span></dd></div>
+                </dl>
+            </section>
+
+            <section class="tile weather-tile weather-new" aria-labelledby="weather-new-title" data-a-new data-state="loading">
+                <div class="weather-tile__head">
+                    <h2 class="weather-tile__title" id="weather-new-title">new in the atmosphere</h2>
+                    <p class="weather-tile__aside" data-a-new-count></p>
+                </div>
+                <p class="weather-new__lede" data-a-new-lede>listening for new arrivals…</p>
+                <!-- a word cloud, each app a link to its lexicons in aturi; the card is for the mouse, the links say the same in words -->
+                <ul class="weather-new__list" role="list" data-a-new-list></ul>
+                <div class="weather-new__tip" data-a-new-tip aria-hidden="true" hidden></div>
+                <p class="weather-tile__note" data-a-new-note hidden>bigger names have written more records. pick one to explore its lexicons in aturi.</p>
+            </section>
+
             <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
                 <div class="weather-tile__head">
-                    <h2 class="eyebrow" id="weather-trends-title">trends</h2>
+                    <h2 class="weather-tile__title" id="weather-trends-title">trends</h2>
                     <div class="weather-controls">
                     <div class="weather-range weather-measure" role="group" aria-label="count new records or active accounts">
                         <button type="button" class="weather-range__btn" data-measure="records" aria-pressed="true">records</button>
@@ -162,7 +178,7 @@
 
             <section class="tile weather-tile weather-apps" aria-labelledby="weather-apps-title">
                 <div class="weather-tile__head">
-                    <h2 class="eyebrow" id="weather-apps-title">elsewhere in the atmosphere</h2>
+                    <h2 class="weather-tile__title" id="weather-apps-title">elsewhere in the atmosphere</h2>
                     <p class="weather-tile__aside" data-r-apps-count></p>
                     <div class="weather-range weather-measure" role="group" aria-label="rank apps by new records or active accounts">
                         <button type="button" class="weather-range__btn" data-measure="records" aria-pressed="true">records</button>
@@ -174,14 +190,14 @@
             </section>
 
             <section class="tile weather-tile weather-bsky" aria-labelledby="weather-bsky-title">
-                <h2 class="eyebrow" id="weather-bsky-title">bluesky</h2>
+                <h2 class="weather-tile__title" id="weather-bsky-title">bluesky</h2>
                 <ol class="weather-bars weather-bars--bsky" role="list" data-r-bsky-list></ol>
                 <p class="weather-tile__note">bluesky&#39;s busiest kinds of record, a second.</p>
             </section>
 
             <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading">
                 <div class="weather-tile__head">
-                    <h2 class="eyebrow" id="weather-heat-title">when the sky is busiest</h2>
+                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
                     <p class="weather-tile__aside" data-a-heat-aside></p>
                 </div>
                 <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
@@ -200,7 +216,7 @@
 
             <!-- every kind of event in the station's last minute, as counts (the hero has the rate a second) -->
             <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title">
-                <h2 class="eyebrow" id="weather-minute-title">the last minute</h2>
+                <h2 class="weather-tile__title" id="weather-minute-title">the last minute</h2>
                 <dl class="weather-stats">
                     <div data-r-minute-accounts hidden><dt>active accounts</dt><dd data-r-active>&ndash;</dd></div>
                     <div><dt>new records</dt><dd data-r-event="creates">&ndash;</dd></div>
@@ -212,7 +228,7 @@
             </section>
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
-                <h2 class="eyebrow" id="weather-how-title">how i measure it</h2>
+                <h2 class="weather-tile__title" id="weather-how-title">how i measure it</h2>
                 <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by. the numbers up top are the last minute, and they keep updating while you&#39;re here.</p>
                 <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. it&#39;s a close estimate, and i never keep track of who&#39;s who.</p>
                 <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in, once a minute at most (◕‿◕)</p>

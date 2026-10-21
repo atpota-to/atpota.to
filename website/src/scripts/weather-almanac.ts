@@ -2,10 +2,12 @@
  * The weather report's almanac (weather/index.html), from /api/weather-almanac
  * (server/weather-almanac.ts) in the reader's own time zone:
  *
- *   today so far          the high and low (the busiest and quietest whole minute, by new
- *                         records a second, every app), the day's totals, and the last hour against usual:
- *                         "busier than usual for a tuesday afternoon" once the station has
- *                         heard a few of those, "for this time of day" after a day
+ *   today so far          the last hour against usual, in words ("busier than usual for a
+ *                         tuesday afternoon" once the station has heard a few of those, "for
+ *                         this time of day" after a day) and on a little barometer; the high
+ *                         and low (the busiest and quietest whole minute, by new records a
+ *                         second, every app) as a range with the last hour on it; and the
+ *                         day's totals
  *   new in the atmosphere apps heard for the first time in the last 24 hours, after the
  *                         station's first week (until then it says it's warming up), as a
  *                         word cloud sized by records, each name a link to its lexicons in
@@ -176,7 +178,15 @@ export function roughly(ms: number): string {
 export interface Usual {
   headline: string;
   detail: string;
+  /** The last hour's records a second over usual's; null while there's nothing to compare with. */
+  ratio: number | null;
 }
+
+/**
+ * Where "much quieter", "quieter", "about as busy", "busier" and "much busier" than usual
+ * meet, as the last hour over usual. The words and the barometer's zones both use them.
+ */
+export const USUAL_EDGES = [0.8, 0.93, 1.08, 1.25] as const;
 
 /**
  * The last hour against usual, in words. "weeks" (the same weekday) once the station has
@@ -191,14 +201,24 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
     return {
       headline: 'the station is still learning what usual looks like',
       detail: `it's been listening for ${roughly(listening)}. after a day it can compare with this time yesterday, and after a week with a usual ${local(nowMs, tz, { weekday: 'long' })}.`,
+      ratio: null,
     };
   }
   const base = normal[basis];
   const rate = now.creates / now.seconds;
   const usual = base.creates / base.seconds;
   const ratio = usual > 0 ? rate / usual : 1;
+  const [muchQuieter, quieter, busier, muchBusier] = USUAL_EDGES;
   const how =
-    ratio >= 1.25 ? 'much busier than usual' : ratio >= 1.08 ? 'busier than usual' : ratio <= 0.8 ? 'much quieter than usual' : ratio <= 0.93 ? 'quieter than usual' : 'about as busy as usual';
+    ratio >= muchBusier
+      ? 'much busier than usual'
+      : ratio >= busier
+        ? 'busier than usual'
+        : ratio <= muchQuieter
+          ? 'much quieter than usual'
+          : ratio <= quieter
+            ? 'quieter than usual'
+            : 'about as busy as usual';
   const weekday = local(nowMs, tz, { weekday: 'long' });
   const hour = Number(new Date(nowMs).toLocaleString('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: tz }));
   const when = basis === 'weeks' ? `for a ${weekday} ${daypart(hour % 24)}` : 'for this time of day';
@@ -212,7 +232,7 @@ export function usualText(normal: NonNullable<Almanac['normal']>, nowMs: number,
     else if (mix <= 0.77) detail += ' a little less mixed than usual.';
   }
   if (basis === 'days') detail += ` in a week it'll compare with ${weekday}s.`;
-  return { headline: `${how} ${when}`, detail };
+  return { headline: `${how} ${when}`, detail, ratio };
 }
 
 // ---------- today so far ----------
@@ -229,21 +249,121 @@ function roll(root: ParentNode, sel: string, text: string): void {
   if (el) rollText(el, text);
 }
 
+/**
+ * Where a ratio to usual sits on the barometer, 0 (the left end) to 1 (the right): on a log
+ * scale, so half as busy and twice as busy are as far from usual, and the ends are about
+ * 30% quieter and 40% busier. Past those the needle rests on the stop.
+ */
+export function gaugeAt(ratio: number): number {
+  return ratio > 0 ? Math.min(1, Math.max(0, Math.log2(ratio) + 0.5)) : 0;
+}
+
+/** "+18%", "−7%", "±0%". */
+export function changeText(ratio: number): string {
+  const pct = Math.round((ratio - 1) * 100);
+  return pct > 0 ? `+${pct}%` : pct < 0 ? `−${-pct}%` : '±0%';
+}
+
+/** Where a value sits between today's low and high, 0 to 1; the middle when they're the same. */
+export function rangeAt(v: number, low: number, high: number): number {
+  if (!(high > low)) return 0.5;
+  return Math.min(1, Math.max(0, (v - low) / (high - low)));
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+/** The barometer's dial, in its own units: a half circle around (CX, CY). */
+const CX = 60;
+const CY = 58;
+const R = 46;
+
+function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
+}
+
+/** The dial's arc from a to b (0 to 1, left to right over the top). */
+function arc(a: number, b: number): string {
+  const at = (t: number) => {
+    const angle = Math.PI * (1 - t);
+    return `${(CX + R * Math.cos(angle)).toFixed(2)} ${(CY - R * Math.sin(angle)).toFixed(2)}`;
+  };
+  return `M${at(a)}A${R} ${R} 0 0 1 ${at(b)}`;
+}
+
+/**
+ * The barometer: five zones, from much quieter to much busier than usual (USUAL_EDGES),
+ * deeper for busier like the heat map, and a needle at the last hour. Drawn once; after
+ * that only the needle moves. While there's nothing to compare with, it waits, needleless.
+ */
+export function renderGauge(host: HTMLElement, ratio: number | null): void {
+  if (!host.firstElementChild) {
+    const dial = svg('svg', { viewBox: '-8 0 136 78', class: 'weather-gauge__svg' });
+    const edges = [0, ...USUAL_EDGES.map(gaugeAt), 1];
+    const gap = 0.012;
+    for (let i = 0; i < 5; i++) {
+      const a = edges[i]! + (i > 0 ? gap : 0);
+      const b = edges[i + 1]! - (i < 4 ? gap : 0);
+      dial.append(svg('path', { d: arc(a, b), class: `weather-gauge__zone weather-gauge__zone--${i + 1}` }));
+    }
+    const needle = svg('g', { class: 'weather-gauge__needle' });
+    needle.append(svg('line', { x1: CX, y1: CY, x2: CX, y2: CY - R + 4 }), svg('circle', { cx: CX, cy: CY, r: 5 }));
+    const quieter = svg('text', { x: CX - R, y: 76, 'text-anchor': 'middle', class: 'weather-gauge__end' });
+    quieter.textContent = 'quieter';
+    const busier = svg('text', { x: CX + R, y: 76, 'text-anchor': 'middle', class: 'weather-gauge__end' });
+    busier.textContent = 'busier';
+    const change = svg('text', { x: CX, y: 77, 'text-anchor': 'middle', class: 'weather-gauge__change' });
+    dial.append(needle, quieter, busier, change);
+    host.append(dial);
+  }
+  const change = host.querySelector('.weather-gauge__change');
+  if (ratio === null) {
+    host.dataset.state = 'learning';
+    if (change) change.textContent = '';
+    return;
+  }
+  host.dataset.state = 'ready';
+  host.style.setProperty('--turn', `${((gaugeAt(ratio) - 0.5) * 180).toFixed(1)}deg`);
+  if (change) change.textContent = changeText(ratio);
+}
+
 export function renderToday(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string): void {
   if (a.normal) {
     const usual = usualText(a.normal, nowMs, tz);
     setText(tile, '[data-a-usual]', usual.headline);
     setText(tile, '[data-a-usual-detail]', usual.detail);
+    const gauge = $(tile, '[data-a-gauge]');
+    if (gauge) renderGauge(gauge, usual.ratio);
   }
   const t = a.today;
   if (t) {
-    roll(tile, '[data-a-high]', t.high ? `${Math.round(t.high.perSecond)}` : '–');
-    setText(tile, '[data-a-high-at]', t.high ? `new records a second at ${clock(t.high.minute, tz)}` : 'no whole minute heard yet');
-    roll(tile, '[data-a-low]', t.low ? `${Math.round(t.low.perSecond)}` : '–');
-    setText(tile, '[data-a-low-at]', t.low ? `new records a second at ${clock(t.low.minute, tz)}` : '');
+    const { high, low } = t;
+    roll(tile, '[data-a-high]', high ? `${Math.round(high.perSecond)}` : '–');
+    setText(tile, '[data-a-high-at]', high ? `high at ${clock(high.minute, tz)}` : 'high');
+    roll(tile, '[data-a-low]', low ? `${Math.round(low.perSecond)}` : '–');
+    setText(tile, '[data-a-low-at]', low ? `low at ${clock(low.minute, tz)}` : 'low');
+    // the last hour on the range, once the station has heard enough of it to say
+    const now = a.normal && a.normal.now.seconds >= 600 ? a.normal.now.creates / a.normal.now.seconds : null;
+    const mark = $(tile, '[data-a-now]');
+    const dot = $(tile, '[data-a-now-dot]');
+    const placed = high && low && now !== null;
+    if (mark) mark.hidden = !placed;
+    if (dot) dot.hidden = !placed;
+    if (placed) {
+      $(tile, '[data-a-range]')?.style.setProperty('--at', rangeAt(now, low.perSecond, high.perSecond).toFixed(3));
+      roll(tile, '[data-a-now]', `last hour ${Math.round(now)}`);
+    }
+    setText(
+      tile,
+      '[data-a-range-said]',
+      high && low
+        ? `today's low was ${Math.round(low.perSecond)} new records a second, at ${clock(low.minute, tz)}, and the high ${Math.round(high.perSecond)}, at ${clock(high.minute, tz)}.${placed ? ` the last hour averaged ${Math.round(now)}.` : ''}`
+        : 'no whole minute heard yet today.',
+    );
     roll(tile, '[data-a-total]', bigNumber(t.creates));
     const share = t.creates > 0 ? (t.elsewhere / t.creates) * 100 : 0;
-    roll(tile, '[data-a-total-note]', t.creates > 0 ? `new records, ${share < 1 ? share.toFixed(2) : share.toFixed(1)}% from other apps` : 'new records');
+    roll(tile, '[data-a-else-share]', t.creates > 0 ? `${share < 1 ? share.toFixed(2) : share.toFixed(1)}%` : '–');
+    roll(tile, '[data-a-else-total]', t.creates > 0 ? `${bigNumber(t.elsewhere)} new records` : '');
   }
   tile.dataset.state = 'ready';
 }
