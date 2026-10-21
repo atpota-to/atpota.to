@@ -467,9 +467,18 @@ html[data-theme="dark"] {
   top: 40px;
   width: 64px;
   height: 64px;
-  border-radius: 50%;
-  box-shadow: inset -16px -6px 0 0 var(--home-moon);
+  overflow: visible;
   transform: rotate(-12deg);
+}
+
+/* tonight's phase (moon.ts draws the lit part), with the dark side just showing, like earthshine */
+.home-sun__moon-lit {
+  fill: var(--home-moon);
+}
+
+.home-sun__moon-dark {
+  fill: var(--home-moon);
+  opacity: 0.14;
 }
 
 .home-sun__earth {
@@ -3701,7 +3710,6 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
     top: 22px;
     width: 44px;
     height: 44px;
-    box-shadow: inset -11px -4px 0 0 var(--home-moon);
   }
 
   /* poe intro */
