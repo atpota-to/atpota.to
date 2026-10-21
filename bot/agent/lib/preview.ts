@@ -18,7 +18,7 @@ import { isChannelKind } from "./channel-kind";
 export function previewsBluesky(channelKind: string | undefined): boolean {
   if (!channelKind) return false;
   if (isChannelKind(channelKind, "bluesky") || isChannelKind(channelKind, "operator-dm") ||
-      isChannelKind(channelKind, "website")) return false;
+      isChannelKind(channelKind, "website") || isChannelKind(channelKind, "weather")) return false;
   if (process.env.POE_PREVIEW?.trim().toLowerCase() === "off") return false;
   return process.env.EVE_DEV === "1" || process.env.EVE_EVALUATION === "1";
 }

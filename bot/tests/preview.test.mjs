@@ -35,13 +35,15 @@ test("POE_PREVIEW=off turns it off locally", () => {
   withEnv({ EVE_DEV: "1", POE_PREVIEW: "off" }, () => assert.equal(previewsBluesky("eve"), false));
 });
 
-test("the real Bluesky and operator DM channels are never treated as a preview", () => {
+test("the real Bluesky, operator DM and weather channels are never treated as a preview", () => {
   withEnv({ EVE_DEV: "1" }, () => {
     // eve's runtime spelling first, then the bare file stem.
     assert.equal(previewsBluesky("channel:bluesky"), false);
     assert.equal(previewsBluesky("channel:operator-dm"), false);
+    assert.equal(previewsBluesky("channel:weather"), false);
     assert.equal(previewsBluesky("bluesky"), false);
     assert.equal(previewsBluesky("operator-dm"), false);
+    assert.equal(previewsBluesky("weather"), false);
     assert.equal(previewsBluesky(undefined), false);
   });
 });

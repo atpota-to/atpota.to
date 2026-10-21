@@ -141,6 +141,32 @@ export const GATE_DEFAULTS = {
   likesPerHour: 10,
   likesPerAuthorPerDay: 3,
 
+  // Poe's weather posts (weather-posts.js, gates/weather.js). Poe decides whether
+  // a moment is worth a post; these decide how often it is asked and how often it
+  // may post. A quiet weather vane is better than a chatty one.
+  weatherPostsPerDay: 3,        // posted, rolling 24 hours, every kind together
+  weatherMinGapMin: 120,        // between two weather posts
+  weatherAsksPerDay: 8,         // moments handed to Poe in 24 hours, skips included: the model bill
+  // Which moments Poe may be asked about. Remove one to stop it.
+  weatherKinds: ['daily', 'storm', 'unusual', 'mixed', 'new_app'],
+  // The daily report is asked for once a UTC day, from this hour. null turns it off.
+  // 16 is noon in New York and 9 in San Francisco.
+  weatherDailyHourUtc: 16,
+  // After one of a kind is asked about, the next of that kind waits this long.
+  weatherStormCooldownHours: 12,
+  weatherUnusualCooldownHours: 12,
+  weatherMixedCooldownHours: 24,
+  weatherNewAppCooldownHours: 24,
+  // An hour this much busier than usual for it (a ratio), or this much quieter.
+  weatherUnusualBusier: 1.4,
+  weatherUnusualQuieter: 0.65,
+  // A new app is worth asking about once it has written this many records. The
+  // station hears a few new apps a day, most of them a handful of test records.
+  weatherNewAppMinRecords: 250,
+  // The diversity index from which the sky counts as mixed: "high" on the page.
+  // A usual minute in October 2026 was about 2.
+  weatherMixedMinIndex: 6,
+
   maxOtherMentions: 2,
   maxGraphemes: 300,            // from the live app.bsky.feed.post lexicon
   maxBytes: 3000,               // ditto
@@ -266,6 +292,27 @@ function parseDispatch() {
   };
 }
 
+// --- weather posts ---------------------------------------------------------
+// Poe posting the Atmosphere's weather on its own account (weather-posts.js).
+//   post   gated drafts are posted (the default, chosen by the operator on
+//          2026-10-21; stage 4 only)
+//   draft  the watcher asks Poe and gates its drafts, and holds every one: read
+//          them in the log or with `npm run weather`
+//   off    nothing runs
+function parseWeatherPosts() {
+  const mode = opt('WEATHER_POSTS', 'post').toLowerCase();
+  if (!['off', 'draft', 'post'].includes(mode)) throw new Error(`WEATHER_POSTS must be off, draft or post, got ${mode}`);
+  const apiBase = opt('WEATHER_API_BASE', 'https://atpota.to/api').replace(/\/+$/, '');
+  if (!/^https:\/\/[^/]+(\/.*)?$/.test(apiBase)) throw new Error(`WEATHER_API_BASE must be an https URL: ${apiBase}`);
+  return {
+    mode,
+    apiBase,
+    pollMs: Math.max(num('WEATHER_POLL_MS', 300000), 60000),
+    // A moment with no draft after this long is given up on.
+    draftTimeoutMs: num('WEATHER_DRAFT_TIMEOUT_MS', 900000),
+  };
+}
+
 export function isAdmin(did) {
   return typeof did === 'string' && config.adminDids.includes(did);
 }
@@ -328,4 +375,5 @@ export const config = {
   adminDids: opt('ADMIN_DIDS', '').split(',').map((s) => s.trim()).filter((s) => s.startsWith('did:')),
 
   dispatch: parseDispatch(),
+  weather: parseWeatherPosts(),
 };

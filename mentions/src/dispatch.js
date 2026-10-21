@@ -274,12 +274,17 @@ export function pageHasDocument(html, documentUri) {
   return false;
 }
 
-export function ogImageUrl(html) {
+/** The content of a page's <meta property="..."> (og:image, og:title...), or null. */
+export function ogContent(html, property) {
   for (const m of String(html).matchAll(/<meta\b[^>]*>/gi)) {
     const a = tagAttributes(m[0]);
-    if (a.property === 'og:image' && a.content) return a.content;
+    if (a.property === property && a.content) return a.content;
   }
   return null;
+}
+
+export function ogImageUrl(html) {
+  return ogContent(html, 'og:image');
 }
 
 async function fetchCapped(url, { maxBytes, timeoutMs = 15000 }) {
@@ -346,7 +351,7 @@ export async function waitForPage(pageUrl, documentUri, deps) {
 const siteOf = (host) => host.toLowerCase().split('.').slice(-2).join('.');
 
 /** The page's Open Graph image as a blob in Poe's repo. Best effort. */
-async function cardThumb(html, pageUrl, deps) {
+export async function cardThumb(html, pageUrl, deps) {
   const src = ogImageUrl(html);
   if (!src) return { thumb: null, note: 'the page has no og:image' };
   let url;
@@ -785,16 +790,26 @@ export function attachProposal(dmId, reply, maxGraphemes = 999) {
  */
 export function liveProposalFor(row) {
   const proposal = db.prepare(`SELECT * FROM dispatch_proposal WHERE status = 'attached' ORDER BY id DESC LIMIT 1`).get();
-  if (!proposal || proposal.operator_did !== row.operator_did) return null;
+  return answersProposal(proposal, row) ? proposal : null;
+}
+
+/**
+ * Whether the operator's message `row` answers `proposal` (any row with
+ * operator_did and dm_message_id): it was shown in Poe's reply to that operator's
+ * previous message, that reply was sent, it is recent, and nothing was said in
+ * between. Shared with operator-posts.js.
+ */
+export function answersProposal(proposal, row) {
+  if (!proposal || proposal.operator_did !== row.operator_did) return false;
   const shownIn = db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(proposal.dm_message_id);
-  if (!shownIn || shownIn.status !== 'sent' || shownIn.convo_id !== row.convo_id) return null;
+  if (!shownIn || shownIn.status !== 'sent' || shownIn.convo_id !== row.convo_id) return false;
   const at = Date.parse(row.received_at);
   const sent = Date.parse(shownIn.updated_at);
-  if (!(at >= sent - 5000) || at - sent > PROPOSAL_TTL_MS) return null;
+  if (!(at >= sent - 5000) || at - sent > PROPOSAL_TTL_MS) return false;
   const between = db.prepare(`SELECT COUNT(*) AS n FROM operator_dm WHERE convo_id = ?
     AND received_at > ? AND received_at < ? AND message_id NOT IN (?, ?)`)
     .get(row.convo_id, shownIn.received_at, row.received_at, shownIn.message_id, row.message_id).n;
-  return between ? null : proposal;
+  return !between;
 }
 
 /** Settle a proposal with the operator's answer. False if it was no longer live. */

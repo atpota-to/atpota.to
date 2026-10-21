@@ -1,4 +1,4 @@
-export type ChannelName = "bluesky" | "operator-dm" | "website";
+export type ChannelName = "bluesky" | "operator-dm" | "website" | "weather";
 
 /**
  * True when a turn came through the named channel. At runtime eve spells an

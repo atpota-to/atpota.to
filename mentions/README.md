@@ -339,6 +339,8 @@ is worth more than the convenience of a client library.
 | `src/notifications.js` | the safety net |
 | `src/reconcile.js` | turns dispatched with no draft coming back |
 | `src/richtext.js` | grapheme counting and UTF-8 byte offsets |
+| `src/weather-posts.js` | Poe's weather posts: the watcher, the draft callback, the poster |
+| `src/gates/weather.js` | every decision about a weather post |
 
 ---
 
@@ -666,6 +668,34 @@ under six hours old. Otherwise "yes" is ordinary conversation and goes to Poe.
 by plain words ("announce that one please") goes to Poe instead of getting the
 usage.
 
+### Any post, in plain words: `propose_post`
+
+The same confirmation works for any post from Poe's account (`src/operator-posts.js`).
+An operator DMs Poe ("post about the weather right now", "nudge people to subscribe to
+the newsletter", "say good morning"), and Poe writes the post and calls its agent tool
+`propose_post` with the text and a card: `weather` (the live weather card for
+atpota.to/weather, in the forecast design), `newsletter` (atpota.to/blog, with the
+blog's own card) or `none`. The proposal comes on the callback URL, told apart by its
+`proposal`, so nginx needs nothing new:
+
+```
+{ "dmId": "<the operator DM Poe is answering>", "operatorDid": "did:...",
+  "proposal": { "text": "<the post>", "card": "weather" | "newsletter" | "none" } }
+```
+
+It is accepted only while that DM is `dispatched` to the agent, from an `ADMIN_DIDS`
+sender, at most ten calls per DM, and the text is checked (300 graphemes, no
+@handles, no link since the card carries it, no markdown), with the reason back to
+Poe when it fails. The exact post and its card go under Poe's reply, and a whole-message
+yes to that message posts it; the rules for what counts as that yes are the dispatch
+announcement's above. The card must load, or nothing is posted and the reply says
+why: a weather card is fetched by its own address, as weather posts do.
+
+The operator's yes is the approval, so these posts are not held to the weather
+posts' caps. A weather one is then recorded in `weather_post` (kind `operator`), so
+the automatic weather posts keep their 2-hour gap from it. The kill switch, a nap
+and `STAGE` below 4 stop it. Needs `OPERATOR_DM_ENABLED=true`, nothing more.
+
 ## Likes Poe proposes (`appreciate_post`)
 
 The agent's `appreciate_post` tool calls `POST /like-proposal { postUri, attempt }`
@@ -680,6 +710,70 @@ out at most once per post. A failed like is recorded in `likes` and not retried.
 This widened what the credential may write (2026-10-19): `app.bsky.feed.like`
 joined posts, notes and lessons. Follows, reposts and blocks are still refused,
 and likes are never deleted.
+
+## Weather posts (`WEATHER_POSTS`)
+
+Poe posts the Atmosphere's weather on its own account now and then: the day's
+report, and the moments the weather station catches. `src/weather-posts.js` is
+the watcher and the poster; every decision is in `src/gates/weather.js`.
+
+Every `WEATHER_POLL_MS` (5 minutes) the watcher reads the station through
+atpota.to's public endpoints, the ones `/weather` reads (`/api/atmosphere` and
+`/api/weather-almanac?tz=UTC`), and looks for a moment, most newsworthy first:
+
+| kind | when | once per |
+| --- | --- | --- |
+| `storm` | the station's last minute is stormy (600+ new records a second) | 12 hours |
+| `unusual` | the last hour is 1.4x busier or 0.65x as busy as usual for it, when the station heard at least 45 minutes of it | 12 hours |
+| `new_app` | an app the station never heard before has written 250+ records in its first day | 24 hours, and an app once |
+| `mixed` | the diversity index is 6 or more ("high") | 24 hours |
+| `daily` | the day's report, from 16:00 UTC | UTC day |
+
+Only the station's own readings count; a website sample is too short to call a
+storm on. App names are checked as domains and collections as NSIDs before Poe
+sees them. Poe is asked about one moment at a time, and not at all while
+3 weather posts went out in the last 24 hours (`weatherPostsPerDay`), one went
+out in the last 2 hours (`weatherMinGapMin`), or it has been asked 8 times in
+24 hours already, skips included (`weatherAsksPerDay`, the model bill). Every
+threshold is a `weather*` key in `gates.json`; `weatherKinds` lists the kinds it
+may ask about, so removing one turns it off.
+
+A moment goes to the agent as `POST /weather/moment` (shared secret) with the
+station's numbers and Poe's last five weather posts. Poe reads the station and
+answers with the post, or `skip`, on `DROPLET_CALLBACK_URL`, the URL a reply's
+draft comes back on; its `momentId` tells it from a reply, so nginx needs nothing
+new. The draft goes through
+the reply gates as a single post (length, markdown, non-answers, `@handles`), with
+no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
+same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
+posted with an `app.bsky.embed.external` card for the weather page, and the caps
+are checked again first. The card's image is always the live weather card,
+`https://atpota.to/og/weather.png` (`WEATHER_CARD`), fetched by that address rather
+than from the page's og:image, fresh to the minute and in the design that suits the
+post (`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
+apps for a mixed sky or a new one, the day's chart for the daily report. A redirect
+(the website's fallback to the home page's card) counts as no card. Without the card
+a post isn't posted bare: the draft waits, and each tick tries again, for up to 30
+minutes (`CARD_WAIT_MS`), then it is dropped as `rejected` (`no_card`). The first
+weather post, on 2026-10-21, went out under the home page's card because the droplet
+deployed a few minutes before the website and read the page's old og:image.
+With `WEATHER_POSTS=draft` it stops there as `held`, and counts against the caps
+as the post it would have been, so draft mode shows the cadence posting would have.
+
+Each moment is a `weather_post` row: `dispatched`, then `skipped`, `rejected`,
+`held`, `posted`, or `expired` (no draft in 15 minutes). The post's TID record
+key is stored before `createRecord`, so a post a crash leaves uncertain is looked
+up under that key, never posted twice. The kill switch and a nap stop the watcher
+asking at all. `npm run weather` lists the rows, newest first, with each draft
+and what the gates did with it.
+
+It is on by default (`WEATHER_POSTS=post`), so it starts with the deploy. To stop
+it, add `WEATHER_POSTS=off` to `/root/atpotato-mentions/.env` and
+`systemctl restart atpotato-mentions`; `WEATHER_POSTS=draft` keeps Poe drafting
+but holds every one, for reading with `npm run weather`. The kill switch stops it
+at once, without a restart, along with everything else Poe posts. Until the bot's
+weather channel is deployed, the agent refuses each moment and the watcher backs
+off for 15 minutes and asks again.
 
 ## nginx
 

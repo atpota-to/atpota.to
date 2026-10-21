@@ -10,6 +10,9 @@ import {
   isAnnounceText, parseAnnounceCommand, recordCommand, runCommand,
   attachProposal, parseConfirmation, liveProposalFor, decideProposal,
 } from './dispatch.js';
+import {
+  attachPostProposal, livePostProposalFor, decidePostProposal, publishPostProposal,
+} from './operator-posts.js';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS style_feedback (
@@ -82,9 +85,11 @@ export function receiveDraft(body) {
   while (Buffer.byteLength(text) > 10000) text = text.slice(0, -1);
   const accepted = db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_key = ?, draft_text = ?, updated_at = ?
     WHERE message_id = ? AND status = 'dispatched'`).run(body.key, text, nowIso(), body.dmId).changes > 0;
-  if (accepted && config.dispatch.enabled) {
-    // An announcement Poe proposed in this turn goes under its reply, verbatim.
-    const withProposal = attachProposal(body.dmId, text);
+  if (accepted) {
+    // An announcement or a post Poe proposed in this turn goes under its reply,
+    // verbatim. One per reply, so a yes always means one thing.
+    const withProposal = (config.dispatch.enabled ? attachProposal(body.dmId, text) : null) ??
+      attachPostProposal(body.dmId, text);
     if (withProposal) {
       db.prepare(`UPDATE operator_dm SET draft_text = ? WHERE message_id = ? AND status = 'drafted'`)
         .run(withProposal, body.dmId);
@@ -158,7 +163,7 @@ async function dispatchDm(row, fetcher = fetch) {
   if (!response.ok) throw new Error(`operator DM dispatch failed: ${response.status}`);
 }
 
-export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDeps } = {}) {
+export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDeps, postDeps } = {}) {
   if (!config.dmEnabled || config.stage < 4 || !config.adminDids.length || killSwitchEngaged()) return;
   const cutoff = baseline();
   let cursor;
@@ -235,6 +240,22 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
             WHERE message_id = ? AND status = 'queued'`).run("ok, i won't post it.", nowIso(), row.message_id);
           await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         }
+        continue;
+      }
+      // A plain yes or no straight back to a post Poe proposed (operator-posts.js).
+      // Posting takes seconds, so it runs here; 'publishing' keeps a restart from
+      // handing the yes to Poe as a new message, and the post's own key from posting twice.
+      const postAnswer = isAdmin(row.operator_did) ? parseConfirmation(row.text) : null;
+      const postProposal = postAnswer ? livePostProposalFor(row) : null;
+      if (postProposal && decidePostProposal(postProposal.id, postAnswer, row.message_id)) {
+        db.prepare(`UPDATE operator_dm SET status = 'publishing', updated_at = ? WHERE message_id = ? AND status = 'queued'`)
+          .run(nowIso(), row.message_id);
+        const reply = postAnswer === 'yes'
+          ? (await publishPostProposal(postProposal.id, postDeps)) ?? "that post already went out, or was dropped."
+          : "ok, i won't post it.";
+        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
+          WHERE message_id = ? AND status = 'publishing'`).run(reply, nowIso(), row.message_id);
+        await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         continue;
       }
       const command = parseNapCommand(row.text, new Date(), config.botHandle);

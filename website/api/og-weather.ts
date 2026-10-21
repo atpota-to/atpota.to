@@ -1,38 +1,38 @@
 // Vercel Function (Node.js runtime, Web handlers): the weather report's Open Graph card,
-// drawn from the live reading (see server/weather-card.ts). vercel.json serves it at
-// /weather/card.png and includes the fonts and art it reads.
-//   GET / HEAD  -> image/png, 1200x630
+// drawn from the weather right now (server/og-weather.ts). vercel.json rewrites
+// /og/weather.png here.
+//   GET / HEAD ?card=forecast|trend|mix|today  -> image/png, 1200x630
 //   anything else -> 405
 // Local imports end in ".js": Vercel runs the compiled files as native ESM.
 
-import { createCardHandlers } from '../server/weather-card.js';
+import { createOgWeatherHandlers } from '../server/og-weather.js';
 
-const card = createCardHandlers();
+const og = createOgWeatherHandlers();
 
 export function GET(request: Request): Promise<Response> {
-  return card.GET(request);
+  return og.GET(request);
 }
 
 export function HEAD(request: Request): Promise<Response> {
-  return card.HEAD(request);
+  return og.HEAD(request);
 }
 
 export function POST(request: Request): Promise<Response> {
-  return card.methodNotAllowed(request);
+  return og.methodNotAllowed(request);
 }
 
 export function PUT(request: Request): Promise<Response> {
-  return card.methodNotAllowed(request);
+  return og.methodNotAllowed(request);
 }
 
 export function PATCH(request: Request): Promise<Response> {
-  return card.methodNotAllowed(request);
+  return og.methodNotAllowed(request);
 }
 
 export function DELETE(request: Request): Promise<Response> {
-  return card.methodNotAllowed(request);
+  return og.methodNotAllowed(request);
 }
 
 export function OPTIONS(request: Request): Promise<Response> {
-  return card.methodNotAllowed(request);
+  return og.methodNotAllowed(request);
 }
