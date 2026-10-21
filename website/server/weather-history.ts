@@ -12,8 +12,8 @@
  *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts? }
  *
  * Points are raw counts with the seconds they cover, never rates: a rate is
- * count / seconds and the diversity index is 100 * elsewhere / creates, worked out in the
- * page, so summing points (into months, or into the total) stays exact.
+ * count / seconds, worked out in the page, so summing points (into months, or into the
+ * total) stays exact. The diversity index goes by accounts, so it comes with them.
  *
  * Alongside, each from a read-only function (atmosphere/sql/atmosphere_almanac.sql) and
  * left out if it fails:
@@ -25,8 +25,9 @@
  *                 the page compares rates, not counts
  *   appsOverTime  how many apps outside Bluesky were heard each minute, hour, day or
  *                 month (atmosphere_apps_over_time)
- *   accounts      active accounts (different DIDs) over the range and in each bucket, and
- *                 the apps with the most, from the station's sketches (weather-accounts.ts)
+ *   accounts      active accounts (different DIDs) over the range and in each bucket, the
+ *                 diversity index they make, and the apps with the most, from the
+ *                 station's sketches (weather-accounts.ts)
  */
 
 import { readAccounts } from './weather-accounts.js';

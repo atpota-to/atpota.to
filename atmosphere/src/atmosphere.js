@@ -8,6 +8,10 @@
 //   eventOfMessage  eventOf's body, for a message that is already parsed (the station
 //                   needs the message's time_us as well, and parses it once).
 //   mergeTally      adds one tally into another, with addEvent's MAX_COLLECTIONS cap.
+//
+// The diversity index goes by who wrote, not how much (diversityOf): summarize takes the
+// window's crowd, which the station works out from its account sketches (accounts.js
+// crowdOf) and the website's sampler from the DIDs it heard.
 
 export const COLLECTIONS = {
   posts: 'app.bsky.feed.post',
@@ -30,7 +34,11 @@ export const CONDITIONS = [
   ['light', 300],
 ];
 
-/** Diversity index (percent of new records outside Bluesky) at which each level starts. */
+/**
+ * The diversity index (diversityOf) at which each level starts, like the UV index. A
+ * usual minute in October 2026 was about 2: half a percent of active accounts wrote
+ * outside Bluesky, spread across about 15 apps' worth.
+ */
 export const DIVERSITY_LEVELS = [
   ['extreme', 11],
   ['very high', 8],
@@ -52,6 +60,47 @@ export function conditionFor(recordsPerSecond) {
 export function diversityLevel(index) {
   for (const [name, from] of DIVERSITY_LEVELS) if (index >= from) return name;
   return 'low';
+}
+
+/**
+ * A crowd is who wrote in a stretch of the firehose: { active, elsewhere, apps }, the
+ * different accounts active, how many of them wrote outside Bluesky, and each app's
+ * accounts. NOBODY is a stretch with no accounts in it.
+ */
+export const NOBODY = Object.freeze({ active: 0, elsewhere: 0, apps: Object.freeze([]) });
+
+/**
+ * How many apps a crowd is spread across, as an effective number: e to the Shannon
+ * entropy of their accounts over apps. Ten apps with as many accounts each is 10; one
+ * app with nearly everyone is close to 1, however many others have an account or two.
+ * 0 for nobody.
+ */
+export function spreadOf(accounts) {
+  let total = 0;
+  for (const n of accounts) if (n > 0) total += n;
+  if (total <= 0) return 0;
+  let entropy = 0;
+  for (const n of accounts) if (n > 0) entropy -= (n / total) * Math.log(n / total);
+  return Math.exp(entropy);
+}
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/** The diversity index from its parts: the share of active accounts that wrote elsewhere (percent) times the square root of their spread. */
+export function diversityIndex(share, spread) {
+  return round2(share * Math.sqrt(spread));
+}
+
+/**
+ * The diversity index of a crowd: how much of the atmosphere isn't Bluesky, by who's
+ * writing rather than how much gets written. One account writing a thousand records
+ * counts once, and forty accounts across ten apps count for more than forty in one.
+ * { index, share, spread }, each two decimals.
+ */
+export function diversityOf(crowd) {
+  const share = crowd.active > 0 ? round2(Math.min(100, (100 * crowd.elsewhere) / crowd.active)) : 0;
+  const spread = share > 0 ? round2(spreadOf(crowd.apps)) : 0;
+  return { index: diversityIndex(share, spread), share, spread };
 }
 
 /** A collection name worth repeating to visitors (the relay validates these, but they are still someone else's text). */
@@ -126,8 +175,8 @@ export function mergeTally(into, from) {
 
 const round1 = (n) => Math.round(n * 10) / 10;
 
-/** A tally over `seconds`, as a Reading (the shape of `Reading` in the reference). */
-export function summarize(tally, seconds, measuredAt) {
+/** A tally over `seconds`, and who wrote it (NOBODY when that isn't known), as a Reading (the shape of `Reading` in the reference). */
+export function summarize(tally, seconds, measuredAt, crowd = NOBODY) {
   const rate = (count) => round1(count / seconds);
   let bluesky = 0;
   let elsewhere = tally.unnamed;
@@ -147,7 +196,7 @@ export function summarize(tally, seconds, measuredAt) {
     apps.set(domain, app);
   }
   const total = bluesky + elsewhere;
-  const index = total ? Math.round((elsewhere / total) * 10_000) / 100 : 0;
+  const { index, share, spread } = diversityOf(crowd);
   const busiest = (a, b) => b.count - a.count;
   const perSecond = Object.fromEntries(Object.entries(COLLECTIONS).map(([metric, nsid]) => [metric, rate(tally.creates.get(nsid) ?? 0)]));
   return {
@@ -156,7 +205,7 @@ export function summarize(tally, seconds, measuredAt) {
     perSecond,
     condition: conditionFor(rate(total)),
     records: { perSecond: rate(total), bluesky: rate(bluesky), elsewhere: rate(elsewhere) },
-    diversity: { index, level: diversityLevel(index), apps: apps.size, collections: tally.creates.size },
+    diversity: { index, level: diversityLevel(index), share, spread, apps: apps.size, collections: tally.creates.size },
     apps: [...apps]
       .map(([domain, a]) => ({
         domain,

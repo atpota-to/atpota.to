@@ -1,13 +1,16 @@
 /**
  * The trends' active accounts: how many different accounts (DIDs) wrote anything over a
- * range, everyone and on each side of the diversity index, bucket by bucket, and the
- * apps with the most of them. Part of /api/weather-history (weather-history.ts).
+ * range, everyone and on each side of Bluesky, bucket by bucket, the diversity index
+ * they make (atmosphere.ts diversityOf), and the apps with the most of them. Part of
+ * /api/weather-history (weather-history.ts).
  *
  * The weather station counts accounts with HyperLogLog sketches and keeps them by
  * minute, hour, day and month (atmosphere/sql/atmosphere_accounts.sql). A bucket's own
  * count is on its row; a range's is the union of its buckets' sketches, merged here
  * (hll.ts), never a sum: someone active every hour of the day is one account for the day.
- * Everyone is Bluesky merged with elsewhere.
+ * Everyone is Bluesky merged with elsewhere. A bucket's diversity index spreads its
+ * accounts over its apps as the station counted each (the `dids` on its app rows); the
+ * range's, over each app's accounts across the whole range.
  *
  * Coverage works as it does for records: `seconds` is how much of the range the station
  * heard while counting accounts, and the page says when that's short. Unlike records,
@@ -15,8 +18,9 @@
  * the page compares apps' counts only when both windows were heard about as well.
  */
 
+import { diversityOf } from './atmosphere.js';
 import { countSketch, emptySketch, fromBytea, mergeSketch, type Registers } from './hll.js';
-import { collectionsOf, counts, DOMAIN_RE, iso, isRecord, num, type Supabase } from './supabase-public.js';
+import { collectionsOf, counts, DOMAIN_RE, isCount, iso, isRecord, num, type Supabase } from './supabase-public.js';
 
 export type Period = 'minute' | 'hour' | 'day' | 'month';
 
@@ -26,7 +30,16 @@ export interface AccountCounts {
   elsewhere: number;
 }
 
-export interface AccountPoint extends AccountCounts {
+/** The diversity index the accounts make, with its parts (atmosphere.ts diversityOf). */
+export interface Diversity {
+  index: number;
+  /** Percent of the accounts that wrote outside Bluesky. */
+  share: number;
+  /** How many apps those are spread across, as an effective number. */
+  spread: number;
+}
+
+export interface AccountPoint extends AccountCounts, Diversity {
   t: string;
   seconds: number;
 }
@@ -43,7 +56,7 @@ export interface Accounts {
   seconds: number;
   /** How much of the earlier window the station heard, counting accounts. */
   prevSeconds: number;
-  total: AccountCounts;
+  total: AccountCounts & Diversity;
   points: AccountPoint[];
   apps: AccountApp[];
 }
@@ -93,8 +106,18 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
   const { since, until, prev_since, prev_until, period } = w;
   const [main, appRows] = await Promise.all([
     getAll(db, `atmosphere_account_sketch?select=t,seconds,dids,dids_bluesky,dids_elsewhere,bluesky,elsewhere&period=eq.${period}&${range(since, until)}&order=t.asc`),
-    getAll(db, `atmosphere_account_app_sketch?select=t,domain,sketch&period=eq.${period}&${range(since, until)}&order=t.asc,domain.asc`),
+    getAll(db, `atmosphere_account_app_sketch?select=t,domain,dids,sketch&period=eq.${period}&${range(since, until)}&order=t.asc,domain.asc`),
   ]);
+
+  // each bucket's apps' accounts, as the station counted them
+  const bucketApps = new Map<string, number[]>();
+  for (const r of appRows) {
+    const t = isRecord(r) ? iso(r.t) : null;
+    if (!t || !isRecord(r) || typeof r.domain !== 'string' || !DOMAIN_RE.test(r.domain) || !isCount(r.dids)) continue;
+    const apps = bucketApps.get(t);
+    if (apps) apps.push(num(r.dids));
+    else bucketApps.set(t, [num(r.dids)]);
+  }
 
   const bluesky = emptySketch();
   const elsewhere = emptySketch();
@@ -109,12 +132,14 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     mergeSketch(bluesky, b);
     mergeSketch(elsewhere, e);
     seconds += c.seconds;
-    points.push({ t, seconds: c.seconds, active: c.dids, bluesky: c.dids_bluesky, elsewhere: c.dids_elsewhere });
+    const diversity = diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: bucketApps.get(t) ?? [] });
+    points.push({ t, seconds: c.seconds, active: c.dids, bluesky: c.dids_bluesky, elsewhere: c.dids_elsewhere, ...diversity });
   }
-  const total = { active: countSketch(mergeSketch(mergeSketch(emptySketch(), bluesky), elsewhere)), bluesky: countSketch(bluesky), elsewhere: countSketch(elsewhere) };
+  const everyone = { active: countSketch(mergeSketch(mergeSketch(emptySketch(), bluesky), elsewhere)), bluesky: countSketch(bluesky), elsewhere: countSketch(elsewhere) };
+  const apps = [...mergeApps(appRows)].map(([domain, s]) => ({ domain, active: countSketch(s) }));
+  const total = { ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: apps.map((a) => a.active) }) };
 
-  const top = [...mergeApps(appRows)]
-    .map(([domain, s]) => ({ domain, active: countSketch(s) }))
+  const top = apps
     .sort((a, b) => b.active - a.active || (a.domain < b.domain ? -1 : 1))
     .slice(0, w.maxApps);
   const domains = top.map((a) => a.domain).join(',');

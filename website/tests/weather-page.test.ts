@@ -6,6 +6,7 @@ import { niceMax, segments } from '../src/scripts/weather-chart.js';
 import {
   accountChange,
   accountSummary,
+  diversityParts,
   BLUESKY_NAMES,
   compactCount,
   coverageWords,
@@ -34,7 +35,7 @@ const READING: Reading = {
   perSecond: { posts: 51, likes: 308, reposts: 52.2, follows: 24.1 },
   condition: 'stormy',
   records: { perSecond: 444, bluesky: 436, elsewhere: 8 },
-  diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 },
+  diversity: { index: 1.8, level: 'low', share: 0.52, spread: 12, apps: 12, collections: 40 },
   apps: [
     { domain: 'tangled.sh', perSecond: 4, count: 20, collections: ['sh.tangled.repo', 'sh.tangled.feed.star'] },
     { domain: 'whtwnd.com', perSecond: 1, count: 5, collections: ['com.whtwnd.blog.entry'] },
@@ -163,17 +164,18 @@ describe('trends', () => {
     total: point('2026-10-20T17:00:00.000Z', 150, 66_000, 132),
   };
 
-  it('works rates and the index out from counts', () => {
-    expect(ratesOf(point('x'))).toEqual({ records: 440, posts: 50, index: 0.25 });
-    expect(ratesOf(point('x', 0))).toEqual({ records: null, posts: null, index: null });
+  it('works rates out from counts', () => {
+    expect(ratesOf(point('x'))).toEqual({ records: 440, posts: 50 });
+    expect(ratesOf(point('x', 0))).toEqual({ records: null, posts: null });
     expect(coverageWords(59)).toBe('under a minute');
     expect(coverageWords(150)).toBe('2 minutes');
     expect(coverageWords(90_000)).toBe('1 day');
   });
 
   it('sums the range up in a sentence, saying when the station is new', () => {
-    expect(trendSummary(HISTORY)).toBe('the last hour (from 2 minutes of readings so far): 440 new records a second, diversity index 0.20.');
-    expect(trendSummary({ ...HISTORY, total: point('x', 3600, 1_584_000, 3960) })).toBe('the last hour: 440 new records a second, diversity index 0.25.');
+    const accounts = { seconds: 150, prevSeconds: 0, total: { active: 9000, bluesky: 8960, elsewhere: 45, index: 1.66 }, points: [], apps: [] };
+    expect(trendSummary({ ...HISTORY, accounts })).toBe('the last hour (from 2 minutes of readings so far): 440 new records a second, diversity index 1.7.');
+    expect(trendSummary({ ...HISTORY, total: point('x', 3600, 1_584_000, 3960) })).toBe('the last hour: 440 new records a second.');
     expect(trendSummary({ ...HISTORY, points: [], total: point('x', 0) })).toBe('no readings yet for the last hour. the station fills this in as it goes.');
   });
 
@@ -267,12 +269,12 @@ describe('records or accounts', () => {
     ],
   };
   const LIVE: Reading = { ...READING, source: 'station', seconds: 60, accounts: ACCOUNTS };
-  const point = (t: string, active: number, elsewhere: number, seconds = 60) => ({ t, seconds, active, bluesky: active - elsewhere + 10, elsewhere });
+  const point = (t: string, active: number, elsewhere: number, index: number, seconds = 60) => ({ t, seconds, active, bluesky: active - elsewhere + 10, elsewhere, index });
   const acct: HistoryAccounts = {
     seconds: 180,
     prevSeconds: 180,
     total: { active: 40_000, bluesky: 39_500, elsewhere: 900 },
-    points: [point('2026-10-20T16:57:00.000Z', 20_000, 500), point('2026-10-20T16:58:00.000Z', 21_000, 520), point('2026-10-20T16:59:00.000Z', 22_000, 600)],
+    points: [point('2026-10-20T16:57:00.000Z', 20_000, 500, 8.1), point('2026-10-20T16:58:00.000Z', 21_000, 520, 8.4), point('2026-10-20T16:59:00.000Z', 22_000, 600, 9.2)],
     apps: [
       { domain: 'whtwnd.com', active: 300, prevActive: 200, collections: ['com.whtwnd.blog.entry'] },
       { domain: 'tangled.sh', active: 280, prevActive: 0, collections: [] },
@@ -282,15 +284,23 @@ describe('records or accounts', () => {
   const HISTORY: History = { range: 'hour', points: [pts('2026-10-20T16:59:00.000Z')], total: pts('2026-10-20T17:00:00.000Z'), accounts: acct };
   const section = () => report.querySelector<HTMLElement>('[data-r-trends]')!;
 
-  it("puts the last minute's active accounts in the last minute, and the index by accounts", () => {
+  it("puts the last minute's active accounts in the last minute, and what the index is made of", () => {
     renderReport(report, LIVE);
     const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
     expect(minute.hidden).toBe(false);
     expect(text('[data-r-active]')).toBe('21,345');
-    expect(text('[data-r-acct-index]')).toBe('by accounts: 2.9% of the 21,345 accounts active just now wrote somewhere other than bluesky.');
+    expect(text('[data-r-acct-index]')).toBe("0.52% of the 21,345 accounts active just now wrote somewhere other than bluesky, spread across about 12 apps' worth.");
     renderReport(report, READING);
     expect(minute.hidden).toBe(true);
+    expect(text('[data-r-acct-index]')).toBe("0.52% of the accounts heard just now wrote somewhere other than bluesky, spread across about 12 apps' worth.");
+    // a reading from before the index went by accounts
+    renderReport(report, { ...READING, diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 } });
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
+  });
+
+  it('words what an index is made of', () => {
+    expect(diversityParts(0, 0, 100)).toBe('none of the 100 accounts active just now wrote somewhere other than bluesky.');
+    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of the 100 accounts active just now wrote somewhere other than bluesky, all in about one app.');
   });
 
   it('ranks the apps elsewhere by accounts, or by records when the reading has no accounts', () => {
@@ -331,10 +341,12 @@ describe('records or accounts', () => {
       ['tangled.sh', '280', 'new'],
     ]);
 
-    // and back: records put their own titles back
+    // and back: records put their own titles back, and the diversity index comes from the accounts
     renderTrends(section(), HISTORY, NOW, 'records');
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('new records a second');
     expect(newest('records')[0]).toBe('440');
+    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('diversity index');
+    expect(newest('index')[0]).toBe('9.2');
   });
 
   it('says so when there are no account counts yet, or they cannot be read', () => {

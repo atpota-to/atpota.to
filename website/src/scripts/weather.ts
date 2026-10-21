@@ -12,9 +12,10 @@
  * turn faster when the network is busy. Under reduced motion the numbers just change and
  * the rays hold still.
  *
- * Under the Bluesky numbers sits the diversity index: the share of new records written
- * outside Bluesky, with a bar for the split, and the sky behind it all gets cloudier as
- * the index climbs (weather-sky.ts).
+ * Under the Bluesky numbers sits the diversity index: how much of the atmosphere isn't
+ * Bluesky, by the accounts writing elsewhere and how spread out they are over apps
+ * (server/atmosphere.ts diversityOf), with a bar for the share of accounts, and the sky
+ * behind it all gets cloudier as the index climbs (weather-sky.ts).
  *
  * States live on the tile as data-state="loading" | "ready" | "error". While it loads,
  * every part of the tile is already in its place (home.css shimmers where the numbers go),
@@ -89,7 +90,8 @@ export interface Reading {
   condition: Condition;
   /** The rest arrived with the whole-firehose sampler; the tile does without them. */
   records?: { perSecond: number; bluesky: number; elsewhere: number };
-  diversity?: { index: number; level: DiversityLevel; apps: number; collections: number };
+  /** share: percent of active accounts that wrote outside Bluesky; spread: how many apps they're spread across, as an effective number. Readings from before the index went by accounts have neither. */
+  diversity?: { index: number; level: DiversityLevel; share?: number; spread?: number; apps: number; collections: number };
   apps?: App[];
   bluesky?: Array<Rate & { nsid: string }>;
   events?: { creates: number; updates: number; deletes: number; identity: number; account: number };
@@ -126,8 +128,11 @@ function clean(r: Reading): Reading {
   if (typeof r.measuredAt === 'string' && Number.isFinite(Date.parse(r.measuredAt))) out.measuredAt = r.measuredAt;
   if (num(r.seconds)) out.seconds = r.seconds;
   if (nums(r.records, ['perSecond', 'bluesky', 'elsewhere'])) out.records = r.records;
-  const d = r.diversity as Record<string, unknown> | undefined;
-  if (nums(d, ['index', 'apps', 'collections']) && typeof d?.level === 'string' && LEVELS.has(d.level)) out.diversity = r.diversity;
+  const d = r.diversity;
+  if (d && nums(d, ['index', 'apps', 'collections']) && typeof d.level === 'string' && LEVELS.has(d.level)) {
+    out.diversity = { index: d.index, level: d.level, apps: d.apps, collections: d.collections };
+    if (nums(d, ['share', 'spread'])) Object.assign(out.diversity, { share: d.share, spread: d.spread });
+  }
   if (nums(r.events, ['creates', 'updates', 'deletes', 'identity', 'account'])) out.events = r.events;
   if (Array.isArray(r.apps)) {
     out.apps = r.apps.filter((a) => nums(a, ['perSecond', 'count']) && name(a.domain) && Array.isArray(a.collections)).map((a) => ({ ...a, collections: a.collections.filter(name).slice(0, 3) }));
@@ -218,13 +223,38 @@ export function ratioText(records: NonNullable<Reading['records']>): string {
   return n <= 1 ? 'most new records came from outside bluesky' : `1 in ${n.toLocaleString('en-US')} new records came from outside bluesky`;
 }
 
-/** Sizes a two-part bar (bluesky, elsewhere). A sliver of "elsewhere" stays visible. */
-export function renderRatio(bsky: HTMLElement | null, elsewhere: HTMLElement | null, records: NonNullable<Reading['records']>): void {
-  const share = records.perSecond > 0 ? (records.elsewhere / records.perSecond) * 100 : 0;
+/** "1 in 190 accounts active just now wrote outside bluesky, spread across about 10 apps' worth", or that nobody did. */
+export function diversityText(d: { share: number; spread: number }): string {
+  if (d.share <= 0) return 'nobody active just now wrote outside bluesky';
+  const n = Math.round(100 / d.share);
+  const apps = Math.max(1, Math.round(d.spread));
+  const who = n <= 1 ? 'most accounts' : `1 in ${n.toLocaleString('en-US')} accounts`;
+  return `${who} active just now wrote outside bluesky, ${apps === 1 ? 'all in about one app' : `spread across about ${apps} apps' worth`}`;
+}
+
+/** Sizes a two-part bar (bluesky, elsewhere) for elsewhere's share, in percent. A sliver of "elsewhere" stays visible. */
+export function renderShare(bsky: HTMLElement | null, elsewhere: HTMLElement | null, share: number): void {
   if (bsky) bsky.style.flexGrow = String(100 - share);
   if (elsewhere) {
     elsewhere.style.flexGrow = String(share);
-    elsewhere.hidden = records.elsewhere <= 0;
+    elsewhere.hidden = share <= 0;
+  }
+}
+
+/** The bar for new records: bluesky's and everyone else's. */
+export function renderRatio(bsky: HTMLElement | null, elsewhere: HTMLElement | null, records: NonNullable<Reading['records']>): void {
+  renderShare(bsky, elsewhere, records.perSecond > 0 && records.elsewhere > 0 ? (records.elsewhere / records.perSecond) * 100 : 0);
+}
+
+/** The diversity index's own words and bar: by accounts, or by records for a reading from before it went by accounts. */
+function renderMix(text: HTMLElement | null, bsky: HTMLElement | null, elsewhere: HTMLElement | null, r: Reading): void {
+  const d = r.diversity;
+  if (d?.share !== undefined && d.spread !== undefined) {
+    if (text) rollText(text, diversityText({ share: d.share, spread: d.spread }));
+    renderShare(bsky, elsewhere, d.share);
+  } else if (r.records) {
+    if (text) rollText(text, ratioText(r.records));
+    renderRatio(bsky, elsewhere, r.records);
   }
 }
 
@@ -275,9 +305,7 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     if (index) countTo(index, reading.diversity.index, formatIndex);
     const level = tile.querySelector<HTMLElement>('[data-weather-level]');
     if (level) level.textContent = reading.diversity.level;
-    const text = tile.querySelector<HTMLElement>('[data-weather-mix-text]');
-    if (text) rollText(text, ratioText(reading.records));
-    renderRatio(tile.querySelector('[data-weather-bar-bsky]'), tile.querySelector('[data-weather-bar-else]'), reading.records);
+    renderMix(tile.querySelector('[data-weather-mix-text]'), tile.querySelector('[data-weather-bar-bsky]'), tile.querySelector('[data-weather-bar-else]'), reading);
   }
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'ready';

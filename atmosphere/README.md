@@ -89,6 +89,18 @@ thousand records a minute is a thousand records and one account.
   for its 60 seconds. `index` is the share of active accounts that wrote elsewhere,
   and `apps` is the 10 apps with the most accounts. The website's fallback sampler
   has no accounts: a few seconds of accounts don't add up to a minute's.
+- **The diversity index** goes by them, not by records (since 2026-10-21): one account
+  writing a thousand records is one account. `diversity.share` is the percent of active
+  accounts that wrote elsewhere; `diversity.spread` is how many apps they're spread
+  across, as an effective number (e to the Shannon entropy of the apps' accounts: ten
+  apps with as many accounts each is 10, one app with nearly everyone about 1); and
+  `diversity.index = share × √spread` (`diversityOf` in `src/atmosphere.js`). A usual
+  minute in October 2026 was about 2 (1.3 to 3 nineteen minutes in twenty): half a
+  percent of the ~9,000 accounts active, across about 15 apps' worth. Under the old
+  records share, minutes where one account wrote over a thousand records
+  (titlegraph.org, techne.app) read 6 to 7; by accounts they read 2.4 to 2.7, in line
+  with the minutes around them. The trends work it out bucket by
+  bucket from the sketches' `dids` (`website/server/weather-accounts.ts`).
 - **Stored:** see "Minute rows" below and
   [`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql). The website merges
   and counts the stored sketches itself (`website/server/hll.ts`,

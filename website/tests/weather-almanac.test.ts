@@ -257,11 +257,11 @@ describe('rising and falling apps', () => {
 });
 
 describe('the mix against usual', () => {
-  it('mentions a more (or less) mixed sky when both sides have enough to say', () => {
+  it('mentions more (or fewer) records from other apps when both sides have enough to say', () => {
     const base = { ...S(158_400 * 2, 7200), windows: 2 };
     const mixed = usualText({ ...ALMANAC.normal!, now: { ...S(187_200), elsewhere: 15_000 }, weeks: base }, NOW, TZ);
-    expect(mixed.detail).toMatch(/ a more mixed sky than usual, too\.$/);
+    expect(mixed.detail).toMatch(/ more of them from other apps than usual, too\.$/);
     const plain = usualText({ ...ALMANAC.normal!, now: { ...S(187_200), elsewhere: 2000 }, weeks: base }, NOW, TZ);
-    expect(plain.detail).toMatch(/ a little less mixed than usual\.$/);
+    expect(plain.detail).toMatch(/ fewer of them from other apps than usual\.$/);
   });
 });

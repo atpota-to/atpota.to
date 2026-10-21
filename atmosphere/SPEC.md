@@ -125,7 +125,7 @@ have arrived) and answer with the same JSON shape as the website's `Reading`
   "perSecond": { "posts": 51, "likes": 308, "reposts": 52.2, "follows": 24.1 },
   "condition": "stormy",
   "records": { "perSecond": 444, "bluesky": 436, "elsewhere": 8 },
-  "diversity": { "index": 1.8, "level": "low", "apps": 12, "collections": 40 },
+  "diversity": { "index": 1.8, "level": "low", "share": 0.52, "spread": 12, "apps": 12, "collections": 40 },
   "apps": [ { "domain": "tangled.sh", "perSecond": 4, "count": 240, "collections": ["sh.tangled.repo"] } ],
   "bluesky": [ { "nsid": "app.bsky.feed.like", "perSecond": 308, "count": 18480 } ],
   "events": { "creates": 444, "updates": 3.6, "deletes": 13.5, "identity": 0.5, "account": 0.2 },
@@ -142,6 +142,12 @@ have arrived) and answer with the same JSON shape as the website's `Reading`
   (`elsewhere / total * 100`). Up to 10 apps and 8 Bluesky collections, busiest
   first, exactly as `summarize` does. Simplest correct approach: merge the 60
   buckets into one tally and call your copy of `summarize(tally, seconds, …)`.
+  (Changed 2026-10-21: the index goes by accounts now, not records, so one account
+  writing a thousand records counts once. `share` is the percent of active accounts
+  that wrote outside Bluesky, `spread` how many apps they're spread across as an
+  effective number (e to the Shannon entropy of their accounts over apps), and
+  `index = share × √spread`. `summarize` takes the window's accounts as a fourth
+  argument; `diversityOf` in the reference.)
 - `seconds < 30` → answer `503 {"error":"unavailable"}`. The website falls
   back to its own 5-second sampler.
 - Headers: `content-type: application/json; charset=utf-8`,
@@ -230,9 +236,11 @@ create policy "anyone can read" on public.atmosphere_minute for select using (tr
 create policy "anyone can read" on public.atmosphere_minute_app for select using (true);
 ```
 
-The diversity index for any range is `100.0 * sum(elsewhere) / nullif(sum(creates), 0)`,
-and a rate is `sum(x) / sum(seconds_covered)`. Never average per-minute
-indexes: a quiet minute would count as much as a busy one.
+The share of new records outside Bluesky for any range is
+`100.0 * sum(elsewhere) / nullif(sum(creates), 0)` (this was the diversity index until
+2026-10-21; it goes by accounts now, from the sketches below), and a rate is
+`sum(x) / sum(seconds_covered)`. Never average per-minute shares or indexes: a quiet
+minute would count as much as a busy one.
 
 PostgREST's aggregate functions are off on this project, so per-app sums over a range
 come from read-only functions (applied):

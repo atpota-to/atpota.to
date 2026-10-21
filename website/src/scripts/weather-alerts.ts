@@ -25,7 +25,7 @@
 
 import { say, type PoeLine, type PoeSpeech } from '../poe/say';
 import type { MascotFace } from './mascot';
-import { formatIndex, ratioText, recordsPerSecond, type DiversityLevel, type Reading } from './weather';
+import { diversityText, formatIndex, ratioText, recordsPerSecond, type DiversityLevel, type Reading } from './weather';
 
 /** How long Poe's bubble stays up. */
 export const ALERT_MS = 9000;
@@ -83,7 +83,9 @@ export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alert
   }
   const level = r.diversity?.level;
   if (level && prev.level && LEVELS.indexOf(level) > LEVELS.indexOf(prev.level) && r.records) {
-    alerts.push({ kind: 'mixed', label: 'weather alert', text: `the sky's getting mixed: ${level}`, sub: `diversity index ${formatIndex(r.diversity!.index)}. ${ratioText(r.records)}.` });
+    const d = r.diversity!;
+    const why = d.share !== undefined && d.spread !== undefined ? diversityText({ share: d.share, spread: d.spread }) : ratioText(r.records);
+    alerts.push({ kind: 'mixed', label: 'weather alert', text: `the sky's getting mixed: ${level}`, sub: `diversity index ${formatIndex(d.index)}. ${why}.` });
   }
   const app = fresh[0];
   if (app) {

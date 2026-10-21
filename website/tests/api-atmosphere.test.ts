@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api/atmosphere.js';
 import {
+  accountOf,
   addEvent,
   appDomain,
   CACHE_LIVE,
@@ -9,12 +10,16 @@ import {
   conditionFor,
   fromStation,
   STATION_URL,
+  diversityIndex,
   diversityLevel,
+  diversityOf,
   emptyTally,
   eventOf,
   isBluesky,
   isNsid,
   MAX_COLLECTIONS,
+  NOBODY,
+  spreadOf,
   summarize,
   createAtmosphereHandlers,
   JETSTREAMS,
@@ -28,7 +33,7 @@ import {
 // /api/atmosphere with a scripted fake Jetstream: each socket opens, then emits the
 // messages it was given, spread over the sample window.
 
-const commit = (collection: string, operation = 'create') => JSON.stringify({ did: 'did:plc:x', kind: 'commit', commit: { operation, collection } });
+const commit = (collection: string, operation = 'create', did = 'did:plc:x') => JSON.stringify({ did, kind: 'commit', commit: { operation, collection } });
 
 class FakeSocket implements SocketLike {
   onopen: ((e: unknown) => void) | null = null;
@@ -115,9 +120,9 @@ describe('reading the firehose', () => {
     add('com.whtwnd.blog.entry', 2);
     addEvent(tally, { kind: 'delete' });
     addEvent(tally, { kind: 'identity' });
-    const r = summarize(tally, 2, '2026-10-20T00:00:00.000Z');
+    const r = summarize(tally, 2, '2026-10-20T00:00:00.000Z', { active: 40, elsewhere: 3, apps: [2, 1] });
     expect(r.records).toEqual({ perSecond: 101, bluesky: 95, elsewhere: 6 });
-    expect(r.diversity).toEqual({ index: 5.94, level: 'moderate', apps: 2, collections: 5 });
+    expect(r.diversity).toEqual({ index: 10.31, level: 'very high', share: 7.5, spread: 1.89, apps: 2, collections: 5 });
     expect(r.apps).toEqual([
       { domain: 'tangled.sh', count: 10, perSecond: 5, collections: ['sh.tangled.feed.star', 'sh.tangled.repo'] },
       { domain: 'whtwnd.com', count: 2, perSecond: 1, collections: ['com.whtwnd.blog.entry'] },
@@ -136,7 +141,40 @@ describe('reading the firehose', () => {
   });
 
   it('an empty sample has an index of 0', () => {
-    expect(summarize(emptyTally(), 1, '').diversity).toEqual({ index: 0, level: 'low', apps: 0, collections: 0 });
+    expect(summarize(emptyTally(), 1, '').diversity).toEqual({ index: 0, level: 'low', share: 0, spread: 0, apps: 0, collections: 0 });
+  });
+
+  it('spread: how many apps a crowd is spread across, as an effective number', () => {
+    expect(spreadOf([10, 10, 10, 10])).toBe(4);
+    expect(spreadOf([7])).toBe(1);
+    expect(spreadOf([])).toBe(0);
+    expect(spreadOf([0, 0])).toBe(0);
+    // one app with nearly everyone is nearly one app, however many others have an account
+    const crowded = spreadOf([990, ...Array(10).fill(1)]);
+    expect(crowded).toBeGreaterThan(1);
+    expect(crowded).toBeLessThan(1.1);
+  });
+
+  it('works the diversity index out from accounts and their spread, not from records', () => {
+    expect(diversityOf(NOBODY)).toEqual({ index: 0, share: 0, spread: 0 });
+    // half a percent of 10,000 accounts, evenly across ten apps, or all in one
+    const even = { active: 10_000, elsewhere: 50, apps: Array(10).fill(5) };
+    expect(diversityOf(even)).toEqual({ index: 1.58, share: 0.5, spread: 10 });
+    expect(diversityOf({ active: 10_000, elsewhere: 50, apps: [50] })).toEqual({ index: 0.5, share: 0.5, spread: 1 });
+    // one more account, in an app of its own, however many records it writes
+    expect(diversityOf({ active: 10_001, elsewhere: 51, apps: [...even.apps, 1] })).toEqual({ index: 1.65, share: 0.51, spread: 10.53 });
+    // sketches can count a few more elsewhere than active
+    expect(diversityOf({ active: 3, elsewhere: 4, apps: [4] }).share).toBe(100);
+    expect(diversityIndex(0.5, 10)).toBe(1.58);
+  });
+
+  it('knows whose a commit is, by the station\'s rules', () => {
+    expect(accountOf(commit('app.bsky.feed.like'))).toEqual({ did: 'did:plc:x', app: null });
+    expect(accountOf(commit('sh.tangled.repo', 'delete'))).toEqual({ did: 'did:plc:x', app: 'tangled.sh' });
+    expect(accountOf(commit('sh.tangled.repo', 'create', 'not a did'))).toBeNull();
+    expect(accountOf(commit('nodots'))).toBeNull();
+    expect(accountOf(JSON.stringify({ did: 'did:plc:x', kind: 'identity' }))).toBeNull();
+    expect(accountOf('nope')).toBeNull();
   });
 
   it('counts only new records in the collections it watches', () => {
@@ -173,6 +211,29 @@ describe('reading the firehose', () => {
     expect(r.perSecond).toEqual({ posts: 3, likes: 15, reposts: 0, follows: 0.5 });
     expect(r.condition).toBe('calm');
     expect(net.sockets[0]!.closed).toBe(true);
+  });
+
+  it('works its diversity index out from the accounts it heard, however much one of them wrote', async () => {
+    vi.useFakeTimers();
+    let t = 0;
+    const messages = [
+      ...Array.from({ length: 96 }, (_, i) => commit('app.bsky.feed.like', 'create', `did:plc:b${i}`)),
+      ...Array(500).fill(commit('org.titlegraph.title', 'create', 'did:plc:bot')),
+      commit('sh.tangled.repo', 'create', 'did:plc:t1'),
+      commit('sh.tangled.repo', 'create', 'did:plc:t2'),
+      commit('blue.mado.note', 'update', 'did:plc:m1'),
+      // also on bluesky: one more account elsewhere, not one more active
+      commit('blue.mado.note', 'create', 'did:plc:b0'),
+    ];
+    const reading = sample(opener([{ messages }]).open, 'wss://x', () => t, 2000);
+    await vi.advanceTimersByTimeAsync(5);
+    t = 2000;
+    await vi.advanceTimersByTimeAsync(2000);
+    const r = await reading;
+    // 100 accounts, 5 of them elsewhere, across titlegraph.org (1), tangled.sh (2) and mado.blue (2)
+    expect(r.diversity).toMatchObject({ share: 5, spread: 2.87, index: 8.47 });
+    expect(r.records.elsewhere).toBeGreaterThan(r.records.bluesky);
+    expect(r.accounts).toBeUndefined();
   });
 
   // Until 2026-10-21 the connect timeout kept running after the socket opened, and with the
@@ -258,7 +319,7 @@ const STATION = {
   perSecond: { posts: 51, likes: 308, reposts: 52.2, follows: 24.1 },
   condition: 'stormy',
   records: { perSecond: 444, bluesky: 436, elsewhere: 8 },
-  diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 },
+  diversity: { index: 1.8, level: 'low', share: 0.52, spread: 12, apps: 12, collections: 40 },
   apps: [{ domain: 'tangled.sh', perSecond: 4, count: 240, collections: ['sh.tangled.repo'] }],
   bluesky: [{ nsid: 'app.bsky.feed.like', perSecond: 308, count: 18480 }],
   events: { creates: 444, updates: 3.6, deletes: 13.5, identity: 0.5, account: 0.2 },
@@ -282,12 +343,12 @@ describe('reading the weather station', () => {
       ...STATION,
       condition: 'hail',
       records: { perSecond: 640, bluesky: 630, elsewhere: 10 },
-      diversity: { ...STATION.diversity, index: 9, level: 'nonsense' },
+      diversity: { ...STATION.diversity, index: 1, share: 3, spread: 9, level: 'nonsense' },
       apps: [{ domain: '<b>x</b>', perSecond: 1, count: 1, collections: [] }, { domain: 'ok.app', perSecond: 1, count: 1, collections: ['<i>', 'app.ok.thing'] }],
       bluesky: [{ nsid: 'sh.tangled.repo', perSecond: 1, count: 1 }],
     })!;
     expect(r.condition).toBe('stormy');
-    expect(r.diversity.level).toBe('very high');
+    expect(r.diversity).toEqual({ index: 9, level: 'very high', share: 3, spread: 9, apps: 12, collections: 40 });
     expect(r.apps).toEqual([{ domain: 'ok.app', perSecond: 1, count: 1, collections: ['app.ok.thing'] }]);
     expect(r.bluesky).toEqual([]);
   });
@@ -314,6 +375,13 @@ describe('reading the weather station', () => {
     expect(fromStation(STATION)!.accounts).toBeUndefined();
     expect(fromStation({ ...STATION, accounts: { ...accounts, active: 'lots' } })!.accounts).toBeUndefined();
     expect(fromStation({ ...STATION, accounts: { ...accounts, apps: null } })!.accounts).toBeUndefined();
+  });
+
+  it('works the index out from an older station\'s accounts, which sends no share or spread', () => {
+    const accounts = { active: 21000, bluesky: 20800, elsewhere: 210, index: 1, apps: [30, 30, 30, 30].map((n, i) => ({ domain: `app${i}.test`, accounts: n, collections: [] })) };
+    const older = { ...STATION, diversity: { index: 0.6, level: 'low', apps: 12, collections: 40 } };
+    expect(fromStation({ ...older, accounts })!.diversity).toEqual({ index: 2, level: 'low', share: 1, spread: 4, apps: 12, collections: 40 });
+    expect(fromStation(older)).toBeNull();
   });
 
   it('refuses a reading missing its numbers', () => {
