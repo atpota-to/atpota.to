@@ -473,9 +473,22 @@ export function renderNewApps(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
 }
 
 /**
+ * Biggest in the middle, smallest at the ends: busiest first, then every other one either
+ * side of it. Wrapped into centred lines, the big names land on the middle lines and the
+ * small ones top and bottom, so the cloud bulges in the middle like a cloud.
+ */
+export function cloudOrder<T extends { domain: string; creates: number }>(apps: T[]): T[] {
+  const busiest = [...apps].sort((a, b) => b.creates - a.creates || (a.domain < b.domain ? -1 : 1));
+  const left = busiest.filter((_, i) => i % 2 === 1).reverse();
+  const right = busiest.filter((_, i) => i % 2 === 0);
+  return [...left, ...right];
+}
+
+/**
  * The new apps as a word cloud: each name sized by the records it's written (on a log
  * scale, so one busy app doesn't make the rest specks) and a link to its lexicons in
- * Aturi. It's only redrawn when the apps or their counts change, and a newcomer pops in.
+ * Aturi, the busiest in the middle (cloudOrder). It's only redrawn when the apps or their
+ * counts change, and a newcomer pops in.
  */
 function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: string): void {
   const drawn = apps.map((app) => `${app.domain} ${app.creates} ${app.firstSeen}`).join('\n');
@@ -486,7 +499,7 @@ function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: 
   if (tip) tip.hidden = true;
   const most = Math.log(Math.max(1, ...apps.map((app) => app.creates)));
   list.replaceChildren(
-    ...apps.map((app) => {
+    ...cloudOrder(apps).map((app) => {
       const li = document.createElement('li');
       li.className = before && !before.has(app.domain) ? 'weather-new__app is-new' : 'weather-new__app';
       li.style.setProperty('--w', (most > 0 ? Math.log(Math.max(1, app.creates)) / most : 0).toFixed(2));

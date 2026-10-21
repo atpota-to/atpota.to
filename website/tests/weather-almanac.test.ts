@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   aturiFor,
+  cloudOrder,
   bigNumber,
   changeText,
   daypart,
@@ -181,8 +182,18 @@ describe('new in the atmosphere', () => {
   it('sizes names by their records, biggest for the busiest', () => {
     const app = (domain: string, creates: number) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates, collections: [] });
     renderNewApps(root.querySelector('[data-a-new]')!, { ...ALMANAC, newApps: { ...ALMANAC.newApps!, apps: [app('a.one', 1), app('b.two', 10), app('c.three', 100)] } }, NOW, TZ);
-    const sizes = [...root.querySelectorAll<HTMLElement>('[data-a-new-list] li')].map((li) => li.style.getPropertyValue('--w'));
-    expect(sizes).toEqual(['0.00', '0.50', '1.00']);
+    const sizes = Object.fromEntries([...root.querySelectorAll<HTMLElement>('[data-a-new-list] li')].map((li) => [li.textContent!.split(',')[0], li.style.getPropertyValue('--w')]));
+    expect(sizes).toEqual({ 'a.one': '0.00', 'b.two': '0.50', 'c.three': '1.00' });
+  });
+
+  it('puts the busiest in the middle of the cloud and the quietest at its ends, so it bulges like a cloud', () => {
+    const apps = [1, 7, 3, 9, 5, 2, 8].map((creates) => ({ domain: `app${creates}.com`, creates }));
+    expect(cloudOrder(apps).map((a) => a.creates)).toEqual([2, 5, 8, 9, 7, 3, 1]);
+    expect(cloudOrder([])).toEqual([]);
+    // the page draws it that way
+    const app = (domain: string, creates: number) => ({ domain, firstSeen: '2026-11-03T16:46:00.000Z', creates, collections: [] });
+    renderNewApps(root.querySelector('[data-a-new]')!, { ...ALMANAC, newApps: { ...ALMANAC.newApps!, apps: [app('a.one', 1), app('b.two', 10), app('c.three', 100)] } }, NOW, TZ);
+    expect([...root.querySelectorAll<HTMLElement>('[data-a-new-list] [data-domain]')].map((el) => el.dataset.domain)).toEqual(['b.two', 'c.three', 'a.one']);
   });
 
   it('reads an app\'s namespace off its domain', () => {

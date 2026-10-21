@@ -782,16 +782,23 @@ html[data-theme="dark"] .weather-hero {
 }
 
 /* A word cloud (weather-almanac.ts renderCloud): each new app's name, bigger for more
-   records (--w, 0 to 1), on one baseline per line like a tag cloud, each a link to Aturi. */
+   records (--w, 0 to 1), on one baseline per line like a tag cloud, each a link to Aturi.
+   The busiest sit in the middle (cloudOrder), so the lines bulge there. It fills what the
+   tile has to spare beside today's tile, words centred in it, and the sizes follow the
+   cloud's own width: a wider cloud gets bigger names, a phone's still fits a few a line. */
 .weather-new__list {
+  container: new-cloud / inline-size;
+  flex: 1 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  align-content: center;
   justify-content: center;
-  gap: 2px 4px;
+  gap: 0 2px;
+  min-height: 180px;
   margin: 0;
-  padding: 14px 10px;
-  border-radius: 16px;
+  padding: 18px 10px;
+  border-radius: 24px;
   background: var(--bg);
   list-style: none;
 }
@@ -802,12 +809,12 @@ html[data-theme="dark"] .weather-hero {
 
 .weather-new__link {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 3px 6px;
   border-radius: var(--radius-pill);
   color: var(--text);
-  font-size: calc(15px + var(--w, 0) * 13px);
+  font-size: calc(clamp(13px, 3.2cqi, 17px) + var(--w, 0) * var(--w, 0) * clamp(16px, 7cqi, 34px));
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.15;
   text-decoration: none;
   overflow-wrap: anywhere;
   transition: background-color var(--dur) var(--ease-out);

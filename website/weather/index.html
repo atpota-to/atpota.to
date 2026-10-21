@@ -74,25 +74,6 @@
                 <p class="visually-hidden" role="status" data-r-status></p>
             </header>
 
-            <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading">
-                <div class="weather-tile__head">
-                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
-                    <p class="weather-tile__aside" data-a-heat-aside></p>
-                </div>
-                <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
-                <div class="weather-heat__scroll">
-                    <table class="weather-heat__grid" data-a-heat-grid>
-                        <caption class="visually-hidden">new records a second for each hour of the week, in your time</caption>
-                    </table>
-                </div>
-                <div class="weather-heat__legend" aria-hidden="true">
-                    <span data-a-heat-min>&ndash;</span>
-                    <span class="weather-heat__ramp"><i class="weather-heat__cell--1"></i><i class="weather-heat__cell--2"></i><i class="weather-heat__cell--3"></i><i class="weather-heat__cell--4"></i><i class="weather-heat__cell--5"></i></span>
-                    <span data-a-heat-max>&ndash;</span>
-                    <span class="weather-heat__legend-empty"><i class="weather-heat__cell--empty"></i> not heard yet</span>
-                </div>
-            </section>
-
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
                 <div class="weather-tile__titled">
                     <h2 class="weather-tile__title" id="weather-diversity-title">diversity index</h2>
@@ -197,6 +178,25 @@
                 </div>
                 <dl class="weather-forecast__sun" data-f-sun hidden></dl>
                 <p class="weather-tile__note" data-f-note></p>
+            </section>
+
+            <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading">
+                <div class="weather-tile__head">
+                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
+                    <p class="weather-tile__aside" data-a-heat-aside></p>
+                </div>
+                <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
+                <div class="weather-heat__scroll">
+                    <table class="weather-heat__grid" data-a-heat-grid>
+                        <caption class="visually-hidden">new records a second for each hour of the week, in your time</caption>
+                    </table>
+                </div>
+                <div class="weather-heat__legend" aria-hidden="true">
+                    <span data-a-heat-min>&ndash;</span>
+                    <span class="weather-heat__ramp"><i class="weather-heat__cell--1"></i><i class="weather-heat__cell--2"></i><i class="weather-heat__cell--3"></i><i class="weather-heat__cell--4"></i><i class="weather-heat__cell--5"></i></span>
+                    <span data-a-heat-max>&ndash;</span>
+                    <span class="weather-heat__legend-empty"><i class="weather-heat__cell--empty"></i> not heard yet</span>
+                </div>
             </section>
 
             <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
@@ -304,10 +304,10 @@
 
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="weather-tile__title" id="weather-how-title">how i measure it</h2>
-                <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by. the numbers up top are the last minute, and they keep updating while you&#39;re here.</p>
-                <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. it&#39;s a close estimate, and i never keep track of who&#39;s who.</p>
-                <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in, once a minute at most (◕‿◕)</p>
-                <p>a quiet app can slip past me now and then, and one busy bot can tip things for a while. i&#39;m a potato, not a satellite! <a href="/">back home</a>.</p>
+                <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by, live while you&#39;re here.</p>
+                <p>flip to <strong>accounts</strong> to count who&#39;s writing instead of how much, so one chatty bot can&#39;t pass for a crowd. i never keep track of who&#39;s who.</p>
+                <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in (◕‿◕)</p>
+                <p>i&#39;m a potato, not a satellite, so a quiet app can slip past me now and then. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>
         </div>

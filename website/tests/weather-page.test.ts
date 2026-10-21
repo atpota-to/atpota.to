@@ -70,9 +70,9 @@ describe('the atmosphere weather report', () => {
     expect(PAGE).toContain('/src/styles/weather.css');
   });
 
-  it('puts when the sky is busiest right under the header', () => {
+  it('puts when the sky is busiest right under the forecast', () => {
     const tiles = [...report.querySelectorAll(':scope > .tile')].map((t) => t.getAttribute('aria-labelledby'));
-    expect(tiles.slice(0, 3)).toEqual(['weather-title', 'weather-heat-title', 'weather-diversity-title']);
+    expect(tiles.indexOf('weather-heat-title')).toBe(tiles.indexOf('weather-forecast-title') + 1);
   });
 
   it('fills every tile from one reading', () => {
