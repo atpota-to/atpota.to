@@ -48,7 +48,7 @@ test("the prompt fences the facts and offers the skip", () => {
   assert.match(buildWeatherPrompt(WeatherMoment.parse({ ...moment, recent: [] })), /\(none yet\)/);
 });
 
-test("sends the draft only to the droplet's weather callback", async () => {
+test("sends the draft to the droplet's own callback URL, the one replies use", async () => {
   process.env.DROPLET_CALLBACK_URL = "https://droplet.example/callback";
   process.env.DROPLET_SHARED_SECRET = "shared";
   const originalFetch = globalThis.fetch;
@@ -63,7 +63,7 @@ test("sends the draft only to the droplet's weather callback", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
-  assert.equal(sent.url, "https://droplet.example/weather-draft");
+  assert.equal(sent.url, "https://droplet.example/callback");
   assert.equal(sent.options.headers["x-atpotato-secret"], "shared");
   assert.deepEqual(JSON.parse(sent.options.body), draft);
 });

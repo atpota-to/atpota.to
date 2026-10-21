@@ -62,7 +62,11 @@ export function buildWeatherPrompt(moment: WeatherMoment): string {
   ].join("\n");
 }
 
-/** Hand the draft (or the skip) back to the droplet, which decides whether it is posted. */
+/**
+ * Hand the draft (or the skip) back to the droplet, which decides whether it is posted.
+ * It goes to the same callback URL as a reply's draft; the droplet tells them apart by
+ * momentId, so the weather needs nothing new in front of the droplet.
+ */
 export async function postWeatherDraft(draft: {
   key: string;
   momentId: string;
@@ -76,7 +80,7 @@ export async function postWeatherDraft(draft: {
     return;
   }
   try {
-    const response = await fetch(new URL("/weather-draft", callback), {
+    const response = await fetch(callback, {
       method: "POST",
       headers: { "content-type": "application/json", "x-atpotato-secret": secret },
       body: JSON.stringify(draft),

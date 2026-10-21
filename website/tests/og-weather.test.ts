@@ -197,7 +197,9 @@ describe('og weather: the cards', () => {
     // without a usual yet, the condition's own words
     expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a quiet spell, right now']));
     expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'rocksky.app', '16,836', 'low']));
-    expect(texts(drawCard('today', data(), art))).toEqual(expect.arrayContaining(['much busier than usual', '+25%', '11.4 million', '212', '446']));
+    expect(texts(drawCard('today', data(), art))).toEqual(expect.arrayContaining([
+      'the last hour', 'much busier than usual', '+25%', 'today in numbers', '212', '446', 'new records', '11.4 million', 'from other apps',
+    ]));
     expect(texts(drawCard('trend', data(), art))).toEqual(expect.arrayContaining(['busiest hour 450', '362']));
   });
 
@@ -206,9 +208,9 @@ describe('og weather: the cards', () => {
     const listing = (n: number) => data({ almanac: { ...data().almanac!, newApps: { ...data().almanac!.newApps!, apps: Array.from({ length: n }, (_, i) => ({
       domain: `app${i}.example`, firstSeen: '2026-10-21T11:50:00.000Z', creates: 10, collections: [],
     })) } } });
-    expect(texts(drawCard('today', listing(3), art))).toEqual(expect.arrayContaining(['3 apps', 'first heard in the last day']));
+    expect(texts(drawCard('today', listing(3), art))).toEqual(expect.arrayContaining(['new apps, last 24 hours', '3']));
     // the almanac stops at 20, so 20 means "at least 20"
-    expect(texts(drawCard('today', listing(20), art))).toEqual(expect.arrayContaining(['20+ apps']));
+    expect(texts(drawCard('today', listing(20), art))).toEqual(expect.arrayContaining(['20+']));
   });
 
   it('gives way to the quiet card when its numbers are missing', async () => {
@@ -230,8 +232,10 @@ describe('og weather: the cards', () => {
     expect(drawCard('trend', data({ day: { points: points(4) } }), art)).toBeNull();
     // no usual yet: today's range still stands
     expect(texts(drawCard('today', data({ almanac: { ...data().almanac, normal: undefined } }), art))).toEqual(
-      expect.arrayContaining(['the station is still learning what usual looks like', '212']),
+      expect.arrayContaining(['still learning what usual looks like', '212']),
     );
+    // nothing for the right-hand panel: the last hour has the card to itself
+    expect(texts(drawCard('today', data({ almanac: { ...data().almanac, today: undefined, newApps: undefined } }), art))).not.toContain('today in numbers');
     // the apps of the last minute when the day's aren't in
     expect(texts(drawCard('mix', data({ day: null }), art))).toEqual(expect.arrayContaining(['grain.social', 'new records, the last minute']));
   });

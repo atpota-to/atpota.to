@@ -712,7 +712,9 @@ may ask about, so removing one turns it off.
 
 A moment goes to the agent as `POST /weather/moment` (shared secret) with the
 station's numbers and Poe's last five weather posts. Poe reads the station and
-answers on `POST /weather-draft` with the post, or `skip`. The draft goes through
+answers with the post, or `skip`, on `DROPLET_CALLBACK_URL`, the URL a reply's
+draft comes back on; its `momentId` tells it from a reply, so nginx needs nothing
+new. The draft goes through
 the reply gates as a single post (length, markdown, non-answers, `@handles`), with
 no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
 same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
@@ -731,16 +733,17 @@ up under that key, never posted twice. The kill switch and a nap stop the watche
 asking at all. `npm run weather` lists the rows, newest first, with each draft
 and what the gates did with it.
 
-To turn it on: deploy the bot with its weather channel, add the nginx block for
-`/weather-draft`, set `WEATHER_POSTS=draft` and restart. Read a day or two of
-drafts with `npm run weather`, then set `WEATHER_POSTS=post`.
+To turn it on, once the bot's weather channel is deployed: add `WEATHER_POSTS=post`
+to `/root/atpotato-mentions/.env` and `systemctl restart atpotato-mentions`, or
+`WEATHER_POSTS=draft` first to read a day of drafts with `npm run weather` before
+any go out.
 
 ## nginx
 
 `/etc/nginx/sites-available/hook.atpota.to` forwards only exact paths to this
 service; anything else is a 404 at nginx. Every agent → droplet endpoint needs
 its own `location =` block, or the agent's call fails without reaching here:
-`/callback`, `/dm-draft`, `/weather-draft`, `/memory`, `/health`, `/like-proposal`,
+`/callback`, `/dm-draft`, `/memory`, `/health`, `/like-proposal`,
 `/dispatch/announce-proposal`, `/internal/bluesky-search`,
 `/internal/scan-budget/claim`, `/internal/list-records-budget/claim` and
 `/internal/scan-approval/request`. `/like-proposal` and the four `/internal/`

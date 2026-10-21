@@ -654,63 +654,86 @@ function mixColor(a: string, b: string, p: number): string {
   return `rgb(${[0, 1, 2].map((i) => Math.round(ch(a, i) * p + ch(b, i) * (1 - p))).join(', ')})`;
 }
 
+/** "07:44", a minute's time of day in UTC. */
+function utcClock(iso: string): string {
+  return new Date(iso).toISOString().slice(11, 16);
+}
+
+/** One line of "today in numbers": what it is on the left, the number on the right. */
+function todayRow(label: string, value: string, first = false): El {
+  return h(
+    { justifyContent: 'space-between', alignItems: 'baseline', padding: '13px 0', borderTop: first ? 'none' : `2px solid ${TODAY_RULE}` },
+    h({ fontSize: 24, color: C.soft }, label),
+    h({ fontSize: 34, fontWeight: 700, letterSpacing: '-0.02em' }, value),
+  );
+}
+
+const TODAY_TINT = mixColor(C.bsky, C.card, 0.1);
+const TODAY_RULE = 'rgba(26, 115, 201, 0.16)';
+
+/**
+ * The almanac, in two panels like the mix card: on the left the last hour against usual
+ * (the barometer and how far off), on the right today in numbers (its range, how much was
+ * written, how much of it elsewhere, and how many apps were new).
+ */
 function today(d: CardData, art: Art): El | null {
   const usual = usualOf(d.almanac?.normal);
   const t = d.almanac?.today;
   if (!usual && !t) return null;
-  const lastHour = usual?.rate ?? recordsNow(d)?.rate ?? null;
   const fresh = d.almanac?.newApps && !d.almanac.newApps.warmingUp ? d.almanac.newApps.apps.length : null;
-  const range = t?.high && t.low ? { low: t.low.perSecond, high: t.high.perSecond } : null;
-  const rangeW = 960;
-  const at = range && lastHour !== null ? (range.high > range.low ? Math.min(1, Math.max(0, (lastHour - range.low) / (range.high - range.low))) : 0.5) : null;
+  const range = t?.high && t.low ? { low: t.low, high: t.high } : null;
+  const rows: Array<[string, string]> = [];
+  if (t) rows.push(['new records', bigNumber(t.creates)]);
+  if (t && t.creates > 0) rows.push(['from other apps', `${((100 * t.elsewhere) / t.creates).toFixed(2)}%`]);
+  // The almanac lists at most NEW_APPS, from the last 24 hours: a full list is "20+".
+  if (fresh) rows.push(['new apps, last 24 hours', fresh >= NEW_APPS ? `${NEW_APPS}+` : String(fresh)]);
+  const right = range || rows.length;
+  const left = right ? 600 : 1144;
   return page(
     tile(
-      { width: 1144, height: 574, background: C.paper, padding: '42px 50px 36px' },
+      { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
       masthead(art, 'today so far', C.brown, { background: C.bg }),
+      h({ fontSize: 24, color: C.muted, marginTop: 'auto' }, 'the last hour'),
       h(
-        { alignItems: 'center', gap: 34, marginTop: 'auto' },
-        h(
-          { flexDirection: 'column', alignItems: 'center' },
-          svgImage(gaugeSvg(usual?.ratio ?? null), 240, 132),
-          usual ? h({ fontSize: 34, fontWeight: 700, marginTop: 4 }, changeText(usual.ratio)) : null,
-        ),
-        h(
-          { flexDirection: 'column', flex: 1 },
-          h({ fontSize: 58, fontWeight: 700, lineHeight: 1.02, letterSpacing: '-0.02em' }, usual ? usual.how : 'the station is still learning what usual looks like'),
-          usual
-            ? h({ fontSize: 27, color: C.soft, marginTop: 10, lineHeight: 1.3 }, `${int(usual.rate)} new records a second over the last hour; usually about ${int(usual.usual)} ${usual.when.replace('for ', 'at ')}.`)
-            : null,
-        ),
+        { fontSize: usual ? 56 : 40, fontWeight: 700, lineHeight: 1.02, letterSpacing: '-0.02em', marginTop: 4 },
+        usual ? usual.how : 'still learning what usual looks like',
       ),
-      range
+      h(
+        { alignItems: 'center', gap: 26, marginTop: 22 },
+        svgImage(gaugeSvg(usual?.ratio ?? null), 220, 121),
+        usual ? big(changeText(usual.ratio), 76, { color: C.bsky }) : null,
+      ),
+      usual
         ? h(
-            { flexDirection: 'column', marginTop: 34, width: rangeW + 120 },
-            h({ fontSize: 22, color: C.muted }, "today's range (utc) · new records a second"),
-            h(
-              { alignItems: 'center', gap: 18, marginTop: at !== null ? 38 : 10 },
-              h({ fontSize: 32, fontWeight: 700, width: 70 }, int(range.low)),
-              h(
-                { position: 'relative', width: rangeW - 140, height: 18, borderRadius: 9, backgroundImage: `linear-gradient(90deg, ${mixColor(C.bsky, C.card, 0.2)}, ${C.bsky})` },
-                at !== null
-                  ? h({ position: 'absolute', left: Math.min(rangeW - 140 - 26, Math.max(-4, at * (rangeW - 140) - 15)), top: -6, width: 30, height: 30, borderRadius: 999, background: C.card, border: `6px solid ${C.ink}` })
-                  : null,
-                at !== null
-                  ? h({ position: 'absolute', left: Math.min(rangeW - 140 - 180, Math.max(0, at * (rangeW - 140) - 90)), top: -44, width: 180, justifyContent: 'center', fontSize: 22, fontWeight: 700 }, `last hour ${int(lastHour!)}`)
-                  : null,
-              ),
-              h({ fontSize: 32, fontWeight: 700 }, int(range.high)),
-            ),
+            { fontSize: 24, color: C.soft, marginTop: 18, lineHeight: 1.35 },
+            `${int(usual.rate)} new records a second, against about ${int(usual.usual)} ${usual.when.replace('for ', 'at ')}.`,
           )
         : null,
-      h(
-        { gap: 16, marginTop: 28, alignItems: 'flex-end' },
-        t ? stat('so far today', bigNumber(t.creates), 'new records', { width: 300 }) : null,
-        t && t.creates > 0 ? stat('from other apps', `${((100 * t.elsewhere) / t.creates).toFixed(2)}%`, `${bigNumber(t.elsewhere)} new records`, { width: 300 }) : null,
-        // The almanac lists at most NEW_APPS, from the last 24 hours: a full list is "20+".
-        fresh ? stat('new in the atmosphere', fresh >= NEW_APPS ? `${NEW_APPS}+ apps` : `${fresh} app${fresh === 1 ? '' : 's'}`, 'first heard in the last day', { width: 330 }) : null,
-      ),
-      h({ position: 'absolute', right: 50, top: 50 }, footer(d)),
+      h({ marginTop: 20 }, footer(d)),
     ),
+    right
+      ? tile(
+          { width: 1144 - left - 16, height: 574, background: TODAY_TINT, padding: '40px 40px 30px' },
+          h({ fontSize: 30, fontWeight: 700, color: C.bsky }, 'today in numbers'),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, 'since midnight utc'),
+          range
+            ? h(
+                { flexDirection: 'column', marginTop: 'auto' },
+                h({ fontSize: 22, color: C.soft }, 'quietest to busiest minute, rec/sec'),
+                h(
+                  { alignItems: 'center', gap: 14, marginTop: 10 },
+                  h({ fontSize: 30, fontWeight: 700 }, int(range.low.perSecond)),
+                  h({ flex: 1, height: 16, borderRadius: 8, backgroundImage: `linear-gradient(90deg, ${mixColor(C.bsky, C.card, 0.2)}, ${C.bsky})` }),
+                  h({ fontSize: 30, fontWeight: 700 }, int(range.high.perSecond)),
+                ),
+                h({ justifyContent: 'space-between', fontSize: 20, color: C.muted, marginTop: 6 }, h({}, utcClock(range.low.minute)), h({}, utcClock(range.high.minute))),
+              )
+            : null,
+          rows.length
+            ? h({ flexDirection: 'column', marginTop: range ? 22 : 'auto' }, ...rows.map(([label, value], i) => todayRow(label, value, i === 0)))
+            : null,
+        )
+      : null,
   );
 }
 

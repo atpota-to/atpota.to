@@ -4,7 +4,7 @@
 // and when gates/weather.js finds a moment worth a post (the daily report, a
 // storm, an hour well off usual, a more mixed sky, a new app) and the caps allow
 // one, it hands Poe that moment. Poe reads the station and answers with a post or
-// "skip" on /weather-draft. The draft goes through the weather gates and, when
+// "skip" on the callback URL replies use. The draft goes through the weather gates and, when
 // WEATHER_POSTS=post, is posted from Poe's account with a link card to the weather
 // page, whose og:image is the page's live weather card.
 //
@@ -342,7 +342,7 @@ export async function weatherTick({ nowMs = Date.now(), deps = defaultDeps } = {
 
 // --- Poe's answer -------------------------------------------------------------------
 
-/** Validate and store a draft from POST /weather-draft. Returns { status, body, id? }. */
+/** Validate and store a weather draft from the callback URL (callback.js). Returns { status, body, id? }. */
 export function receiveWeatherDraft(body) {
   if (!isObject(body)) return { status: 400, body: { error: 'BadRequest' } };
   const { key, momentId, text, links } = body;

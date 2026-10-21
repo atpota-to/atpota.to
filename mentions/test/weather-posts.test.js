@@ -397,3 +397,34 @@ test('facts carry the trigger and the sky around it', () => {
   assert.equal(facts.newToday[0].domain, 'songnario.app');
   assert.deepEqual(Object.keys(factsFor({ kind: 'storm', subject: 'x', trigger: { perSecond: 1 } }, null, null)), ['timeZone', 'trigger']);
 });
+
+test('a weather draft comes back on the reply callback URL, told apart by its momentId', async () => {
+  clear();
+  const { startCallbackServer } = await import('../src/callback.js');
+  const w = fakeWorld();
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  config.weather.mode = 'draft';   // held, so nothing reaches for the network
+  const server = startCallbackServer({ stats: { callbackUnauthorized: 0, callbackInvalid: 0 } });
+  await new Promise((resolve) => (server.listening ? resolve() : server.once('listening', resolve)));
+  const url = `http://127.0.0.1:${server.address().port}/callback`;
+  const body = JSON.stringify({ key: 'http:1', momentId: `wx-${asked.id}`, text: 'breezy skies today', links: [] });
+  try {
+    assert.equal((await fetch(url, { method: 'POST', body })).status, 401);
+    const res = await fetch(url, { method: 'POST', headers: { 'x-atpotato-secret': config.sharedSecret }, body });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true });
+    const again = await fetch(url, { method: 'POST', headers: { 'x-atpotato-secret': config.sharedSecret }, body });
+    assert.deepEqual(await again.json(), { ok: true, ignored: true });
+    for (let i = 0; i < 50 && db.prepare('SELECT status FROM weather_post WHERE id = ?').get(asked.id).status === 'drafted'; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(db.prepare('SELECT status FROM weather_post WHERE id = ?').get(asked.id).status, 'held');
+    // a malformed one is a 400, not a reply draft
+    const bad = await fetch(url, { method: 'POST', headers: { 'x-atpotato-secret': config.sharedSecret },
+      body: JSON.stringify({ momentId: 'nope', text: 'x' }) });
+    assert.equal(bad.status, 400);
+  } finally {
+    config.weather.mode = 'post';
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
