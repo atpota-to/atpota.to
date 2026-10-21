@@ -1,14 +1,18 @@
 /**
  * Fills scripts/og-cards.html with the copy each page shows right now, so the Open Graph
  * cards follow the site: the home hero and Poe's nudge, the /guides hero and every guide
- * it lists, and the blog hero (whose name and tagline come from the publication record).
+ * it lists, the blog hero (whose name and tagline come from the publication record), the
+ * garden's heading and description, and the home page's Poe tile, which also makes the
+ * share card for chatting with Poe.
  *
  * Runs in the card page, which fetches the pages from the dev server it is served by.
  * readCards() takes any page loader, so tests run it on the same HTML the build serves.
  * A card that can't be read is reported, not drawn, and keeps its committed image.
  */
 
-export type CardKind = 'home' | 'guides' | 'guide' | 'blog';
+import { drawFlower, sampleVariant, seedVariant, type FlowerKind } from '../src/scripts/flowers.js';
+
+export type CardKind = 'home' | 'guides' | 'guide' | 'blog' | 'garden' | 'poe';
 
 export interface CardData {
   /** The image's name in public/og or dist/og, without ".png". */
@@ -18,7 +22,7 @@ export interface CardData {
   lede: string;
   /** Section chip (guides, blog). */
   chip?: string;
-  /** Author handle with its @ (guide, blog). */
+  /** Author handle with its @ (guide, blog, poe). */
   handle?: string;
   /** Poe's speech bubble (home). */
   bubble?: string;
@@ -39,6 +43,12 @@ export type LoadPage = (path: string) => Promise<Document>;
 function text(doc: Document, path: string, selector: string): string {
   const value = doc.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim();
   if (!value) throw new Error(`${path} has nothing at ${selector}`);
+  return value;
+}
+
+function meta(doc: Document, path: string, name: string): string {
+  const value = doc.querySelector(`meta[name="${name}"]`)?.getAttribute('content')?.trim();
+  if (!value) throw new Error(`${path} has no <meta name="${name}">`);
   return value;
 }
 
@@ -119,7 +129,29 @@ export async function readCards(load: LoadPage): Promise<CardResult[]> {
     };
   });
 
-  return Promise.all([home, guides, ...guidePages, blog]);
+  const garden = attempt('garden', async () => {
+    const doc = await load('/garden');
+    return {
+      name: 'garden',
+      kind: 'garden',
+      title: text(doc, '/garden', '#garden-title'),
+      lede: meta(doc, '/garden', 'description'),
+    };
+  });
+
+  // Poe has no page of its own; its tile on the home page is the one place it says hi.
+  const poe = attempt('poe', async () => {
+    const doc = await load('/');
+    return {
+      name: 'poe',
+      kind: 'poe',
+      title: text(doc, '/', '#home-poe-title'),
+      lede: text(doc, '/', '.home-poe__text.only-touch'),
+      handle: handleFrom(doc, '/', 'a.home-poe__handle'),
+    };
+  });
+
+  return Promise.all([home, guides, ...guidePages, blog, garden, poe]);
 }
 
 /** One <section data-og> per card, from the page's <template data-og-kind> for its kind. */
@@ -137,6 +169,39 @@ export function renderCards(root: HTMLElement, cards: readonly CardData[]): HTML
     root.append(section);
     return section;
   });
+}
+
+/**
+ * The garden card's patch, row by row: a few of everything, the weather's own flowers
+ * among them, a couple of sprouts and seeds still coming up, and empty plots.
+ */
+export const PATCH: readonly (readonly (FlowerKind | 'sprout' | 'seed' | null)[])[] = [
+  ['sunflower', null, 'storm-lily', 'tulip'],
+  ['sprout', 'prism-aster', 'cosmos', null],
+  ['poppy', 'lotus', 'seed', 'hydrangea'],
+  [null, 'daisy', 'strawberry', 'sprout'],
+  ['violet', 'marigold', 'sprout', null],
+];
+
+/** Fills each [data-og-patch] with PATCH's plots, drawn the way the garden draws them. */
+export function plantPatches(root: HTMLElement): void {
+  const doc = root.ownerDocument;
+  for (const patch of root.querySelectorAll<HTMLElement>('[data-og-patch]')) {
+    PATCH.forEach((row, y) =>
+      row.forEach((plant, x) => {
+        const plot = doc.createElement('span');
+        plot.className = 'og-plot';
+        if (plant === 'sprout' || plant === 'seed') {
+          plot.append(drawFlower(doc, 'daisy', plant === 'sprout' ? 'sprout' : 'bud', seedVariant(x * 7 + y)));
+        } else if (plant) {
+          plot.append(drawFlower(doc, plant, 'bloom', sampleVariant(plant)));
+        } else {
+          plot.classList.add('og-plot--empty');
+        }
+        patch.append(plot);
+      }),
+    );
+  }
 }
 
 const MIN_TITLE_PX = 44;
@@ -196,6 +261,7 @@ export async function main(doc: Document = document): Promise<void> {
   }
   const drawn = results.flatMap((r) => ('card' in r ? [r.card] : []));
   const sections = renderCards(root, drawn);
+  plantPatches(root);
   await doc.fonts.ready;
   await imagesLoaded(root);
   root.querySelectorAll<HTMLElement>('.og-bubble').forEach(shrinkWrap);
