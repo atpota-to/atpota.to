@@ -1,0 +1,28 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.poe.memory",
+  "description": "Poe's notes about one person, published in Poe's own repo so anyone, that person included, can read what Poe remembers. One record per person, keyed by their DID, rewritten whenever Poe saves or removes a note, and deleted when they ask to be forgotten.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["subject", "notes", "updatedAt"],
+        "properties": {
+          "subject": { "type": "string", "format": "did", "description": "Who the notes are about; always the record key." },
+          "notes": { "type": "array", "items": { "type": "ref", "ref": "#note" } },
+          "updatedAt": { "type": "string", "format": "datetime", "description": "When any note last changed." }
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "required": ["text", "createdAt"],
+      "properties": {
+        "text": { "type": "string", "maxGraphemes": 300, "maxLength": 3000 },
+        "createdAt": { "type": "string", "format": "datetime", "description": "When Poe saved the note. For notes saved before 2026-10-21, when the stored version holding it arrived." }
+      }
+    }
+  }
+}

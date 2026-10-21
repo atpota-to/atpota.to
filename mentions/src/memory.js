@@ -88,8 +88,23 @@ export function storeMemory(did, content) {
     return { ok: true, needsPublish: false };
   }
   const shown = notes.filter(publishable);
-  db.saveMemoryDoc(did, content, shown, notes.length - shown.length);
+  db.saveMemoryDoc(did, content, shown, notes.length - shown.length, notedAt(notes, existing));
   return { ok: true, needsPublish: true };
+}
+
+/**
+ * When each note was saved, by its text: the time it was first seen here,
+ * which is when the agent saved it, give or take a hand-off. A note this
+ * droplet kept from before dates were recorded (2026-10-21) gets the time
+ * its version was stored, the closest it knows. A rewritten note is a new
+ * note, with a new date.
+ */
+function notedAt(notes, existing) {
+  const known = existing?.noted_at ? JSON.parse(existing.noted_at) : {};
+  const before = existing && !existing.noted_at ? new Set(notesFrom(existing.content) ?? []) : new Set();
+  const now = db.nowIso();
+  return Object.fromEntries(notes.map((note) =>
+    [note, known[note] ?? (before.has(note) ? existing.updated_at : now)]));
 }
 
 // One publish at a time per person. Each reads the latest stored version when
@@ -142,10 +157,13 @@ async function publishLatest(did, { api, didResolves }) {
       db.markMemoryPublished(did, doc.held_back ? 'every note held back, so no record' : 'no notes, so no record');
       return false;
     }
+    // Each note carries when it was saved (website/lexicons/to/atpota/poe/memory.json).
+    // Records from before 2026-10-21 held plain strings; the sweep rewrites them.
+    const dates = doc.noted_at ? JSON.parse(doc.noted_at) : {};
     await api.putRecord(MEMORY_COLLECTION, did, {
       $type: MEMORY_COLLECTION,
       subject: did,
-      notes,
+      notes: notes.map((text) => ({ text, createdAt: dates[text] ?? doc.updated_at })),
       updatedAt: doc.updated_at,
     });
     db.markMemoryPublished(did, doc.held_back ? `${doc.held_back} held back by the publish rules` : null);
