@@ -28,7 +28,7 @@ import { COPY as TEASER, initGardenTeaser } from '../src/scripts/garden-teaser.j
 import { initLatest, LOADING_LINES } from '../src/scripts/home.js';
 import { FIRST_ASK_MS, initNavWeather, MAX_NAV_CLOUDS, NAV_REFRESH_MS, renderNavSky } from '../src/scripts/nav-weather.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
-import { greeting, initPet, milestoneLine, PETS_KEY, petReaction } from '../src/scripts/pet.js';
+import { easterEgg, greeting, initPet, milestoneLine, PETS_KEY, petReaction } from '../src/scripts/pet.js';
 import { forgetReader, readReader, READER_KEY, rememberReader } from '../src/scripts/reader.js';
 import { initTagline, TAGLINES } from '../src/scripts/tagline.js';
 import {
@@ -139,6 +139,34 @@ describe('poe remembers you', () => {
     img.click();
     expect(localStorage.getItem(PETS_KEY)).toBe('50');
     expect(document.querySelector('[data-pet-say]')!.textContent).toBe("50 pets. we're basically family");
+  });
+
+  it('has more milestones, long-streak reactions and easter eggs', () => {
+    expect(milestoneLine(1)).toContain('first');
+    expect(milestoneLine(404)).toContain('not found');
+    expect(milestoneLine(1337)).toContain('leet');
+    expect(milestoneLine(1500)).toBe('1500 pets. legend.');
+    expect(petReaction(20)).toMatchObject({ spin: true });
+    expect(petReaction(42).say).toContain('42');
+    expect(petReaction(43).say).toContain('friends');
+    expect(easterEgg(new Date(2026, 9, 31, 15))).toContain('boo');
+    expect(easterEgg(new Date(2026, 1, 14, 15))).toContain('valentine');
+    expect(easterEgg(new Date(2026, 5, 3, 2))).toContain('late');
+    expect(easterEgg(new Date(2026, 5, 3, 15))).toBeNull();
+  });
+
+  it('tells a frantic petter to slow down, once per streak', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 3, 15));
+    localStorage.setItem(PETS_KEY, '1000');
+    document.body.innerHTML = HERO();
+    initPet();
+    const img = document.querySelector<HTMLImageElement>('img[data-pet]')!;
+    const said = document.querySelector('[data-pet-say]')!;
+    for (let i = 0; i < 5; i++) img.click();
+    expect(['too fast! (@_@)', 'whoa whoa whoa', 'gentle pls', "i'm getting dizzy", 'turbo pets?!']).not.toContain(said.textContent);
+    img.click();
+    expect(['too fast! (@_@)', 'whoa whoa whoa', 'gentle pls', "i'm getting dizzy", 'turbo pets?!']).toContain(said.textContent);
   });
 });
 

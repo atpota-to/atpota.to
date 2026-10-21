@@ -10,8 +10,10 @@
  *   (petFlourish), so Poe never answers the same way twice. After PET_RESET_MS without
  *   a pet, everything settles back.
  * - Remembers: pets add up across visits (localStorage PETS_KEY), and some totals get
- *   a line of their own (milestoneLine). A reader who signed in on the blog is greeted
- *   by handle in the bubble (src/scripts/reader.ts).
+ *   a line of their own (milestoneLine). Long streaks get reactions too, the first pet
+ *   of a visit on a special day or late at night gets an easter egg (easterEgg), and
+ *   frantic petting gets told to slow down. A reader who signed in on the blog is
+ *   greeted by handle in the bubble (src/scripts/reader.ts).
  * - Counts: a reader signed in with Bluesky has their pets saved to their own repo
  *   (pet-sync.ts), so the count follows them across devices, and the tile shows it
  *   ([data-pet-count]). The higher of the saved count and this browser's wins, so pets
@@ -63,9 +65,16 @@ export function pickMotion(previous: PetMotion | undefined, random: () => number
 }
 
 const FLOURISH_FACES: readonly MascotFace[] = ['wow', 'kawaii', 'happy', 'wink'];
-const FLOURISH_LINES = ['boop', 'eep!', 'mrrp', 'hehe', '♪', 'oh!', '(˶ᵔ ᵕ ᵔ˶)', 'more pls', 'hm?'];
+const FLOURISH_LINES = [
+  'boop', 'eep!', 'mrrp', 'hehe', '♪', 'oh!', '(˶ᵔ ᵕ ᵔ˶)', 'more pls', 'hm?',
+  'tee hee', 'squish', 'blep', 'ah!', 'nom', 'mlem', '*happy noises*', 'boing', '♡', 'tickles!', 'hihi',
+];
 /** Past ten pets Poe keeps chatting now and then instead of repeating itself. */
-const FRIEND_LINES = ['you again (◕‿◕)', 'i could do this all day', 'ok one more', "i'm getting so round", 'purr?', 'best day ever', 'my fan club'];
+const FRIEND_LINES = [
+  'you again (◕‿◕)', 'i could do this all day', 'ok one more', "i'm getting so round", 'purr?', 'best day ever', 'my fan club',
+  'certified good potato', 'starch levels: rising', "don't stop now", 'i feel so seen', 'this is my cardio',
+  'you have nice hands', 'peak potato', 'is this love?', 'tell your friends', 'mashed with joy', 'ten outta ten',
+];
 
 /** Sometimes a quick face and a word on a pet that has no reaction of its own; null most of the time. */
 export function petFlourish(random: () => number = Math.random): PetReaction | null {
@@ -89,24 +98,84 @@ export interface PetReaction {
   blush?: boolean;
 }
 
+/** Long streaks (pets in a row) that get a line of their own. */
+const STREAK_REACTIONS: Readonly<Record<number, PetReaction>> = {
+  15: { face: 'wow', say: "15 in a row?! you're good at this" },
+  20: { face: 'happy', say: 'combo x20 ✦', spin: true, blush: true },
+  30: { face: 'kawaii', say: 'my fries are jealous', blush: true },
+  42: { face: 'wink', say: '42: the answer to everything', blush: true },
+  50: { face: 'happy', say: 'FIFTY. new record?', spin: true, blush: true },
+  75: { face: 'sleepy', say: 'so… relaxed… (˘ω˘)', blush: true },
+  100: { face: 'kawaii', say: '100 in a row. you are unstoppable', spin: true, blush: true },
+  200: { face: 'wow', say: 'do you need a snack break?', blush: true },
+};
+
 /** What Poe does on the nth pet in a row (1-based). Old friends (10+ pets on earlier visits) hear so. */
 export function petReaction(n: number, oldFriend = false): PetReaction {
   if (n === 3) return { face: 'wink', say: 'hehe' };
   if (n === 6) return { face: 'happy', say: 'stop it, you (⁄ ⁄•⁄ω⁄•⁄ ⁄)', blush: true };
   if (n === 8) return { face: 'happy', say: 'wheee', spin: true, blush: true };
+  const streak = STREAK_REACTIONS[n];
+  if (streak) return streak;
   if (n >= 10) return { face: 'kawaii', say: oldFriend ? 'still best friends (◕‿◕)' : "ok ok, we're friends now", blush: true };
   return {};
 }
 
+/** All-time pet totals with a line of their own. */
+const MILESTONES: Readonly<Record<number, string>> = {
+  1: 'our very first pet ♡',
+  10: '10 pets! a good start',
+  25: "that's 25 pets all time (◕‿◕)",
+  42: '42 pets. that means something',
+  50: "50 pets. we're basically family",
+  77: '77 pets. lucky potato ✦',
+  100: "100 pets! you're my favourite",
+  123: '123 pets. easy as abc',
+  150: '150 pets. sprouting a little',
+  200: "200 pets. i'd follow you anywhere",
+  250: "250 pets. i'm telling the other potatoes",
+  314: '314 pets. a slice of π',
+  365: '365 pets. one for every day',
+  404: '404 pets. pet not found… jk',
+  500: '500 pets. legend.',
+  777: '777 pets. jackpot! ✦✦✦',
+  1234: '1234 pets. counting is fun',
+  1337: '1337 pets. very leet',
+  2026: '2026 pets. a good year',
+  5000: "5000 pets. i'm framing this",
+  10000: '10,000 pets. you are poe now',
+};
+
 /** A line for some all-time pet totals, or null. */
 export function milestoneLine(total: number): string | null {
-  if (total === 25) return "that's 25 pets all time (◕‿◕)";
-  if (total === 50) return "50 pets. we're basically family";
-  if (total === 100) return "100 pets! you're my favourite";
-  if (total === 250) return "250 pets. i'm telling the other potatoes";
+  const line = MILESTONES[total];
+  if (line) return line;
   if (total >= 500 && total % 500 === 0) return `${total} pets. legend.`;
   return null;
 }
+
+/** A line for special days and hours, or null. Month is 1-based. */
+export function easterEgg(now: Date): string | null {
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const hour = now.getHours();
+  if (month === 1 && day === 1) return 'happy new year! ✦';
+  if (month === 2 && day === 14) return 'be my valentine? ♡';
+  if (month === 3 && day === 14) return 'happy π day (3.14…)';
+  if (month === 4 && day === 1) return "i'm actually a sweet potato";
+  if (month === 8 && day === 19) return 'national potato day!! ♪';
+  if (month === 10 && day === 31) return 'boo! i\'m a ghost potato';
+  if (month === 12 && (day === 24 || day === 25)) return 'merry potato-mas ✦';
+  if (month === 12 && day === 31) return 'one more pet before the year ends';
+  if (hour >= 0 && hour < 5) return "shh, it's late (˘ω˘)";
+  if (hour >= 5 && hour < 7) return 'up early? me too';
+  return null;
+}
+
+/** Pets this close together count as frantic. */
+const FRANTIC_MS = 1600;
+const FRANTIC_PETS = 6;
+const FRANTIC_LINES = ['too fast! (@_@)', 'whoa whoa whoa', 'gentle pls', "i'm getting dizzy", 'turbo pets?!'];
 
 /** The bubble's hint, with the reader's handle when it fits. */
 export function greeting(handle: string | null, touch: boolean): string | null {
@@ -244,6 +313,9 @@ export function initPet(root: ParentNode = document, opts: PetOptions = {}): voi
 
   let lastMotion: PetMotion | undefined;
   let lastFriendLine: string | undefined;
+  /** Times of the last few pets, to notice frantic petting. */
+  const recent: number[] = [];
+  let franticShown = false;
 
   /** Plays a motion with its own hop, tilt and speed, so no two pets look alike. */
   const move = (flip: boolean) => {
@@ -267,6 +339,7 @@ export function initPet(root: ParentNode = document, opts: PetOptions = {}): voi
 
   const settle = () => {
     count = 0;
+    franticShown = false;
     img.classList.remove('is-blushing');
     say(undefined);
     restoreMascot(img);
@@ -296,8 +369,21 @@ export function initPet(root: ParentNode = document, opts: PetOptions = {}): voi
       img.src = MASCOT_URLS[reaction.face];
     }
     if (reaction.blush) img.classList.add('is-blushing');
+    // easter eggs: frantic petting once per streak, special days on the first pet of a visit
+    const now = Date.now();
+    recent.push(now);
+    if (recent.length > FRANTIC_PETS) recent.shift();
+    const frantic = !franticShown && recent.length === FRANTIC_PETS && now - recent[0] < FRANTIC_MS;
+    if (frantic) {
+      franticShown = true;
+      img.dataset.mascotHold = '';
+      img.src = MASCOT_URLS.wow;
+    }
     const milestone = milestoneLine(total);
+    const egg = visit === 0 && count === 1 ? easterEgg(new Date(now)) : null;
     if (milestone) say(milestone);
+    else if (frantic) say(FRANTIC_LINES[Math.floor(Math.random() * FRANTIC_LINES.length)]);
+    else if (egg) say(egg);
     else if (reaction.say) say(reaction.say);
 
     visit += 1;
