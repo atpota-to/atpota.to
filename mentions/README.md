@@ -733,10 +733,13 @@ up under that key, never posted twice. The kill switch and a nap stop the watche
 asking at all. `npm run weather` lists the rows, newest first, with each draft
 and what the gates did with it.
 
-To turn it on, once the bot's weather channel is deployed: add `WEATHER_POSTS=post`
-to `/root/atpotato-mentions/.env` and `systemctl restart atpotato-mentions`, or
-`WEATHER_POSTS=draft` first to read a day of drafts with `npm run weather` before
-any go out.
+It is on by default (`WEATHER_POSTS=post`), so it starts with the deploy. To stop
+it, add `WEATHER_POSTS=off` to `/root/atpotato-mentions/.env` and
+`systemctl restart atpotato-mentions`; `WEATHER_POSTS=draft` keeps Poe drafting
+but holds every one, for reading with `npm run weather`. The kill switch stops it
+at once, without a restart, along with everything else Poe posts. Until the bot's
+weather channel is deployed, the agent refuses each moment and the watcher backs
+off for 15 minutes and asks again.
 
 ## nginx
 

@@ -294,12 +294,13 @@ function parseDispatch() {
 
 // --- weather posts ---------------------------------------------------------
 // Poe posting the Atmosphere's weather on its own account (weather-posts.js).
-//   off    nothing runs (the default)
+//   post   gated drafts are posted (the default, chosen by the operator on
+//          2026-10-21; stage 4 only)
 //   draft  the watcher asks Poe and gates its drafts, and holds every one: read
-//          them in the log or with `npm run weather` before going live
-//   post   gated drafts are posted (stage 4 only)
+//          them in the log or with `npm run weather`
+//   off    nothing runs
 function parseWeatherPosts() {
-  const mode = opt('WEATHER_POSTS', 'off').toLowerCase();
+  const mode = opt('WEATHER_POSTS', 'post').toLowerCase();
   if (!['off', 'draft', 'post'].includes(mode)) throw new Error(`WEATHER_POSTS must be off, draft or post, got ${mode}`);
   const apiBase = opt('WEATHER_API_BASE', 'https://atpota.to/api').replace(/\/+$/, '');
   if (!/^https:\/\/[^/]+(\/.*)?$/.test(apiBase)) throw new Error(`WEATHER_API_BASE must be an https URL: ${apiBase}`);
