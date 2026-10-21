@@ -14,11 +14,12 @@
  *
  * The site's typeface (Eigerdals) comes from an Adobe Fonts kit that only serves web pages,
  * so the card is set in Nunito (server/fonts, SIL Open Font License, OFL.txt). The fonts
- * and the art are read from the project's files: vercel.json includes them in this function.
+ * and the art are read from the project's files, each named by a literal URL from this
+ * module (FILES) so Vercel's file tracing bundles them with the function, wherever the
+ * function's working directory turns out to be. vercel.json names them too, to be sure.
  */
 
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { ImageResponse } from '@vercel/og';
 import { createAtmosphereHandlers, type Condition, type DiversityLevel, type Reading } from './atmosphere.js';
 import { methodNotAllowed } from './supabase-public.js';
@@ -40,13 +41,24 @@ export const CONDITION_TEXT: Record<Condition, string> = {
   stormy: 'stormy. somebody said something',
 };
 
+/**
+ * The files it draws with. Each is a literal `new URL(..., import.meta.url)` on purpose:
+ * that's what file tracing can follow (a path built at runtime it can't).
+ */
+export const FILES = {
+  regular: new URL('./fonts/nunito-400.woff', import.meta.url),
+  heavy: new URL('./fonts/nunito-800.woff', import.meta.url),
+  wordmark: new URL('../src/assets/wordmark.svg', import.meta.url),
+  sun: new URL('../src/assets/weather-sun.svg', import.meta.url),
+};
+
 /** Poe's face for each condition (src/assets/mascot). */
-export const FACES: Record<Condition, string> = {
-  calm: 'sleepy',
-  light: 'normal',
-  breezy: 'happy',
-  gusty: 'wink',
-  stormy: 'wow',
+export const FACES: Record<Condition, URL> = {
+  calm: new URL('../src/assets/mascot/potato-sleepy.svg', import.meta.url),
+  light: new URL('../src/assets/mascot/potato-normal.svg', import.meta.url),
+  breezy: new URL('../src/assets/mascot/potato-happy.svg', import.meta.url),
+  gusty: new URL('../src/assets/mascot/potato-wink.svg', import.meta.url),
+  stormy: new URL('../src/assets/mascot/potato-wow.svg', import.meta.url),
 };
 
 /** Clouds in the sky for a diversity index (cloudCount in src/scripts/weather-sky.ts). */
@@ -119,20 +131,21 @@ export function paintSun(svg: string): string {
   return out;
 }
 
-export async function loadAssets(root: string): Promise<Assets> {
-  const file = (path: string) => readFile(join(root, path));
-  const text = async (path: string) => (await file(path)).toString('utf8');
-  const font = async (weight: 400 | 800) => {
-    const buf = await file(`server/fonts/nunito-${weight}.woff`);
+export type ReadFile = (file: URL) => Promise<Buffer>;
+
+export async function loadAssets(read: ReadFile = (file) => readFile(file)): Promise<Assets> {
+  const text = async (file: URL) => (await read(file)).toString('utf8');
+  const font = async (file: URL, weight: 400 | 800) => {
+    const buf = await read(file);
     return { name: 'Nunito', data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, weight, style: 'normal' as const };
   };
   const conditions = Object.keys(FACES) as Condition[];
   const [regular, heavy, wordmark, sun, ...faces] = await Promise.all([
-    font(400),
-    font(800),
-    text('src/assets/wordmark.svg'),
-    text('src/assets/weather-sun.svg'),
-    ...conditions.map((c) => text(`src/assets/mascot/potato-${FACES[c]}.svg`)),
+    font(FILES.regular, 400),
+    font(FILES.heavy, 800),
+    text(FILES.wordmark),
+    text(FILES.sun),
+    ...conditions.map((c) => text(FACES[c])),
   ]);
   return {
     fonts: [regular, heavy],
@@ -292,8 +305,8 @@ export interface CardDeps {
   reading?: () => Promise<Reading>;
   /** Draws the PNG; default @vercel/og's ImageResponse. */
   render?: Render;
-  /** Where the fonts and art are read from; default the project root (process.cwd()). */
-  root?: string;
+  /** Reads the fonts and art (FILES, FACES); default the file system. */
+  read?: ReadFile;
   timeoutMs?: number;
   log?: (fields: { event: string; [k: string]: unknown }) => void;
 }
@@ -336,7 +349,7 @@ export function createCardHandlers(deps: CardDeps = {}) {
     if (request.method === 'HEAD') return new Response(null, { status: 200, headers: { ...headers, 'cache-control': CACHE } });
     const r = await read();
     const cache = r ? CACHE : CACHE_FALLBACK;
-    assets ??= loadAssets(deps.root ?? process.cwd());
+    assets ??= loadAssets(deps.read);
     assets.catch(() => (assets = null));
     try {
       const art = await assets;

@@ -11,6 +11,7 @@ import {
   CONDITION_TEXT,
   createCardHandlers,
   FACES,
+  FILES,
   HEIGHT,
   loadAssets,
   MAX_CLOUDS,
@@ -79,7 +80,7 @@ describe('the weather card', () => {
   });
 
   it("draws the reading: its rate, condition and diversity, and Poe's face for the weather", async () => {
-    const assets = await loadAssets(root);
+    const assets = await loadAssets();
     const tree = card(assets, READING);
     const text = words(tree).join(' ');
     expect(text).toContain('688');
@@ -89,23 +90,30 @@ describe('the weather card', () => {
     expect(text).toContain('lots of other apps about.');
     expect(text).toContain('the atmosphere at 2:05 pm utc, oct 21');
     expect(images(tree)).toContain(assets.poe.stormy);
-    expect(FACES.stormy).toBe('wow');
+    expect(FACES.stormy.pathname).toMatch(/\/potato-wow\.svg$/);
     // without a reading: the report's title on a plain day
     const plain = words(card(assets, null)).join(' ');
     expect(plain).toContain('the atmosphere weather report');
     expect(plain).not.toContain('rec/sec');
   });
 
-  it('every face it can make is a mascot that exists', async () => {
-    const assets = await loadAssets(root);
+  it('every file it draws with exists, named the way file tracing can follow', async () => {
+    const assets = await loadAssets();
     for (const [condition, face] of Object.entries(FACES)) {
-      expect(assets.poe[condition as keyof typeof FACES], face).toMatch(/^data:image\/svg\+xml;base64,/);
+      expect(assets.poe[condition as keyof typeof FACES], face.pathname).toMatch(/^data:image\/svg\+xml;base64,/);
+    }
+    // literal new URL(..., import.meta.url) for each, never a path built at runtime
+    const source = readFileSync(resolve(root, 'server/weather-card.ts'), 'utf8');
+    for (const file of [...Object.values(FILES), ...Object.values(FACES)]) {
+      const rel = file.pathname.slice(file.pathname.indexOf('/website/') + '/website/'.length);
+      const literal = rel.startsWith('server/') ? `./${rel.slice('server/'.length)}` : `../${rel}`;
+      expect(source, rel).toContain(`new URL('${literal}', import.meta.url)`);
     }
     expect(Buffer.from(assets.wordmark.split(',')[1]!, 'base64').toString()).not.toContain('currentColor');
   });
 
   it('answers a 1200x630 PNG drawn from the live reading, cached for a few minutes', async () => {
-    const res = await get(createCardHandlers({ reading: async () => READING, root, log: quiet }));
+    const res = await get(createCardHandlers({ reading: async () => READING, log: quiet }));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
     expect(res.headers.get('cache-control')).toBe(CACHE);
@@ -114,28 +122,28 @@ describe('the weather card', () => {
 
   it("draws the plain card, and keeps it for less time, when there's no reading or it's slow", async () => {
     const logged: string[] = [];
-    const down = createCardHandlers({ reading: async () => Promise.reject(new Error('down')), root, log: (f) => logged.push(f.event) });
+    const down = createCardHandlers({ reading: async () => Promise.reject(new Error('down')), log: (f) => logged.push(f.event) });
     const res = await get(down);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE_FALLBACK);
     expect(pngSize(Buffer.from(await res.arrayBuffer()))).toEqual({ width: WIDTH, height: HEIGHT });
     expect(logged).toEqual(['reading_error']);
 
-    const slow = createCardHandlers({ reading: () => new Promise(() => {}), root, timeoutMs: 20, log: quiet });
+    const slow = createCardHandlers({ reading: () => new Promise(() => {}), timeoutMs: 20, log: quiet });
     const late = await get(slow);
     expect(late.headers.get('cache-control')).toBe(CACHE_FALLBACK);
     await late.arrayBuffer();
   }, 30_000);
 
   it("sends people to the site's own card if it can't draw one", async () => {
-    const res = await get(createCardHandlers({ reading: async () => READING, root: '/nowhere', log: quiet }));
+    const res = await get(createCardHandlers({ reading: async () => READING, read: async () => Promise.reject(new Error('ENOENT')), log: quiet }));
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/og/home.png');
   });
 
   it("HEAD answers without reading the sky; anything else isn't allowed", async () => {
     let reads = 0;
-    const h = createCardHandlers({ reading: async () => (reads++, READING), root, log: quiet });
+    const h = createCardHandlers({ reading: async () => (reads++, READING), log: quiet });
     const head = await get(h, 'HEAD');
     expect(head.status).toBe(200);
     expect(head.headers.get('content-type')).toBe('image/png');
