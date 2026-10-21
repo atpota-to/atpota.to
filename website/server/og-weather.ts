@@ -121,7 +121,7 @@ export async function readCardData(deps: OgWeatherDeps = {}): Promise<CardData> 
 // ---------- drawing ----------
 
 /** A file that ships with the function (vercel.json includeFiles), by its path in website/. */
-async function asset(path: string): Promise<Buffer> {
+export async function asset(path: string): Promise<Buffer> {
   try {
     return await readFile(fileURLToPath(new URL(`../${path}`, import.meta.url)));
   } catch {

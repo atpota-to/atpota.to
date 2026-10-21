@@ -257,6 +257,10 @@ describe('/api/blog post', () => {
     expect(d.querySelector('meta[name="atproto:cid"]')!.getAttribute('content')).toBe('cid-3new');
     expect(d.querySelector('link[rel="canonical"]')!.getAttribute('href')).toBe('https://atpota.to/blog/issue-2');
     expect(d.querySelector('meta[property="article:published_time"]')!.getAttribute('content')).toBe('2026-10-12T09:00:00.000Z');
+    // no cover image: the issue's own card (server/og-dispatch.ts)
+    expect(d.querySelector('meta[property="og:image"]')!.getAttribute('content')).toBe('https://atpota.to/og/dispatch/3new.png');
+    expect(d.querySelector('meta[property="og:image:alt"]')!.getAttribute('content')).toMatch(/^Issue 2: <\/script>.* an issue of The Weekly Spud/);
+    expect(d.querySelector('meta[property="og:image:width"]')!.getAttribute('content')).toBe('1200');
     expect(d.title).toBe('Issue 2: </script><script>alert(1)</script> - The Weekly Spud');
     const ld = d.querySelector('script[type="application/ld+json"]')!;
     expect(JSON.parse(ld.textContent!).headline).toBe('Issue 2: </script><script>alert(1)</script>');

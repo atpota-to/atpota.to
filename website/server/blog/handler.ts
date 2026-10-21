@@ -82,20 +82,14 @@ function respond(method: string, body: string, status: number, type: string, cac
   });
 }
 
-export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
-  const env = deps.env ?? (() => process.env);
+/**
+ * The publication and its posts, cached in the instance for DATA_TTL_MS. Shared by the
+ * pages here and each post's Open Graph card (server/og-dispatch.ts).
+ */
+export function createBlogData(deps: Pick<BlogDeps, 'fetch' | 'now'> = {}): (config: BlogConfig) => Promise<BlogData> {
   const doFetch: Fetch = deps.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = deps.now ?? (() => Date.now());
-  const log =
-    deps.log ??
-    ((fields) => {
-      const line = JSON.stringify({ src: 'blog', ...fields });
-      if (fields.event.endsWith('_error')) console.warn(line);
-      else console.info(line);
-    });
-
   const dataCache = new TtlCache<Promise<BlogData>>(DATA_TTL_MS, now);
-  const shellCache = new TtlCache<Shell>(SHELL_TTL_MS, now);
 
   async function identityFor(did: string): Promise<Identity> {
     try {
@@ -121,6 +115,24 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
     pending.catch(() => dataCache.delete(key));
     return pending;
   }
+
+  return loadData;
+}
+
+export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
+  const env = deps.env ?? (() => process.env);
+  const doFetch: Fetch = deps.fetch ?? ((input, init) => globalThis.fetch(input, init));
+  const now = deps.now ?? (() => Date.now());
+  const log =
+    deps.log ??
+    ((fields) => {
+      const line = JSON.stringify({ src: 'blog', ...fields });
+      if (fields.event.endsWith('_error')) console.warn(line);
+      else console.info(line);
+    });
+
+  const loadData = createBlogData({ fetch: doFetch, now });
+  const shellCache = new TtlCache<Shell>(SHELL_TTL_MS, now);
 
   async function shellFor(request: Request, e: Env): Promise<Shell> {
     const origin = new URL(request.url).origin;

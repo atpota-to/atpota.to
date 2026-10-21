@@ -228,9 +228,9 @@ export interface El {
   type: string;
   props: { style?: Style; children?: Kid | Kid[]; src?: string; width?: number; height?: number };
 }
-type Kid = El | string;
+export type Kid = El | string;
 
-const C = {
+export const C = {
   bg: '#F4EEDF',
   paper: '#FFFDF7',
   card: '#FFFFFF',
@@ -256,12 +256,12 @@ const C = {
   bsky: '#1A73C9',
 } as const;
 
-function h(style: Style, ...kids: Array<Kid | null | false | undefined>): El {
+export function h(style: Style, ...kids: Array<Kid | null | false | undefined>): El {
   const children = kids.filter((k): k is Kid => k !== null && k !== false && k !== undefined && k !== '');
   return { type: 'div', props: { style: { display: 'flex', ...style }, children } };
 }
 
-function img(src: string, width: number, height: number, style: Style = {}): El {
+export function img(src: string, width: number, height: number, style: Style = {}): El {
   return { type: 'img', props: { src, width, height, style } };
 }
 
@@ -271,19 +271,19 @@ export function svgImage(svg: string, width: number, height: number, style: Styl
 }
 
 /** The card itself: the site's paper-coloured page with the tiles on it. */
-function page(...kids: Array<El | null | false>): El {
+export function page(...kids: Array<El | null | false>): El {
   return h({ width: CARD_WIDTH, height: CARD_HEIGHT, padding: 28, gap: 16, background: C.bg, fontFamily: 'signika', color: C.ink }, ...kids);
 }
 
-function tile(style: Style, ...kids: Array<Kid | null | false | undefined>): El {
+export function tile(style: Style, ...kids: Array<Kid | null | false | undefined>): El {
   return h({ position: 'relative', flexDirection: 'column', borderRadius: 40, overflow: 'hidden', ...style }, ...kids);
 }
 
-function wordmark(art: Art, color: string = C.brown, height = 38): El {
+export function wordmark(art: Art, color: string = C.brown, height = 38): El {
   return img(art.wordmark(color), Math.round((height * 874) / 218), height);
 }
 
-function chip(text: string, style: Style = {}): El {
+export function chip(text: string, style: Style = {}): El {
   return h(
     { alignItems: 'center', height: 44, padding: '0 20px', borderRadius: 999, background: C.card, color: C.soft, fontSize: 22, fontWeight: 600, ...style },
     text,

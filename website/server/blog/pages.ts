@@ -92,12 +92,25 @@ export function readingMinutes(text: string): number {
   return Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 }
 
-function clip(text: string, max: number): string {
+export function clip(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   if (flat.length <= max) return flat;
   const cut = flat.slice(0, max - 1);
   const space = cut.lastIndexOf(' ');
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.;:]+$/, '')}…`;
+}
+
+/** A post's own card (server/og-dispatch.ts), for a post without a cover image. */
+export function issueCardUrl(doc: BlogDocument): string {
+  return `${SITE_ORIGIN}/og/dispatch/${doc.rkey}.png`;
+}
+
+function issueCardTags(site: SiteInfo, doc: BlogDocument): string[] {
+  return [
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta property="og:image:alt" content="${escapeAttr(`${doc.title}: an issue of ${site.name}, with a happy potato standing on a dirt mound under green rays.`)}">`,
+  ];
 }
 
 interface HeadMeta {
@@ -106,6 +119,8 @@ interface HeadMeta {
   canonical: string | null;
   type: 'website' | 'article';
   image: string;
+  /** Size and alt for an image of our own; the blog's card has its own. */
+  imageTags?: string[];
   site: SiteInfo;
   record?: { uri: string; cid: string } | null;
   document?: BlogDocument;
@@ -128,7 +143,7 @@ function headHtml(m: HeadMeta): string {
     `<meta property="og:title" content="${escapeAttr(m.title)}">`,
     `<meta property="og:description" content="${escapeAttr(m.description)}">`,
     `<meta property="og:image" content="${escapeAttr(m.image)}">`,
-    ...(m.image === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_TAGS : []),
+    ...(m.image === DEFAULT_OG_IMAGE ? DEFAULT_OG_IMAGE_TAGS : (m.imageTags ?? [])),
     `<meta name="twitter:card" content="summary_large_image">`,
   );
   if (m.canonical) tags.push(`<meta property="og:url" content="${escapeAttr(m.canonical)}">`);
@@ -399,7 +414,8 @@ export function postPage(input: PostInput): Page {
       description,
       canonical,
       type: 'article',
-      image: doc.coverUrl ?? DEFAULT_OG_IMAGE,
+      image: doc.coverUrl ?? issueCardUrl(doc),
+      ...(doc.coverUrl ? {} : { imageTags: issueCardTags(site, doc) }),
       site,
       document: doc,
       record: { uri: doc.uri, cid: doc.cid },
