@@ -6,7 +6,9 @@ import { niceMax, segments } from '../src/scripts/weather-chart.js';
 import {
   accountChange,
   accountSummary,
+  bindExplainers,
   diversityParts,
+  EXPLAINERS,
   BLUESKY_NAMES,
   compactCount,
   coverageWords,
@@ -22,7 +24,8 @@ import {
   type History,
   type HistoryAccounts,
 } from '../src/scripts/weather-page.js';
-import { CONDITION_TEXT, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
+import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
+import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 
 // /weather: the atmosphere weather report, filled from one /api/atmosphere reading.
 
@@ -289,18 +292,18 @@ describe('records or accounts', () => {
     const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
     expect(minute.hidden).toBe(false);
     expect(text('[data-r-active]')).toBe('21,345');
-    expect(text('[data-r-acct-index]')).toBe("0.52% of the 21,345 accounts active just now wrote somewhere other than bluesky, spread across about 12 apps' worth.");
+    expect(text('[data-r-acct-index]')).toBe('0.52% of 21,345 active accounts wrote outside bluesky, across about 12 apps.');
     renderReport(report, READING);
     expect(minute.hidden).toBe(true);
-    expect(text('[data-r-acct-index]')).toBe("0.52% of the accounts heard just now wrote somewhere other than bluesky, spread across about 12 apps' worth.");
+    expect(text('[data-r-acct-index]')).toBe('0.52% of the accounts heard just now wrote outside bluesky, across about 12 apps.');
     // a reading from before the index went by accounts
     renderReport(report, { ...READING, diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 } });
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
   });
 
   it('words what an index is made of', () => {
-    expect(diversityParts(0, 0, 100)).toBe('none of the 100 accounts active just now wrote somewhere other than bluesky.');
-    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of the 100 accounts active just now wrote somewhere other than bluesky, all in about one app.');
+    expect(diversityParts(0, 0, 100)).toBe('none of 100 active accounts wrote outside bluesky.');
+    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote outside bluesky, all in about one app.');
   });
 
   it('ranks the apps elsewhere by accounts, or by records when the reading has no accounts', () => {
@@ -396,5 +399,57 @@ describe('records or accounts', () => {
     expect(compactCount(21_345)).toBe('21.3k');
     expect(compactCount(1_200_000)).toBe('1.2m');
     expect(compactCount(950)).toBe('950');
+  });
+});
+
+describe("what's this? Poe explains", () => {
+  it('puts a button by the diversity index\'s title, and leaves the long story to Poe', () => {
+    const tile = report.querySelector('.weather-diversity')!;
+    const button = tile.querySelector<HTMLButtonElement>('.weather-tile__titled > [data-poe-explain="diversity"]')!;
+    expect(button.previousElementSibling!.textContent).toBe('diversity index');
+    expect(button.getAttribute('aria-label')).toBe("what's the diversity index? ask poe");
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(tile.textContent).not.toMatch(/square root/);
+  });
+
+  it('opens Poe on the question and its answer, back to the button after', () => {
+    const asked: PoeExplanation[] = [];
+    const off = setExplainer((e) => {
+      asked.push(e);
+      return true;
+    });
+    try {
+      bindExplainers(report);
+      const button = report.querySelector<HTMLElement>('[data-poe-explain="diversity"]')!;
+      expect(button.hidden).toBe(false);
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      button.click(); // from the keyboard (no pointer: detail 0)
+      expect(asked.map((e) => [e.question, e.opener, e.via])).toEqual([
+        ["what's the diversity index?", button, 'pointer'],
+        ["what's the diversity index?", button, 'keyboard'],
+      ]);
+      expect(asked[0]!.answer).toBe(EXPLAINERS.diversity!.answer);
+    } finally {
+      off();
+    }
+  });
+
+  it('hides a button it has no answer for', () => {
+    report.insertAdjacentHTML('beforeend', '<button type="button" data-poe-explain="nonsense">?</button>');
+    bindExplainers(report);
+    expect(report.querySelector<HTMLElement>('[data-poe-explain="nonsense"]')!.hidden).toBe(true);
+  });
+
+  it("the answers are in Poe's voice, and the diversity index's says the page's own levels", () => {
+    for (const { question, answer } of Object.values(EXPLAINERS)) {
+      for (const words of [question, answer.replace(/`[^`]*`/g, '')]) {
+        expect(words).toBe(words.toLowerCase());
+        expect(words).not.toMatch(/[\u2014\u2013]/); // no em or en dashes
+      }
+      expect(answer.trim()).toMatch(/\(◕‿◕\)$|[.?!]$/);
+    }
+    const levels = EXPLAINERS.diversity!.answer;
+    expect(levels).toContain('0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme');
+    expect(DIVERSITY_SCALE.map(([, from]) => from)).toEqual([0, 3, 6, 8, 11]);
   });
 });

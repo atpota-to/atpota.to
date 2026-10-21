@@ -51,6 +51,42 @@ html[data-theme="dark"] {
   letter-spacing: -0.01em;
 }
 
+/* A title with a "what's this?" button by it (weather-page.ts bindExplainers). */
+.weather-tile__titled {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.weather-info {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.weather-info svg {
+  width: 20px;
+  height: 20px;
+}
+
+.weather-info:hover {
+  color: var(--text);
+}
+
+.weather-info:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
 .weather-tile__head {
   display: flex;
   flex-wrap: wrap;
@@ -621,12 +657,6 @@ html[data-theme="dark"] {
   margin-top: 10px;
   font-size: 14px;
   color: var(--text-soft);
-}
-
-.weather-diversity__about {
-  margin-top: auto;
-  font-size: 13px;
-  color: var(--muted);
 }
 
 /* A UV-style scale: five bands as wide as their ranges (0-3-6-8-11-13), one hue getting deeper. */

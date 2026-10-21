@@ -19,7 +19,7 @@ import { PoeIdentity, readWho, saveWho, type Who } from './identity';
 import { BLINK_GAP_MS, BLINK_MS, CHEER_MS, GLANCE_MS, WAKE_MS, WAVE_MS, idleGap, nextBeat, shouldNap, startIdle, type IdleBeat } from './idle';
 import { ERROR_MS, FOUND_MS, cornerMood, faceUrl, perchedMood, type Mood, type MoodState } from './moods';
 import { renderAnswer, splitTrailingFace } from './render';
-import { SAY_MS, setSpeaker, type PoeLine, type PoeSpeech } from './say';
+import { SAY_MS, setExplainer, setSpeaker, type PoeExplanation, type PoeLine, type PoeSpeech } from './say';
 import { ASKABLE_SELECTOR, currentSection, getAskableSelection, pillPosition, type Rect } from './selection';
 import { isSlashShortcut, isTypingTarget, otherModalOpen } from './shortcuts';
 import {
@@ -437,6 +437,7 @@ export class PoeWidget {
     this.on(win, 'poe:open', () => this.open({ opener: doc.activeElement, via: 'event' }));
     this.on(win, 'poe:cheer', () => this.cheer());
     this.cleanups.push(setSpeaker((line) => this.say(line)));
+    this.cleanups.push(setExplainer((explanation) => this.explain(explanation)));
     if (this.identity) {
       const off = this.identity.onChange(() => this.renderAccount());
       this.cleanups.push(off);
@@ -1023,7 +1024,8 @@ export class PoeWidget {
     // Asked for now, so a slow PDS overlaps with the rest; never longer than TOKEN_WAIT_MS.
     const tokenPromise = this.identity ? this.identity.token() : Promise.resolve(null);
     // Poe has answered before in this transcript; a fresh server conversation needs saying.
-    const hadAnswers = this.transcript.some((e) => e.role === 'poe');
+    // An answer written ahead of time (explain) was never the bot's to remember.
+    const hadAnswers = this.transcript.some((e) => e.role === 'poe' && !e.canned);
     const you: TranscriptEntry = { role: 'you', text: request.message };
     if (extra.quote) you.quote = extra.quote.slice(0, 300);
     this.pushEntry(you);
@@ -1203,6 +1205,12 @@ export class PoeWidget {
     if (force || this.isNearBottom()) this.log.scrollTop = this.log.scrollHeight;
   }
 
+  /** Scrolls the log so `node` sits at its top, a little way in. */
+  private scrollLogTo(node: HTMLElement): void {
+    if (!this.isOpen) return;
+    this.log.scrollTop += node.getBoundingClientRect().top - this.log.getBoundingClientRect().top - 12;
+  }
+
   /* ------------------------------------------------------------ announce */
 
   private announce(text: string): void {
@@ -1285,6 +1293,33 @@ export class PoeWidget {
   }
 
   /* ----------------------------------------------------------------- say */
+
+  /**
+   * A page's "what's this?" (say.ts explain): the chat opens on the reader's question and
+   * Poe's answer, written ahead of time, as a turn like any other, so a follow-up reads on
+   * from it. Asked again straight after, the chat just opens on it. While a turn is in
+   * flight the chat only opens. False when it can't open (another dialog is up).
+   */
+  explain(explanation: PoeExplanation): boolean {
+    this.open({ opener: explanation.opener ?? null, via: explanation.via ?? 'pointer' });
+    if (!this.isOpen) return false;
+    if (this.busy) return true;
+    const [you, poe] = this.transcript.slice(-2);
+    const again = you?.role === 'you' && you.text === explanation.question && poe?.role === 'poe' && poe.text === explanation.answer;
+    if (!again) {
+      this.pushEntry({ role: 'you', text: explanation.question });
+      this.pushEntry({ role: 'poe', text: explanation.answer, links: [], canned: true });
+      this.updatePlaceholder();
+      this.renderChips();
+    }
+    // the answer is long enough to want reading from the top: the question goes up top
+    const asked = this.renderedEntries[this.renderedEntries.length - 2]?.el;
+    if (asked) this.scrollLogTo(asked);
+    else this.scrollLog(true);
+    this.announce(`${COPY.answerAnnounce}${renderAnswer(explanation.answer, [], this.doc).plain}`);
+    this.setTurnMood('found', FOUND_MS);
+    return true;
+  }
 
   /**
    * A page's line in a chat bubble by the potato (say.ts). Null while the panel is open,

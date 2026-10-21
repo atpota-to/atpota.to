@@ -163,7 +163,8 @@ export const NOTE_CODES: readonly NoteCode[] = [
 
 export type TranscriptEntry =
   | { role: 'you'; text: string; quote?: string }
-  | { role: 'poe'; text: string; links: string[] }
+  // `canned`: written ahead of time (say.ts explain), so the bot behind Poe never saw it
+  | { role: 'poe'; text: string; links: string[]; canned?: true }
   | { role: 'note'; code: NoteCode; retryAfter?: number };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -184,7 +185,7 @@ export function parseEntry(value: unknown): TranscriptEntry | null {
     const links = Array.isArray(value.links)
       ? value.links.filter((l): l is string => typeof l === 'string' && l.startsWith('https://') && l.length <= 2048).slice(0, MAX_LINKS_PER_ENTRY)
       : [];
-    return { role: 'poe', text: value.text.slice(0, MAX_POE_TEXT), links };
+    return { role: 'poe', text: value.text.slice(0, MAX_POE_TEXT), links, ...(value.canned === true ? { canned: true as const } : {}) };
   }
   if (value.role === 'note') {
     if (typeof value.code !== 'string' || !(NOTE_CODES as readonly string[]).includes(value.code)) return null;

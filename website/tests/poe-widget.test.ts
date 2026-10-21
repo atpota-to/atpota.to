@@ -10,7 +10,7 @@ import { faceUrl } from '../src/poe/moods.js';
 import { MASCOT_ARM_URL, MASCOT_URLS, MASCOT_WAVE_URL } from '../src/scripts/mascot.js';
 import { PHONE_QUERY, type PoeWidget } from '../src/poe/ui.js';
 import { resetStoresForTests } from '../src/poe/storage.js';
-import { say, type PoeLine } from '../src/poe/say.js';
+import { explain, say, type PoeLine } from '../src/poe/say.js';
 
 /* ---------- helpers ---------- */
 
@@ -1097,6 +1097,57 @@ describe("a page's line (say.ts)", () => {
     mount();
     unmountPoe();
     expect(say(line())).toBeNull();
+  });
+});
+
+describe("a page's explanation (say.ts explain)", () => {
+  const ANSWER = "it's how much of the atmosphere isn't bluesky.\n\ni multiply two things:\n- the share outside `app.bsky.*`\n- the square root of the spread\n\nfor now (◕‿◕)";
+  const ask = (over: Partial<Parameters<typeof explain>[0]> = {}) => explain({ question: "what's the diversity index?", answer: ANSWER, ...over });
+
+  it('opens the chat on the question and its answer, written ahead of time, without asking anyone', () => {
+    vi.useFakeTimers();
+    const { fn, calls } = fakeFetch(() => okStream([]));
+    mount(fn);
+    expect(ask()).toBe(true);
+    expect(widget.opened).toBe(true);
+    const [you, poe] = bubbles();
+    expect(you!.textContent).toContain("what's the diversity index?");
+    expect(poe!.querySelectorAll('li')).toHaveLength(2);
+    expect(poe!.querySelector('code')!.textContent).toBe('app.bsky.*');
+    expect(poe!.querySelector('.poe-face')!.textContent).toBe('(◕‿◕)');
+    expect(calls).toHaveLength(0);
+    expect(stored()).toEqual([
+      { role: 'you', text: "what's the diversity index?" },
+      { role: 'poe', text: ANSWER, links: [], canned: true },
+    ]);
+    vi.advanceTimersByTime(100);
+    expect(widget.live.textContent).toMatch(/^poe says: it's how much of the atmosphere/);
+    expect($('.poe-potato img').getAttribute('src')).toBe(faceUrl('found'));
+  });
+
+  it('asked again straight away, just opens on it; focus goes back to the button', () => {
+    mount();
+    const button = $('#say-hi');
+    button.focus();
+    ask({ opener: button });
+    widget.close();
+    ask({ opener: button });
+    expect(bubbles()).toHaveLength(2);
+    widget.close();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('a written answer is not one the bot has to remember: no fresh-start note after it', async () => {
+    const { fn } = fakeFetch(() => okStream([['ready', { conversation: 'new' }], ['done', { text: 'because square roots grow slowly', links: [] }]]));
+    mount(fn);
+    ask();
+    await widget.send('why the square root?');
+    expect($('[data-code="fresh_start"]')).toBeNull();
+    expect(bubbles()).toHaveLength(4);
+  });
+
+  it('says no without a poe on the page', () => {
+    expect(ask()).toBe(false);
   });
 });
 

@@ -68,7 +68,13 @@
             </header>
 
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title">
-                <h2 class="weather-tile__title" id="weather-diversity-title">diversity index</h2>
+                <div class="weather-tile__titled">
+                    <h2 class="weather-tile__title" id="weather-diversity-title">diversity index</h2>
+                    <!-- Poe explains it in its chat (weather-page.ts EXPLAINERS, src/poe/say.ts explain) -->
+                    <button type="button" class="weather-info" data-poe-explain="diversity" aria-haspopup="dialog" aria-label="what's the diversity index? ask poe" title="what's this?">
+                        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
+                    </button>
+                </div>
                 <div class="weather-diversity__now">
                     <p class="weather-diversity__index" data-r-index>&ndash;</p>
                     <div>
@@ -81,7 +87,6 @@
                     <div class="weather-scale__names"><span>low</span><span>moderate</span><span>high</span><span>very high</span><span>extreme</span></div>
                 </div>
                 <p class="weather-diversity__accounts" data-r-acct-index hidden></p>
-                <p class="weather-diversity__about">how much of the atmosphere isn&#39;t bluesky, by who&#39;s writing rather than how much: the percent of active accounts that wrote with lexicons that aren&#39;t bluesky&#39;s (anything outside <code>app.bsky.*</code> and <code>chat.bsky.*</code>), times the square root of how many apps they&#39;re spread across (ten apps with as many accounts each count as ten; one app with nearly everyone, as about one). one account writing a thousand records still counts once. like the uv index, 0&ndash;2 is low and 11+ is extreme.</p>
             </section>
 
             <section class="tile weather-tile weather-mix" aria-labelledby="weather-mix-title">
