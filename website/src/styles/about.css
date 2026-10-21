@@ -128,47 +128,68 @@
   grid-template-columns: 150px minmax(0, 1fr);
   gap: 28px;
   padding: 44px 48px 48px;
+  /* stones and grain repeat at different sizes, and start somewhere else in every layer,
+     so the soil never lines up into a pattern */
   background:
-    radial-gradient(circle at 20% 30%, rgb(0 0 0 / 0.12) 0 5px, transparent 6px) 0 0 / 140px 120px,
-    radial-gradient(ellipse at 70% 80%, rgb(255 255 255 / 0.1) 0 7px, transparent 8px) 0 0 / 190px 150px,
+    url("../assets/scene/soil-stones.svg") var(--stones-at, 0 0) / 690px 470px,
+    url("../assets/scene/soil-grain.svg") var(--grain-at, 0 0) / 520px 380px,
     var(--layer);
 }
 
 /* Lighter toward the top. Each layer sits over the one below it, so its lumpy edge shows. */
 .timeline__year:nth-last-child(1) {
   --mix: 88%;
+  --stones-at: -120px -40px;
+  --grain-at: -60px -200px;
+  --edge-at: 0;
   z-index: 6;
 }
 
 .timeline__year:nth-last-child(2) {
   --mix: 68%;
+  --stones-at: -380px -210px;
+  --grain-at: -300px -90px;
+  --edge-at: -210px;
   z-index: 5;
 }
 
 .timeline__year:nth-last-child(3) {
   --mix: 50%;
+  --stones-at: -40px -330px;
+  --grain-at: -170px -20px;
+  --edge-at: -420px;
   z-index: 4;
 }
 
 .timeline__year:nth-last-child(4) {
   --mix: 34%;
+  --stones-at: -540px -120px;
+  --grain-at: -400px -260px;
+  --edge-at: -90px;
   z-index: 3;
 }
 
 .timeline__year:nth-last-child(5) {
   --mix: 24%;
+  --stones-at: -260px -400px;
+  --grain-at: -20px -150px;
+  --edge-at: -330px;
   z-index: 2;
 }
 
-/* each layer's lumpy bottom edge, over the layer below */
+/* each layer's lumpy bottom edge, over the layer below: bumps of uneven width and depth */
 .timeline__year::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -13px;
-  height: 14px;
-  background: radial-gradient(ellipse 34px 14px at 34px 0, var(--layer) 98%, transparent 100%) 0 0 / 68px 14px repeat-x;
+  bottom: -15px;
+  height: 18px;
+  background:
+    url("../assets/scene/soil-grain.svg") var(--grain-at, 0 0) / 520px 380px,
+    var(--layer);
+  -webkit-mask: url("../assets/scene/soil-edge.svg") var(--edge-at, 0) 0 / 640px 18px repeat-x;
+  mask: url("../assets/scene/soil-edge.svg") var(--edge-at, 0) 0 / 640px 18px repeat-x;
 }
 
 .timeline__label {
@@ -324,7 +345,8 @@
   padding: 40px 48px 44px;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background:
-    radial-gradient(ellipse at 30% 40%, rgb(255 255 255 / 0.06) 0 18px, transparent 19px) 0 0 / 120px 70px,
+    url("../assets/scene/soil-stones.svg") -300px -100px / 690px 470px,
+    url("../assets/scene/soil-grain.svg") -200px -60px / 520px 380px,
     color-mix(in oklab, var(--soil) 80%, black);
   color: var(--on-soil-soft);
   font-size: 17px;
