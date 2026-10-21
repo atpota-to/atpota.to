@@ -176,10 +176,17 @@ export function datedNote(text: string, now = Date.now()): string {
   return `[${new Date(now).toISOString().slice(0, 10)}] ${text.trim().replace(DATE_PREFIX, "")}`;
 }
 
+/**
+ * Room for a journal Poe writes in most days: about 80 notes of the usual
+ * length, against eve's default of 4,000 characters, about 25. A full journal
+ * refuses the save until Poe removes a note.
+ */
+export const JOURNAL_MAX_CHARACTERS = 12_000;
+
 // Both slots use the existing private Blob store, but only person memory
 // hands writes to the droplet. The slot namespace keeps their documents apart.
-export function privateFileMemory(): MemoryProvider {
-  const base = fileMemory({ backend: store });
+export function privateFileMemory(options: { maxCharacters?: number } = {}): MemoryProvider {
+  const base = fileMemory({ backend: store, maxCharacters: options.maxCharacters });
   return defineMemoryProvider({
     recall: {
       async "turn.started"(ctx) {

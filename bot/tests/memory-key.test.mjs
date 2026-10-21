@@ -22,7 +22,7 @@ for (const [file, from, to] of [
 }
 const { memoryKey, personNotesKey, PERSON_SLOT } = await import(new URL("memory-key.js", out));
 const { personScope } = await import(new URL("person-scope.js", out));
-const { datedNote, emptyNotes, forgetNotes, privateFileMemory, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
+const { JOURNAL_MAX_CHARACTERS, datedNote, emptyNotes, forgetNotes, privateFileMemory, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
   await import(new URL("published-memory.js", out));
 const { createMemoryLock } = await import("../node_modules/eve/dist/src/shared/memory-state.js");
 const { defaultNamespace } = await import("eve/memory");
@@ -82,6 +82,18 @@ test("journal notes are saved with the day they were saved, and person notes are
   const recalled = (await journal.recall["turn.started"](turn("life", "dated-life"))).messages[0].content;
   assert.match(recalled, /0: \[\d{4}-\d{2}-\d{2}\] posted my first dispatch/);
   assert.match(recalled, /saved that day \(UTC\)/);
+
+  // A journal written in most days has room well past eve's default 4,000 characters.
+  const roomy = privateFileMemory({ maxCharacters: JOURNAL_MAX_CHARACTERS });
+  const roomyTools = await roomy.tools(turn("life", "roomy-life"));
+  for (let i = 0; i < 40; i++) {
+    await roomyTools.save_memory.execute({ text: `found something new today, number ${i}, `.padEnd(150, "x") }, { abortSignal });
+  }
+  assert.match((await roomy.recall["turn.started"](turn("life", "roomy-life"))).messages[0].content, /39: \[/);
+  const cramped = await privateFileMemory().tools(turn("self", "cramped-self"));
+  await assert.rejects(async () => {
+    for (let i = 0; i < 40; i++) await cramped.save_memory.execute({ text: `fact ${i} `.padEnd(150, "x") }, { abortSignal });
+  }, /4,000-character limit/);
 
   const person = publishedFileMemory();
   await (await person.tools(turn("person", "undated-person"))).save_memory.execute({ text: "builds feeds" }, { abortSignal });

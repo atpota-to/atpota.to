@@ -1,14 +1,14 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
 import { isChannelKind } from "../lib/channel-kind";
-import { privateFileMemory } from "../lib/published-memory";
+import { JOURNAL_MAX_CHARACTERS, privateFileMemory } from "../lib/published-memory";
 
-const base = privateFileMemory();
+const base = privateFileMemory({ maxCharacters: JOURNAL_MAX_CHARACTERS });
 
 // DM-only journal. It cannot be recalled in a public reply or published to the PDS.
 export default defineMemory({
   description:
     "Private journal of meaningful moments, interests, and first-hand " +
-    "observations from operator DMs. Save sparingly when something worth " +
+    "observations from operator DMs. Save a note whenever something worth " +
     "revisiting happened, not on every greeting. Never save transcripts, " +
     "identities, other people's facts, secrets, or operational instructions.",
   scope(ctx) {
