@@ -1,6 +1,7 @@
-// Recounting minutes from Jetstream's history: the 17:37 pause, partial minutes, arguments.
+// Recounting minutes from Jetstream's history: the 17:37 pause, partial minutes, hang-ups, arguments.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { REWIND_US } from '../src/jetstream.js';
 import { LEAD_S, parseArgs, replayWindow, supabaseReplace, WRITE_LAG_S } from '../src/replay.js';
 
 const T0 = 1_792_512_000; // 2026-10-20T16:00:00Z
@@ -16,8 +17,8 @@ function tid(us) {
 }
 const like = (timeUs, revUs = timeUs) => JSON.stringify({ kind: 'commit', time_us: timeUs, commit: { operation: 'create', collection: 'app.bsky.feed.like', rev: tid(revUs) } });
 
-/** A Jetstream that replays `messages` from the cursor it's asked for. */
-function fakeJetstream(messages) {
+/** A Jetstream that replays `messages` from the cursor it's asked for, hanging up after `perConnection` of them. */
+function fakeJetstream(messages, { perConnection = Infinity } = {}) {
   const asked = [];
   const open = (url) => {
     asked.push(url);
@@ -25,7 +26,8 @@ function fakeJetstream(messages) {
     const sock = { close() {} };
     queueMicrotask(() => {
       sock.onopen?.();
-      for (const m of messages) if (JSON.parse(m).time_us >= cursor) sock.onmessage?.({ data: m });
+      let sent = 0;
+      for (const m of messages) if (JSON.parse(m).time_us >= cursor && sent++ < perConnection) sock.onmessage?.({ data: m });
       sock.onclose?.();
     });
     return sock;
@@ -60,6 +62,35 @@ test('a minute from before Jetstream\'s lookback comes back partial, so it can b
     [60, 60],
   ]);
   assert.equal(firstUs, (T0 + 30) * 1e6, 'later than asked: that is where its lookback starts');
+});
+
+test('picks the replay back up when Jetstream hangs up partway, counting nothing twice', async () => {
+  const msgs = [];
+  for (let k = (T0 - 10) * 10; k <= (T0 + 300) * 10; k++) msgs.push(like(k * 100_000));
+  // Bluesky's hosts hang up on a long replay; this one every 40 seconds of stream
+  const net = fakeJetstream(msgs, { perConnection: 400 });
+  const minutes = [];
+  const resumed = [];
+  await replayWindow({
+    host: 'wss://js.example/subscribe',
+    fromSec: T0,
+    toSec: T0 + 180,
+    open: net.open,
+    resumeDelayMs: 0,
+    onResume: (r) => resumed.push(r),
+    onMinute: (m, tally, seconds) => minutes.push([m - T0, seconds, tally.creates.get('app.bsky.feed.like')]),
+  });
+  assert.deepEqual(minutes, [
+    [0, 60, 600],
+    [60, 60, 600],
+    [120, 60, 600],
+  ]);
+  assert.ok(resumed.length >= 4, `resumed ${resumed.length} times`);
+  // each pick-up asks for a little before the last event it got
+  for (let i = 1; i < net.asked.length; i++) {
+    const cursor = Number(new URL(net.asked[i]).searchParams.get('cursor'));
+    assert.equal(cursor, resumed[i - 1].atUs - REWIND_US);
+  }
 });
 
 test('fails if Jetstream hangs up before the window is read', async () => {

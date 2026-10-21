@@ -183,7 +183,9 @@ It rewrites a minute's row and all its app rows, then re-sums the hourly and dai
 roll-ups (`atmosphere_hour_app`, `atmosphere_day_app`) from `--from` on. It's safe while the live station runs:
 `--to` must be at least 3 minutes ago, and the station never goes back to a minute
 it has written. It takes up to 48 hours a run, and reads about 6 minutes of history
-in 30 s.
+in 30 s. Bluesky's hosts hang up on a long replay (on 2026-10-21, after about 95 s
+and 300 MB); it says `jetstream hung up at …; picking it back up` and carries on from
+there, counting nothing twice. It writes only once the whole window is read.
 
 **How far back.** Jetstream keeps a lookback of about a day and a half on Bluesky's
 hosts. Minutes before it come back partial, are listed, and are left alone.
@@ -319,6 +321,22 @@ again within seconds. The unit is
 [`atpotato-weather.service`](atpotato-weather.service), capped at MemoryMax=256M
 and CPUQuota=50%. Measured on 2026-10-20: ~7% of one core and 30–70 MB.
 
+**Falling behind.** A replay only helps if it runs faster than the live stream. With
+the unit's half a core it can do about 7× on a quiet box, so even 30 minutes of
+replay is back in about 5. On a busy box it may not keep up: on 2026-10-21, with the
+archive backfill running alongside, it replayed at a fifth of real time, fell further
+behind every second, and `/v1/now` had nothing to give for over an hour. So once the
+stream is more than a minute behind, `src/jetstream.js` times how fast it's catching
+up, and if it won't be back within 5 minutes it gives the replay up and reconnects at
+the live tail. The live reading comes back at once; the minutes it skipped aren't
+written (or are written partly covered), and it logs them:
+
+```bash
+journalctl -u atpotato-weather -o cat | grep 'skipping to the live tail'   # gapFrom, gapTo
+```
+
+Fill them with `src/replay.js` (above) while they're inside Jetstream's lookback.
+
 ## Files
 
 ```
@@ -326,7 +344,7 @@ src/atmosphere.js  counting rules (copy of the reference) + mergeTally
 src/accounts.js    who counts as an active account, per-second lists, the reading's `accounts`
 src/hll.js         HyperLogLog sketches: hashing, merging, counting, bytes
 src/station.js     per-second buckets, coverage, rolling window, minute sums
-src/jetstream.js   the connection: cursor, replay dedupe, fallback, backoff, stall watchdog
+src/jetstream.js   the connection: cursor, replay dedupe, fallback, backoff, stall and catch-up watchdogs
 src/clock.js       when a record was made: its rev, within limits, else time_us
 src/writer.js      minute rows, Supabase upserts, retries
 src/rollup.js      accounts by hour, day and month: merged in memory, written every 5 minutes
