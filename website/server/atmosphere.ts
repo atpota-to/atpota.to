@@ -27,7 +27,8 @@
 
 import { TtlCache } from './blog/atproto.js';
 
-export const JETSTREAMS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-east.bsky.network/subscribe'] as const;
+/** Bluesky's us-east hosts share one address, so the fallback is in us-west: the same firehose, somewhere else. */
+export const JETSTREAMS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe'] as const;
 
 export const COLLECTIONS = {
   posts: 'app.bsky.feed.post',
@@ -431,8 +432,11 @@ export function sample(open: OpenSocket, url: string, now: () => number, sampleM
       reject(error instanceof Error ? error : new Error('could not open socket'));
       return;
     }
-    timers.push(setTimeout(() => finish(new Error('jetstream did not connect')), connectMs));
+    const connecting = setTimeout(() => finish(new Error('jetstream did not connect')), connectMs);
+    timers.push(connecting);
     socket.onopen = () => {
+      // connected: the sample may well run longer than the connect timeout
+      clearTimeout(connecting);
       opened = true;
       started = now();
       timers.push(setTimeout(() => finish(null), sampleMs));

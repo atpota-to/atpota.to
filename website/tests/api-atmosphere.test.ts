@@ -5,6 +5,7 @@ import {
   appDomain,
   CACHE_LIVE,
   CACHE_OK,
+  CONNECT_TIMEOUT_MS,
   conditionFor,
   fromStation,
   STATION_URL,
@@ -20,6 +21,7 @@ import {
   jetstreamUrl,
   metricOf,
   sample,
+  SAMPLE_MS,
   type SocketLike,
 } from '../server/atmosphere.js';
 
@@ -171,6 +173,27 @@ describe('reading the firehose', () => {
     expect(r.perSecond).toEqual({ posts: 3, likes: 15, reposts: 0, follows: 0.5 });
     expect(r.condition).toBe('calm');
     expect(net.sockets[0]!.closed).toBe(true);
+  });
+
+  // Until 2026-10-21 the connect timeout kept running after the socket opened, and with the
+  // real timings (a 5 s sample, a 4 s connect timeout) it always fired first: every sample
+  // in production failed as "jetstream did not connect". The tests above use shorter samples.
+  it('samples for the full SAMPLE_MS once connected, with the real timings', async () => {
+    expect(SAMPLE_MS).toBeGreaterThan(CONNECT_TIMEOUT_MS);
+    vi.useFakeTimers();
+    let t = 0;
+    const net = opener([{ messages: [commit('app.bsky.feed.post'), commit('app.bsky.feed.like')] }]);
+    const reading = sample(net.open, 'wss://x', () => t);
+    const settled = reading.then(
+      (r) => r,
+      (e: Error) => e,
+    );
+    await vi.advanceTimersByTimeAsync(5);
+    t = SAMPLE_MS;
+    await vi.advanceTimersByTimeAsync(SAMPLE_MS + 10);
+    const r = await settled;
+    expect(r).not.toBeInstanceOf(Error);
+    expect((r as Awaited<typeof reading>).seconds).toBe(SAMPLE_MS / 1000);
   });
 
   it('refuses a silent stream, an error, or a socket that never opens', async () => {
