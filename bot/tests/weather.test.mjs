@@ -307,6 +307,20 @@ test("week: a station that has only just started says so instead of comparing or
   assert.equal("appsPerDay" in r, false);
 });
 
+test("week: a week from before the station listened live says how much came from the archive", () => {
+  const LIVE = Date.parse("2026-10-20T16:50:00Z");
+  const week = (now) => lib.weekReport({ week: WEEK_HISTORY }, now, "UTC");
+  const old = week(Date.parse("2026-10-19T19:00:00Z")).archive;
+  assert.deepEqual([old.percent, old.weekBeforePercent], [100, 100]);
+  assert.match(old.note, /^100% of this week and 100% of the week before came from Jetstream's archive, from before the station listened live \(oct 20, 16:50 utc\)/);
+  assert.match(old.note, /the diversity index read low$/, "both weeks alike: the changes between them stand");
+  const straddling = week(LIVE + 2 * DAY).archive;
+  assert.deepEqual([straddling.percent, straddling.weekBeforePercent], [71, 100]);
+  assert.match(straddling.note, /an app's change against the week before can be the archive's doing, not the app's$/);
+  assert.deepEqual(week(NOW).archive.percent, 0, "this week live, the week before mostly not");
+  assert.equal("archive" in week(LIVE + 2 * WEEK), false);
+});
+
 test("week: a part that can't be read is named, and the rest still comes back", async () => {
   const { impl } = fakeFetch({ "/api/weather-history?range=week": WEEK_HISTORY });
   const r = await lib.readWeather("week", "UTC", impl, NOW);

@@ -24,22 +24,43 @@ caught about four days of it"). Anything the report leaves out could not be work
 out: a part named in `unavailable`, a `weekBefore` with `available: false`, an app
 with no `change`. Leave it out rather than guess at it.
 
+Read `archive` too, when it's there. The station has listened live since october 20;
+a week from before that was filled in from Jetstream's archive, which keeps about a
+fifth of the edits other apps lean on. Say so once, in passing ("this week comes from
+jetstream's archive, which hears less of the other apps"). Records a second, the
+hours and the days stand as they are. The diversity index and the apps outside
+Bluesky read low for that part: give them, but never set them against a live week's.
+When `archive.note` says an app's change can be the archive's doing, leave the apps'
+changes out.
+
 ## What goes in
 
-Three short paragraphs at most. Pick what was interesting this week; you don't
-need all of it.
+The section has a fixed shape, so readers find the numbers in the same place every
+week. It reads like the rest of the issue: a paragraph, then a list like shipped
+and growing and shrinking, then the outlook.
 
-- **The headline.** The week's new records a second and its condition, against the
-  week before (`weekBefore.changePercent`), and the diversity index with its level
-  (and `weekBefore.mix`, how mixed a sky it was against the week before, when it's there).
-  Round the way a person would: "about 450 new records a second", "an index of 1.7".
-- **What moved the sky.** The busiest apps outside Bluesky (`apps`) and how each did
-  against the week before (`change`), especially one that is new or way up.
-  `sharePercent` is its share of everything written outside Bluesky. Active accounts
-  (`accounts`) when they say something the records don't.
-- **The extremes.** The busiest and quietest hour (`busiestHour`, `quietestHour`),
-  the busiest day in `days`, and the month's busiest and quietest day (`month`).
-- **The outlook.** Last, in its own paragraph. See below.
+1. **The headline**, one or two sentences. Open with the week's condition in bold
+   ("**a light week.**"), then the week's new records a second against the week
+   before (`weekBefore.changePercent`), and the diversity index with its level (and
+   `weekBefore.mix`, how mixed a sky it was against the week before, when it's
+   there). Round the way a person would: "about 450 new records a second", "an
+   index of 1.7".
+2. **The week at a glance**, a list of two to four items. Each opens with a bold
+   label and a colon, the way the issue's other lists open with the app's name.
+   Pick the ones that say something this week:
+   - **busiest hour** and **quietest hour** (`busiestHour`, `quietestHour`), each
+     with its new records a second and its condition.
+   - **busiest day**, from `days`, or the month's busiest and quietest day (`month`)
+     when they fall in this week.
+   - **outside bluesky**: the busiest apps (`apps`) and how each did against the
+     week before (`change`), especially one that is new or way up. `sharePercent`
+     is its share of everything written outside Bluesky.
+   - **accounts**: active accounts (`accounts`), only when they say something the
+     records don't.
+3. **The outlook**, last, in its own paragraph, opening with "**the outlook.**" in
+   bold. See below.
+4. **The weather page's link**, exactly as `page` returned it, on a line of its own,
+   so it turns into a link card in Leaflet.
 
 The first issue with a weather section explains it in a sentence: the station on
 atpota.to counts every new record in the firehose, Bluesky's and every other app's,
@@ -76,6 +97,8 @@ morning", "keep an eye on tangled.sh, up 200% on the week before".
 ## Format
 
 The same as the rest of the issue: lowercase, plain sentences, short paragraphs,
-under a plain lowercase heading, "atmospheric conditions". It goes last, after
-growing and shrinking, so the issue ends looking ahead. Close the section with the
-weather page's link exactly as `page` returned it.
+under a plain lowercase heading, "atmospheric conditions". It goes after growing
+and shrinking and before your sign-off line, so the issue's last section looks
+ahead. When the issue's opening says what the dispatch covers, name the weather
+too ("...then write up what i found, ending with the weather from my weather
+station").

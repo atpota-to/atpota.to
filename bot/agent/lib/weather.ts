@@ -135,6 +135,31 @@ function heardPercent(seconds: number, spanMs: number): number {
 
 const changePercent = (now: number, before: number) => Math.round((now / before - 1) * 100);
 
+/**
+ * How much of a week, and of the week before, came from Jetstream's archive rather than
+ * the station listening live (LIVE_SINCE). Its numbers are real, but other apps lean on
+ * edits and the archive keeps about a fifth of them, so the model has to say so and not
+ * set an archive week's apps or diversity index against a live one's.
+ */
+function archiveOf(now: number) {
+  const percentOf = (from: number, to: number) => Math.round((100 * Math.max(0, Math.min(to, LIVE_SINCE) - from)) / (to - from));
+  const percent = percentOf(now - WEEK, now);
+  const weekBeforePercent = percentOf(now - 2 * WEEK, now - WEEK);
+  if (!percent && !weekBeforePercent) return {};
+  const live = local(LIVE_SINCE, "UTC", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return {
+    archive: {
+      percent,
+      weekBeforePercent,
+      note:
+        `${percent}% of this week and ${weekBeforePercent}% of the week before came from Jetstream's archive, from before ` +
+        `the station listened live (${live} utc). The archive keeps about a fifth of the edits other apps lean on, so ` +
+        "for that part the apps outside Bluesky, their accounts and the diversity index read low" +
+        (percent === weekBeforePercent ? "" : ", and an app's change against the week before can be the archive's doing, not the app's"),
+    },
+  };
+}
+
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const UTC_WEEKDAYS = ["sunday", ...WEEKDAYS.slice(0, 6)];
 
@@ -592,6 +617,7 @@ export function weekReport(parts: Parts, now: number, tz: string) {
     to: new Date(now).toISOString(),
     heardPercent: heard,
     ...(heard < 90 ? { note: `the station heard ${heard}% of these 7 days, so every number here covers only what it heard` } : {}),
+    ...archiveOf(now),
     perSecond: w.perSecond,
     condition: w.condition,
     records: { total: total.creates, bluesky: total.bluesky, elsewhere: total.elsewhere },
