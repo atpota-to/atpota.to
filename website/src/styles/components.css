@@ -335,18 +335,21 @@ a.tile.tile--soil:hover {
   padding: 9px 46px 9px 20px;
   border-radius: var(--radius-pill);
   background: var(--sky);
-  color: var(--brown);
+  color: var(--brown-on-sky);
   transition: background-color 1.2s var(--ease-out);
 }
 
 .site-header__brand:hover {
-  color: var(--brown);
+  color: var(--brown-on-sky);
 }
 
+/* Nudged down to sit optically centred: the "p" hangs further below the letters than
+   the "t"s rise above them, so centring the box leaves the letters looking high. */
 .site-header__brand .wordmark {
   position: relative;
   z-index: 1;
   height: 38px;
+  translate: 0 5%;
 }
 
 .site-header__sky {

@@ -21,6 +21,8 @@
 
   /* potato */
   --brown: #725B36;
+  /* the header's wordmark in its little sky: a deeper brown, so it stands out on the blue */
+  --brown-on-sky: #5A4527;
   --on-brown: #FCF8EE;
   --skin: #A58650;
   --flesh: #E3CE90;
@@ -137,6 +139,7 @@ html[data-theme="dark"] {
   --muted: #CDBE98;
 
   --brown: #E3CE90;
+  --brown-on-sky: var(--brown);
   --on-brown: #2A2116;
   --skin: #8C7146;
   --flesh: #B89E64;

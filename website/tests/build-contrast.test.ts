@@ -69,7 +69,7 @@ const PAIRS: Array<[string, string, number]> = [
   ['brown', 'paper', UI],
   ['brown', 'flesh-tint', UI],
   // the header's wordmark, in its little sky
-  ['brown', 'sky', UI],
+  ['brown-on-sky', 'sky', TEXT],
   ['on-sun', 'sun', TEXT],
   ['on-sun-soft', 'sun', TEXT],
   ['on-sun', 'sun-deep', TEXT],
