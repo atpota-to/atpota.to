@@ -470,3 +470,19 @@ test('without the weather card a post waits for it, a tick at a time, and is dro
   assert.equal(dropped.gate, 'no_card');
   assert.equal(late.posts.length, 0);
 });
+
+test("an operator's weather post counts for the caps but is never sent to Poe as a recent post", async () => {
+  clear();
+  const at = new Date(NOW - 3 * 3_600_000).toISOString();
+  db.prepare(`INSERT INTO weather_post (kind, subject, facts, status, post_text, posted_at, created_at, updated_at)
+    VALUES ('operator', 'dm:x', '{}', 'posted', 'by hand', ?, ?, ?)`).run(at, at, at);
+  const w = fakeWorld();
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  assert.equal(asked.kind, 'daily');
+  // the agent's schema only knows the watcher's own kinds
+  assert.deepEqual(w.dispatched[0].body.recent, []);
+  // and an hour later it holds the gap like any post
+  const recent = new Date(NOW - 30 * 60_000).toISOString();
+  db.prepare(`UPDATE weather_post SET posted_at = ? WHERE kind = 'operator'`).run(recent);
+  assert.equal(postGate(db.prepare('SELECT * FROM weather_post').all(), NOW, g), 'min_gap');
+});

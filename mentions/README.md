@@ -668,6 +668,34 @@ under six hours old. Otherwise "yes" is ordinary conversation and goes to Poe.
 by plain words ("announce that one please") goes to Poe instead of getting the
 usage.
 
+### Any post, in plain words: `propose_post`
+
+The same confirmation works for any post from Poe's account (`src/operator-posts.js`).
+An operator DMs Poe ("post about the weather right now", "nudge people to subscribe to
+the newsletter", "say good morning"), and Poe writes the post and calls its agent tool
+`propose_post` with the text and a card: `weather` (the live weather card for
+atpota.to/weather, in the forecast design), `newsletter` (atpota.to/blog, with the
+blog's own card) or `none`. The proposal comes on the callback URL, told apart by its
+`proposal`, so nginx needs nothing new:
+
+```
+{ "dmId": "<the operator DM Poe is answering>", "operatorDid": "did:...",
+  "proposal": { "text": "<the post>", "card": "weather" | "newsletter" | "none" } }
+```
+
+It is accepted only while that DM is `dispatched` to the agent, from an `ADMIN_DIDS`
+sender, at most ten calls per DM, and the text is checked (300 graphemes, no
+@handles, no link since the card carries it, no markdown), with the reason back to
+Poe when it fails. The exact post and its card go under Poe's reply, and a whole-message
+yes to that message posts it; the rules for what counts as that yes are the dispatch
+announcement's above. The card must load, or nothing is posted and the reply says
+why: a weather card is fetched by its own address, as weather posts do.
+
+The operator's yes is the approval, so these posts are not held to the weather
+posts' caps. A weather one is then recorded in `weather_post` (kind `operator`), so
+the automatic weather posts keep their 2-hour gap from it. The kill switch, a nap
+and `STAGE` below 4 stop it. Needs `OPERATOR_DM_ENABLED=true`, nothing more.
+
 ## Likes Poe proposes (`appreciate_post`)
 
 The agent's `appreciate_post` tool calls `POST /like-proposal { postUri, attempt }`

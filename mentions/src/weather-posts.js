@@ -23,7 +23,7 @@ import { isNapping } from './nap.js';
 import { faceRules } from './richtext.js';
 import { buildAnnouncement, defaultDeps as dispatchDeps, nextTid, ogContent, postUrl } from './dispatch.js';
 import {
-  WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
+  MOMENT_KINDS, WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
 } from './gates/weather.js';
 
 db.exec(`
@@ -258,8 +258,11 @@ function finish(id, status, extra = {}, from = null) {
 
 /** Poe's last few weather posts, newest first, so it doesn't repeat itself. */
 function recentPosts() {
+  // Only the watcher's own kinds: the agent's schema refuses any other, and an
+  // operator's weather post (operator-posts.js, kind 'operator') is here for the caps.
   return db.prepare(`SELECT kind, post_text AS text, posted_at AS postedAt FROM weather_post
-    WHERE status = 'posted' ORDER BY posted_at DESC LIMIT 5`).all();
+    WHERE status = 'posted' AND kind IN (${MOMENT_KINDS.map(() => '?').join(', ')})
+    ORDER BY posted_at DESC LIMIT 5`).all(...MOMENT_KINDS);
 }
 
 /**
