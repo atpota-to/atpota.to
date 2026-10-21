@@ -49,8 +49,8 @@ export const MAX_ROWS = 40;
 export const MAX_PLOTS = MAX_COLS * MAX_ROWS;
 /** The record key of someone's own garden. */
 export const OWN_PATCH_RKEY = 'self';
-/** The sizes offered for your own garden. */
-export const GARDEN_SIZES = { small: { cols: 6, rows: 4 }, medium: { cols: 8, rows: 6 }, large: { cols: 12, rows: 8 } } as const;
+/** Every new garden's size: the community garden's, so it fills the page and halves neatly on a phone. */
+export const GARDEN_SIZE = { cols: 12, rows: 8 } as const;
 /** A garden's name and note, in graphemes. */
 export const NOTE_MAX = 140;
 export const NAME_MAX = 40;

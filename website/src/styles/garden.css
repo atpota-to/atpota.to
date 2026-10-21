@@ -245,9 +245,8 @@ html[data-theme="dark"] {
   display: none;
 }
 
-/* The patch is as wide as its plots need at about 56px each (garden-page.ts sets
-   --garden-cols), never so narrow its controls crowd; who planted and the settings sit
-   beside it when there's room, under it when there isn't. */
+/* The patch runs the full width of the page, like the header above it; who planted and
+   the settings sit side by side under it when there's room. */
 .garden-level[data-level="garden"] {
   flex-direction: row;
   flex-wrap: wrap;
@@ -256,9 +255,17 @@ html[data-theme="dark"] {
 
 .garden-patch {
   box-sizing: border-box;
-  flex: 0 1 auto;
-  width: min(100%, calc(var(--garden-cols, 8) * 61px + 72px));
-  min-width: min(100%, 460px);
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* Full width leaves room to spare on a desktop, so the plots wrap half as many across a
+   little sooner than the home page's patch, while a whole row would still be cramped. */
+@container patch (max-width: 520px) {
+  .garden-patch .home-plots {
+    grid-template-columns: repeat(var(--plot-cols-narrow, 6), minmax(0, 1fr));
+    gap: 6px;
+  }
 }
 
 .garden-side {
@@ -336,43 +343,6 @@ html[data-theme="dark"] {
   outline-offset: 1px;
 }
 
-.garden-form__sizes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.garden-form__sizes legend {
-  margin-bottom: 6px;
-  padding: 0;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.garden-form__size {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 6px 14px 6px 10px;
-  border: 2px solid var(--line-strong);
-  border-radius: 14px;
-  font-size: 14px;
-  color: var(--text-soft);
-  cursor: pointer;
-}
-
-.garden-form__size strong {
-  color: var(--text);
-}
-
-.garden-form__size:has(input:checked) {
-  border-color: var(--brown);
-  background: var(--bg);
-}
 
 .garden-form__check {
   display: flex;
@@ -382,8 +352,7 @@ html[data-theme="dark"] {
   line-height: 1.4;
 }
 
-.garden-form__check input,
-.garden-form__size input {
+.garden-form__check input {
   width: 18px;
   height: 18px;
   margin: 2px 0 0;
