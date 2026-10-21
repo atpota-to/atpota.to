@@ -339,6 +339,8 @@ is worth more than the convenience of a client library.
 | `src/notifications.js` | the safety net |
 | `src/reconcile.js` | turns dispatched with no draft coming back |
 | `src/richtext.js` | grapheme counting and UTF-8 byte offsets |
+| `src/weather-posts.js` | Poe's weather posts: the watcher, the draft callback, the poster |
+| `src/gates/weather.js` | every decision about a weather post |
 
 ---
 
@@ -680,6 +682,64 @@ out at most once per post. A failed like is recorded in `likes` and not retried.
 This widened what the credential may write (2026-10-19): `app.bsky.feed.like`
 joined posts, notes and lessons. Follows, reposts and blocks are still refused,
 and likes are never deleted.
+
+## Weather posts (`WEATHER_POSTS`)
+
+Poe posts the Atmosphere's weather on its own account now and then: the day's
+report, and the moments the weather station catches. `src/weather-posts.js` is
+the watcher and the poster; every decision is in `src/gates/weather.js`.
+
+Every `WEATHER_POLL_MS` (5 minutes) the watcher reads the station through
+atpota.to's public endpoints, the ones `/weather` reads (`/api/atmosphere` and
+`/api/weather-almanac?tz=UTC`), and looks for a moment, most newsworthy first:
+
+| kind | when | once per |
+| --- | --- | --- |
+| `storm` | the station's last minute is stormy (600+ new records a second) | 12 hours |
+| `unusual` | the last hour is 1.4x busier or 0.65x as busy as usual for it, when the station heard at least 45 minutes of it | 12 hours |
+| `new_app` | an app the station never heard before has written 250+ records in its first day | 24 hours, and an app once |
+| `mixed` | the diversity index is 6 or more ("high") | 24 hours |
+| `daily` | the day's report, from 16:00 UTC | UTC day |
+
+Only the station's own readings count; a website sample is too short to call a
+storm on. App names are checked as domains and collections as NSIDs before Poe
+sees them. Poe is asked about one moment at a time, and not at all while
+3 weather posts went out in the last 24 hours (`weatherPostsPerDay`), one went
+out in the last 2 hours (`weatherMinGapMin`), or it has been asked 8 times in
+24 hours already, skips included (`weatherAsksPerDay`, the model bill). Every
+threshold is a `weather*` key in `gates.json`; `weatherKinds` lists the kinds it
+may ask about, so removing one turns it off.
+
+A moment goes to the agent as `POST /weather/moment` (shared secret) with the
+station's numbers and Poe's last five weather posts. Poe reads the station and
+answers with the post, or `skip`, on `DROPLET_CALLBACK_URL`, the URL a reply's
+draft comes back on; its `momentId` tells it from a reply, so nginx needs nothing
+new. The draft goes through
+the reply gates as a single post (length, markdown, non-answers, `@handles`), with
+no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
+same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
+posted with an `app.bsky.embed.external` card for the weather page, and the caps
+are checked again first. The card's image is the page's live weather card
+(`/og/weather.png`), fetched fresh to the minute in the design that suits the post
+(`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
+apps for a mixed sky or a new one, the day's chart for the daily report.
+With `WEATHER_POSTS=draft` it stops there as `held`, and counts against the caps
+as the post it would have been, so draft mode shows the cadence posting would have.
+
+Each moment is a `weather_post` row: `dispatched`, then `skipped`, `rejected`,
+`held`, `posted`, or `expired` (no draft in 15 minutes). The post's TID record
+key is stored before `createRecord`, so a post a crash leaves uncertain is looked
+up under that key, never posted twice. The kill switch and a nap stop the watcher
+asking at all. `npm run weather` lists the rows, newest first, with each draft
+and what the gates did with it.
+
+It is on by default (`WEATHER_POSTS=post`), so it starts with the deploy. To stop
+it, add `WEATHER_POSTS=off` to `/root/atpotato-mentions/.env` and
+`systemctl restart atpotato-mentions`; `WEATHER_POSTS=draft` keeps Poe drafting
+but holds every one, for reading with `npm run weather`. The kill switch stops it
+at once, without a restart, along with everything else Poe posts. Until the bot's
+weather channel is deployed, the agent refuses each moment and the watcher backs
+off for 15 minutes and asks again.
 
 ## nginx
 

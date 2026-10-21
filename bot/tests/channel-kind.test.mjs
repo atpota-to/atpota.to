@@ -8,7 +8,8 @@ import { test } from "node:test";
 // runtime ("channel:bluesky"), which is the case the bare-name checks missed.
 const stub = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig",
-  "agent/instructions/bluesky.ts", "agent/instructions/operator-dm.ts", "types/assets.d.ts",
+  "agent/instructions/bluesky.ts", "agent/instructions/operator-dm.ts", "agent/instructions/weather.ts",
+  "types/assets.d.ts",
   "--outDir", ".eve/channel-kind-test", "--rootDir", "agent", "--module", "esnext",
   "--moduleResolution", "bundler", "--target", "es2022", "--skipLibCheck", "--types", "node"],
   { cwd: new URL("..", import.meta.url) });
@@ -29,6 +30,9 @@ const bluesky = (await load("instructions/bluesky", [instructionsStub, kindImpor
   ['from "../lib/preview"', 'from "../lib/preview.mjs"'],
 ])).default;
 const operatorDm = (await load("instructions/operator-dm", [instructionsStub, kindImport])).default;
+const weather = (await load("instructions/weather", [instructionsStub, kindImport,
+  ['from "../skills/weather-post.md?raw"', `from "${stub('export default "---\\nname: weather-post\\n---\\nweather rules";')}"`],
+])).default;
 
 const turn = (definition, kind) => definition.events["turn.started"]({}, { channel: { kind } });
 
@@ -54,4 +58,14 @@ test("the operator DM instructions load only on an operator DM turn", async () =
   for (const kind of ["channel:bluesky", "channel:website", "channel:eve", "unknown"]) {
     assert.equal(await turn(operatorDm, kind), null, kind);
   }
+});
+
+test("the weather post rules load only on a weather turn", async () => {
+  assert.deepEqual(await turn(weather, "channel:weather"), { content: "weather rules" });
+  assert.deepEqual(await turn(weather, "weather"), { content: "weather rules" });
+  for (const kind of ["channel:bluesky", "channel:operator-dm", "channel:website", "channel:eve", "unknown"]) {
+    assert.equal(await turn(weather, kind), null, kind);
+  }
+  // and the weather channel never previews Bluesky mode, even locally
+  assert.equal(await turn(bluesky, "channel:weather"), null);
 });
