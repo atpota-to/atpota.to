@@ -454,6 +454,42 @@ html[data-theme="dark"] {
   gap: 6px;
 }
 
+/* With a plot picked, the picker and the button pop up beside it (garden.ts sets --card-x
+   and --card-y, as for a flower's card), and stay in the flow under the patch on a narrow
+   screen. */
+.home-patch__controls.is-floating {
+  position: absolute;
+  z-index: 5;
+  top: var(--card-y, 50%);
+  left: clamp(12px, calc(var(--card-x, 50%) - 160px), calc(100% - 332px));
+  box-sizing: border-box;
+  width: 320px;
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: 0 16px 40px rgba(28, 22, 14, 0.28);
+  justify-content: center;
+}
+
+.home-patch__controls.is-floating.is-above {
+  transform: translateY(-100%);
+}
+
+.home-patch__controls.is-floating .home-patch__mine,
+.home-patch__controls.is-floating .home-patch__dig {
+  display: none;
+}
+
+@container patch (max-width: 480px) {
+  .home-patch__controls.is-floating {
+    position: static;
+    width: auto;
+    transform: none;
+    border: 2px solid var(--line);
+    box-shadow: none;
+  }
+}
+
 .home-patch__kind {
   display: grid;
   place-items: center;
