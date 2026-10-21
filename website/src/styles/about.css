@@ -1,0 +1,371 @@
+/* The about page (about/index.html): a short bio up on the surface, and how atpotato grew
+   underneath it, a year to a layer of soil. Newest on top, darker the deeper you dig, and
+   each moment is a potato in its layer. */
+
+.about-page {
+  padding: 24px var(--gutter, 16px) 72px;
+}
+
+.about-page:focus {
+  outline: none;
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* ---------- the surface: sky, grass, poe ---------- */
+
+.about-surface {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 24px;
+  padding: 48px 48px 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(var(--sky), color-mix(in srgb, var(--sky) 55%, var(--paper)));
+}
+
+.about-surface__words {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 64px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.about-surface__title {
+  margin-bottom: 4px;
+  font-size: clamp(40px, 4.6vw, 64px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+.about-surface__poe {
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  width: 250px;
+  height: auto;
+  margin-bottom: -8px;
+}
+
+.about-surface__sprout {
+  position: absolute;
+  bottom: -4px;
+  width: 54px;
+  height: 50px;
+  background: url("../assets/sprout.svg") center bottom / contain no-repeat;
+}
+
+.about-surface__sprout--1 {
+  right: 8%;
+}
+
+.about-surface__sprout--2 {
+  right: 34%;
+  width: 40px;
+  height: 37px;
+}
+
+/* ---------- the grass the story's heading sits on ---------- */
+
+.about-story__head {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  gap: 6px;
+  padding: 26px 48px 30px;
+  background: var(--sage);
+}
+
+.about-story__head::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12px;
+  height: 13px;
+  background: radial-gradient(circle at 12px 14px, var(--sage) 11px, transparent 12px) 0 0 / 24px 14px repeat-x;
+}
+
+.about-story__title {
+  font-size: clamp(34px, 3.6vw, 48px);
+  line-height: 1.05;
+}
+
+.about-story__sub {
+  font-size: 18px;
+  color: var(--text-soft);
+}
+
+/* ---------- the layers: a year each, newest on top ---------- */
+
+.timeline,
+.timeline__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.timeline__year {
+  --mix: 18%;
+  --layer: color-mix(in oklab, var(--skin) var(--mix), var(--soil));
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 28px;
+  padding: 44px 48px 48px;
+  background:
+    radial-gradient(circle at 20% 30%, rgb(0 0 0 / 0.12) 0 5px, transparent 6px) 0 0 / 140px 120px,
+    radial-gradient(ellipse at 70% 80%, rgb(255 255 255 / 0.1) 0 7px, transparent 8px) 0 0 / 190px 150px,
+    var(--layer);
+}
+
+/* Lighter toward the top. Each layer sits over the one below it, so its lumpy edge shows. */
+.timeline__year:nth-last-child(1) {
+  --mix: 88%;
+  z-index: 6;
+}
+
+.timeline__year:nth-last-child(2) {
+  --mix: 68%;
+  z-index: 5;
+}
+
+.timeline__year:nth-last-child(3) {
+  --mix: 50%;
+  z-index: 4;
+}
+
+.timeline__year:nth-last-child(4) {
+  --mix: 34%;
+  z-index: 3;
+}
+
+.timeline__year:nth-last-child(5) {
+  --mix: 24%;
+  z-index: 2;
+}
+
+/* each layer's lumpy bottom edge, over the layer below */
+.timeline__year::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -13px;
+  height: 14px;
+  background: radial-gradient(ellipse 34px 14px at 34px 0, var(--layer) 98%, transparent 100%) 0 0 / 68px 14px repeat-x;
+}
+
+.timeline__label {
+  display: grid;
+  gap: 2px;
+  align-self: start;
+  width: fit-content;
+  padding: 12px 18px 14px;
+  border-radius: 20px;
+  background: var(--soil);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.08);
+  color: var(--on-soil);
+  line-height: 1;
+}
+
+.timeline__yr {
+  font-size: 40px;
+}
+
+.timeline__layer {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-soil-soft);
+}
+
+.timeline__items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+/* ---------- a moment: a potato, lumpy, a little tilted, with a couple of eyes ---------- */
+
+.moment {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  flex: 1 1 240px;
+  gap: 6px;
+  max-width: 330px;
+  padding: 26px 30px 30px;
+  border-radius: 46px 70px 52px 76px / 60px 46px 70px 52px;
+  background:
+    radial-gradient(circle at 88% 20%, rgb(114 91 54 / 0.45) 0 3px, transparent 4px),
+    radial-gradient(circle at 10% 76%, rgb(114 91 54 / 0.4) 0 2.5px, transparent 3.5px),
+    radial-gradient(circle at 62% 94%, rgb(114 91 54 / 0.35) 0 2px, transparent 3px),
+    #E3CE90;
+  color: var(--on-sun);
+  box-shadow: inset -8px -10px 0 rgb(165 134 80 / 0.35), 0 8px 0 rgb(0 0 0 / 0.12);
+  transform: rotate(-1.2deg);
+}
+
+.moment:nth-child(even) {
+  border-radius: 70px 44px 76px 50px / 48px 66px 50px 72px;
+  transform: rotate(1.4deg) translateY(10px);
+}
+
+.moment:nth-child(3n) {
+  border-radius: 56px 60px 44px 80px / 70px 50px 64px 46px;
+  transform: rotate(-0.4deg) translateY(-6px);
+}
+
+/* a golden potato, for the big ones */
+.moment--milestone {
+  background:
+    radial-gradient(circle at 86% 18%, rgb(255 255 255 / 0.7) 0 4px, transparent 5px),
+    radial-gradient(circle at 80% 28%, rgb(255 255 255 / 0.5) 0 2px, transparent 3px),
+    #FFCD5E;
+  box-shadow: inset -8px -10px 0 rgb(201 146 49 / 0.45), 0 0 0 6px rgb(255 217 120 / 0.35), 0 8px 0 rgb(0 0 0 / 0.12);
+}
+
+.moment__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgb(255 253 247 / 0.7);
+}
+
+.moment__icon img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.moment__icon--round {
+  border-radius: 50%;
+}
+
+.moment__icon--round img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.moment__icon--glyph svg {
+  width: 30px;
+  height: 30px;
+  color: #725B36;
+}
+
+.moment__date {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+}
+
+.moment__title {
+  font-size: 22px;
+  line-height: 1.15;
+  color: inherit;
+}
+
+.moment__stat {
+  display: grid;
+  margin: 4px 0 2px;
+}
+
+.moment__stat strong {
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.moment__stat span {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.moment__text {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.moment a,
+.moment a:hover {
+  color: inherit;
+}
+
+/* ---------- the bottom ---------- */
+
+.about-story__foot {
+  padding: 40px 48px 44px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background:
+    radial-gradient(ellipse at 30% 40%, rgb(255 255 255 / 0.06) 0 18px, transparent 19px) 0 0 / 120px 70px,
+    color-mix(in oklab, var(--soil) 80%, black);
+  color: var(--on-soil-soft);
+  font-size: 17px;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .about-surface {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 32px 20px 0;
+  }
+
+  .about-surface__words {
+    padding-bottom: 0;
+  }
+
+  .about-surface__poe {
+    width: 170px;
+  }
+
+  .about-story__head {
+    padding: 22px 20px 26px;
+  }
+
+  .timeline__year {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 32px 20px 40px;
+  }
+
+  .timeline__label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .timeline__yr {
+    font-size: 30px;
+  }
+
+  .moment {
+    max-width: none;
+  }
+
+  .about-story__foot {
+    padding: 32px 20px 36px;
+  }
+}

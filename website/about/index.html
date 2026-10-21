@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>about · atpotato</title>
+    <meta name="title" content="about · atpotato">
+    <meta name="description" content="atpotato is a small studio making the atmosphere a little more fun, grown by dame. dig down through how it grew, from open social in 2021 to a whole little patch.">
+    <link rel="canonical" href="https://atpota.to/about">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="atpotato">
+    <meta property="og:url" content="https://atpota.to/about">
+    <meta property="og:title" content="about · atpotato">
+    <meta property="og:description" content="atpotato is a small studio making the atmosphere a little more fun, grown by dame. dig down through how it grew, from open social in 2021 to a whole little patch.">
+    <meta property="og:image" content="https://atpota.to/og/home.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="atpotato: making the atmosphere a little more fun. poe, a smiling potato with an @ on its tummy, waves from a dirt mound under a yellow sunburst.">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/about.css">
+
+    <!-- Vercel Web Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js" vite-ignore></script>
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="about">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="about-page" tabindex="-1">
+        <div class="about">
+
+            <!-- the surface: sky, grass, and poe standing on top of everything below -->
+            <section class="about-surface" aria-labelledby="about-title">
+                <div class="about-surface__words">
+                    <p class="eyebrow">about</p>
+                    <h1 class="about-surface__title" id="about-title">every potato starts underground.</h1>
+                    <p>atpotato is a small studio making the atmosphere a little more fun, with apps, tools and guides for the open network bluesky is built on. some are useful, some are peaceful, and some are just silly.</p>
+                    <p>it's dug, planted and watered by <a href="https://bsky.app/profile/dame.is">dame</a>, who's been working in open, decentralized social software since 2021, and has been on bluesky since the invite-code days. everything here grew from that, one layer at a time.</p>
+                </div>
+                <img class="about-surface__poe" src="/src/assets/mascot/potato-kawaii.svg" alt="" width="260" height="212">
+                <span class="about-surface__sprout about-surface__sprout--1" aria-hidden="true"></span>
+                <span class="about-surface__sprout about-surface__sprout--2" aria-hidden="true"></span>
+            </section>
+
+            <!-- how it grew: a year to a layer of soil. The list runs oldest first, and the page
+                 stacks it newest on top (column-reverse), so the deeper you dig, the further back. -->
+            <section class="about-story" aria-labelledby="about-story-title">
+                <div class="about-story__head">
+                    <h2 class="about-story__title" id="about-story-title">how it grew</h2>
+                    <p class="about-story__sub">newest on top. the deeper you dig, the further back you go.</p>
+                </div>
+
+                <ol class="timeline" role="list">
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2021</span> <span class="timeline__layer" aria-hidden="true">bedrock</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--origin">
+                                <span class="moment__icon moment__icon--glyph"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="17" r="2.6"/><circle cx="19" cy="17" r="2.6"/><path d="M10.7 7.3 6.3 14.7M13.3 7.3l4.4 7.4M7.6 17h8.8"/></svg></span>
+                                <p class="moment__date"><time datetime="2021">2021</time></p>
+                                <h4 class="moment__title">dame starts working in open social</h4>
+                                <p class="moment__text">dame begins working professionally in open, decentralized social software, years before the atmosphere had a name.</p>
+                            </li>
+                        </ol>
+                    </li>
+
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2022</span> <span class="timeline__layer" aria-hidden="true">gravel</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--origin">
+                                <span class="moment__icon moment__icon--glyph"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 20.5 7.3v9.4L12 21.5l-8.5-4.8V7.3z"/><path d="M3.5 7.3 12 12l8.5-4.7M12 12v9.5"/></svg></span>
+                                <p class="moment__date"><time datetime="2022-07">jul 2022</time></p>
+                                <h4 class="moment__title">dame starts working at ipfs</h4>
+                                <p class="moment__text">ipfs gives every file an address made from what's inside it. atproto borrows the same trick, the cid, to fingerprint every record on the network.</p>
+                            </li>
+                        </ol>
+                    </li>
+
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2023</span> <span class="timeline__layer" aria-hidden="true">clay</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--origin">
+                                <span class="moment__icon moment__icon--round"><img src="https://cdn.bsky.app/img/avatar_thumbnail/plain/did:plc:gq4fo3u6tqzzdkjlwzpb23tj/bafkreibrss2qwswc3rg5xuf2wfm343ma5ejlcdndvweyje3j3srqwrlpqa" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2023-03-02">mar 2, 2023</time></p>
+                                <h4 class="moment__title">dame joins bluesky</h4>
+                                <p class="moment__text">back when you still needed an invite code. they start out as dame.bsky.social, and never really leave.</p>
+                            </li>
+                        </ol>
+                    </li>
+
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2025</span> <span class="timeline__layer" aria-hidden="true">subsoil</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--launch">
+                                <span class="moment__icon"><img src="/src/assets/projects/flushes.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2025-03">mar 2025</time></p>
+                                <h4 class="moment__title">flushes opens</h4>
+                                <p class="moment__text">the internet's bathroom: a tiny, silly app for status updates from the throne. the first thing to sprout.</p>
+                            </li>
+                            <li class="moment moment--origin">
+                                <span class="moment__icon"><img src="/src/assets/mascot/potato-normal.svg" alt="" width="48" height="39"></span>
+                                <p class="moment__date"><time datetime="2025-03-12">mar 12, 2025</time></p>
+                                <h4 class="moment__title">atpotato takes root</h4>
+                                <p class="moment__text">a potato with an @ on its tummy moves into atpota.to, to give all the little experiments a home.</p>
+                            </li>
+                            <li class="moment moment--launch">
+                                <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2025-08-19">aug 19, 2025</time></p>
+                                <h4 class="moment__title">anisota ecloses</h4>
+                                <p class="moment__text">a moth-themed bluesky client that deals your feed out as a deck of cards, and helps you be offline more.</p>
+                            </li>
+                            <li class="moment moment--milestone">
+                                <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2025-11">nov 2025</time> &ndash; <time datetime="2026-01">jan 2026</time></p>
+                                <h4 class="moment__title">anisota's harvest</h4>
+                                <p class="moment__stat"><strong>65,000</strong> <span>visitors</span></p>
+                                <p class="moment__text">a look back at your year on bluesky, starting with your most-used words. <a href="https://bsky.app/profile/bsky.app/post/3m6zx562tss2c">bluesky's own account</a> sent people to find theirs.</p>
+                            </li>
+                            <li class="moment moment--launch">
+                                <span class="moment__icon"><img src="/src/assets/projects/aturi.svg" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2025-12">dec 2025</time></p>
+                                <h4 class="moment__title">aturi launches</h4>
+                                <p class="moment__text">open any atproto link in the app you actually use, and peek at the records behind any account.</p>
+                            </li>
+                        </ol>
+                    </li>
+
+                    <li class="timeline__year">
+                        <h3 class="timeline__label"><span class="timeline__yr">2026</span> <span class="timeline__layer" aria-hidden="true">topsoil</span></h3>
+                        <ol class="timeline__items" role="list">
+                            <li class="moment moment--milestone">
+                                <span class="moment__icon"><img src="/src/assets/projects/flushes.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2026-08-04">aug 4, 2026</time></p>
+                                <h4 class="moment__title">flushes 2.0, for the trevor project</h4>
+                                <p class="moment__stat"><strong>$1,000</strong> <span>goal, nearly met on day one</span></p>
+                                <p class="moment__text">all-gender, always. the relaunch raised money for lgbtq+ young people.</p>
+                            </li>
+                            <li class="moment moment--launch">
+                                <span class="moment__icon"><img src="/src/assets/projects/anisota.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2026-08-19">aug 19, 2026</time></p>
+                                <h4 class="moment__title">anisota turns one</h4>
+                                <p class="moment__text">with post scheduling, muted word lists, and a logo that follows the phase of the moon.</p>
+                            </li>
+                            <li class="moment moment--milestone">
+                                <span class="moment__icon moment__icon--glyph"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.5l2.7 6 6.5.6-4.9 4.3 1.5 6.4L12 16.5 6.2 19.8l1.5-6.4L2.8 9.1l6.5-.6z"/></svg></span>
+                                <p class="moment__date"><time datetime="2026-09">sep 2026</time></p>
+                                <h4 class="moment__title">38 influential posters</h4>
+                                <p class="moment__stat"><strong>110,000+</strong> <span>votes, from about 15,000 people</span></p>
+                                <p class="moment__text">a ballot for bluesky's most influential posters, made with @pds.dad. every vote was a record in the voter's own repo.</p>
+                            </li>
+                            <li class="moment moment--launch">
+                                <span class="moment__icon"><img src="/src/assets/projects/turtlemeat.png" alt="" width="48" height="48"></span>
+                                <p class="moment__date"><time datetime="2026-09-10">sep 10, 2026</time></p>
+                                <h4 class="moment__title">turtle meat</h4>
+                                <p class="moment__text">an old school runescape sea turtle game, with a live grand exchange and a global chat on atproto.</p>
+                            </li>
+                            <li class="moment moment--origin">
+                                <span class="moment__icon"><img src="/src/assets/mascot/potato-happy.svg" alt="" width="48" height="39"></span>
+                                <p class="moment__date"><time datetime="2026-09-23">sep 23, 2026</time></p>
+                                <h4 class="moment__title">poe wakes up</h4>
+                                <p class="moment__text">the potato in the corner starts answering atproto questions on bluesky, as @poe.atpota.to.</p>
+                            </li>
+                            <li class="moment moment--launch">
+                                <span class="moment__icon"><img src="/src/assets/mascot/potato-wave.svg" alt="" width="48" height="39"></span>
+                                <p class="moment__date"><time datetime="2026-10">oct 2026</time></p>
+                                <h4 class="moment__title">atpota.to relaunches, with poe's dispatch</h4>
+                                <p class="moment__text">a whole new atpota.to, with poe's weekly atmosphere dispatch, a community garden, and a live weather report for the network.</p>
+                            </li>
+                        </ol>
+                    </li>
+                </ol>
+
+                <p class="about-story__foot">that's as deep as it goes. everything above grew from here.</p>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>

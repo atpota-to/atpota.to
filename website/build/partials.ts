@@ -16,7 +16,7 @@ import type { Plugin, ViteDevServer } from 'vite';
  * Active navigation: links carrying data-nav="projects|blog|garden|weather|about" get
  * aria-current="page" when they match the page, and so does the wordmark (data-nav="home";
  * the nav itself has no home link). The page is read from
- * <body data-page="home|guide|guides|blog|garden|weather|notfound">; <body data-nav-current="..."> overrides it.
+ * <body data-page="home|guide|guides|blog|garden|weather|about|notfound">; <body data-nav-current="..."> overrides it.
  * This is the ONLY place aria-current is set for the main nav (nav.ts does not).
  */
 
@@ -37,6 +37,7 @@ export const NAV_FOR_PAGE: Record<string, string> = {
   blog: 'blog',
   garden: 'garden',
   weather: 'weather',
+  about: 'about',
 };
 
 function insideDir(dir: string, file: string): boolean {

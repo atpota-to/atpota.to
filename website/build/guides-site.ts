@@ -70,8 +70,8 @@ function serveWellKnown(req: IncomingMessage, res: ServerResponse, next: (err?: 
   res.end(publicationUri());
 }
 
-/** Pages that are a folder's index.html (guides/, garden/, weather/). */
-const FOLDER_PAGES = new Set(['/guides', '/garden', '/weather']);
+/** Pages that are a folder's index.html (guides/, garden/, weather/, about/). */
+const FOLDER_PAGES = new Set(['/guides', '/garden', '/weather', '/about']);
 /** Someone's garden (/garden/dame.is, /garden/dame.is/flowers): garden/index.html, as vercel.json rewrites it. */
 const GARDEN_PAGE_RE = /^\/garden\/(?!index\.html$)[^/]+(?:\/flowers)?\/?$/;
 
