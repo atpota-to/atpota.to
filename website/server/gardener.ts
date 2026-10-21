@@ -8,7 +8,9 @@
  * the same way, so a flower here is the flower there, with the same plot and care. At most
  * MAX_GARDENS gardens' patches are read per request, the ones planted in most recently.
  * Each flower brings its recent tending: who, what, and when (from the tend record's TID
- * key), newest first. Tenders atpotato blocks, or whose accounts are hidden, are left out.
+ * key), newest first: from the garden index in one read when it's the source, else from
+ * Constellation and Slingshot flower by flower. Tenders atpotato blocks, or whose accounts
+ * are hidden, are left out.
  * The tending they've given comes from their own tend records.
  *
  * And how they get on with Poe: the pets they've given it (their to.atpota.poe.pets record,
@@ -34,6 +36,7 @@ import { fetchJson, listRecords, type RecordEntry } from './blog/atproto.js';
 import { POE_DID } from './blog/config.js';
 import { backlinks, mapPool, SLINGSHOT } from './blog/discussion.js';
 import {
+  CACHE_INDEX,
   CACHE_MISSING,
   CONCURRENCY,
   createGardenReader,
@@ -58,6 +61,7 @@ import {
   type Patch,
   type Season,
   type TendAction,
+  type TendRef,
 } from './garden.js';
 import { getRecordFromPds } from './slingshot.js';
 
@@ -169,6 +173,19 @@ class Missing extends Error {}
 export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
   const reader = createGardenReader(deps);
 
+  /** A flower's tending from the index's tend records: checked, timed by their keys, newest first. */
+  function fromIndex(flower: Flower, refs: readonly TendRef[]): Array<{ did: string; action: TendAction; at: number }> {
+    const now = reader.now();
+    const planted = Date.parse(flower.plantedAt);
+    return refs
+      .flatMap((t) => {
+        const at = tidTime(t.rkey);
+        return at !== null && isTendAction(t.action) && at >= planted && at <= now + 60_000 ? [{ did: t.did, action: t.action, at }] : [];
+      })
+      .sort((a, b) => b.at - a.at)
+      .slice(0, MAX_TENDS_SHOWN);
+  }
+
   async function tends(flower: Flower): Promise<Array<{ did: string; action: TendAction; at: number }>> {
     const refs = await backlinks(reader.fetch, flower.uri, TEND_NSID, '.subject.uri', MAX_TENDS_SHOWN * 2).catch(() => []);
     const read = await mapPool(refs, CONCURRENCY, async ({ did, rkey }) => {
@@ -231,10 +248,12 @@ export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
           failed++;
           return [];
         }
+        const blocks = await reader.blocked(owner).catch(() => site);
         const flowers = await withCare(
           reader,
           shown.filter((f) => theirs.has(f.uri)),
           open,
+          blocks,
         );
         return flowers.map((f) => ({ ...f, patch: { rkey: p.rkey, uri: p.uri, name: p.name, season: p.season, open, cols: p.cols, rows: p.rows, owner: { did: owner, handle: garden.handle } } }));
       })
@@ -303,7 +322,8 @@ export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
     ]);
     const [found, garden, gave, withPoe] = await Promise.all([planted(did, sprouts), ownGarden(did), given(did, tendRecords), poe(did, identity.pds)]);
 
-    const tended = await mapPool(found, 4, tends);
+    const indexed = await reader.tends(found.map((f) => f.uri));
+    const tended = indexed ? found.map((f) => fromIndex(f, indexed.get(f.uri) ?? [])) : await mapPool(found, 4, tends);
     const { authors: tenders, blocked: blockedTenders } = await reader.authors(tended.flat().map((t) => t.did));
     const flowers: GardenerFlower[] = found.map((f, i) => ({
       ...f,
@@ -321,7 +341,7 @@ export function createGardenerHandlers(deps: GardenDeps = {}): GardenHandlers {
     const actor = params.get('actor') ?? params.get('did') ?? '';
     if (!isActor(actor)) return jsonResponse(request, 400, { error: 'bad_actor' }, 'no-store');
     try {
-      return jsonResponse(request, 200, await read(actor), CACHE_GARDENER);
+      return jsonResponse(request, 200, await read(actor), reader.source === 'index' ? CACHE_INDEX : CACHE_GARDENER);
     } catch (error) {
       if (error instanceof Missing) return jsonResponse(request, 404, { error: 'not_found' }, CACHE_MISSING);
       reader.log({ event: 'gardener_error', error: (error as Error)?.message ?? 'Error' });

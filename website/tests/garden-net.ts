@@ -1,10 +1,13 @@
 // A scripted network for the garden's functions (/api/garden, /api/gardener): DID
 // documents from plc.directory, one PDS for everyone (atpotato's patches and blocks, other
 // people's gardens and blocks, and each person's own sprouts and tends), Constellation's
-// backlinks, Slingshot's records and the AppView's profiles.
+// backlinks, Slingshot's records and the AppView's profiles; and the garden index in
+// Supabase (garden/supabase/garden_index.sql), which holds the same records as everyone's
+// repos unless told otherwise.
 
 import { CONSTELLATION, SLINGSHOT } from '../server/blog/discussion.js';
 import { GARDEN_SUBJECT, PATCH_NSID, SPROUT_NSID, TEND_NSID } from '../server/garden.js';
+import { SUPABASE_URL } from '../server/supabase-public.js';
 
 export const PDS = 'https://pds.test';
 export const did = (n: number) => `did:plc:${'a'.repeat(23)}${'bcdefghijklmnopqrstuvwxyz'[n]}`; // base32, like a real did:plc
@@ -55,6 +58,22 @@ export interface Net {
   /** Constellation fails for tend lookups only. */
   tendsDown?: boolean;
   calls?: string[];
+  /** The garden index: absent, it answers what's settled (nothing) and an empty heartbeat. */
+  index?: IndexState;
+}
+
+export interface IndexState {
+  /** garden_status: the indexer's heartbeat and its last finished backfill. */
+  heartbeatAt: string | null;
+  backfilledAt: string | null;
+  /** garden_growth rows, as the read functions answer them: sprout URI -> growth. */
+  growth?: Record<string, Record<string, unknown>>;
+  /** Records the index doesn't have yet (at:// URIs), and ones it has that are gone. */
+  missing?: string[];
+  extra?: Record<string, Record<string, unknown>>;
+  /** When Jetstream first relayed a record, by at:// URI. */
+  firstSeen?: Record<string, string>;
+  down?: boolean;
 }
 
 export const patchRecord = (name: string, opensAt: string, closesAt: string, cols = 12, rows = 8, season = 'autumn') => ({
@@ -123,10 +142,63 @@ function gardenAnswer(net: Net, repo: string, rkey: string, stale?: Record<strin
   return value ? json({ uri: patchUri(rkey, repo), cid: patchCid(rkey, value), value }) : json({ error: 'RecordNotFound' }, 400);
 }
 
+/** Every record the index holds, "did/collection/rkey" -> value. */
+function indexed(net: Net): Array<[string, Record<string, unknown>]> {
+  const missing = new Set(net.index?.missing ?? []);
+  const all: Array<[string, Record<string, unknown>]> = [
+    ...Object.entries(net.patches).map(([rkey, value]): [string, Record<string, unknown>] => [`${GARDEN_SUBJECT}/${PATCH_NSID}/${rkey}`, value]),
+    ...Object.entries(net.gardens ?? {}).flatMap(([owner, patches]) => Object.entries(patches).map(([rkey, value]): [string, Record<string, unknown>] => [`${owner}/${PATCH_NSID}/${rkey}`, value])),
+    ...Object.entries(net.records),
+    ...Object.entries(net.index?.extra ?? {}),
+  ];
+  return all.filter(([key]) => !missing.has(`at://${key}`));
+}
+
+/** The garden index's answers: PostgREST reads and the read functions. */
+function indexAnswer(net: Net, url: URL, body: Record<string, unknown>): Response {
+  const state = net.index;
+  if (state?.down) return new Response('down', { status: 503 });
+  const status = state ? { id: 1, heartbeat_at: state.heartbeatAt, backfilled_at: state.backfilledAt, stream_at: state.heartbeatAt } : null;
+  const growth = state?.growth ?? {};
+  const rows = indexed(net).map(([key, value]) => {
+    const [d, c, r] = [key.slice(0, key.indexOf('/')), key.split('/')[1]!, key.split('/')[2]!];
+    const ref = c === SPROUT_NSID ? (value.patch as { uri?: string })?.uri : c === TEND_NSID ? (value.subject as { uri?: string })?.uri : null;
+    const uri = `at://${key}`;
+    return { uri, did: d, collection: c, rkey: r, cid: c === PATCH_NSID ? patchCid(r, value) : CID, record: value, ref_uri: ref ?? null };
+  });
+  const path = url.pathname.replace('/rest/v1/', '');
+  if (path === 'garden_status') return json(status ? [status] : []);
+  if (path === 'garden_records') {
+    const collection = url.searchParams.get('collection')?.replace(/^eq\./, '');
+    const owner = url.searchParams.get('did')?.replace(/^eq\./, '');
+    return json(rows.filter((r) => r.collection === collection && r.did === owner).map((r) => ({ uri: r.uri, cid: r.cid, record: r.record })));
+  }
+  if (path === 'rpc/garden_sprouts') {
+    const patches = (body.p_patches as string[]) ?? [];
+    const sprouts = rows
+      .filter((r) => r.collection === SPROUT_NSID && patches.includes(r.ref_uri ?? ''))
+      .map((r) => ({ uri: r.uri, did: r.did, rkey: r.rkey, cid: r.cid, value: r.record, patch: r.ref_uri, firstSeenAt: state?.firstSeen?.[r.uri] ?? null, growth: growth[r.uri] ?? null }));
+    return json({ status, sprouts });
+  }
+  if (path === 'rpc/garden_tends') {
+    const flowers = (body.p_flowers as string[]) ?? [];
+    return json(rows.filter((r) => r.collection === TEND_NSID && flowers.includes(r.ref_uri ?? '')).map((r) => ({ flower: r.ref_uri, did: r.did, rkey: r.rkey, action: r.record.action })));
+  }
+  if (path === 'rpc/garden_growth_of') {
+    const flowers = (body.p_flowers as string[]) ?? [];
+    return json({ status, growth: Object.fromEntries(flowers.filter((u) => growth[u]).map((u) => [u, growth[u]])) });
+  }
+  return json({ message: 'not found' }, 404);
+}
+
 export function fakeFetch(net: Net): typeof fetch {
-  return (async (input: RequestInfo | URL) => {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     net.calls?.push(`${url.origin}${url.pathname}`);
+    if (url.origin === SUPABASE_URL) {
+      const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+      return indexAnswer(net, url, body);
+    }
     if (url.origin === 'https://plc.directory') {
       const id = decodeURIComponent(url.pathname.slice(1));
       if (net.unknownDids?.includes(id)) return json({ message: 'DID not registered' }, 404);

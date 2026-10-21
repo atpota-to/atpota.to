@@ -1,9 +1,11 @@
 name: Deploy droplet
 
-# Deploys the droplet's two services (mentions/ = Poe, atmosphere/ = the weather
-# station) when a push to main touches them, by asking the droplet to run
-# droplet/deploy.sh. For each service, the droplet:
+# Deploys the droplet's three services (mentions/ = Poe, atmosphere/ = the weather
+# station, garden/ = the garden index, which also runs website/shared/) when a push to
+# main touches them, by asking the droplet to run droplet/deploy.sh. For each service,
+# the droplet:
 #  - fetches the commit from GitHub itself
+#  - does nothing if the service isn't set up there yet (no .env in its data folder)
 #  - does nothing if that service's folder didn't change
 #  - runs its tests
 #  - for Poe, waits until no reply is in flight
@@ -21,6 +23,8 @@ on:
     paths:
       - 'mentions/**'
       - 'atmosphere/**'
+      - 'garden/**'
+      - 'website/shared/**'
       - 'droplet/**'
       - '.github/workflows/deploy-droplet.yml'
   workflow_dispatch:
@@ -28,14 +32,14 @@ on:
       service:
         description: Which service
         type: choice
-        options: [both, atmosphere, mentions]
-        default: both
+        options: [all, atmosphere, mentions, garden]
+        default: all
       commit:
         description: Full commit SHA on main (blank = latest main). An older one rolls back.
         required: false
         default: ''
 
-# One deploy at a time, never cancelled halfway. Each run asks for both services, and
+# One deploy at a time, never cancelled halfway. Each run asks for every service, and
 # the droplet skips whichever is already current, so a run that GitHub drops from
 # the queue loses nothing.
 concurrency:
@@ -64,10 +68,13 @@ jobs:
           fi
           if [ "$EVENT" = workflow_dispatch ]; then
             commit="$INPUT_COMMIT"
-            case "$INPUT_SERVICE" in both) services="atmosphere mentions" ;; *) services="$INPUT_SERVICE" ;; esac
+            case "$INPUT_SERVICE" in all) services="atmosphere mentions garden" ;; *) services="$INPUT_SERVICE" ;; esac
           else
             commit="$PUSHED"
-            services="atmosphere mentions"
+            # garden last: on the push that adds it, the droplet's deploy scripts are still
+            # the old ones (which refuse "garden") until the first deploy of this commit
+            # installs the new ones from it.
+            services="atmosphere mentions garden"
           fi
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/deploy_key

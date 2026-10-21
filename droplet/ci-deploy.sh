@@ -3,18 +3,18 @@
 #
 # /root/.ssh/authorized_keys pins that key to this script ("restrict,command=..."), so
 # whatever the client asks to run, this runs instead, with the request in
-# $SSH_ORIGINAL_COMMAND. It accepts exactly "<mentions|atmosphere> [<full sha>]", where
-# the commit must be on main, and hands it to deploy.sh. That fetches the code from
+# $SSH_ORIGINAL_COMMAND. It accepts exactly "<mentions|atmosphere|garden> [<full sha>]",
+# where the commit must be on main, and hands it to deploy.sh. That fetches the code from
 # GitHub itself: the key can trigger a deploy of what's already on main and nothing else.
 set -euo pipefail
 
 read -r service sha extra <<<"${SSH_ORIGINAL_COMMAND:-}" || true
 refuse() {
-  echo "refused: $1 (expected \"<mentions|atmosphere> [<commit on main>]\")" >&2
+  echo "refused: $1 (expected \"<mentions|atmosphere|garden> [<commit on main>]\")" >&2
   exit 64
 }
 case "${service:-}" in
-  mentions | atmosphere) ;;
+  mentions | atmosphere | garden) ;;
   *) refuse "unknown service '${service:-}'" ;;
 esac
 [[ -z ${extra:-} ]] || refuse "too many arguments"

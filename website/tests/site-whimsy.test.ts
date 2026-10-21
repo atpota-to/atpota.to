@@ -481,7 +481,7 @@ describe('the flower patch', () => {
     run: () => Promise<unknown>;
   }
 
-  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: (typeof autumn & { planting?: string }) | null; summerFlowers?: unknown[] } = {}): Rig {
+  function rig(opts: { signedIn?: boolean; failCreate?: number; auth?: null; flowers?: unknown[]; patch?: (typeof autumn & { planting?: string }) | null; summerFlowers?: unknown[]; seeds?: boolean } = {}): Rig {
     document.body.innerHTML = section('home-patch garden-patch', GARDEN_PAGE) + DIALOG;
     const calls: Rig['calls'] = [];
     const went: Prepared[] = [];
@@ -526,6 +526,7 @@ describe('the flower patch', () => {
           patches: patch ? [summary(summer, 4), summary(autumn, flowers.length), summary(winter, 0)] : [],
           flowers: shown,
           total: shown.length,
+          ...(opts.seeds ? { seeds: true } : {}),
         });
       }
       if (url.origin === 'https://public.api.bsky.app') return Response.json({ did: ME, handle: 'me.test', displayName: 'Me' });
@@ -685,6 +686,65 @@ describe('the flower patch', () => {
     expect(document.querySelector('.is-yours')).toBeNull();
     expect(plot(7).classList.contains('home-plot--empty')).toBe(true);
     expect(statusText()).toBe(COPY.dug);
+  });
+
+  it('where the garden gives out seeds there’s nothing to pick: you plant a seed, and nobody knows what it’ll be', async () => {
+    const r = rig({ signedIn: true, seeds: true });
+    await r.run();
+    expect(document.querySelector<HTMLElement>('[data-garden-kinds]')!.hidden).toBe(true);
+    plot(7).click();
+    expect(plantButton().textContent).toBe(COPY.plantHere('seed'));
+    expect(statusText()).toBe(COPY.choose('seed'));
+    plantButton().click();
+    await flush();
+    expect(r.calls[0]!.body!.record).toMatchObject({ $type: SPROUT_NSID, patch: { uri: autumn.uri, cid: autumn.cid }, kind: 'seed', plot: 7 });
+    expect(statusText()).toBe(COPY.plantedSeed);
+    expect(plot(7).getAttribute('aria-label')).toBe(COPY.flowerPlot('your', 'seed', 'sprout'));
+  });
+
+  it('a seed’s card: a sprout gives nothing away, a bud its family, the bloom what it grew into and the weather it grew in', async () => {
+    const seed = (rkey: string, plot: number, days: number, extra: Record<string, unknown>) => ({
+      ...friendRose,
+      rkey,
+      uri: `at://${FRIEND}/${SPROUT_NSID}/${rkey}`,
+      plot,
+      plantedAt: new Date(NOW - days * 24 * 3600_000).toISOString(),
+      kind: 'seed',
+      family: null,
+      weather: null,
+      ...extra,
+    });
+    const flowers = [
+      seed('3ks', 1, 1, { weather: { planted: { wind: 3, mix: 1 }, grew: null } }),
+      seed('3kb', 2, 3, { family: 'fungus', weather: { planted: { wind: 0, mix: 0 }, grew: null } }),
+      seed('3kl', 3, 9, { kind: 'storm-lily', family: 'flower', weather: { planted: { wind: 4, mix: 2 }, grew: { wind: 4, mix: 1, apps: ['leaflet.pub'] } } }),
+      seed('3ko', 4, 8, {}),
+    ];
+    await rig({ flowers, seeds: true }).run();
+    const card = () => document.querySelector<HTMLElement>('[data-garden-card]')!;
+    const said = (sel: string) => card().querySelector(sel)?.textContent;
+
+    plot(1).click();
+    expect(said('#garden-card-title')).toBe(COPY.theirs('friend.test', 'seed'));
+    expect(said('.home-card__meta')).toBe(COPY.growing('sprout', 2));
+    expect(said('.home-card__weather')).toBe('planted in a gust');
+
+    plot(2).click();
+    expect(said('.home-card__meta')).toBe(`${COPY.growing('bud', 4)} · ${COPY.hint.fungus}`);
+    expect(said('.home-card__weather')).toBe('planted in a calm minute under a plainer sky than usual');
+
+    plot(3).click();
+    expect(said('#garden-card-title')).toBe(COPY.theirs('friend.test', 'storm lily'));
+    const lily = flowerVariant(flowers[2] as never);
+    expect(said('.home-card__meta')).toBe(COPY.inBloom(describeBloom('storm-lily', lily), true));
+    expect(said('.home-card__weather')).toBe(['planted in a storm under a sky more mixed than usual', 'grew in a stormy week under a usual sky', 'windswept, ' + (lily.lost.length === 1 ? 'lost a petal' : 'lost two petals')].join(' · '));
+    expect(plot(3).getAttribute('aria-label')).toBe(COPY.flowerPlot('@friend.test\'s', 'storm lily', 'bloom'));
+
+    // in bloom, but the garden hasn't said what it is yet: still opening
+    plot(4).click();
+    expect(said('#garden-card-title')).toBe(COPY.theirs('friend.test', 'seed'));
+    expect(said('.home-card__meta')).toBe(COPY.opening);
+    expect(card().querySelector('.home-card__weather')).toBeNull();
   });
 
   it('one each (the default): once yours is in, the picker gives way to looking after it', async () => {

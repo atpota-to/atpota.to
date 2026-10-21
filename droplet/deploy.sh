@@ -3,6 +3,7 @@
 #
 #   /root/atpota-live/deploy.sh mentions            # Poe's mentions service (atpotato-mentions)
 #   /root/atpota-live/deploy.sh atmosphere          # the weather station (atpotato-weather)
+#   /root/atpota-live/deploy.sh garden              # the garden index (atpotato-garden)
 #   /root/atpota-live/deploy.sh atmosphere <commit> # a specific commit: a rollback, or a branch to try
 #   FORCE=1 /root/atpota-live/deploy.sh mentions    # restart onto it even if its code didn't change
 #
@@ -10,14 +11,20 @@
 # through ci-deploy.sh), so usually nobody needs to.
 #
 # What it does:
-#  1. Unpacks the commit once into releases/<sha>/, a plain copy with no .git.
-#  2. Does nothing more if the service's code hasn't changed since the release it's
-#     running (docs and SQL don't count).
-#  3. Runs the service's tests there.
-#  4. For Poe, waits until no reply is in flight (npm run in-flight).
-#  5. Switches /root/atpota-live/<service>, installs the unit file if it changed, and
-#     restarts.
-#  6. Checks health. If unhealthy, it goes back to the previous release by itself.
+#  1. Unpacks the commit once into releases/<sha>/, a plain copy with no .git: the
+#     services' folders, droplet/, and website/shared/ (the garden rules, which garden/
+#     imports). Only the folders that exist at that commit, so an older one still
+#     unpacks; a release unpacked before a folder was added gets it added.
+#  2. Does nothing more if the service isn't set up on this droplet yet (no .env in its
+#     data folder): it says so and succeeds, so merging a new service before the operator
+#     has set it up doesn't fail the run.
+#  3. Does nothing more if the service's code hasn't changed since the release it's
+#     running (docs and SQL don't count; for the garden, website/shared/ counts too).
+#  4. Runs the service's tests there.
+#  5. For Poe, waits until no reply is in flight (npm run in-flight).
+#  6. Switches /root/atpota-live/<service>, installs the unit file if it changed (and
+#     enables it the first time), and restarts.
+#  7. Checks health. If unhealthy, it goes back to the previous release by itself.
 #
 # A running process keeps reading the release it started from (node resolves the link
 # at start). That matters for Poe, which imports modules lazily mid-run and must never
@@ -43,8 +50,13 @@ case "$service" in
     data=/root/atpotato-weather
     health() { curl -fs --max-time 5 -o /dev/null http://127.0.0.1:8790/healthz 2>/dev/null; }
     ;;
+  garden)
+    unit=atpotato-garden
+    data=/root/atpotato-garden
+    health() { curl -fs --max-time 5 -o /dev/null http://127.0.0.1:8791/healthz 2>/dev/null; }
+    ;;
   *)
-    echo "usage: $0 <mentions|atmosphere> [commit]" >&2
+    echo "usage: $0 <mentions|atmosphere|garden> [commit]" >&2
     exit 64
     ;;
 esac
@@ -63,12 +75,32 @@ sha=$(git -C "$REPO" rev-parse --verify "${2:-main}^{commit}")
 short=${sha:0:12}
 release=$LIVE/releases/$short
 
+# git archive fails on a path the commit doesn't have, so ask only for the ones it does
+# (an older commit, a rollback, may predate garden/).
+parts=()
+for p in mentions atmosphere droplet garden website/shared; do
+  git -C "$REPO" cat-file -e "$sha:$p" 2>/dev/null && parts+=("$p")
+done
 if [[ ! -d $release ]]; then
   tmp=$(mktemp -d "$LIVE/releases/.tmp-XXXXXX")
-  git -C "$REPO" archive "$sha" mentions atmosphere droplet | tar -x -C "$tmp"
+  git -C "$REPO" archive "$sha" "${parts[@]}" | tar -x -C "$tmp"
   echo "$sha" >"$tmp/REVISION"
   chmod 755 "$tmp"
   mv -T "$tmp" "$release"
+else
+  # Unpacked by an older deploy.sh that didn't know a folder yet: add what's missing,
+  # each folder whole or not at all.
+  missing=()
+  for p in "${parts[@]}"; do [[ -e $release/$p ]] || missing+=("$p"); done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    tmp=$(mktemp -d "$LIVE/releases/.tmp-XXXXXX")
+    git -C "$REPO" archive "$sha" "${missing[@]}" | tar -x -C "$tmp"
+    for p in "${missing[@]}"; do
+      mkdir -p "$release/$(dirname "$p")"
+      mv -T "$tmp/$p" "$release/$p"
+    done
+    rm -rf -- "$tmp"
+  fi
 fi
 
 # The deploy scripts themselves come from the tip of main, never from an older commit
@@ -83,10 +115,23 @@ previous=$(readlink "$LIVE/$service" 2>/dev/null || true)
 old_sha=$([[ -n $previous && -f $LIVE/$previous/../REVISION ]] && cat "$LIVE/$previous/../REVISION" || true)
 echo "== $service: ${old_sha:0:12}${old_sha:+ -> }$short"
 
+# A service is set up on this droplet by hand, once (its README says how): until its
+# data folder has a .env, there's nothing to deploy it into.
+if [[ ! -f $data/.env ]]; then
+  echo "== $service is not set up on this droplet yet (no $data/.env); see $service/README.md. Nothing deployed."
+  record "not-set-up"
+  exit 0
+fi
+if [[ ! -d $release/$service ]]; then
+  echo "!! $short has no $service/ (it predates it); nothing deployed" >&2
+  record "no-such-service"
+  exit 1
+fi
+
 prune() {
   # Keep every release something points at, plus the newest $KEEP.
   declare -A keep=()
-  for l in mentions atmosphere deploy.sh ci-deploy.sh; do
+  for l in mentions atmosphere garden deploy.sh ci-deploy.sh; do
     target=$(readlink "$LIVE/$l" 2>/dev/null || true)
     [[ $target == releases/* ]] && keep[$(cut -d/ -f2 <<<"$target")]=1
   done
@@ -98,8 +143,10 @@ prune() {
   return 0
 }
 
-# Docs and SQL don't change what runs, so they don't restart anything.
+# Docs and SQL don't change what runs, so they don't restart anything. The garden also
+# runs website/shared/ (its types, *.d.ts, are only for the website).
 paths=("$service" ':!*.md' ':!*.sql')
+[[ $service == garden ]] && paths=(garden website/shared ':!*.md' ':!*.sql' ':!*.d.ts')
 if [[ -n $old_sha && -z ${FORCE:-} ]] && git -C "$REPO" diff --quiet "$old_sha" "$sha" -- "${paths[@]}"; then
   echo "== $service/ code is unchanged since ${old_sha:0:12}; nothing to deploy"
   prune
@@ -155,9 +202,15 @@ unit_file=/etc/systemd/system/$unit.service
 unit_backup=$(mktemp)
 cp "$unit_file" "$unit_backup" 2>/dev/null || true
 if ! cmp -s "$release/$service/$unit.service" "$unit_file"; then
+  first_install=$([[ -f $unit_file ]] && echo 0 || echo 1)
   echo "== installing changed $unit.service"
   cp "$release/$service/$unit.service" "$unit_file"
   systemctl daemon-reload
+  # A new service starts at boot like the rest. Only the first time: an existing unit's
+  # enabled state is the operator's.
+  if [[ $first_install -eq 1 ]]; then
+    systemctl enable --quiet "$unit"
+  fi
 fi
 
 link "releases/$short/$service" "$service"

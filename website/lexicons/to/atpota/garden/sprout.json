@@ -17,7 +17,8 @@
           },
           "kind": {
             "type": "string",
-            "knownValues": ["sunflower", "rose", "daisy", "violet", "poppy", "tulip"]
+            "knownValues": ["sunflower", "rose", "daisy", "violet", "poppy", "tulip", "seed"],
+            "description": "The kind its planter picked, or \"seed\": the garden decides what it grows into, from the seed itself, the patch's season and the network weather the minute it was planted, and shows it when it blooms."
           },
           "plot": {
             "type": "integer",

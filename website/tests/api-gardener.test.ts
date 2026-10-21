@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as api from '../api/gardener.js';
 import { POE_DID } from '../server/blog/config.js';
-import { resetDiscussionCaches } from '../server/blog/discussion.js';
-import { SPROUT_NSID, TEND_NSID } from '../server/garden.js';
+import { CONSTELLATION, resetDiscussionCaches } from '../server/blog/discussion.js';
+import { CACHE_INDEX, SPROUT_NSID, TEND_NSID } from '../server/garden.js';
 import { CACHE_GARDENER, createGardenerHandlers, MAX_GARDENS, MEMORY_NSID, PETS_NSID, toGiven, toNotes, toPets, toTend } from '../server/gardener.js';
 import { fetchGardener, MEMORY_NSID as CLIENT_MEMORY_NSID, POE_DID as CLIENT_POE_DID } from '../src/scripts/garden.js';
 import { CID, DAY, did, fakeFetch, gardenRecord, patchRecord, patchUri, sprout, tendOf, tid, type Net } from './garden-net.js';
@@ -108,6 +108,8 @@ describe('/api/gardener', () => {
       cid: CID,
       handle: 'one.test',
       kind,
+      family: 'flower',
+      weather: null,
       plot,
       plantedAt,
       care: 0,
@@ -131,10 +133,10 @@ describe('/api/gardener', () => {
         {
           ...base('n1', 'daisy', 2, '2026-10-15T00:00:00.000Z'),
           patch: { rkey: '2026-autumn', uri: patchUri('2026-autumn'), name: 'autumn 2026', season: 'autumn', open: true, cols: 4, rows: 2, owner: atpotato },
-          // one day by its owner and three neighbours. Care counts from the index alone, so
-          // did(5)'s (blocked) and did(3)'s (no such action) count, but aren't listed.
-          care: 0.57,
-          helpers: 3,
+          // one day by its owner and two neighbours. Care counts did(3)'s (no such action),
+          // which isn't listed; did(5) is blocked, so theirs doesn't count at all.
+          care: 0.43,
+          helpers: 2,
           lastTended: new Date(daisyAt + 2 * DAY).toISOString(),
           tends: [
             { did: did(2), handle: 'two.test', action: 'talk', at: new Date(daisyAt + DAY).toISOString() },
@@ -158,6 +160,17 @@ describe('/api/gardener', () => {
       },
       poe: { pets: 108, notes: 2 },
     });
+  });
+
+  it('reads every flower’s tending from the index in one go when it’s the source, with the same answer', async () => {
+    const request = () => new Request(`https://atpota.to/api/gardener?actor=${did(1)}`);
+    const fromNetwork = await (await handlers().GET(request())).json();
+    resetDiscussionCaches();
+    const n: Net = { ...net(), index: { heartbeatAt: new Date(NOW - 60_000).toISOString(), backfilledAt: '2026-10-20T00:00:00.000Z' }, calls: [] };
+    const res = await createGardenerHandlers({ fetch: fakeFetch(n), now: () => NOW, log: () => undefined, env: { GARDEN_SOURCE: 'index' } }).GET(request());
+    expect(res.headers.get('cache-control')).toBe(CACHE_INDEX);
+    expect(await res.json()).toEqual(fromNetwork);
+    expect(n.calls!.some((c) => c.startsWith(CONSTELLATION))).toBe(false);
   });
 
   it('reads pets and Poe’s notes: a whole count, and only notes about this person', () => {

@@ -1,7 +1,7 @@
 /**
  * The home page's garden tile: a way into atpotato's community garden (/garden/atpota.to),
- * not the garden itself. The whole tile is the link. It shows a row of flowers, one of
- * each kind in bloom with a look picked fresh each visit, and once /api/garden answers,
+ * not the garden itself. The whole tile is the link. It shows a row of six plants in bloom,
+ * six different kinds with looks picked fresh each visit, and once /api/garden answers,
  * the open patch's name and how many of its plots are planted.
  *
  * Without JavaScript, or when the garden doesn't load, the tile is still its words and its
@@ -9,17 +9,20 @@
  */
 
 import { fetchGarden, type GardenView } from './garden-api';
-import { drawFlower, FLOWER_KINDS, variantFor } from './flowers';
+import { drawFlower, KINDS, variantFor, type FlowerKind } from './flowers';
 
 export const COPY = {
   count: (n: number, plots: number) => (n === 0 ? `${plots} empty plots. be the first!` : `${n} of ${plots} plots planted`),
 };
 
-/** Six flowers, one of each kind, in bloom and as well tended as they come. */
+/** Six plants of six different kinds, in bloom and as well tended as they come. */
 export function drawRow(row: HTMLElement, random: () => number = Math.random): void {
   const doc = row.ownerDocument;
+  const left = [...KINDS];
+  const kinds: FlowerKind[] = [];
+  while (kinds.length < 6) kinds.push(left.splice(Math.floor(random() * left.length), 1)[0]!);
   row.replaceChildren(
-    ...FLOWER_KINDS.map((kind) => {
+    ...kinds.map((kind) => {
       const mound = doc.createElement('span');
       mound.className = 'home-garden__mound';
       mound.append(drawFlower(doc, kind, 'bloom', variantFor(kind, Math.floor(random() * 2 ** 32), 1)));

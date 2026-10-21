@@ -7,7 +7,14 @@
  * Anyone can plant a flower in an open patch with their Bluesky account. It's a record in
  * their own repo, tied to their DID, pointing at the patch with a strong ref:
  *
- *   to.atpota.garden.sprout  { patch: { uri, cid }, kind: "sunflower" | ..., plot, createdAt }
+ *   to.atpota.garden.sprout  { patch: { uri, cid }, kind: "seed" | "sunflower" | ..., plot, createdAt }
+ *
+ * Where the garden gives out seeds (/api/garden says `seeds`), there's no picking: you plant
+ * a seed, and nobody knows what it'll be until it blooms. Every seed sprouts the same two
+ * leaves, its bud shows only its family, and the bloom is whatever the garden decided from
+ * the seed, the season and the network weather the minute it went in (server/garden.ts).
+ * Its card says what weather it was planted in and, once it blooms, the week it grew in.
+ * Elsewhere the picker offers the six kinds people pick themselves.
  *
  * and anyone can tend a flower, theirs or a neighbour's (tend(), for the garden page):
  *
@@ -47,7 +54,8 @@ import { el, isBusy, loadMe, mountSignIn, setBusy, type Me, type SignIn } from '
 import { clearPending, localStoreFor, readPending, savePending, sessionStoreFor } from '../blog/state';
 import type { KeyValueStore } from '../poe/storage';
 import { burst, cheer } from './burst';
-import { DAY_MS, drawFlower, FLOWER_KINDS, GROW_DAYS, sampleVariant, stageFor, type FlowerKind, type Stage, type Variant } from './flowers';
+import { familyOf, MIX, WIND, type Family } from '../../shared/garden-rules.js';
+import { DAY_MS, drawFlower, drawSeed, FLOWER_KINDS, GROW_DAYS, kindName, sampleVariant, seedVariant, stageFor, type FlowerKind, type Stage, type Variant } from './flowers';
 import {
   fetchGarden,
   flowerVariant,
@@ -56,14 +64,18 @@ import {
   isPlot,
   patchUri,
   PLANTING,
+  SEED,
   SPROUT_NSID,
   sproutRecord,
   tend,
   type Flower,
+  type FlowerWeather,
   type GardenView,
   type Owner,
   type Patch,
   type PatchSummary,
+  type PickedKind,
+  type Weather,
 } from './garden-api';
 import { readReader, rememberReader } from './reader';
 
@@ -82,11 +94,12 @@ export const WATERED_KEY = 'garden:watered';
 
 export const COPY = {
   pick: 'pick a plot',
-  plantHere: (kind: FlowerKind) => `plant a ${kind} here`,
+  plantHere: (kind: string) => `plant a ${kind} here`,
   planting: 'planting…',
-  choose: (kind: FlowerKind) => `tap an empty plot to plant your ${kind} there, or plant it here.`,
-  planted: (kind: FlowerKind) => `planted! your ${kind} is a sprout for now, and it blooms in a week. tend it to help it grow (◕‿◕)`,
-  moved: (kind: FlowerKind) => `moved! a new ${kind} is growing in your new plot (◕‿◕)`,
+  choose: (kind: string) => `tap an empty plot to plant your ${kind} there, or plant it here.`,
+  planted: (kind: string) => `planted! your ${kind} is a sprout for now, and it blooms in a week. tend it to help it grow (◕‿◕)`,
+  plantedSeed: "planted! nobody knows what your seed will grow into, not even you. tend it, and in a week it blooms and you'll see (◕‿◕)",
+  moved: (kind: string) => `moved! a new ${kind} is growing in your new plot (◕‿◕)`,
   oneEach: "your flower's growing here. it's one each, so look after it well (◕‿◕)",
   plantedElsewhere: "you've already got a flower growing in this garden. it's one each, so look after that one (◕‿◕)",
   dug: 'dug up. the patch will miss you.',
@@ -106,11 +119,14 @@ export const COPY = {
   stage: { sprout: 'just planted', bud: 'budding', bloom: 'in bloom' } satisfies Record<Stage, string>,
   thirsty: 'thirsty',
   emptyPlot: (n: number, selected: boolean) => `empty plot ${n}${selected ? ', picked' : ''}`,
-  flowerPlot: (who: string, kind: FlowerKind, stage: Stage, thirsty = false) => `${who} ${kind}, ${COPY.stage[stage]}${thirsty ? `, ${COPY.thirsty}` : ''}`,
+  flowerPlot: (who: string, kind: string, stage: Stage, thirsty = false) => `${who} ${kind}, ${COPY.stage[stage]}${thirsty ? `, ${COPY.thirsty}` : ''}`,
   tabs: { open: 'growing now', closed: 'pressed', soon: (when: string) => `opens ${when}` },
-  yours: (kind: FlowerKind) => `your ${kind}`,
-  theirs: (handle: string, kind: FlowerKind) => `@${handle}'s ${kind}`,
+  yours: (kind: string) => `your ${kind}`,
+  theirs: (handle: string, kind: string) => `@${handle}'s ${kind}`,
   growing: (stage: Stage, day: number) => (stage === 'sprout' ? `just planted · day ${day}` : `budding · day ${day} of ${GROW_DAYS}`),
+  /** What a seed's bud gives away. */
+  hint: { flower: "it's going to flower", leafy: 'something leafy is unfurling', succulent: 'something thick-leaved and slow', fruit: 'a blossom, so maybe fruit', fungus: 'something is pushing up' } satisfies Record<Family, string>,
+  opening: "it's opening…",
   inBloom: (bloom: string, open: boolean) => `${bloom} · ${open ? 'in bloom' : 'pressed'}`,
   thirstyFor: (days: number) => `looks thirsty: not watered for ${days} ${days === 1 ? 'day' : 'days'}`,
   water: 'water it',
@@ -123,11 +139,69 @@ export const COPY = {
   close: 'close',
 } as const;
 
-/** "a two-tone double daisy with a ladybug", or just "a daisy". */
-export function describeBloom(kind: FlowerKind, v: Pick<Variant, 'twoTone' | 'double' | 'ladybug'>): string {
-  const looks = [v.twoTone ? 'two-tone' : '', v.double ? 'double' : ''].filter(Boolean).join(' ');
-  return `a ${looks ? `${looks} ` : ''}${kind}${v.ladybug ? ' with a ladybug' : ''}`;
+/** "a two-tone double daisy with a ladybug", "a four-leaf clover", "an echeveria", or just "a daisy". */
+export function describeBloom(kind: FlowerKind, v: Pick<Variant, 'twoTone' | 'double' | 'ladybug'> & Partial<Pick<Variant, 'fourLeaf'>>): string {
+  let base: string;
+  if (kind === 'toadstool' && v.double) base = 'a fairy ring of toadstools';
+  else if (kind === 'cactus' && v.double) base = 'a cactus flowering twice';
+  else if (kind === 'clover' && v.fourLeaf) base = 'a four-leaf clover';
+  else {
+    const looks = [v.twoTone ? 'two-tone' : '', v.double ? 'double' : ''].filter(Boolean).join(' ');
+    const words = `${looks ? `${looks} ` : ''}${kindName(kind)}`;
+    base = `${/^[aeiou]/.test(words) ? 'an' : 'a'} ${words}`;
+  }
+  return `${base}${v.ladybug ? ' with a ladybug' : ''}`;
 }
+
+/** What a flower is called on its card: its kind, or "seed" until a seed blooms. */
+export function nameOf(f: Pick<Flower, 'kind'>): string {
+  return f.kind === SEED ? 'seed' : kindName(f.kind);
+}
+
+/** A planted flower as it is now: a seed as far as anyone can tell, or its kind with its look. */
+export function drawPlanted(doc: Document, f: Pick<Flower, 'did' | 'rkey' | 'kind' | 'care' | 'family' | 'weather'>, stage: Stage): SVGSVGElement {
+  const v = flowerVariant(f);
+  return f.kind === SEED ? drawSeed(doc, stage, v, f.family) : drawFlower(doc, f.kind, stage, v);
+}
+
+/** The weather words (shared/garden-rules.js WIND and MIX, 0 to 4). */
+export const WEATHER = {
+  minute: ['a calm minute', 'a light breeze', 'a breezy minute', 'a gust', 'a storm'],
+  week: ['a calm week', 'a light week', 'a breezy week', 'a gusty week', 'a stormy week'],
+  sky: ['a plainer sky than usual', 'a usual sky', 'a sky more mixed than usual', 'a very mixed sky', 'the most mixed sky in a month'],
+} as const;
+
+/** "planted in a gust", and the sky when it was anything but usual. */
+export function plantedWords(w: Weather): string {
+  return `planted in ${WEATHER.minute[w.wind]}${w.mix === 1 ? '' : ` under ${WEATHER.sky[w.mix]}`}`;
+}
+
+/** "grew in a stormy week under a very mixed sky". */
+export function grewWords(w: Weather): string {
+  return `grew in ${WEATHER.week[w.wind]} under ${WEATHER.sky[w.mix]}`;
+}
+
+/** What the weather did to a bloom, in a few words each: what the card lists. */
+export function weatherLooks(kind: FlowerKind, v: Pick<Variant, 'cross' | 'sweep' | 'lost' | 'wind' | 'mix' | 'way'>): string[] {
+  const looks: string[] = [];
+  if (kind === 'hydrangea' && v.mix !== null) looks.push(v.way <= 1 ? 'blue, from a plain sky' : v.way >= 3 ? 'pink, from a mixed sky' : 'lilac');
+  if (v.cross) looks.push(kind === 'monstera' ? 'speckled' : 'cross-pollinated');
+  if (kind === 'dandelion' && v.wind !== null && v.wind >= 2) looks.push(v.wind >= 3 ? 'its seeds blown away' : 'gone to seed');
+  if (kind === 'echeveria' && v.wind !== null && v.wind >= 3) looks.push('red at the tips');
+  if (v.sweep >= 8 && !['dandelion', 'cactus', 'toadstool', 'watermelon', 'pumpkin', 'echeveria'].includes(kind)) looks.push('windswept');
+  if (v.lost.length) looks.push(v.lost.length === 1 ? 'lost a petal' : 'lost two petals');
+  return looks;
+}
+
+/** The weather lines on a flower's card: what it was planted in, and the week it grew in once it has bloomed. */
+export function weatherLines(weather: FlowerWeather | null, stage: Stage): string[] {
+  const lines: string[] = [];
+  if (weather?.planted) lines.push(plantedWords(weather.planted));
+  if (stage === 'bloom' && weather?.grew) lines.push(grewWords(weather.grew));
+  return lines;
+}
+
+export { MIX, WIND };
 
 /** Which day of its life a flower is on, from 1. */
 export function dayOf(plantedAt: string, now: number): number {
@@ -302,7 +376,10 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
   /** The flower whose card is open. */
   let cardFor: string | null = null;
   const storedKind = store.get(KIND_KEY);
-  let kind: FlowerKind = isFlowerKind(storedKind) ? storedKind : 'sunflower';
+  let kind: PickedKind = isFlowerKind(storedKind) ? storedKind : 'sunflower';
+  /** The garden gives out seeds: no picking, and nobody knows what grows until it blooms. */
+  let seeds = false;
+  const planting_ = () => (seeds ? 'seed' : kindName(kind));
 
   const say = (text: string) => {
     if (status) status.textContent = text;
@@ -343,8 +420,8 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       if (mine) b.classList.add('is-yours');
       if (f.uri === fresh) b.classList.add('is-new');
       if (f.thirsty) b.classList.add('is-thirsty');
-      b.setAttribute('aria-label', COPY.flowerPlot(mine ? 'your' : `@${f.handle}'s`, f.kind, stage, f.thirsty));
-      b.append(drawFlower(doc, f.kind, stage, flowerVariant(f)));
+      b.setAttribute('aria-label', COPY.flowerPlot(mine ? 'your' : `@${f.handle}'s`, nameOf(f), stage, f.thirsty));
+      b.append(drawPlanted(doc, f, stage));
       b.append(el(doc, 'span', { class: 'home-plot__tag', 'aria-hidden': 'true' }, mine ? COPY.you : `@${f.handle}`));
     } else {
       const picked = i === selected;
@@ -353,7 +430,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       b.setAttribute('aria-label', COPY.emptyPlot(i + 1, picked));
       if (picked) {
         b.classList.add('is-picked');
-        const ghost = drawFlower(doc, kind, 'bloom', sampleVariant(kind));
+        const ghost = seeds ? drawSeed(doc, 'sprout', seedVariant(i), null) : drawFlower(doc, kind, 'bloom', sampleVariant(kind));
         ghost.classList.add('home-flower--ghost');
         b.append(ghost, el(doc, 'span', { class: 'home-plot__tag', 'aria-hidden': 'true' }, COPY.plantTag));
       }
@@ -387,11 +464,12 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     // A closed or upcoming patch can't be planted in, and nor can one where the reader has
     // their one flower: no picker, no button.
     const shutAway = Boolean(patch && (!patch.open || doneHere()));
-    if (kindsGroup) kindsGroup.hidden = shutAway;
+    // With seeds there's nothing to pick.
+    if (kindsGroup) kindsGroup.hidden = shutAway || seeds;
     if (plantButton) plantButton.hidden = shutAway;
     if (plantButton && !isBusy(plantButton)) {
       plantButton.disabled = shut() !== null;
-      plantButton.textContent = selected === null ? COPY.pick : COPY.plantHere(kind);
+      plantButton.textContent = selected === null ? COPY.pick : COPY.plantHere(planting_());
     }
   }
 
@@ -399,10 +477,10 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     selected = plot;
     if (plot !== null) focusAt = plot;
     render();
-    if (plot !== null) say(COPY.choose(kind));
+    if (plot !== null) say(COPY.choose(planting_()));
   }
 
-  function pickKind(next: FlowerKind): void {
+  function pickKind(next: PickedKind): void {
     kind = next;
     for (const b of kindButtons) {
       b.setAttribute('aria-checked', String(b.dataset.kind === next));
@@ -483,7 +561,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       ? { open: (lede: string) => opts.openSignIn!(lede, beforeLeave) }
       : mountSignIn({ doc, win, dialog: doc.querySelector<HTMLDialogElement>('dialog[data-blog-signin]'), auth, fetchImpl, local, now, beforeLeave });
   const ownerDid = () => owner?.did ?? (opts.owner?.startsWith('did:') ? opts.owner : GARDEN_SUBJECT);
-  const emit = () => opts.onView?.({ owner, patch, patches, flowers });
+  const emit = () => opts.onView?.({ owner, patch, patches, flowers, seeds });
 
   async function ensureSession(): Promise<Session | null> {
     if (session || !auth?.eager) return session;
@@ -560,7 +638,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
         return;
       }
       const planted = new Date(now());
-      const ref = await createRecord(s, SPROUT_NSID, sproutRecord(here, kind, plot, planted));
+      const ref = await createRecord(s, SPROUT_NSID, sproutRecord(here, seeds ? SEED : kind, plot, planted));
       // Moving: the new flower first, then the old ones go: a failed delete leaves two, and
       // the patch shows the newest.
       for (const uri of existing) if (uri !== ref.uri) await deleteRecord(s, uri);
@@ -573,7 +651,9 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
         uri: ref.uri,
         cid: ref.cid,
         handle: me.handle.startsWith('did:') ? COPY.you : me.handle,
-        kind,
+        kind: seeds ? SEED : kind,
+        family: seeds ? null : familyOf(kind),
+        weather: null,
         plot,
         plantedAt: planted.toISOString(),
         care: 0,
@@ -586,7 +666,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       selected = null;
       focusAt = plot;
       render();
-      say(existing.length ? COPY.moved(kind) : COPY.planted(kind));
+      say(existing.length ? COPY.moved(planting_()) : seeds ? COPY.plantedSeed : COPY.planted(kind));
       emit();
       const cell = plots?.querySelector(`[data-plot="${plot}"]`);
       burst(cell ?? plantButton, 'leaves', win);
@@ -667,6 +747,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     if (garden) {
       owner = garden.owner ?? owner;
       patch = garden.patch;
+      seeds = garden.seeds;
       if (garden.patches.length) patches = garden.patches;
       flowers = garden.flowers;
       selected = null;
@@ -714,18 +795,22 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
     const stage = stageFor(f.plantedAt, now(), open);
     const v = flowerVariant(f);
     const mine = isMine(f);
+    const name = nameOf(f);
     const close = el(doc, 'button', { type: 'button', class: 'home-card__close', 'aria-label': COPY.close, 'data-garden-card-close': '' });
     close.append(closeIcon(doc));
     const bed = el(doc, 'span', { class: 'home-card__bed', 'aria-hidden': 'true' });
-    bed.append(drawFlower(doc, f.kind, stage, v));
+    bed.append(drawPlanted(doc, f, stage));
     const words = el(doc, 'div', { class: 'home-card__words' });
-    words.append(
-      el(doc, 'h3', { class: 'home-card__title', id: 'garden-card-title' }, mine ? COPY.yours(f.kind) : COPY.theirs(f.handle, f.kind)),
-      el(doc, 'p', { class: 'home-card__meta' }, stage === 'bloom' ? COPY.inBloom(describeBloom(f.kind, v), open) : COPY.growing(stage, dayOf(f.plantedAt, now()))),
-    );
+    const hint = f.kind === SEED && stage === 'bud' && f.family ? ` · ${COPY.hint[f.family]}` : '';
+    const meta =
+      stage !== 'bloom' ? `${COPY.growing(stage, dayOf(f.plantedAt, now()))}${hint}` : f.kind === SEED ? COPY.opening : COPY.inBloom(describeBloom(f.kind, v), open);
+    words.append(el(doc, 'h3', { class: 'home-card__title', id: 'garden-card-title' }, mine ? COPY.yours(name) : COPY.theirs(f.handle, name)), el(doc, 'p', { class: 'home-card__meta' }, meta));
     const top = el(doc, 'div', { class: 'home-card__top' });
     top.append(bed, words);
     const parts: HTMLElement[] = [top];
+    const looks = stage === 'bloom' && f.kind !== SEED ? weatherLooks(f.kind, v) : [];
+    const lines = weatherLines(f.weather, stage);
+    if (lines.length || looks.length) parts.push(el(doc, 'p', { class: 'home-card__weather' }, [...lines, ...(looks.length ? [looks.join(', ')] : [])].join(' · ')));
     if (open && f.thirsty) parts.push(el(doc, 'p', { class: 'home-card__note' }, COPY.thirstyFor(thirstyDays(f, now()))));
     const actions = el(doc, 'div', { class: 'home-card__actions' });
     if (mine) {
@@ -794,7 +879,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       f.lastTended = new Date(now()).toISOString();
       render();
       fillCard();
-      cardSay(COPY.watered(isMine(f) ? COPY.yours(f.kind) : COPY.theirs(f.handle, f.kind)));
+      cardSay(COPY.watered(isMine(f) ? COPY.yours(nameOf(f)) : COPY.theirs(f.handle, nameOf(f))));
       burst(plots?.querySelector(`[data-plot="${f.plot}"]`) ?? button, 'drops', win);
     } catch (error) {
       failed(error);
@@ -865,6 +950,7 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       owner = garden.owner ?? owner;
       patch = garden.patch;
       patches = garden.patches;
+      seeds = garden.seeds;
       // A flower planted while this was loading stays.
       const planted = flowers.filter((f) => f.uri === fresh);
       flowers = [...garden.flowers.filter((f) => f.uri !== fresh), ...planted];
