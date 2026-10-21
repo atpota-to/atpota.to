@@ -225,6 +225,8 @@ test('a run writes new minutes only, and re-sums each day once it is written', a
   const out = await backfill({ args, host: 'https://js.example', apiKey: 'k', db, Jetstream: FakeJetstream, fetch, log: (l) => lines.push(l), warn: () => {} });
 
   assert.equal(FakeJetstream.opts.apiKey, 'k');
+  // a 429's Retry-After is waited out in full, not cut to the SDK's 30 s default
+  assert.ok(FakeJetstream.opts.retry.maxDelayMs >= 10 * 60_000);
   assert.equal(FakeJetstream.asked.raw, true);
   assert.deepEqual(calls, [
     ['existing', '2026-10-06T23:00:00.000Z', '2026-10-07T00:00:00.000Z'],
