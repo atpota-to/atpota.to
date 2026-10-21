@@ -49,7 +49,7 @@ import {
   fetchGardener,
   fetchLeaderboard,
   flowerVariant,
-  GARDEN_SIZES,
+  GARDEN_SIZE,
   GARDEN_SUBJECT,
   gardenPath,
   gardenRecord,
@@ -95,7 +95,6 @@ export const LEADERS_SHOWN = 10;
 
 export type Level = 'garden' | 'flowers';
 export type Filter = 'all' | 'growing' | 'bloom' | 'pressed';
-type Size = keyof typeof GARDEN_SIZES;
 
 export const COPY = {
   docTitle: (who: string | null) => (who ? `${who}'s garden · atpotato` : 'your garden · atpotato'),
@@ -693,32 +692,23 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     list.replaceChildren(...people.map((p) => chip(p, p.kind)));
   }
 
-  function sizeOf(patch: Pick<Patch, 'cols' | 'rows'>): Size | null {
-    return (Object.keys(GARDEN_SIZES) as Size[]).find((k) => GARDEN_SIZES[k].cols === patch.cols && GARDEN_SIZES[k].rows === patch.rows) ?? null;
-  }
-
-  function fillForm(form: HTMLFormElement, values: { name: string; note: string; size: Size | null; open?: boolean; planting: Planting }): void {
+  function fillForm(form: HTMLFormElement, values: { name: string; note: string; open?: boolean; planting: Planting }): void {
     const field = <T extends HTMLElement>(name: string) => form.elements.namedItem(name) as T | null;
     const name = field<HTMLInputElement>('name');
     const note = field<HTMLTextAreaElement>('note');
     if (name) name.value = values.name;
     if (note) note.value = values.note;
-    for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="size"]')) radio.checked = radio.value === values.size;
     const open = field<HTMLInputElement>('open');
     if (open && values.open !== undefined) open.checked = values.open;
     const many = field<HTMLInputElement>('many');
     if (many) many.checked = values.planting === 'many';
   }
 
-  function readForm(form: HTMLFormElement, fallback: { cols: number; rows: number }): { name: string; note: string; cols: number; rows: number; open: boolean; many: boolean } {
+  function readForm(form: HTMLFormElement): { name: string; note: string; open: boolean; many: boolean } {
     const data = new FormData(form);
-    const size = data.get('size');
-    const dims = typeof size === 'string' && size in GARDEN_SIZES ? GARDEN_SIZES[size as Size] : fallback;
     return {
       name: String(data.get('name') ?? '').trim().slice(0, NAME_MAX * 4),
       note: String(data.get('note') ?? '').trim().slice(0, NOTE_MAX * 4),
-      cols: dims.cols,
-      rows: dims.rows,
       open: form.elements.namedItem('open') ? data.get('open') !== null : true,
       many: data.get('many') !== null,
     };
@@ -731,7 +721,9 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       return null;
     }
     if (button && isBusy(button)) return null;
-    const v = readForm(form, base ?? GARDEN_SIZES.medium);
+    const v = readForm(form);
+    // A new garden is the one size; one already planted keeps its own, so no flower moves.
+    const dims = base ?? GARDEN_SIZE;
     if (!v.name) return null;
     if (button) setBusy(button, true);
     setText(status, COPY.setup.planting);
@@ -740,7 +732,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       // Many each, or one each; a garden that moves flowers (set elsewhere) keeps doing so.
       const planting: Planting = v.many ? 'many' : base?.planting === 'move' ? 'move' : PLANTING[0];
       const record = gardenRecord(
-        { name: v.name, note: v.note || null, cols: v.cols, rows: v.rows, createdAt: base?.createdAt, closesAt: v.open ? null : base?.closesAt && !base.open ? base.closesAt : at.toISOString(), planting },
+        { name: v.name, note: v.note || null, cols: dims.cols, rows: dims.rows, createdAt: base?.createdAt, closesAt: v.open ? null : base?.closesAt && !base.open ? base.closesAt : at.toISOString(), planting },
         at,
       );
       const saved = await saveGarden(session, record);
@@ -787,7 +779,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     if (setup) setup.hidden = !(owner && !has);
     if (none) none.hidden = owner || has;
     setText(none?.querySelector<HTMLElement>('[data-none-text]') ?? null, COPY.none(person.handle));
-    if (owner && !has && setup) fillForm(setup.querySelector<HTMLFormElement>('[data-setup-form]')!, { name: COPY.setup.name(person.handle), note: '', size: 'medium', planting: PLANTING[0] });
+    if (owner && !has && setup) fillForm(setup.querySelector<HTMLFormElement>('[data-setup-form]')!, { name: COPY.setup.name(person.handle), note: '', planting: PLANTING[0] });
     if (!has) return;
     if (controller) {
       await controller.reload(version);
@@ -810,7 +802,6 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       onView: (v) => {
         gardenView = v;
         if (v.patch?.open) season = v;
-        if (v.patch) patchTile?.style.setProperty('--garden-cols', String(v.patch.cols));
         renderVisitors();
         renderStats();
         renderNumbers();
@@ -819,7 +810,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
         // Settings only for your own garden (record key "self").
         if (settings) settings.hidden = !(owner && p && p.rkey === OWN_PATCH_RKEY);
         if (settings && p && owner) {
-          fillForm(settings.querySelector<HTMLFormElement>('[data-settings-form]')!, { name: p.name, note: p.note ?? '', size: sizeOf(p), open: p.open, planting: p.planting });
+          fillForm(settings.querySelector<HTMLFormElement>('[data-settings-form]')!, { name: p.name, note: p.note ?? '', open: p.open, planting: p.planting });
         }
       },
     });

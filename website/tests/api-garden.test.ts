@@ -314,10 +314,8 @@ describe('growing and tending', () => {
     expect(client.patchUri('2026-autumn')).toBe(patchUri('2026-autumn'));
     expect(client.patchUri('self', did(1))).toBe(patchUri('self', did(1)));
     expect([client.OWN_PATCH_RKEY, client.NAME_MAX, client.NOTE_MAX, client.MIN_COLS, client.MIN_ROWS]).toEqual([OWN_PATCH_RKEY, NAME_MAX, NOTE_MAX, MIN_COLS, MIN_ROWS]);
-    for (const size of Object.values(client.GARDEN_SIZES)) {
-      expect(size.cols).toBeGreaterThanOrEqual(MIN_COLS);
-      expect(size.rows).toBeGreaterThanOrEqual(MIN_ROWS);
-    }
+    expect(client.GARDEN_SIZE.cols).toBeGreaterThanOrEqual(MIN_COLS);
+    expect(client.GARDEN_SIZE.rows).toBeGreaterThanOrEqual(MIN_ROWS);
   });
 
   it('your own garden’s record: limited by graphemes, inside the lexicon’s sizes, and the server reads it back', () => {

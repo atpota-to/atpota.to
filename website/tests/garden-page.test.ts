@@ -577,41 +577,42 @@ describe('the garden page', () => {
     const form = $<HTMLFormElement>('[data-setup-form]');
     expect((form.elements.namedItem('name') as HTMLInputElement).value).toBe("me's garden");
     (form.elements.namedItem('note') as HTMLTextAreaElement).value = 'come say hi';
-    form.querySelector<HTMLInputElement>('input[value="small"]')!.checked = true;
+    // one size for every garden: nothing to pick
+    expect(form.querySelector('input[name="size"]')).toBeNull();
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await flush();
     const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
     expect(put).toMatchObject({ repo: ME, collection: PATCH_NSID, rkey: 'self' });
-    expect(put.record).toMatchObject({ $type: PATCH_NSID, name: "me's garden", note: 'come say hi', cols: 6, rows: 4 });
+    expect(put.record).toMatchObject({ $type: PATCH_NSID, name: "me's garden", note: 'come say hi', cols: 12, rows: 8 });
     // one flower each unless you say otherwise: the default, so it isn't written
     expect(put.record).not.toHaveProperty('planting');
     // the garden is loaded at the version just saved, not an older cached one
     expect(new URLSearchParams(r.gardenAsked.at(-1)).get('v')).toBe('bafypatch1');
     expect(shown('[data-setup]')).toBe(false);
     expect(shown('[data-garden]')).toBe(true);
-    expect(document.querySelectorAll('[data-garden] [data-plot]')).toHaveLength(24);
+    expect(document.querySelectorAll('[data-garden] [data-plot]')).toHaveLength(96);
     expect(text('[data-head-status]')).toBe(COPY.setup.done);
     expect(shown('[data-settings]')).toBe(true);
     expect(shown('[data-how]')).toBe(true);
   });
 
-  it('your garden settings: rename, resize, let people plant more than one, or close it', async () => {
+  it('your garden settings: rename, let people plant more than one, or close it', async () => {
     const r = rig({ signedIn: true, path: '/garden/me.test' });
     await r.run();
     expect(shown('[data-settings]')).toBe(true);
     const form = $<HTMLFormElement>('[data-settings-form]');
     const many = () => form.elements.namedItem('many') as HTMLInputElement;
     expect((form.elements.namedItem('name') as HTMLInputElement).value).toBe("me's garden");
-    expect(form.querySelector<HTMLInputElement>('input[value="medium"]')!.checked).toBe(true);
+    expect(form.querySelector('input[name="size"]')).toBeNull();
     expect(many().checked).toBe(false);
     (form.elements.namedItem('name') as HTMLInputElement).value = 'the back yard';
-    form.querySelector<HTMLInputElement>('input[value="large"]')!.checked = true;
     many().checked = true;
     (form.elements.namedItem('open') as HTMLInputElement).checked = false;
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await flush();
     const put = r.calls.find((c) => c.path.endsWith('putRecord'))!.body!;
-    expect(put.record).toMatchObject({ name: 'the back yard', cols: 12, rows: 8, planting: 'many', createdAt: '2026-10-01T00:00:00Z', closesAt: new Date(NOW).toISOString() });
+    // a garden already planted keeps its size, so no flower moves
+    expect(put.record).toMatchObject({ name: 'the back yard', cols: 8, rows: 6, planting: 'many', createdAt: '2026-10-01T00:00:00Z', closesAt: new Date(NOW).toISOString() });
     expect(many().checked).toBe(true);
     expect(text('[data-settings-status]')).toBe(COPY.setup.saved);
     expect(new URLSearchParams(r.gardenAsked.at(-1)).get('v')).toBe('bafypatch1');
