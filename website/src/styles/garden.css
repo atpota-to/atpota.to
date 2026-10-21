@@ -13,6 +13,9 @@ html[data-theme="dark"] {
 
 .garden-page {
   padding: 24px var(--gutter, 16px) 64px;
+  /* A plot's name tag (patch.css) sits wider than an edge plot, even hidden; body's clip goes
+     to the viewport, which phones still scroll sideways, so the page clips it here. */
+  overflow-x: clip;
 }
 
 .garden-page:focus {
