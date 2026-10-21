@@ -44,7 +44,7 @@ export function contrast(a: string, b: string): number {
 const TEXT = 4.5;
 const UI = 3;
 const PAIRS: Array<[string, string, number]> = [
-  ...['bg', 'paper', 'card'].flatMap((bg): Array<[string, string, number]> => [
+  ...['bg', 'paper', 'card', 'inset'].flatMap((bg): Array<[string, string, number]> => [
     ['text', bg, TEXT],
     ['ink', bg, TEXT],
     ['text-soft', bg, TEXT],
