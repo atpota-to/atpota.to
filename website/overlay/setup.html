@@ -65,16 +65,16 @@
 
                     <fieldset class="ovs-set">
                         <legend>show</legend>
-                        <label class="ovs-check"><input type="checkbox" name="show" value="poe" checked> poe</label>
-                        <label class="ovs-check"><input type="checkbox" name="show" value="weather" checked> the weather card <em>top corner</em></label>
-                        <label class="ovs-check"><input type="checkbox" name="show" value="strip"> the weather strip <em>a slim bar along the bottom</em></label>
+                        <label class="ovs-check"><input type="checkbox" name="show" value="poe" checked><span>poe</span></label>
+                        <label class="ovs-check"><input type="checkbox" name="show" value="weather" checked><span>the weather card <em>top corner</em></span></label>
+                        <label class="ovs-check"><input type="checkbox" name="show" value="strip"><span>the weather strip <em>a slim bar along the bottom</em></span></label>
                     </fieldset>
 
                     <fieldset class="ovs-set">
                         <legend>poe</legend>
-                        <label class="ovs-check"><input type="checkbox" name="chat" checked> hellos and chat commands</label>
-                        <label class="ovs-check"><input type="checkbox" name="follows" checked> thanks for new followers</label>
-                        <label class="ovs-check"><input type="checkbox" name="alerts" checked> weather alerts <em>storms, new apps blowing in</em></label>
+                        <label class="ovs-check"><input type="checkbox" name="chat" checked><span>hellos and chat commands</span></label>
+                        <label class="ovs-check"><input type="checkbox" name="follows" checked><span>thanks for new followers</span></label>
+                        <label class="ovs-check"><input type="checkbox" name="alerts" checked><span>weather alerts <em>storms, new apps blowing in</em></span></label>
                         <label class="ovs-field ovs-field--row">naps after
                             <select name="nap">
                                 <option value="0">never</option>
@@ -94,10 +94,10 @@
 
                     <fieldset class="ovs-set ovs-set--row">
                         <legend>look</legend>
-                        <label class="ovs-check"><input type="radio" name="side" value="right" checked> poe on the right</label>
-                        <label class="ovs-check"><input type="radio" name="side" value="left"> poe on the left</label>
-                        <label class="ovs-check"><input type="radio" name="theme" value="light" checked> light</label>
-                        <label class="ovs-check"><input type="radio" name="theme" value="dark"> dark</label>
+                        <label class="ovs-check"><input type="radio" name="side" value="right" checked><span>poe on the right</span></label>
+                        <label class="ovs-check"><input type="radio" name="side" value="left"><span>poe on the left</span></label>
+                        <label class="ovs-check"><input type="radio" name="theme" value="light" checked><span>light</span></label>
+                        <label class="ovs-check"><input type="radio" name="theme" value="dark"><span>dark</span></label>
                     </fieldset>
 
                     <label class="ovs-field">people poe should ignore <em>bots, say. handles, one per line or comma separated</em>
@@ -110,10 +110,11 @@
                     <!-- the overlay itself, with ?demo, over a pretend stream -->
                     <div class="ovs-preview" data-ovs-preview>
                         <iframe class="ovs-preview__frame" title="overlay preview" data-ovs-frame tabindex="-1"></iframe>
+                        <button type="button" class="ovs-preview__full" data-ovs-full aria-label="see the preview full screen">full screen</button>
                     </div>
 
                     <label class="ovs-field">your overlay URL
-                        <input type="text" readonly data-ovs-url>
+                        <textarea class="ovs-url" rows="1" readonly data-ovs-url></textarea>
                     </label>
                     <div class="ovs-out__buttons">
                         <button type="button" class="btn btn--primary btn--sm" data-ovs-copy>copy URL</button>

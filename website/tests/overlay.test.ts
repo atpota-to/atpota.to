@@ -7,7 +7,7 @@ import { appsLine, createGate, endedLine, followLine, forecastLine, helloLine, l
 import { readParams, toSearch } from '../src/overlay/params.js';
 import { LINE_GAP_MS, LINE_MS, MAX_LINES, bobMs, enqueue, mountOverlayPoe } from '../src/overlay/poe.js';
 import { AGAIN_MS, createRegulars } from '../src/overlay/regulars.js';
-import { overlayUrl, paramsFrom } from '../src/overlay/setup.js';
+import { init as initSetup, overlayUrl, paramsFrom } from '../src/overlay/setup.js';
 import { TUNES } from '../src/overlay/sounds.js';
 import { WAKE_MS } from '../src/poe/idle.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
@@ -291,6 +291,30 @@ describe('the setup page', () => {
     form.querySelector<HTMLSelectElement>('[name="nap"]')!.value = '10';
     form.querySelector<HTMLTextAreaElement>('[name="ignore"]')!.value = 'bot.bsky.social\n@other.bsky.social, nonsense!';
     expect(overlayUrl(paramsFrom(form), 'https://atpota.to')).toBe('https://atpota.to/overlay?show=poe,strip&streamer=dame.is&follows=off&ignore=bot.bsky.social,other.bsky.social&sound=off&nap=10&side=left');
+  });
+});
+
+describe('the setup page on a phone', () => {
+  it('opens the preview full screen, and closes it with the button, a tap or Escape', () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} });
+    document.body.innerHTML = read('../overlay/setup.html').split('<body')[1]!.replace(/^[^>]*>/, '');
+    initSetup(document);
+    const preview = document.querySelector<HTMLElement>('[data-ovs-preview]')!;
+    const full = document.querySelector<HTMLButtonElement>('[data-ovs-full]')!;
+    full.click();
+    expect(preview.classList.contains('is-full')).toBe(true);
+    expect(document.documentElement.classList.contains('ovs-full-open')).toBe(true);
+    expect(full.textContent).toBe('close');
+    full.click();
+    expect(preview.classList.contains('is-full')).toBe(false);
+    full.click();
+    preview.click();
+    expect(preview.classList.contains('is-full')).toBe(false);
+    full.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(preview.classList.contains('is-full')).toBe(false);
+    expect(document.documentElement.classList.contains('ovs-full-open')).toBe(false);
+    vi.unstubAllGlobals();
   });
 });
 

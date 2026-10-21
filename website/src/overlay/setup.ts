@@ -5,6 +5,7 @@
  *
  * The preview is the real overlay in an iframe at 1920x1080, scaled down to fit. It's
  * rebuilt a moment after the form stops changing (PREVIEW_DELAY_MS), not on every key.
+ * On a phone that's tiny, so it also opens full screen.
  */
 
 import { actorOf, DEFAULT_NAP, DEFAULT_VOLUME, PIECES, toSearch, type OverlayParams, type Piece } from './params';
@@ -44,7 +45,8 @@ export function init(root: Document = document): void {
   const form = root.querySelector<HTMLFormElement>('[data-ovs-form]');
   const frame = root.querySelector<HTMLIFrameElement>('[data-ovs-frame]');
   const preview = root.querySelector<HTMLElement>('[data-ovs-preview]');
-  const url = root.querySelector<HTMLInputElement>('[data-ovs-url]');
+  const url = root.querySelector<HTMLTextAreaElement>('[data-ovs-url]');
+  const full = root.querySelector<HTMLButtonElement>('[data-ovs-full]');
   const copy = root.querySelector<HTMLButtonElement>('[data-ovs-copy]');
   const open = root.querySelector<HTMLAnchorElement>('[data-ovs-open]');
   const status = root.querySelector<HTMLElement>('[data-ovs-status]');
@@ -72,6 +74,30 @@ export function init(root: Document = document): void {
   const fit = () => preview.style.setProperty('--scale', String(preview.clientWidth / WIDTH));
   fit();
   new ResizeObserver(fit).observe(preview);
+
+  // full screen: the preview fills the screen (setup.css .is-full), until the button, Escape or a tap on it
+  const setFull = (on: boolean) => {
+    preview.classList.toggle('is-full', on);
+    root.documentElement.classList.toggle('ovs-full-open', on);
+    if (full) {
+      full.textContent = on ? 'close' : 'full screen';
+      full.setAttribute('aria-label', on ? 'close the full screen preview' : 'see the preview full screen');
+    }
+    fit();
+  };
+  full?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setFull(!preview.classList.contains('is-full'));
+  });
+  preview.addEventListener('click', () => {
+    if (preview.classList.contains('is-full')) setFull(false);
+  });
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && preview.classList.contains('is-full')) {
+      setFull(false);
+      full?.focus();
+    }
+  });
 
   copy?.addEventListener('click', async () => {
     try {
