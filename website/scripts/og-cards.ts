@@ -3,7 +3,7 @@
  * cards follow the site: the home hero and Poe's nudge, the /guides hero and every guide
  * it lists, the blog hero (whose name and tagline come from the publication record), the
  * garden's heading and description, and the home page's Poe tile, which also makes the
- * share card for chatting with Poe.
+ * share card for chatting with Poe, and the about page's surface.
  *
  * Runs in the card page, which fetches the pages from the dev server it is served by.
  * readCards() takes any page loader, so tests run it on the same HTML the build serves.
@@ -12,7 +12,7 @@
 
 import { drawFlower, sampleVariant, seedVariant, type FlowerKind } from '../src/scripts/flowers.js';
 
-export type CardKind = 'home' | 'guides' | 'guide' | 'blog' | 'garden' | 'poe';
+export type CardKind = 'home' | 'guides' | 'guide' | 'blog' | 'garden' | 'poe' | 'about';
 
 export interface CardData {
   /** The image's name in public/og or dist/og, without ".png". */
@@ -22,7 +22,7 @@ export interface CardData {
   lede: string;
   /** Section chip (guides, blog). */
   chip?: string;
-  /** Author handle with its @ (guide, blog, poe). */
+  /** Author handle with its @ (guide, blog, poe, about). */
   handle?: string;
   /** Poe's speech bubble (home). */
   bubble?: string;
@@ -151,7 +151,18 @@ export async function readCards(load: LoadPage): Promise<CardResult[]> {
     };
   });
 
-  return Promise.all([home, guides, ...guidePages, blog, garden, poe]);
+  const about = attempt('about', async () => {
+    const doc = await load('/about');
+    return {
+      name: 'about',
+      kind: 'about',
+      title: text(doc, '/about', '#about-title'),
+      lede: meta(doc, '/about', 'description'),
+      handle: handleFrom(doc, '/about', '.about-surface__words a[href^="https://bsky.app/profile/"]'),
+    };
+  });
+
+  return Promise.all([home, guides, ...guidePages, blog, garden, poe, about]);
 }
 
 /** One <section data-og> per card, from the page's <template data-og-kind> for its kind. */

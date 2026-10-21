@@ -23,6 +23,7 @@ const PAGES: Record<string, () => string> = {
   ...Object.fromEntries(GUIDES.documents.map((g) => [`/guides/${g.slug}`, () => read(g.html)])),
   '/blog': () => `<body>${blogIndex}</body>`,
   '/garden': () => read('garden/index.html'),
+  '/about': () => read('about/index.html'),
 };
 
 function loader(pages: Record<string, () => string> = PAGES): LoadPage {
@@ -40,7 +41,7 @@ function cardsOf(results: CardResult[]): Record<string, CardData> {
 describe('og cards: readCards', () => {
   it('reads every card from the copy its page shows', async () => {
     const results = await readCards(loader());
-    expect(results.map((r) => r.name)).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'blog', 'garden', 'poe']);
+    expect(results.map((r) => r.name)).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'blog', 'garden', 'poe', 'about']);
     expect(results.filter((r) => 'error' in r)).toEqual([]);
     const cards = cardsOf(results);
 
@@ -88,16 +89,25 @@ describe('og cards: readCards', () => {
       lede: home.querySelector('.home-poe__text.only-touch')!.textContent!.replace(/\s+/g, ' ').trim(),
       handle: '@poe.atpota.to',
     });
+
+    const about = new DOMParser().parseFromString(read('about/index.html'), 'text/html');
+    expect(cards.about).toEqual({
+      name: 'about',
+      kind: 'about',
+      title: about.querySelector('#about-title')!.textContent,
+      lede: about.querySelector('meta[name="description"]')!.getAttribute('content'),
+      handle: '@dame.is',
+    });
   });
 
   it('a page that fails costs only its own card', async () => {
     const down = await readCards(loader({ ...PAGES, '/blog': () => `<body>${unavailablePage(new Map()).main}</body>` }));
     expect(down.find((r) => r.name === 'blog')).toEqual({ name: 'blog', error: '/blog has nothing at .blog-hero__title' });
-    expect(Object.keys(cardsOf(down))).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'garden', 'poe']);
+    expect(Object.keys(cardsOf(down))).toEqual(['home', 'guides', ...GUIDES.documents.map((g) => g.slug), 'garden', 'poe', 'about']);
 
     const { '/guides': _gone, ...noGuides } = PAGES;
     const missing = await readCards(loader(noGuides));
-    expect(missing.map((r) => r.name)).toEqual(['home', 'guides', 'blog', 'garden', 'poe']);
+    expect(missing.map((r) => r.name)).toEqual(['home', 'guides', 'blog', 'garden', 'poe', 'about']);
     expect(missing[1]).toEqual({ name: 'guides', error: '/guides answered 404' });
   });
 
