@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PAGE_PATHS } from '../server/garden-page.js';
 import type { Auth, Prepared, Session } from '../src/blog/auth.js';
 import { PENDING_KEY } from '../src/blog/state.js';
 import { createStore } from '../src/poe/storage.js';
@@ -250,16 +251,17 @@ describe('garden addresses', () => {
     expect(actorOf({ did: CY, handle: 'cy.example' })).toBe('cy.example');
   });
 
-  it('vercel.json serves garden/index.html for every garden address', () => {
+  it('vercel.json serves garden/index.html for every garden address, through the function that gives it its tags', () => {
     const vercel = JSON.parse(read('../vercel.json')) as { cleanUrls?: boolean; rewrites: Array<{ source: string; destination: string }> };
     const garden = vercel.rewrites.filter((r) => r.source.startsWith('/garden'));
     // With cleanUrls, garden/index.html is served at /garden and /garden/index.html only
-    // redirects there, so a rewrite has to land on /garden or it 404s.
+    // redirects there, so the function (server/garden-page.ts) fetches the page from /garden.
     expect(vercel.cleanUrls).toBe(true);
     expect(garden).toEqual([
-      { source: '/garden/:actor', destination: '/garden' },
-      { source: '/garden/:actor/flowers', destination: '/garden' },
+      { source: '/garden/:actor', destination: '/api/garden-page?actor=:actor' },
+      { source: '/garden/:actor/flowers', destination: '/api/garden-page?actor=:actor&level=flowers' },
     ]);
+    expect(PAGE_PATHS).toEqual(['/garden']);
     expect(vercel.rewrites.some((r) => r.destination.endsWith('.html'))).toBe(false);
   });
 });

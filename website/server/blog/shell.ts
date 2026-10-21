@@ -80,12 +80,17 @@ export interface ShellRequest {
  * bypass secret is only ever sent there. The cookie is the visitor's own, for this origin.
  */
 export async function fetchShell(doFetch: Fetch, req: ShellRequest): Promise<Shell> {
+  return parseShell(await fetchPage(doFetch, req, SHELL_PATHS));
+}
+
+/** A built page of this deployment, by the first of `paths` that answers (the garden's page uses it too). */
+export async function fetchPage(doFetch: Fetch, req: ShellRequest, paths: readonly string[]): Promise<string> {
   const headers: Record<string, string> = { accept: 'text/html' };
   if (req.cookie) headers.cookie = req.cookie;
   const host = new URL(req.origin).hostname;
   if (req.bypassSecret && host.endsWith('.vercel.app')) headers['x-vercel-protection-bypass'] = req.bypassSecret;
   let lastError: unknown = null;
-  for (const path of SHELL_PATHS) {
+  for (const path of paths) {
     try {
       const res = await doFetch(new URL(path, req.origin), { headers, signal: AbortSignal.timeout(SHELL_TIMEOUT_MS) });
       if (!res.ok) {
@@ -93,7 +98,7 @@ export async function fetchShell(doFetch: Fetch, req: ShellRequest): Promise<She
         lastError = new ShellError(`shell ${path} answered ${res.status}`);
         continue;
       }
-      return parseShell(await res.text());
+      return await res.text();
     } catch (error) {
       lastError = error;
     }

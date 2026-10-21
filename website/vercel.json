@@ -11,6 +11,16 @@
       "supportsCancellation": true,
       "includeFiles": "{server/og-fonts/**,src/assets/wordmark.svg,src/assets/mascot/*.svg,node_modules/@resvg/resvg-wasm/index_bg.wasm}"
     },
+    "api/og-dispatch.ts": {
+      "maxDuration": 30,
+      "supportsCancellation": true,
+      "includeFiles": "{server/og-fonts/**,src/assets/wordmark.svg,src/assets/sprout.svg,src/assets/mascot/*.svg,node_modules/@resvg/resvg-wasm/index_bg.wasm}"
+    },
+    "api/og-garden.ts": {
+      "maxDuration": 30,
+      "supportsCancellation": true,
+      "includeFiles": "{server/og-fonts/**,src/assets/wordmark.svg,src/assets/mascot/*.svg,node_modules/@resvg/resvg-wasm/index_bg.wasm}"
+    },
     "api/*.ts": {
       "maxDuration": 300,
       "supportsCancellation": true
@@ -23,8 +33,10 @@
     { "source": "/blog/:path*", "destination": "/api/blog?view=post&path=:path*" },
     { "source": "/receive_auth_callback", "destination": "/api/blog?view=email-return" },
     { "source": "/og/weather.png", "destination": "/api/og-weather" },
-    { "source": "/garden/:actor", "destination": "/garden" },
-    { "source": "/garden/:actor/flowers", "destination": "/garden" }
+    { "source": "/og/dispatch/:key", "destination": "/api/og-dispatch?key=:key" },
+    { "source": "/og/garden/:actor", "destination": "/api/og-garden?actor=:actor" },
+    { "source": "/garden/:actor", "destination": "/api/garden-page?actor=:actor" },
+    { "source": "/garden/:actor/flowers", "destination": "/api/garden-page?actor=:actor&level=flowers" }
   ],
   "redirects": [
     {
