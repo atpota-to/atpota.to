@@ -136,6 +136,26 @@ describe('the forecast tile', () => {
     expect(tile.querySelector('[data-f-note]')!.textContent).toBe(skillWords(FORECAST));
   });
 
+  it("gives each hour its likely range as a bar for a phone's rows, on one scale for them all", () => {
+    renderForecast(tile, FORECAST, NOW, TZ);
+    const bars = [...tile.querySelectorAll<HTMLElement>('[data-f-hours] > li .weather-forecast__range')];
+    expect(bars).toHaveLength(7);
+    const v = (el: HTMLElement, k: string) => Number(el.style.getPropertyValue(k));
+    for (const b of bars) {
+      expect(b.getAttribute('aria-hidden')).toBe('true');
+      expect(v(b, '--lo')).toBeLessThanOrEqual(v(b, '--v'));
+      expect(v(b, '--v')).toBeLessThanOrEqual(v(b, '--hi'));
+    }
+    // the lowest low starts the scale, the highest high ends it; now is a point
+    expect(Math.min(...bars.map((b) => v(b, '--lo')))).toBe(0);
+    expect(Math.max(...bars.map((b) => v(b, '--hi')))).toBe(1);
+    expect(v(bars[0]!, '--lo')).toBe(v(bars[0]!, '--hi'));
+    // rows where the strip won't fit the tile, so a phone never scrolls it sideways
+    const css = readFileSync(resolve(process.cwd(), 'src/styles/weather.css'), 'utf8');
+    expect(css).toMatch(/\.weather-forecast \{[^}]*container: forecast \/ inline-size/);
+    expect(css).toMatch(/@container forecast \(max-width: \d+px\) \{[\s\S]*?\.weather-forecast__scroll \{\s*overflow: visible/);
+  });
+
   it("drops hours that have gone by", () => {
     renderForecast(tile, FORECAST, NOW + 2 * HOUR, TZ);
     expect(tile.querySelectorAll('[data-f-hours] > li')).toHaveLength(6);

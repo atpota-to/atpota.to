@@ -211,6 +211,33 @@ export function resetSharedReading(): void {
   shared = null;
 }
 
+/** Records a second as people read them: one decimal under 100, whole after that. */
+export function formatRate(n: number): string {
+  return n < 100 ? n.toLocaleString('en-US', { maximumFractionDigits: 1 }) : Math.round(n).toLocaleString('en-US');
+}
+
+/** Accounts as people read them: 21,345. */
+export const formatCount = (n: number) => Math.round(n).toLocaleString('en-US');
+
+/** Accounts on an axis: 21k, 1.2m. */
+export function compactCount(n: number): string {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n).toLowerCase();
+}
+
+/** How much of a range the station covered, in words: "13 minutes", "2 days". */
+export function coverageWords(seconds: number): string {
+  const units: Array<[string, number]> = [
+    ['day', 86_400],
+    ['hour', 3600],
+    ['minute', 60],
+  ];
+  for (const [unit, size] of units) {
+    const n = Math.floor(seconds / size);
+    if (n >= 1) return `${n} ${unit}${n === 1 ? '' : 's'}`;
+  }
+  return 'under a minute';
+}
+
 /** The index as people read it: two decimals under 1, one under 10, whole after that. */
 export function formatIndex(index: number): string {
   return index < 1 ? index.toFixed(2) : index < 10 ? index.toFixed(1) : String(Math.round(index));

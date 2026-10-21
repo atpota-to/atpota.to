@@ -889,8 +889,10 @@ html[data-theme="dark"] .weather-hero {
 
 /* ---------- the forecast (weather-forecast.ts) ---------- */
 
+/* A container, so the hours turn to rows whenever the strip wouldn't fit the tile. */
 .weather-forecast {
   grid-column: 1 / -1;
+  container: forecast / inline-size;
 }
 
 .weather-forecast__lede {
@@ -900,9 +902,9 @@ html[data-theme="dark"] .weather-hero {
   text-wrap: balance;
 }
 
-/* An hour a column, like a weather app's strip; it scrolls sideways when it doesn't fit.
+/* An hour a column, like a weather app's strip, where it fits (rows otherwise, below).
    Positioned, so each hour's visually hidden words are clipped with it: with the tile as
-   their containing block they'd hang off its edge and widen the whole page on a phone. */
+   their containing block they'd hang off its edge and widen the whole page. */
 .weather-forecast__scroll {
   position: relative;
   overflow-x: auto;
@@ -1060,6 +1062,109 @@ html[data-theme="dark"] .weather-hero {
   font-variant-numeric: tabular-nums;
 }
 
+/* Each hour's likely range, for the rows below: hidden in the strip, which has the band. */
+.weather-forecast__range {
+  display: none;
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+
+.weather-forecast__range i {
+  position: absolute;
+  inset: 0 calc((1 - var(--hi, 1)) * 100%) 0 calc(var(--lo, 0) * 100%);
+  min-width: 6px;
+  border-radius: 3px;
+  background: var(--weather-bsky);
+  opacity: 0.4;
+}
+
+.weather-forecast__range::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--v, 0) * 100%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--weather-bsky);
+  box-shadow: 0 0 0 2px var(--bg);
+  transform: translate(-50%, -50%);
+}
+
+/* Narrower than the strip (a phone, a narrow window): an hour a row, like a weather app's
+   days, no sideways scrolling. The chart's band becomes each row's bar. */
+@container forecast (max-width: 800px) {
+  .weather-forecast__scroll {
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+  }
+
+  .weather-forecast__strip {
+    min-width: 0;
+    padding: 4px 14px;
+  }
+
+  .weather-forecast__chart {
+    display: none;
+  }
+
+  .weather-forecast__hours {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* a storm's chance sits under its drawing, as a weather app has it */
+  .weather-forecast__hour {
+    grid-template-columns: 54px 32px minmax(0, 1fr) minmax(42px, auto);
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "time icon range rate"
+      "time chance range rate";
+    align-items: center;
+    justify-items: start;
+    gap: 0 12px;
+    min-height: 46px;
+    padding: 4px 0;
+    border-top: 1px solid var(--line-strong);
+  }
+
+  .weather-forecast__hour:first-child {
+    border-top: 0;
+  }
+
+  .weather-forecast__time {
+    grid-area: time;
+    font-size: 14px;
+  }
+
+  .weather-forecast__icon {
+    grid-area: icon;
+  }
+
+  .weather-forecast__chance {
+    grid-area: chance;
+    justify-self: center;
+    line-height: 1;
+  }
+
+  .weather-forecast__icon {
+    justify-self: center;
+  }
+
+  .weather-forecast__range {
+    display: block;
+    grid-area: range;
+    justify-self: stretch;
+  }
+
+  .weather-forecast__rate {
+    grid-area: rate;
+    justify-self: end;
+  }
+}
+
 .weather-forecast[data-state="loading"] .weather-forecast__strip {
   min-height: 150px;
   opacity: 0.5;
@@ -1072,6 +1177,11 @@ html[data-theme="dark"] .weather-hero {
 
   .weather-forecast__band {
     fill: none;
+  }
+
+  .weather-forecast__range i,
+  .weather-forecast__range::after {
+    background: CanvasText;
   }
 }
 
@@ -1576,26 +1686,31 @@ html[data-theme="dark"] .weather-hero {
   font-weight: 700;
 }
 
-/* How an app did against the earlier window (weather-page.ts appChange): an arrow and a
-   number, in words for screen readers; the tint only repeats what the arrow says. */
-.weather-bars__change {
+/* How an app did against the earlier window (weather-page.ts appChange), or a number in
+   the last-minute tile against the span before (weather-span.ts): an arrow and a number,
+   in words for screen readers; the tint only repeats what the arrow says. */
+.weather-bars__change,
+.weather-change {
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.weather-bars__change[data-trend] {
+.weather-bars__change[data-trend],
+.weather-change[data-trend] {
   padding: 1px 8px;
   border-radius: var(--radius-pill);
 }
 
-.weather-bars__change[data-trend="up"] {
+.weather-bars__change[data-trend="up"],
+.weather-change[data-trend="up"] {
   background: var(--leaf-tint);
   color: var(--leaf-strong);
 }
 
-.weather-bars__change[data-trend="down"] {
+.weather-bars__change[data-trend="down"],
+.weather-change[data-trend="down"] {
   background: var(--flesh-tint);
   color: var(--text);
 }
@@ -1605,8 +1720,14 @@ html[data-theme="dark"] .weather-hero {
   color: var(--text);
 }
 
-.weather-bars__change[data-trend="steady"] {
+.weather-bars__change[data-trend="steady"],
+.weather-change[data-trend="steady"] {
   color: var(--muted);
+}
+
+/* No chip yet (nothing to compare with): no gap where it goes. */
+.weather-change:empty {
+  display: none;
 }
 
 .weather-bars__value {
@@ -1697,6 +1818,12 @@ html[data-theme="dark"] .weather-hero {
   font-variant-numeric: tabular-nums;
 }
 
+.weather-stats .weather-change {
+  width: fit-content;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
 /* Feels like, gusts, humidity, visibility (weather-page.ts renderReadouts): a weather app's
    details, each with a little drawing, its number, and what it means in a line. */
 .weather-readouts {
@@ -1739,15 +1866,77 @@ html[data-theme="dark"] .weather-hero {
   margin: 0;
 }
 
+/* The number on a line of its own, what it counts under it, then its chip: nothing to
+   wrap around the number in a phone's narrow column. */
 .weather-readout__value {
-  font-size: 15px;
-  color: var(--text-soft);
+  display: grid;
+  justify-items: start;
+  gap: 2px;
 }
 
 .weather-readout__value strong {
   font-size: 26px;
+  line-height: 1.15;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+.weather-readout__unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.weather-readout__value .weather-change {
+  margin-top: 4px;
+}
+
+/* "minute" in the title: tap it for the last hour, day or week (weather-span.ts). */
+.weather-span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: -4px 0;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline 2px dashed var(--dash);
+  text-underline-offset: 5px;
+  cursor: pointer;
+}
+
+.weather-span:hover {
+  text-decoration-color: var(--text-soft);
+}
+
+.weather-span:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.weather-span__word {
+  display: inline-block;
+}
+
+.weather-span svg {
+  flex: none;
+  width: 0.8em;
+  height: 0.8em;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A span still on its way: the last numbers stay, dimmed, until its own come. */
+.weather-minute[data-state="loading"] .weather-readout__value strong,
+.weather-minute[data-state="loading"] .weather-stats dd {
+  opacity: 0.4;
 }
 
 .weather-readout__note {

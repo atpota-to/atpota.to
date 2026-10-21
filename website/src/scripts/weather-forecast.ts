@@ -5,7 +5,8 @@
  *
  *   the hours        a weather app's strip: each hour's time, a drawing of its weather, its
  *                    number, and its chance of a storm when there's much of one; under them
- *                    the forecast as a line, in a band where 8 runs in 10 land
+ *                    the forecast as a line, in a band where 8 runs in 10 land. Where the
+ *                    strip doesn't fit (a phone), each hour is a row instead, its band a bar
  *   in words         the lede (forecastWords): "breezy until about 11 pm, then calming down
  *                    to a light breeze", and a storm's chance when it's worth a mention
  *   sunrise, sunset  when the network wakes and settles, the next of each
@@ -176,8 +177,11 @@ function nightAt(iso: string, tz?: string): boolean {
   return timeOfDay(local) === 'night';
 }
 
+/** Where a value sits between the forecast's lowest low and highest high, 0 to 1. */
+type Scale = (v: number) => number;
+
 /** One hour of the strip, its words for screen readers in the same item. */
-function hourItem(label: string, h: { perSecond: number; condition: Condition; low?: number; high?: number; storm?: number }, night: boolean, now = false): HTMLLIElement {
+function hourItem(label: string, h: { perSecond: number; condition: Condition; low?: number; high?: number; storm?: number }, night: boolean, scale: Scale, now = false): HTMLLIElement {
   const li = document.createElement('li');
   li.className = now ? 'weather-forecast__hour is-now' : 'weather-forecast__hour';
   li.dataset.condition = h.condition;
@@ -201,7 +205,16 @@ function hourItem(label: string, h: { perSecond: number; condition: Condition; l
   const range = h.low !== undefined && h.high !== undefined ? ` (likely ${Math.round(h.low)} to ${Math.round(h.high)})` : '';
   const storm = h.storm !== undefined && h.storm >= STORM_SHOWN ? `, a ${chanceWords(h.storm)} chance of a storm` : '';
   said.textContent = `${label}: ${CONDITION_WORDS[h.condition]}, about ${Math.round(h.perSecond)} new records a second${range}${storm}`;
-  li.append(time, icon, rate, chance, said);
+  // on a phone each hour is a row, like a weather app's days: its likely range as a bar
+  // across the forecast's whole range, with a dot for the forecast itself
+  const band = document.createElement('span');
+  band.className = 'weather-forecast__range';
+  band.setAttribute('aria-hidden', 'true');
+  band.style.setProperty('--lo', scale(h.low ?? h.perSecond).toFixed(3));
+  band.style.setProperty('--hi', scale(h.high ?? h.perSecond).toFixed(3));
+  band.style.setProperty('--v', scale(h.perSecond).toFixed(3));
+  band.append(document.createElement('i'));
+  li.append(time, icon, rate, chance, band, said);
   return li;
 }
 
@@ -256,8 +269,12 @@ export function renderForecast(tile: HTMLElement, f: Forecast, nowMs = Date.now(
   const hours = f.hours.filter((h) => Date.parse(h.t) + 3_600_000 > nowMs);
   if (lede) rollText(lede, forecastWords(hours, tz));
   if (list) {
-    const items = hours.map((h) => hourItem(hourLabel(h.t, tz), { ...h, storm: h.chance.storm }, nightAt(h.t, tz)));
-    if (f.now) items.unshift(hourItem('now', f.now, nightAt(new Date(nowMs).toISOString(), tz), true));
+    const values = [...hours.flatMap((h) => [h.low, h.high]), ...(f.now ? [f.now.perSecond] : [])];
+    const lo = Math.min(...values);
+    const span = Math.max(...values) - lo || 1;
+    const scale: Scale = (v) => Math.min(1, Math.max(0, (v - lo) / span));
+    const items = hours.map((h) => hourItem(hourLabel(h.t, tz), { ...h, storm: h.chance.storm }, nightAt(h.t, tz), scale));
+    if (f.now) items.unshift(hourItem('now', f.now, nightAt(new Date(nowMs).toISOString(), tz), scale, true));
     list.replaceChildren(...items);
     list.style.setProperty('--hours', String(items.length));
   }

@@ -4,6 +4,10 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { niceMax, segments } from '../src/scripts/weather-chart.js';
 import {
+  APPS_EMPTY,
+  APPS_TRICKLE,
+  LIST_TOP,
+  topBars,
   accountChange,
   accountSummary,
   bindExplainers,
@@ -15,12 +19,9 @@ import {
   createMeasure,
   fetchHistory,
   formatRate,
-  gustOf,
-  humidityOf,
   MEASURE_KEY,
   ratesOf,
   renderReport,
-  renderReadouts,
   renderReportError,
   renderTrends,
   trendSummary,
@@ -67,6 +68,11 @@ describe('the atmosphere weather report', () => {
     expect(PAGE).toContain('<!-- @partial header -->');
     expect(PAGE).toContain('<link rel="canonical" href="https://atpota.to/weather">');
     expect(PAGE).toContain('/src/styles/weather.css');
+  });
+
+  it('puts when the sky is busiest right under the header', () => {
+    const tiles = [...report.querySelectorAll(':scope > .tile')].map((t) => t.getAttribute('aria-labelledby'));
+    expect(tiles.slice(0, 3)).toEqual(['weather-title', 'weather-heat-title', 'weather-diversity-title']);
   });
 
   it('fills every tile from one reading', () => {
@@ -457,32 +463,35 @@ describe("what's this? Poe explains", () => {
   });
 });
 
-describe("the weather app's readouts", () => {
-  it('humidity is the share of writes that change or take back a record', () => {
-    expect(humidityOf({ creates: 90, updates: 4, deletes: 6, identity: 1, account: 0 })).toBe(10);
-    expect(humidityOf({ creates: 0, updates: 0, deletes: 0, identity: 3, account: 0 })).toBeNull();
+describe('the lists', () => {
+  it('show the busiest five, and leave out any that would read 0', () => {
+    const bar = (label: string, perSecond: number, value?: string) => ({ label, perSecond, count: perSecond * 60, value });
+    const bars = [bar('a', 9), bar('b', 0.04), bar('c', 7), bar('d', 0.06), bar('e', 3), bar('f', 2), bar('g', 1), bar('h', 0, '0')];
+    expect(topBars(bars).map((b) => b.label)).toEqual(['a', 'c', 'd', 'e', 'f']);
+    expect(LIST_TOP).toBe(5);
   });
 
-  it("gusts are the busiest second of the station's minute, and a sample has none", () => {
-    const series = [{ t: 1, creates: 420 }, null, { t: 3, creates: 980 }, { t: 4, creates: 440 }] as Reading['series'];
-    expect(gustOf({ ...READING, source: 'station', series })).toBe(980);
-    expect(gustOf({ ...READING, source: 'station', series: [] })).toBeNull();
-    expect(gustOf({ ...READING, source: 'sample', series })).toBeNull();
+  it('elsewhere and bluesky: the top five, none at 0, and the count says so', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ domain: `app${i}.com`, perSecond: 10 - i, count: (10 - i) * 5, collections: [] }));
+    renderReport(report, {
+      ...READING,
+      apps: many,
+      bluesky: [
+        { nsid: 'app.bsky.feed.like', perSecond: 308, count: 1540 },
+        { nsid: 'app.bsky.graph.starterpack', perSecond: 0.01, count: 1 },
+      ],
+    });
+    expect(report.querySelectorAll('[data-r-apps] li')).toHaveLength(5);
+    expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 5');
+    expect([...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent)).toEqual([BLUESKY_NAMES['app.bsky.feed.like']]);
   });
 
-  it('fills feels like, gusts, humidity and visibility', () => {
-    renderReadouts(report, { ...READING, source: 'station', series: [{ t: 1, creates: 1234 }] as Reading['series'] });
-    expect(text('[data-r-feels]')).toBe('51');
-    expect(report.querySelector<HTMLElement>('[data-r-gusts-wrap]')!.hidden).toBe(false);
-    expect(text('[data-r-gusts]')).toBe('1,234');
-    expect(text('[data-r-humidity]')).toBe('3.7%');
-    expect(text('[data-r-visibility]')).toBe('12 apps');
-  });
-
-  it('hides gusts for a sampled reading, and dashes what it does not know', () => {
-    renderReadouts(report, { ...READING, source: 'sample', events: undefined, diversity: { ...READING.diversity!, apps: undefined } } as unknown as Reading);
-    expect(report.querySelector<HTMLElement>('[data-r-gusts-wrap]')!.hidden).toBe(true);
-    expect(text('[data-r-humidity]')).toBe('–');
-    expect(text('[data-r-visibility]')).toBe('–');
+  it("says when other apps only wrote a trickle, rather than that nobody did", () => {
+    renderReport(report, { ...READING, apps: [{ domain: 'x.y', perSecond: 0.02, count: 1, collections: [] }] });
+    const empty = report.querySelector<HTMLElement>('[data-r-apps-empty]')!;
+    expect(empty.hidden).toBe(false);
+    expect(empty.textContent).toBe(APPS_TRICKLE);
+    renderReport(report, { ...READING, apps: [], diversity: { ...READING.diversity!, apps: 0 } });
+    expect(empty.textContent).toBe(APPS_EMPTY);
   });
 });
