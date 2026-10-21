@@ -480,6 +480,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   let gardenView: GardenView | null = null;
   /** The community garden's season: the last view of one of its open patches. */
   let season: GardenView | null = null;
+  /** The garden below is still loading, so the community garden's numbers aren't in yet. */
+  let seasonPending = true;
   let controller: GardenController | null = null;
   let featured: GardenerFlower | null = null;
   let revealing = false;
@@ -599,6 +601,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
 
   function renderStats(): void {
     if (!headStats || !person) return;
+    // Until then the header keeps the placeholder chips it loaded with.
+    if (isCommunity() && !season && seasonPending) return;
     const chips = isCommunity() ? seasonChips() : personChips(person);
     headStats.replaceChildren(
       ...chips.map(([value, label, href]) => {
@@ -1345,6 +1349,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
 
   if (!route) {
     root.dataset.state = 'missing';
+    if (headStats) headStats.hidden = true;
     setText(headTitle, COPY.missing.title);
     setText(headLede, COPY.missing.lede(win.location.pathname.split('/')[2] ?? ''));
     headActions?.replaceChildren(el(doc, 'a', { class: 'btn btn--primary', href: '/garden' }, COPY.community.visit));
@@ -1356,6 +1361,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   const loaded = await fetchGardener(asked, fetchImpl);
   if (loaded === 'missing' || loaded === null) {
     root.dataset.state = loaded === 'missing' ? 'missing' : 'error';
+    if (headStats) headStats.hidden = true;
     setText(headTitle, loaded === 'missing' ? COPY.missing.title : headTitle?.textContent ?? '');
     setText(headLede, loaded === 'missing' ? COPY.missing.lede(asked) : COPY.loadFailed);
     if (route.actor) headActions?.replaceChildren(el(doc, 'a', { class: 'btn btn--primary', href: '/garden' }, COPY.community.visit));
@@ -1382,6 +1388,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   // How it grows: for anyone at the community garden, and on your own page until you plant.
   if (isCommunity() || (owner && !person.flowers.length)) fillHow();
   await Promise.all([showGarden(), loadLeaders()]);
+  seasonPending = false;
+  renderStats();
 }
 
 export function init(): Promise<void> {

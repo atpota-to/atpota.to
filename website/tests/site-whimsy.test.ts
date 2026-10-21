@@ -11,6 +11,7 @@ import {
   describeBloom,
   flowerVariant,
   freePlotFrom,
+  GARDEN_SIZE,
   initGarden,
   KIND_KEY,
   middlePlot,
@@ -590,6 +591,20 @@ describe('the flower patch', () => {
     expect(plot(20).querySelector('svg')!.outerHTML).not.toBe(first);
     // the kinds picker shows each flower
     expect(document.querySelectorAll('[data-garden-kinds] [data-kind] svg.home-flower')).toHaveLength(6);
+  });
+
+  it('while the patch loads: bare mounds, and no picker or button to flash up before it’s in', async () => {
+    const running = rig({ seeds: true }).run();
+    expect(document.querySelectorAll('.home-plot--skeleton')).toHaveLength(GARDEN_SIZE.cols * GARDEN_SIZE.rows);
+    expect(document.querySelectorAll('[data-plot]')).toHaveLength(0);
+    expect(document.querySelector<HTMLElement>('[data-garden-kinds]')!.hidden).toBe(true);
+    expect(plantButton().hidden).toBe(true);
+    await running;
+    expect(document.querySelectorAll('.home-plot--skeleton')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-plot]')).toHaveLength(PLOTS);
+    // a garden that gives out seeds never shows the picker at all
+    expect(document.querySelector<HTMLElement>('[data-garden-kinds]')!.hidden).toBe(true);
+    expect(plantButton().hidden).toBe(false);
   });
 
   it('a patch can be any size, and a wide one wraps in half on a narrow screen', async () => {

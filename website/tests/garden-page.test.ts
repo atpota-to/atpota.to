@@ -673,12 +673,15 @@ describe('the garden page', () => {
     await rig({ path: '/garden/nobody.example' }).run();
     expect($('[data-garden-page]').dataset.state).toBe('missing');
     expect(text('[data-head-lede]')).toBe(COPY.missing.lede('nobody.example'));
+    // no placeholder numbers left behind
+    expect(shown('[data-head-stats]')).toBe(false);
     expect($('[data-head-actions] a').getAttribute('href')).toBe('/garden');
     await rig({ path: '/garden/a/b' }).run();
     expect($('[data-garden-page]').dataset.state).toBe('missing');
     await rig({ path: '/garden/cy.example', gardenerDown: true }).run();
     expect($('[data-garden-page]').dataset.state).toBe('error');
     expect(text('[data-head-lede]')).toBe(COPY.loadFailed);
+    expect(shown('[data-head-stats]')).toBe(false);
   });
 });
 
