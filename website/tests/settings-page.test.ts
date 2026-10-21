@@ -74,6 +74,7 @@ describe('settings page', () => {
     expect(a.start).not.toHaveBeenCalled();
     expect(root.dataset.state).toBe('signed-out');
     expect($('[data-settings-memory]').hidden).toBe(true);
+    expect($('[data-settings-overlay]').hidden).toBe(true);
     const asked = vi.fn();
     window.addEventListener(SIGNIN_EVENT, asked);
     $<HTMLButtonElement>('[data-settings-signin-button]').click();
@@ -87,6 +88,8 @@ describe('settings page', () => {
     expect($('[data-settings-lede]').textContent).toBe(SETTINGS_COPY.lede('@someone.example'));
     expect($<HTMLImageElement>('[data-settings-avatar] img').src).toBe(PROFILE.avatar);
     expect($('[data-settings-memory]').hidden).toBe(false);
+    expect($('[data-settings-overlay]').hidden).toBe(false);
+    expect($<HTMLAnchorElement>('[data-settings-overlay] a.btn').getAttribute('href')).toBe('/overlay/setup');
     expect($('[data-forget-confirm]').hidden).toBe(true);
     $<HTMLButtonElement>('[data-forget-start]').click();
     expect($('[data-forget-confirm]').hidden).toBe(false);
@@ -139,6 +142,7 @@ describe('settings page', () => {
     window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: { did: null } }));
     expect(root.dataset.state).toBe('signed-out');
     expect($('[data-settings-memory]').hidden).toBe(true);
+    expect($('[data-settings-overlay]').hidden).toBe(true);
   });
 });
 

@@ -1,6 +1,7 @@
 /**
- * The settings page (settings/index.html): who the reader is signed in as, and "forget me",
- * which has Poe empty every note it keeps about them.
+ * The settings page (settings/index.html): who the reader is signed in as, a way to their
+ * stream overlay's setup (/overlay/setup), and "forget me", which has Poe empty every note
+ * it keeps about them.
  *
  * Forgetting works like Poe's sign-in (src/poe/identity.ts), for a different method: this
  * asks the reader's own PDS for an atproto service-auth token addressed to atpota.to for
@@ -136,6 +137,8 @@ export async function init(opts: SettingsOptions = {}): Promise<void> {
   const avatarSlot = q<HTMLElement>('[data-settings-avatar]');
   const signinCard = q<HTMLElement>('[data-settings-signin]');
   const memoryCard = q<HTMLElement>('[data-settings-memory]');
+  // The stream overlay's setup (overlay/setup.html), for a signed-in reader; older copies of the page may not have it.
+  const overlayCard = root.querySelector<HTMLElement>('[data-settings-overlay]');
   const start = q<HTMLButtonElement>('[data-forget-start]');
   const confirm = q<HTMLElement>('[data-forget-confirm]');
   const yes = q<HTMLButtonElement>('[data-forget-yes]');
@@ -153,6 +156,7 @@ export async function init(opts: SettingsOptions = {}): Promise<void> {
     root!.dataset.state = state;
     signinCard.hidden = state !== 'signed-out';
     memoryCard.hidden = state !== 'signed-in';
+    if (overlayCard) overlayCard.hidden = state !== 'signed-in';
     avatarSlot.replaceChildren();
     if (state === 'unavailable') {
       title.textContent = SETTINGS_COPY.unavailableTitle;
