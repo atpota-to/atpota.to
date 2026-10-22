@@ -579,19 +579,21 @@ describe('the lens', () => {
     initLensDock(report, l);
     bindLens(report, l);
     expect(dock.hidden).toBe(false);
-    expect(panel.hidden).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
     expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('1h · accounts');
     strip.click();
-    expect(panel.hidden).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
+    expect(dock.dataset.open).toBe('');
     expect(strip.getAttribute('aria-expanded')).toBe('true');
     // a choice keeps it open, to make another
     panel.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
     expect(l.get().window).toBe('week');
     expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('7d · accounts');
     panel.querySelector<HTMLButtonElement>('[data-lens-measure="records"]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(panel.hidden).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
     report.querySelector('[data-weather-hero]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(panel.hidden).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
+    expect(dock.dataset.open).toBeUndefined();
     expect(strip.getAttribute('aria-expanded')).toBe('false');
   });
 
