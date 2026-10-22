@@ -45,7 +45,7 @@
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
-import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, type Watch } from './weather-alerts';
+import { alertsFor, createAlertDesk, newAppAlert, recordAlert, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock } from './weather-dock';
 import { initForecast } from './weather-forecast';
@@ -1330,7 +1330,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
 
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, feed, lens);
-  initHostTrends(report, feed, lens, (list, bars) => renderBars(list, bars, undefined));
+  initHostTrends(report, feed, lens, (list, bars) => renderBars(list, bars, undefined), watchHosts(desk));
   const newApps = watchNewApps(desk);
   initAlmanac(
     report,

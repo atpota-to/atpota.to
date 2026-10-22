@@ -2804,6 +2804,13 @@ html:not(.js) .home-weather {
   font-size: 14px;
 }
 
+.home-weather__hosts {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
 .home-weather__foot {
   display: flex;
   flex-wrap: wrap;

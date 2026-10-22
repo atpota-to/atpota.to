@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoeLine, PoeSpeech } from '../src/poe/say.js';
-import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, recordAlert, RETRY_MS, STALE_MS, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
+import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, recordAlert, RETRY_MS, STALE_MS, watchHosts, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
 import { smoothPath } from '../src/scripts/weather-chart.js';
 import { watchNewApps } from '../src/scripts/weather-page.js';
 import { cloudCount, MAX_CLOUDS, renderClouds } from '../src/scripts/weather-sky.js';
@@ -116,6 +116,45 @@ describe('what makes a weather alert', () => {
     watch(almanac([fresh('b.app'), fresh('a.app')]));
     expect(pushed).toEqual([newAppAlert('b.app', '4:46 pm')]);
     expect(pushed[0]!.text).toBe('b.app is brand new here (◕‿◕)');
+  });
+});
+
+describe('alerts from where the atmosphere lives', () => {
+  const census = (measuredAt: string, independent: number) => ({
+    measuredAt, listed: 6442, active: independent + 90, bluesky: 90, independent, writing: null,
+    accounts: { bluesky: 1, independent: 1 }, diversity: { index: 7.48, share: 1.51, spread: 24.5 }, top: [],
+  });
+
+  it('a new census with more independent hosts says so; the same census, or fewer, does not', () => {
+    const first = alertsFor(null, { ...READING, hosts: census('2026-10-22T14:00:00Z', 1799) });
+    expect(alertsFor(first.watch, { ...READING, hosts: census('2026-10-22T14:00:00Z', 1799) }).alerts.filter((a) => a.kind === 'host')).toEqual([]);
+    const more = alertsFor(first.watch, { ...READING, hosts: census('2026-10-22T14:10:00Z', 1801) });
+    expect(more.alerts.find((a) => a.kind === 'host')).toMatchObject({ text: '2 more independent hosts just came online', sub: '1,801 independent pds hosts now, 1,891 in all.' });
+    expect(alertsFor(more.watch, { ...READING, hosts: census('2026-10-22T14:20:00Z', 1800) }).alerts.filter((a) => a.kind === 'host')).toEqual([]);
+    // a reading without the census keeps the last one to compare with
+    expect(alertsFor(first.watch, READING).watch.independentHosts).toBe(1799);
+  });
+
+  it('new hosts by name, and accounts moving house, after the first look', () => {
+    const pushed: WeatherAlert[] = [];
+    const see = watchHosts({ push: (a) => pushed.push(a) });
+    const day = (movedOut: number, movedIn: number) => ({ day: '2026-10-22', ops: 1, createdBluesky: 1, createdIndependent: 1, createdUnlisted: 1, createdCustomHandle: 0, movedOut, movedIn, movedBetween: 0, deleted: 0 });
+    const history = (names: string[], movedOut: number, movedIn = 0) => ({
+      bucket: 'hour' as const, since: '2026-10-08', points: [], newHosts: names.length, growing: [], daily: [],
+      new: names.map((hostname) => ({ hostname, accounts: 3, first: '2026-10-22' })),
+      identities: [day(movedOut, movedIn)],
+    });
+    see(history(['old.example'], 10));
+    expect(pushed).toEqual([]);
+    see(history(['old.example', 'fresh.example'], 12));
+    expect(pushed.map((a) => [a.kind, a.text])).toEqual([
+      ['newhost', 'fresh.example just joined the atmosphere (◕‿◕)'],
+      ['moving', '2 accounts just moved out of bluesky to an independent host'],
+    ]);
+    see(history(['old.example', 'fresh.example'], 12, 1));
+    expect(pushed.at(-1)).toMatchObject({ kind: 'moving', text: 'someone just moved back to bluesky', sub: 'today so far: 12 out, 1 back in.' });
+    see(undefined);
+    expect(pushed).toHaveLength(3);
   });
 });
 

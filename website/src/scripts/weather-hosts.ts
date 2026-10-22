@@ -240,7 +240,7 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
  * Follows the lens: the range's hosts on load, on a window change, and every 5 minutes
  * while the tab is visible, into the hosts tile's trends part and the identity tiles.
  */
-export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, drawBars: (list: HTMLElement, bars: Bar[]) => void): void {
+export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, drawBars: (list: HTMLElement, bars: Bar[]) => void, onHosts?: (h: HostHistory | undefined) => void): void {
   const part = $(report, '[data-h-trends]');
   let asked = 0;
   const load = async (quietly = false) => {
@@ -251,6 +251,7 @@ export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, d
     if (history) {
       if (part) renderHostTrends(part, history.hosts, range, drawBars);
       renderIdentities(report, history.hosts?.identities ?? []);
+      onHosts?.(history.hosts);
     } else if (!quietly && part) part.hidden = true;
   };
   lens.onChange((l, was) => {

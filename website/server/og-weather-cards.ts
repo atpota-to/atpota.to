@@ -5,7 +5,7 @@
  *
  *   forecast  the report's header as a card: new records a second, the condition, a sky
  *             that clouds over with the diversity index, and Poe on its hill saying how mixed
- *             the sky is
+ *             the sky is, with chips for the diversity index and the pds hosts
  *   trend     the last 24 hours of new records a second as a chart, with the busiest and
  *             quietest hours marked
  *   mix       who else is in the sky: the diversity index on its scale, and the busiest apps
@@ -505,11 +505,24 @@ function forecast(d: CardData, art: Art): El | null {
         h(
           { flexWrap: 'wrap', gap: 12, marginTop: 26 },
           mix ? chip(`diversity index ${formatIndex(mix.index)} · ${mix.level}`, onSky) : null,
+          // where the atmosphere lives: the station's census of pds hosts
+          d.now?.hosts ? chip(hostsChip(d.now.hosts), onSky) : null,
         ),
         h({ marginTop: 22 }, footer(d, C.skyMono)),
       ),
     ),
   );
+}
+
+/**
+ * "98.5% of accounts on bluesky pdses · 1.5% independent": the forecast card's
+ * chip for the station's census, by where accounts live. A share under 1% keeps two decimals,
+ * so it never reads as nothing.
+ */
+export function hostsChip(hosts: NonNullable<Reading['hosts']>): string {
+  const independent = Math.min(100, Math.max(0, hosts.diversity.share));
+  const pct = (v: number) => (v > 0 && v < 1 ? v.toFixed(2) : v > 99 && v < 100 ? v.toFixed(1) : String(Math.round(v * 10) / 10));
+  return `${pct(100 - independent)}% of accounts on bluesky pdses · ${pct(independent)}% independent`;
 }
 
 /** "+20% busier than usual", "−9% quieter than usual", "about as busy as usual": the number says how much. */
