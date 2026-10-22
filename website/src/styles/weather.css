@@ -480,12 +480,9 @@ html[data-theme="dark"] .weather-hero {
   min-width: 0;
 }
 
-/* "457 rec/sec" on one line; the forecast under it is words, so it reads lighter. */
+/* The number on its own line; what it counts and its chip under it, and the forecast under
+   those is words, so it reads lighter. */
 .weather-hero__big {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 8px;
   font-size: 64px;
   font-weight: 700;
   line-height: 1;
@@ -493,14 +490,17 @@ html[data-theme="dark"] .weather-hero {
   font-variant-numeric: tabular-nums;
 }
 
-.weather-hero__unit {
-  font-size: 22px;
-  color: var(--weather-sky-mono);
+/* "rec/sec  ↑ 4%": the unit first, then the chip */
+.weather-hero__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 10px;
 }
 
 .weather-hero__change {
   width: fit-content;
-  margin-top: 10px;
 }
 
 /* No pill when steady, so it takes the sky's text color, day or night. */
@@ -2135,13 +2135,15 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 /* The header's unit ("rec/sec"): a tap moves it on, like °C and °F. */
 button.weather-hero__unit {
-  margin: 0;
+  /* its text lines up with the number's left edge; the padding is only for the focus ring */
+  margin: 0 0 0 -6px;
   padding: 2px 6px;
   border: 0;
   border-radius: 8px;
   background: none;
   font: inherit;
-  font-size: 22px;
+  font-size: 20px;
+  line-height: 1.2;
   font-weight: 700;
   color: var(--weather-sky-mono);
   text-decoration: underline 2px dashed color-mix(in srgb, var(--weather-sky-mono) 45%, transparent);
@@ -2256,7 +2258,7 @@ button.weather-hero__unit:disabled {
   }
 
   button.weather-hero__unit {
-    font-size: 18px;
+    font-size: 17px;
   }
 
   .weather-hero__sun {

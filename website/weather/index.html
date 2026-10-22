@@ -65,10 +65,13 @@
                         <!-- @svg weather-sun.svg class="weather-sun" aria-hidden="true" focusable="false" -->
                     </button>
                     <div class="weather-hero__reading">
-                        <!-- the number is in the lens's unit (weather-lens.ts); a tap on "rec/sec" moves it on to a minute, an hour, a day and totals -->
-                        <p class="weather-hero__big"><span data-r-records data-waiting>&ndash;</span> <button type="button" class="weather-hero__unit" data-r-unit data-lens-cycle-unit aria-label="a second. change to a minute">rec/sec</button><span class="visually-hidden" data-r-unit-words>new records a second</span></p>
-                        <!-- against the span before, as the "last hour" tile has it (weather-page.ts renderHeadlineChange) -->
-                        <p class="weather-change weather-hero__change" data-r-headline-change data-waiting></p>
+                        <p class="weather-hero__big"><span data-r-records data-waiting>&ndash;</span><span class="visually-hidden" data-r-unit-words>new records a second</span></p>
+                        <div class="weather-hero__sub">
+                            <!-- the number is in the lens's unit (weather-lens.ts); a tap on "rec/sec" moves it on to a minute, an hour, a day and totals -->
+                            <button type="button" class="weather-hero__unit" data-r-unit data-lens-cycle-unit aria-label="a second. change to a minute">rec/sec</button>
+                            <!-- against the span before, as the "last hour" tile has it (weather-page.ts renderHeadlineChange) -->
+                            <p class="weather-change weather-hero__change" data-r-headline-change data-waiting></p>
+                        </div>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
                         <!-- new records a second over the station's 60 seconds, when it's live, or the window's line; the number above says it in words -->
                         <div class="weather-spark" data-r-spark data-waiting aria-hidden="true"></div>

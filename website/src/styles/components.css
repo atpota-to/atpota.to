@@ -548,6 +548,8 @@ html[data-theme="dark"] {
 .site-account {
   position: relative;
   display: flex;
+  /* never squeezed by the buttons beside it */
+  flex: none;
 }
 
 .site-account:empty {
@@ -740,6 +742,28 @@ html[data-theme="dark"] {
 
   .site-account__label {
     display: none;
+  }
+
+  /* "ask poe" is a circle too, with just its chat bubble; the label stays for screen readers
+     and the title says it (and the "/" shortcut) on hover. In the phone sheet it's a full row. */
+  .ask-poe-btn {
+    flex: none;
+    width: 48px;
+    padding: 0;
+  }
+
+  .ask-poe-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .ask-poe-btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
