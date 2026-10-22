@@ -514,9 +514,15 @@ function forecast(d: CardData, art: Art): El | null {
   );
 }
 
-/** "1,889 pds hosts · 1,799 independent": the forecast card's chip for the station's census. */
+/**
+ * "98.5% of accounts on bluesky pdses · 1.5% independent": the forecast card's
+ * chip for the station's census, by where accounts live. A share under 1% keeps two decimals,
+ * so it never reads as nothing.
+ */
 export function hostsChip(hosts: NonNullable<Reading['hosts']>): string {
-  return `${int(hosts.active)} pds hosts · ${int(hosts.independent)} independent`;
+  const independent = Math.min(100, Math.max(0, hosts.diversity.share));
+  const pct = (v: number) => (v > 0 && v < 1 ? v.toFixed(2) : v > 99 && v < 100 ? v.toFixed(1) : String(Math.round(v * 10) / 10));
+  return `${pct(100 - independent)}% of accounts on bluesky pdses · ${pct(independent)}% independent`;
 }
 
 /** "+20% busier than usual", "−9% quieter than usual", "about as busy as usual": the number says how much. */

@@ -29,6 +29,7 @@ import {
   formatIndex,
   gaugeAt,
   hillSvg,
+  hostsChip,
   isCard,
   LEVEL_TEXT,
   MAX_CLOUDS,
@@ -198,13 +199,18 @@ describe('og weather: the cards', () => {
     expect(forecast.join(' ')).not.toContain('a quiet spell');
     // and the pds hosts, when the station's census came with the reading
     expect(forecast.join(' ')).not.toContain('pds hosts');
+    // by where accounts live, not a count of hosts
+    const chipFor = (share: number) => hostsChip({ measuredAt: '2026-10-21T12:05:00.000Z', listed: 1, active: 1, bluesky: 1, independent: 0, writing: null, accounts: { bluesky: 1, independent: 1 }, diversity: { index: 0, share, spread: 1 }, top: [] });
+    expect(chipFor(1.51)).toBe("98.5% of accounts on bluesky pdses · 1.5% independent");
+    expect(chipFor(0.42)).toBe("99.6% of accounts on bluesky pdses · 0.42% independent");
+    expect(chipFor(12)).toBe("88% of accounts on bluesky pdses · 12% independent");
     const withHosts = data({
       now: fromStation({
         ...STATION,
         hosts: { measuredAt: '2026-10-21T12:05:00Z', listed: 6442, active: 1889, bluesky: 90, independent: 1799, writing: null, accounts: { bluesky: 1, independent: 1 }, diversity: { share: 1.51, spread: 24.57 }, top: [] },
       }),
     });
-    expect(texts(drawCard('forecast', withHosts, art))).toEqual(expect.arrayContaining(['1,889 pds hosts · 1,799 independent']));
+    expect(texts(drawCard('forecast', withHosts, art))).toEqual(expect.arrayContaining(["98.5% of accounts on bluesky pdses · 1.5% independent"]));
     // without a usual yet, the condition's own words
     expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a quiet spell, right now']));
     expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'rocksky.app', '16,836', 'low']));
