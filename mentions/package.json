@@ -17,7 +17,8 @@
     "lessons": "/opt/node22/bin/node --env-file=.env src/tools/lessons.js",
     "memory": "/opt/node22/bin/node --env-file=.env src/tools/memory.js",
     "in-flight": "/opt/node22/bin/node --no-warnings --env-file=.env src/tools/in-flight.js",
-    "weather": "/opt/node22/bin/node --env-file=.env src/tools/weather.js"
+    "weather": "/opt/node22/bin/node --env-file=.env src/tools/weather.js",
+    "profile-look": "/opt/node22/bin/node --env-file=.env src/tools/profile-look.js"
   },
   "dependencies": {}
 }

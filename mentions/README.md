@@ -341,6 +341,7 @@ is worth more than the convenience of a client library.
 | `src/richtext.js` | grapheme counting and UTF-8 byte offsets |
 | `src/weather-posts.js` | Poe's weather posts: the watcher, the draft callback, the poster |
 | `src/gates/weather.js` | every decision about a weather post |
+| `src/profile-look.js` | Poe's avatar and banner changing with the sky |
 
 ---
 
@@ -793,6 +794,42 @@ but holds every one, for reading with `npm run weather`. The kill switch stops i
 at once, without a restart, along with everything else Poe posts. Until the bot's
 weather channel is deployed, the agent refuses each moment and the watcher backs
 off for 15 minutes and asks again.
+
+## Poe's profile look (`PROFILE_LOOK`)
+
+Poe's avatar and banner change with the sky over New York (`src/profile-look.js`).
+The day is cut in four at sunrise and sunset, worked out in code: dawn from half an
+hour before sunrise, day from an hour and a half after it, golden hour from an hour
+and a half before sunset, night from half an hour after it. Each slot gets one look,
+from a roll seeded on the slot, so a restart picks the same one:
+
+- **Avatar:** the season and the time of day, with a face that is usually the time
+  of day's own and sometimes another (sleepy on about 7 nights in 10). While Poe
+  naps, the face is sleepy.
+- **Banner:** the same time of day and season, with the weather station's weather.
+  It switches to dispatch day for a day after an announcement, to Halloween week's
+  nights or New Year's Eve, or now and then (one slot in forty) to the moon, the
+  beach or a cloud.
+
+The pictures come from the website's library (`atpota.to/poe-profile`, named in its
+`manifest.json`, made by `website/scripts/poe-profile.ts`), so nothing is drawn
+here. A picture is fetched only from there, without following redirects, and must
+be a JPEG under 1 MB.
+
+A write changes only `avatar` and `banner` in `app.bsky.actor.profile/self`, and is
+swapped against the record as read, so an edit made in between is never written
+over. If the avatar or banner isn't the one this service last set, someone changed
+it by hand, and the profile is left alone for the rest of that day. A failed write
+waits 30 minutes before the same look is tried again. The kill switch stops every
+write; a nap doesn't, since a nap is what gives Poe the sleepy face.
+
+It is on by default (`PROFILE_LOOK=on`, stage 4 only), so it starts with the
+deploy; the first write replaces whatever avatar and banner the profile has.
+`npm run profile-look` shows today's slots, the look each was given, and every
+change made. To stop it, add `PROFILE_LOOK=off` to `/root/atpotato-mentions/.env`
+and `systemctl restart atpotato-mentions`; `PROFILE_LOOK=dry-run` keeps working
+each look out and logging it without writing anything. The kill switch stops it
+at once, without a restart.
 
 ## nginx
 

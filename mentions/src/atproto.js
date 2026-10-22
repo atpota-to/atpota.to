@@ -378,6 +378,36 @@ export async function uploadBlob(bytes, mimeType) {
   return res.json.blob;
 }
 
+// --- Poe's profile ------------------------------------------------------------
+// Only profile-look.js writes it, and only its avatar and banner change.
+export const PROFILE_COLLECTION = 'app.bsky.actor.profile';
+
+/** Poe's profile record ({ uri, cid, value }), or null when there is none. */
+export function getOwnProfile() {
+  return getPublicRecord(config.botDid, PROFILE_COLLECTION, 'self');
+}
+
+/**
+ * Replace Poe's profile record, only if it is still the one read (swapRecord), so
+ * an edit made in between is never written over. The kill switch stops it; a nap
+ * doesn't, since a nap is what gives Poe its sleepy face.
+ */
+export async function putOwnProfile(record, swapRecord) {
+  if (typeof swapRecord !== 'string' || !swapRecord) throw new Error('putOwnProfile needs the cid it read');
+  const res = await authed((t) => {
+    if (killSwitchEngaged()) throw new Error('profile change paused by kill switch');
+    return rawPost('com.atproto.repo.putRecord', {
+      repo: config.botDid, collection: PROFILE_COLLECTION, rkey: 'self', record, swapRecord,
+    }, t);
+  });
+  if (!res.ok) {
+    const err = new Error(`putRecord (profile) failed: ${res.status} ${res.json?.error ?? res.text.slice(0, 300)}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json;   // { uri, cid }
+}
+
 // --- the publisher credential -------------------------------------------------
 // Dispatch issues are site.standard.document records in atpota.to's repo, so
 // linking an issue to its announcement needs atpota.to's credential. It gets

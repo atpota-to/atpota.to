@@ -12,7 +12,8 @@
     "publish:guides": "node scripts/run.mjs scripts/publish-guides.ts",
     "publish:lexicons": "node scripts/run.mjs scripts/publish-lexicons.ts",
     "garden:patches": "node scripts/run.mjs scripts/open-patches.ts",
-    "og": "node scripts/run.mjs scripts/og-images.ts"
+    "og": "node scripts/run.mjs scripts/og-images.ts",
+    "poe-profile": "node scripts/run.mjs scripts/poe-profile.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

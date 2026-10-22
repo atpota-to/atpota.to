@@ -13,6 +13,7 @@ import { startNotificationSweep } from './notifications.js';
 import { startReconcile } from './reconcile.js';
 import { startOperatorDmPoll } from './operator-dm.js';
 import { startWeatherWatch } from './weather-posts.js';
+import { startProfileLook } from './profile-look.js';
 
 // node:sqlite and a stable Intl.Segmenter mean this needs Node 22. The default
 // `node` on this droplet is 18, where the import fails with an opaque
@@ -110,6 +111,7 @@ async function main() {
   const reconcileTimer = startReconcile(stats);
   const dmTimer = startOperatorDmPoll();
   const weatherTimer = startWeatherWatch();
+  const lookTimer = startProfileLook();
   const stream = connectJetstream({ onEvent, stats });
 
   const statsTimer = setInterval(() => {
@@ -153,6 +155,7 @@ async function main() {
     if (reconcileTimer) clearInterval(reconcileTimer);
     if (dmTimer) clearInterval(dmTimer);
     if (weatherTimer) clearInterval(weatherTimer);
+    if (lookTimer) clearInterval(lookTimer);
     stream.close();                       // flushes the cursor watermark
     callbackServer?.close();
 
