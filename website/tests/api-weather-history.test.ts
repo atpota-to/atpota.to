@@ -249,7 +249,7 @@ describe('steady counts and bursts', () => {
 const sk = (...registers: number[]) => `\\x020c${registers.map((i) => `${i.toString(16).padStart(4, '0')}01`).join('')}`;
 
 describe('active accounts in the trends', () => {
-  function stationDb() {
+  function stationDb({ minuteSketchesYesterday = true } = {}) {
     const urls: URL[] = [];
     const fetch = (async (input: string) => {
       const url = new URL(input);
@@ -257,7 +257,12 @@ describe('active accounts in the trends', () => {
       const table = url.pathname.split('/').pop();
       const q = url.searchParams;
       const earlier = (q.get('t') ?? q.get('minute') ?? '').startsWith('gte.2026-10-19');
-      if (table === 'atmosphere_account_sketch' && earlier) return Response.json([{ t: '2026-10-19T16:30:00+00:00', seconds: 60, bluesky: sk(1, 6), elsewhere: sk(7) }]);
+      // the hour sketch the earlier hour falls back to, when its minute sketches are gone
+      const hourBefore = q.get('period') === 'eq.hour' && q.get('t') === 'eq.2026-10-19T16:00:00.000Z';
+      if (table === 'atmosphere_account_sketch' && hourBefore) return Response.json([{ seconds: 3600, bluesky: sk(1, 6, 8), elsewhere: sk(7) }]);
+      if (table === 'atmosphere_account_app_sketch' && hourBefore) return Response.json([{ domain: 'tangled.sh', sketch: sk(7) }, { domain: 'whtwnd.com', sketch: sk(7) }]);
+      if (table === 'atmosphere_account_sketch' && earlier)
+        return Response.json(minuteSketchesYesterday ? [{ t: '2026-10-19T16:30:00+00:00', seconds: 3600, bluesky: sk(1, 6), elsewhere: sk(7) }] : []);
       if (table === 'atmosphere_account_sketch')
         return Response.json([
           { t: '2026-10-20T16:58:00+00:00', seconds: 60, dids: 3, dids_bluesky: 2, dids_elsewhere: 1, bluesky: sk(1, 2), elsewhere: sk(3) },
@@ -267,7 +272,9 @@ describe('active accounts in the trends', () => {
       if (table === 'atmosphere_account_app_sketch')
         return Response.json(
           earlier
-            ? [{ domain: 'tangled.sh', sketch: sk(7) }]
+            ? minuteSketchesYesterday
+              ? [{ domain: 'tangled.sh', sketch: sk(7) }]
+              : []
             : [
                 { t: '2026-10-20T16:58:00+00:00', domain: 'tangled.sh', dids: 1, sketch: sk(3) },
                 { t: '2026-10-20T16:59:00+00:00', domain: 'tangled.sh', dids: 2, sketch: sk(3, 5) },
@@ -294,7 +301,7 @@ describe('active accounts in the trends', () => {
       // over the hour, tangled.sh had both accounts elsewhere and whtwnd.com one of them
       total: { active: 5, bluesky: 3, elsewhere: 2, share: 40, spread: 1.89, index: 54.99 },
       // the same hour yesterday, from the minute sketches still kept: one of three accounts elsewhere, all tangled.sh's
-      prev: { seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
+      prev: { seconds: 3600, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
       points: [
         { t: '2026-10-20T16:58:00.000Z', seconds: 60, active: 3, bluesky: 2, elsewhere: 1, share: 33.33, spread: 1, index: 33.33 },
         { t: '2026-10-20T16:59:00.000Z', seconds: 60, active: 4, bluesky: 2, elsewhere: 2, share: 50, spread: 1.89, index: 68.74 },
@@ -312,6 +319,18 @@ describe('active accounts in the trends', () => {
     expect(earlier!.searchParams.getAll('t')).toEqual(['gte.2026-10-19T16:00:00.000Z', 'lt.2026-10-19T17:00:00.000Z']);
     // the earlier hour's coverage from the minute rows, since minute sketches don't last a day
     expect(asked('atmosphere_minute').some((u) => u.searchParams.get('dids') === 'not.is.null')).toBe(true);
+  });
+
+  it('falls back to the hour sketch nearest the earlier hour when its minute sketches are gone', async () => {
+    const db = stationDb({ minuteSketchesYesterday: false });
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: 0 });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { accounts: { prev: unknown; apps: Array<{ domain: string; prevActive: number }> } };
+    // registers 1, 6, 8 on Bluesky and 7 elsewhere, written to by both apps
+    expect(body.accounts.prev).toEqual({ seconds: 3600, active: 4, bluesky: 3, elsewhere: 1, share: 25, spread: 2, index: 35.36 });
+    expect(body.accounts.apps.map((a) => [a.domain, a.prevActive])).toEqual([
+      ['tangled.sh', 1],
+      ['whtwnd.com', 1],
+    ]);
   });
 
   it('gives a longer range the earlier window\'s everyone and diversity index, over every app', async () => {

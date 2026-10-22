@@ -108,6 +108,11 @@ function mergeApps(rows: unknown[]): Map<string, Registers> {
   return apps;
 }
 
+/** The seconds a window's sketch rows cover. */
+function coveredSeconds(rows: unknown[]): number {
+  return rows.reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) && num(r.seconds) > 0 ? num(r.seconds) : 0), 0);
+}
+
 /** Everyone in a window's sketch rows, the seconds they cover, and the diversity index they make over `apps`. */
 function everyoneOf(rows: unknown[], apps: Map<string, Registers>): AccountCounts & Diversity & { seconds: number } {
   const bluesky = emptySketch();
@@ -164,7 +169,7 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     .slice(0, w.maxApps);
 
   // the earlier window's diversity index spreads its accounts over every app, not only the top ones
-  const [prevRows, prevCoverage, prevSketches, collections] = await Promise.all([
+  let [prevRows, prevCoverage, prevSketches, collections] = await Promise.all([
     getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc,domain.asc`),
     // minute sketches of everyone may not reach back to the earlier window (they're kept 26 hours), so its coverage
     // comes from the minute rows, and the seconds its sketches cover go with its diversity index
@@ -180,6 +185,16 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
       }),
     ),
   ]);
+  // where the minute sketches don't cover the earlier hour (they began on 2026-10-21, and
+  // are kept 26 hours), the hour sketch nearest it stands in: an hour of accounts like
+  // the one it's compared with, at most half an hour off
+  if (period === 'minute' && coveredSeconds(prevSketches) < 0.9 * (Date.parse(prev_until) - Date.parse(prev_since)) / 1000) {
+    const hour = new Date(Math.round(Date.parse(prev_since) / 3_600_000) * 3_600_000).toISOString();
+    [prevRows, prevSketches] = await Promise.all([
+      getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.hour&t=eq.${hour}&order=domain.asc`),
+      getAll(db, `atmosphere_account_sketch?select=seconds,bluesky,elsewhere&period=eq.hour&t=eq.${hour}`),
+    ]);
+  }
   const prev = mergeApps(prevRows);
   const prevTotal = everyoneOf(prevSketches, prev);
   const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
