@@ -4,7 +4,8 @@
  * streamer (app.bsky.graph.follow records whose `subject` is them), and the streamer's own
  * place.stream.livestream records: a new one is a stream going live, and one updated with
  * an `endedAt` is that stream over. And the streamer's own overlay settings
- * (to.atpota.poe.overlay), so a change saved on the setup page shows on stream at once. All
+ * (to.atpota.poe.overlay) and scenes (to.atpota.poe.scene), so a change saved on the setup
+ * page shows on stream at once. All
  * of them are public records in people's own repos, so the overlay needs no sign-in and no
  * stream.place API.
  *
@@ -20,6 +21,8 @@ export const FOLLOW = 'app.bsky.graph.follow';
 export const LIVESTREAM = 'place.stream.livestream';
 /** The streamer's overlay settings (config.ts): a save shows on stream straight away. */
 export const OVERLAY = 'to.atpota.poe.overlay';
+/** The streamer's scenes (scenes.ts), each at its name. */
+export const SCENE = 'to.atpota.poe.scene';
 
 /** Bluesky's us-east hosts share one address, so the fallback is in us-west (as server/atmosphere.ts). */
 export const JETSTREAMS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe'] as const;
@@ -39,7 +42,9 @@ export type StreamEvent =
   | { kind: 'live'; rkey: string; title: string | null }
   | { kind: 'ended'; rkey: string }
   /** The streamer saved new overlay settings (unchecked: config.ts fromRecord checks them). */
-  | { kind: 'config'; value: unknown };
+  | { kind: 'config'; value: unknown }
+  /** The streamer saved a scene (unchecked: scenes.ts fromSceneRecord checks it). */
+  | { kind: 'scene'; rkey: string; value: unknown };
 
 const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
@@ -57,6 +62,9 @@ export function eventFor(message: unknown, streamer: string): StreamEvent | null
   const record = commit.record;
   if (commit.collection === OVERLAY) {
     return message.did === streamer && commit.rkey === 'self' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'config', value: record } : null;
+  }
+  if (commit.collection === SCENE) {
+    return message.did === streamer && typeof commit.rkey === 'string' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'scene', rkey: commit.rkey, value: record } : null;
   }
   if (commit.collection === LIVESTREAM && message.did === streamer && typeof commit.rkey === 'string') {
     if (commit.operation === 'create' && record.endedAt === undefined) return { kind: 'live', rkey: commit.rkey, title: typeof record.title === 'string' && record.title.trim() ? record.title.trim().slice(0, 140) : null };
@@ -78,6 +86,7 @@ export function jetstreamUrl(host: string, follows: boolean, cursor?: number): s
   url.searchParams.append('wantedCollections', CHAT);
   url.searchParams.append('wantedCollections', LIVESTREAM);
   url.searchParams.append('wantedCollections', OVERLAY);
+  url.searchParams.append('wantedCollections', SCENE);
   if (follows) url.searchParams.append('wantedCollections', FOLLOW);
   if (cursor !== undefined) url.searchParams.set('cursor', String(cursor));
   return url.toString();

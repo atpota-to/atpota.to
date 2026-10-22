@@ -8,6 +8,7 @@ import { POE_LXM } from '../src/poe/identity.js';
 import { PATCH_NSID, SPROUT_NSID, TEND_NSID } from '../src/scripts/garden-api.js';
 import { PETS_NSID } from '../src/scripts/pet-sync.js';
 import { OVERLAY_NSID } from '../src/overlay/config.js';
+import { SCENE_NSID } from '../src/overlay/scenes.js';
 import { POE_FORGET_LXM } from '../src/scripts/settings.js';
 import {
   authorityDomain,
@@ -28,7 +29,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 describe('the lexicons in the repo', () => {
   it('are well formed, at the paths their ids say, and include the set the sign-in asks for', () => {
     const ids = loadLexicons(ROOT).map((l) => l.id);
-    expect(ids).toEqual(expect.arrayContaining([ATPOTATO_SET, PATCH_NSID, SPROUT_NSID, TEND_NSID, PETS_NSID, OVERLAY_NSID]));
+    expect(ids).toEqual(expect.arrayContaining([ATPOTATO_SET, PATCH_NSID, SPROUT_NSID, TEND_NSID, PETS_NSID, OVERLAY_NSID, SCENE_NSID]));
     expect(includedSets(SCOPE)).toEqual([ATPOTATO_SET]);
   });
 
@@ -38,8 +39,9 @@ describe('the lexicons in the repo', () => {
     expect(grants(TEND_NSID)).toEqual(['create']);
     expect(grants(PETS_NSID)).toEqual(['create', 'update']);
     expect(grants(OVERLAY_NSID)).toEqual(['create', 'update']);
+    expect(grants(SCENE_NSID)).toEqual(['create', 'update']);
     expect(AUTH_FULL.permissions.filter((p) => p.resource === 'rpc')).toEqual([{ type: 'permission', resource: 'rpc', lxm: [POE_LXM, POE_FORGET_LXM], aud: '*' }]);
-    expect(AUTH_FULL.permissions).toHaveLength(6);
+    expect(AUTH_FULL.permissions).toHaveLength(7);
   });
 
   it('a set may only reach its own NSID group, without wildcards or resources sets cannot hold', () => {

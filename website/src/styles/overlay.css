@@ -997,3 +997,369 @@ body[data-side="left"] .ov-bubble {
     display: none;
   }
 }
+
+/* ---------- scenes (?scene=, scene-view.ts): a full-screen backdrop under everything ---------- */
+
+.ovsc {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  --ovsc-sky: #B3DDF0;
+  --ovsc-sky-deep: #8CCBEA;
+  --ovsc-ink: #2C3A3E;
+  --ovsc-hill: #9FD38A;
+  --ovsc-hill-deep: #7FBF6A;
+}
+
+.ovsc__back {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--ovsc-sky-deep), var(--ovsc-sky) 70%);
+}
+
+.ovsc[data-background="night"] {
+  --ovsc-sky: #2C3A5C;
+  --ovsc-sky-deep: #172038;
+  --ovsc-ink: #F7EFDA;
+  --ovsc-hill: #22311F;
+  --ovsc-hill-deep: #1A2618;
+}
+
+.ovsc[data-background="garden"] {
+  --ovsc-sky: #FFEDB8;
+  --ovsc-sky-deep: #FFD978;
+  --ovsc-ink: #3D2F1B;
+}
+
+.ovsc[data-background="butter"] {
+  --ovsc-sky: #FFE29A;
+  --ovsc-sky-deep: #FFD978;
+  --ovsc-ink: #3D2F1B;
+}
+
+/* The backdrop's parts are placed on their own, over the clouds: components.css makes
+   whatever follows a .weather-sky relative (for the weather tiles), which they mustn't be. */
+.ovsc .ovsc__back > :not(.weather-sky) {
+  position: absolute;
+  z-index: 0;
+}
+
+.ovsc__panel,
+.ovsc__bar,
+.ovsc__weather,
+.ovsc__holes {
+  z-index: 1;
+}
+
+/* each backdrop's own parts */
+.ovsc__rays,
+.ovsc__stars,
+.ovsc__hill,
+.ovsc__soil,
+.ovsc__sun {
+  display: none;
+}
+
+.ovsc[data-background="day"] .ovsc__hill,
+.ovsc[data-background="night"] .ovsc__hill,
+.ovsc[data-background="day"] .ovsc__sun,
+.ovsc[data-background="night"] .ovsc__sun,
+.ovsc[data-background="garden"] .ovsc__sun,
+.ovsc[data-background="night"] .ovsc__stars,
+.ovsc[data-background="garden"] .ovsc__soil,
+.ovsc[data-background="butter"] .ovsc__rays {
+  display: block;
+}
+
+.ovsc__clouds {
+  height: 60%;
+}
+
+.ovsc__clouds .weather-sky__cloud {
+  width: 220px;
+  height: 64px;
+  border-radius: 64px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.ovsc__clouds .weather-sky__cloud::before {
+  left: 36px;
+  top: -44px;
+  width: 92px;
+  height: 92px;
+}
+
+.ovsc__clouds .weather-sky__cloud::after {
+  left: 108px;
+  top: -28px;
+  width: 68px;
+  height: 68px;
+}
+
+.ovsc__sun {
+  position: absolute;
+  top: 70px;
+  right: 120px;
+  width: 220px;
+  height: 220px;
+}
+
+/* the sun by day, tonight's moon by night, whatever the overlay's theme */
+.ovsc .ovsc__sun .weather-sun__day {
+  display: inline;
+}
+
+.ovsc .ovsc__sun .weather-sun__night {
+  display: none;
+}
+
+.ovsc[data-background="night"] .ovsc__sun .weather-sun__day {
+  display: none;
+}
+
+.ovsc[data-background="night"] .ovsc__sun .weather-sun__night {
+  display: inline;
+}
+
+.ovsc__hill {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -62%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 20%, var(--ovsc-hill), var(--ovsc-hill-deep));
+}
+
+.ovsc__stars {
+  position: absolute;
+  inset: 0 0 30% 0;
+  background-image:
+    radial-gradient(4px 4px at 8% 12%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(6px 6px at 22% 30%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(4px 4px at 35% 8%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(4px 4px at 48% 26%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(6px 6px at 61% 14%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(4px 4px at 74% 36%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(4px 4px at 86% 52%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(6px 6px at 14% 58%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(4px 4px at 30% 72%, #FFF7D6 50%, transparent 51%),
+    radial-gradient(4px 4px at 92% 22%, #FFF7D6 50%, transparent 51%);
+  animation: ovsc-twinkle 4s ease-in-out infinite alternate;
+}
+
+.ovsc__soil {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26%;
+  background: var(--soil);
+  border-top: 10px solid var(--soil-line);
+}
+
+.ovsc__sprout {
+  position: absolute;
+  bottom: 100%;
+  width: 90px;
+  height: auto;
+  margin-bottom: -18px;
+}
+
+.ovsc__sprout:nth-child(1) { left: 8%; }
+.ovsc__sprout:nth-child(2) { left: 26%; width: 70px; }
+.ovsc__sprout:nth-child(3) { left: 47%; }
+.ovsc__sprout:nth-child(4) { left: 68%; width: 76px; }
+.ovsc__sprout:nth-child(5) { left: 86%; width: 64px; }
+
+.ovsc__rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3000px;
+  height: 3000px;
+  margin: -1500px 0 0 -1500px;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.28) 0deg 9deg, transparent 9deg 22.5deg);
+  animation: ovsc-turn 120s linear infinite;
+}
+
+@keyframes ovsc-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ovsc-twinkle {
+  to {
+    opacity: 0.55;
+  }
+}
+
+/* ---------- the panel: starting, brb, ending ---------- */
+
+.ovsc__panel {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  width: max-content;
+  max-width: 1300px;
+  padding: 56px 88px 60px;
+  border-radius: 56px;
+  background: var(--paper);
+  color: var(--text);
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(35, 26, 15, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.ovsc__wordmark {
+  width: 260px;
+  height: auto;
+  color: var(--brown);
+}
+
+.ovsc__title {
+  margin: 0;
+  font-size: 112px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.ovsc__sub {
+  margin: 0;
+  max-width: 1000px;
+  font-size: 38px;
+  line-height: 1.25;
+  color: var(--text-soft);
+}
+
+.ovsc__count {
+  margin: 8px 0 0;
+  padding: 8px 40px;
+  border-radius: var(--radius-pill);
+  background: var(--sun);
+  color: var(--on-sun);
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ovsc__count.is-done {
+  font-size: 56px;
+  background: var(--leaf-pill);
+}
+
+.ovsc__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ovsc__links li {
+  padding: 12px 28px;
+  border-radius: var(--radius-pill);
+  background: var(--flesh-tint);
+  font-size: 30px;
+  font-weight: 700;
+}
+
+/* ---------- the screen share's frame ---------- */
+
+.ovsc__holes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* a soft paper rim round each window, just outside it */
+.ovsc__hole {
+  position: absolute;
+  box-sizing: content-box;
+  margin: -10px 0 0 -10px;
+  border: 10px solid var(--paper);
+  border-radius: 38px;
+  box-shadow: 0 16px 40px rgba(35, 26, 15, 0.25);
+}
+
+.ovsc__hole.is-circle {
+  border-radius: 50%;
+}
+
+.ovsc__bar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 34px;
+  border-radius: 36px;
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.ovsc__bar-mark {
+  flex: none;
+  width: 200px;
+  height: auto;
+  color: var(--brown);
+}
+
+.ovsc__bar-words {
+  min-width: 0;
+  padding-left: 28px;
+  border-left: 3px solid var(--line-strong);
+}
+
+.ovsc__bar-words:has(.ovsc__bar-title:empty):has(.ovsc__bar-sub[hidden]) {
+  display: none;
+}
+
+.ovsc__bar-title {
+  overflow: hidden;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovsc__bar-sub {
+  overflow: hidden;
+  font-size: 24px;
+  color: var(--text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovsc__weather {
+  position: absolute;
+  justify-content: center;
+}
+
+/* Poe stands in the column beside the screen (layout follows the camera's side) */
+body[data-scene="screenshare"] .ov-poe {
+  right: 40px;
+}
+
+body[data-scene="screenshare"][data-side="left"] .ov-poe {
+  left: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ovsc__rays,
+  .ovsc__stars {
+    animation: none;
+  }
+}

@@ -11,6 +11,9 @@
  *                SAVE_DELAY_MS after the last change; a preview of the overlay with ?demo
  *                over a pretend stream; the URL to paste into OBS
  *
+ * Under them, the scenes (setup-scenes.ts): starting soon, be right back, the end and the
+ * screen share, each saved as its own record.
+ *
  * A sign-in from before the overlay permission existed can't save (403): the page asks
  * the streamer to sign in again. The preview is the real overlay in an iframe at
  * 1920x1080, scaled down to fit, with the draft in its URL so it shows changes before
@@ -24,6 +27,7 @@ import { loadMe } from '../blog/signin';
 import { troubleFrom } from '../scripts/pet-sync';
 import { actorOf, copyConfig, DEFAULT_CONFIG, SLOTS, WIDGET_HINTS, WIDGET_HOME, WIDGET_KINDS, WIDGET_NAMES, type OverlayConfig, type Slot, type WidgetKind } from './config';
 import { toSearch } from './params';
+import { mountScenes, type ScenesOptions } from './setup-scenes';
 import { readOwnConfig, saveConfig } from './store';
 
 export const PREVIEW_DELAY_MS = 400;
@@ -163,6 +167,8 @@ export interface SetupOptions {
   fetchImpl?: typeof fetch;
   /** Saving, for tests. */
   save?: (session: Session, config: OverlayConfig, createdAt: string) => Promise<void>;
+  /** The scenes section's, for tests. */
+  scenes?: ScenesOptions;
 }
 
 export async function init(opts: SetupOptions = {}): Promise<void> {
@@ -200,6 +206,7 @@ export async function init(opts: SetupOptions = {}): Promise<void> {
     q('[data-ovs-signin]').hidden = state !== 'signed-out';
     q('[data-ovs-unavailable]').hidden = state !== 'unavailable';
     q('[data-ovs-editor]').hidden = state !== 'signed-in';
+    if (state !== 'signed-in') q('[data-ovs-scenes]').hidden = true;
     if (state === 'checking') who.textContent = SETUP_COPY.checking;
     else if (state !== 'signed-in') who.textContent = SETUP_COPY.signedOut;
   };
@@ -232,10 +239,12 @@ export async function init(opts: SetupOptions = {}): Promise<void> {
     }
   };
 
+  let scenes: { refresh(): void } | null = null;
   form.addEventListener('input', () => {
     const c = configFrom(form);
     reflect(form, c);
     showPreview(c);
+    scenes?.refresh();
     win.clearTimeout(saveTimer);
     saveTimer = win.setTimeout(() => void saveNow(), SAVE_DELAY_MS);
   });
@@ -305,4 +314,5 @@ export async function init(opts: SetupOptions = {}): Promise<void> {
   setState('signed-in');
   fit();
   showPreview(config);
+  scenes = mountScenes(q('[data-ovs-scenes]'), s, handle ?? s.did, () => configFrom(form), () => (reconsent.hidden = false), opts.scenes);
 }

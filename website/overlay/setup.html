@@ -149,6 +149,98 @@
                     </ol>
                 </section>
             </div>
+
+            <!-- the scenes (src/overlay/setup.ts): one tab each, saved as to.atpota.poe.scene/<scene> -->
+            <section class="tile ovs-scenes" aria-labelledby="ovs-scenes-title" data-ovs-scenes hidden>
+                <div class="ovs-scenes__head">
+                    <h2 class="ovs-out__title" id="ovs-scenes-title">scenes</h2>
+                    <p class="ovs-scenes__lede">full screens for the moments in between, each with its own URL: add each one as a browser source in its own OBS scene. poe and its chat come along.</p>
+                </div>
+                <div class="ovs-tabs" role="tablist" aria-label="scenes" data-ovs-scene-tabs>
+                    <button type="button" role="tab" class="ovs-tab" data-scene="starting" aria-selected="true">starting soon</button>
+                    <button type="button" role="tab" class="ovs-tab" data-scene="brb" aria-selected="false">be right back</button>
+                    <button type="button" role="tab" class="ovs-tab" data-scene="ending" aria-selected="false">the end</button>
+                    <button type="button" role="tab" class="ovs-tab" data-scene="screenshare" aria-selected="false">screen share</button>
+                </div>
+                <div class="ovs-grid" role="tabpanel" data-ovs-scene-panel>
+                    <form class="ovs-form" data-ovs-scene-form>
+                        <label class="ovs-field">title
+                            <input type="text" name="title" maxlength="80" autocomplete="off">
+                        </label>
+                        <label class="ovs-field">a line under it <em>what the stream is about</em>
+                            <input type="text" name="subtitle" maxlength="200" autocomplete="off">
+                        </label>
+                        <label class="ovs-field ovs-field--row">backdrop
+                            <select name="background">
+                                <option value="day">day: sky, clouds and the sun</option>
+                                <option value="night">night: stars and tonight's moon</option>
+                                <option value="garden">garden: sprouts in the soil</option>
+                                <option value="butter">butter: sunburst</option>
+                            </select>
+                        </label>
+                        <label class="ovs-check"><input type="checkbox" name="showPoe" checked><span>poe <em>and its chat</em></span></label>
+                        <label class="ovs-check"><input type="checkbox" name="showWidgets"><span>the weather widgets <em>as you set them up above</em></span></label>
+
+                        <fieldset class="ovs-set" data-ovs-for="starting">
+                            <legend>countdown</legend>
+                            <label class="ovs-check"><input type="radio" name="countdown" value="timer" checked><span>a timer <em>starts when the scene comes on</em></span></label>
+                            <label class="ovs-field ovs-field--row">for
+                                <select name="minutes">
+                                    <option value="1">1 minute</option>
+                                    <option value="2">2 minutes</option>
+                                    <option value="3">3 minutes</option>
+                                    <option value="5" selected>5 minutes</option>
+                                    <option value="10">10 minutes</option>
+                                    <option value="15">15 minutes</option>
+                                    <option value="30">30 minutes</option>
+                                    <option value="60">an hour</option>
+                                </select>
+                            </label>
+                            <label class="ovs-check"><input type="radio" name="countdown" value="clock"><span>to a time</span></label>
+                            <label class="ovs-field ovs-field--row">at <input type="datetime-local" name="at"></label>
+                            <label class="ovs-check"><input type="radio" name="countdown" value="none"><span>no countdown</span></label>
+                        </fieldset>
+
+                        <label class="ovs-field" data-ovs-for="ending">where to find you <em>up to four, one per line</em>
+                            <textarea name="links" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+                        </label>
+
+                        <fieldset class="ovs-set" data-ovs-for="screenshare">
+                            <legend>camera</legend>
+                            <div class="ovs-set--row">
+                                <label class="ovs-check"><input type="radio" name="camSide" value="right" checked><span>on the right</span></label>
+                                <label class="ovs-check"><input type="radio" name="camSide" value="left"><span>on the left</span></label>
+                                <label class="ovs-check"><input type="radio" name="camSide" value="none"><span>no camera</span></label>
+                            </div>
+                            <div class="ovs-set--row">
+                                <label class="ovs-check"><input type="radio" name="camShape" value="rounded" checked><span>rounded square</span></label>
+                                <label class="ovs-check"><input type="radio" name="camShape" value="circle"><span>circle</span></label>
+                                <label class="ovs-check"><input type="radio" name="camShape" value="wide"><span>wide</span></label>
+                            </div>
+                        </fieldset>
+                    </form>
+
+                    <div class="ovs-out">
+                        <div class="ovs-preview" data-ovs-scene-preview>
+                            <iframe class="ovs-preview__frame" title="scene preview" data-ovs-scene-frame tabindex="-1"></iframe>
+                        </div>
+                        <p class="ovs-out__saved" role="status" data-ovs-scene-saved></p>
+                        <label class="ovs-field">this scene's URL
+                            <textarea class="ovs-url" rows="1" readonly data-ovs-scene-url></textarea>
+                        </label>
+                        <div class="ovs-out__buttons">
+                            <button type="button" class="btn btn--primary btn--sm" data-ovs-scene-copy>copy URL</button>
+                            <span class="ovs-out__status" role="status" data-ovs-scene-status></span>
+                        </div>
+                        <div class="ovs-holes" data-ovs-for="screenshare">
+                            <h3 class="ovs-holes__title">in OBS</h3>
+                            <p>put your screen capture and camera <strong>under</strong> this browser source, then give each the spot below (right-click, transform, edit transform):</p>
+                            <ul class="ovs-holes__list" data-ovs-holes></ul>
+                        </div>
+                        <p class="ovs-holes__note" data-ovs-for="starting">tick <strong>refresh browser when scene becomes active</strong> on this source, so a timer starts again each time.</p>
+                    </div>
+                </div>
+            </section>
         </div>
     </main>
 

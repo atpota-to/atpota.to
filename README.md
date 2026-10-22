@@ -119,6 +119,23 @@ via OBS* to hear Poe, and leave *shutdown source when not visible* off.
   garden's pets leaderboard, one an hour (`garden/`). It only ever says handles, never
   what people wrote.
 
+**Scenes** are full screens for the moments in between, each with its own URL and its
+own record (`to.atpota.poe.scene`, at the scene's name,
+[`website/lexicons/to/atpota/poe/scene.json`](website/lexicons/to/atpota/poe/scene.json)),
+set up in the scenes section of `/overlay/setup` and followed live like the rest. Add
+each as a browser source in its own OBS scene: `/overlay?streamer=dame.is&scene=starting`.
+
+| scene | what's on it |
+| --- | --- |
+| `starting` | "starting soon", a line under it, and a countdown: a timer from when the scene comes on (tick *refresh browser when scene becomes active*), or to a time. When it runs out Poe cheers |
+| `brb` | "be right back" |
+| `ending` | "thanks for watching", and up to four places to find you |
+| `screenshare` | an atpotato frame with a big 16:9 window for a screen capture and a camera window beside it (rounded, circle or wide; right, left or none), the title along the bottom and the weather in the column, Poe on the camera's side. The setup page gives each window's exact spot to put the OBS sources under it |
+
+Each has a title and a line under it, a backdrop (day: sky, clouds and the sun; night:
+stars and tonight's moon; garden: sprouts in the soil; butter: a turning sunburst), and
+whether Poe (with its chat) and the weather widgets come along.
+
 Settings in the URL override the saved ones, for that browser source only (the setup
 page's preview passes its whole draft this way):
 

@@ -1,0 +1,51 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.poe.scene",
+  "description": "One of the full-screen scenes of Poe's stream overlay (atpota.to/overlay?scene=...): the countdown before a stream, the be-right-back screen, the end screen, or the frame for sharing a screen with a camera. One record per scene, at the scene's name as its record key: \"starting\", \"brb\", \"ending\" or \"screenshare\". The overlay reads it from your repo and follows changes live.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["createdAt", "updatedAt"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 400, "maxGraphemes": 80, "description": "The big words (\"starting soon\")." },
+          "subtitle": { "type": "string", "maxLength": 1000, "maxGraphemes": 200, "description": "A line under them: what the stream is about." },
+          "background": { "type": "string", "knownValues": ["day", "night", "garden", "butter"], "description": "The backdrop behind it all (the screen share's frame colour)." },
+          "showPoe": { "type": "boolean" },
+          "showWidgets": { "type": "boolean", "description": "Whether the weather widgets from the overlay's settings show on this scene too." },
+          "countdown": { "type": "ref", "ref": "#countdown" },
+          "links": {
+            "type": "array",
+            "maxLength": 4,
+            "description": "Where to find the streamer, on the end screen (\"bsky.app/profile/dame.is\").",
+            "items": { "type": "string", "maxLength": 300, "maxGraphemes": 60 }
+          },
+          "camera": { "type": "ref", "ref": "#camera" },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "countdown": {
+      "type": "object",
+      "description": "The starting screen's countdown: to a time, or a timer that starts when the scene is shown.",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "knownValues": ["timer", "clock", "none"] },
+        "minutes": { "type": "integer", "minimum": 1, "maximum": 120, "description": "For a timer." },
+        "at": { "type": "string", "format": "datetime", "description": "For a clock: when the stream starts." }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "description": "The screen share's camera window.",
+      "required": ["side", "shape"],
+      "properties": {
+        "side": { "type": "string", "knownValues": ["right", "left", "none"] },
+        "shape": { "type": "string", "knownValues": ["rounded", "circle", "wide"] }
+      }
+    }
+  }
+}
