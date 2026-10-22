@@ -86,10 +86,15 @@ test('plans just the live segments a range needs', () => {
 });
 
 test('refuses the crawl, and anything past the last sealed segment', () => {
-  assert.throws(() => planRange(ARCHIVE, CRAWL_END - 3600, CRAWL_END + 3600), /--from must be after .*a crawl of records that already existed/);
+  assert.throws(() => planRange(ARCHIVE, CRAWL_END - 150, CRAWL_END + 3600), /--from must be after .*a crawl of records that already existed/);
+  assert.throws(() => planRange(ARCHIVE, CRAWL_END - 3600, CRAWL_END + 3600), /the archive is empty before/);
   assert.throws(() => planRange(ARCHIVE, CRAWL_END + 3600, CRAWL_END + 30 * 6000), /--to must be before/);
   assert.throws(() => planRange([], DAY, DAY + 60), /no segments/);
   assert.equal(planRange(ARCHIVE.slice(2), CRAWL_END + 60, CRAWL_END + 120).segments, 1, 'no crawl: the archive starts where the live stream does');
+  // a dense segment later in the archive (a new crawl, a rewrite) doesn't refuse a range clear of it
+  const later = [...ARCHIVE, segment(99, CRAWL_END + 30 * 6000, CRAWL_END + 30 * 6000 + 10, 3_000_000, 900_000_000), segment(100, CRAWL_END + 30 * 6000 + 10, CRAWL_END + 31 * 6000, 3_000_000, 903_000_000)];
+  assert.equal(planRange(later, CRAWL_END + 6000, CRAWL_END + 12_000).segments, 3);
+  assert.throws(() => planRange(later, CRAWL_END + 6000, CRAWL_END + 30 * 6000 + 5), /reaches into a crawl.*#99/);
 });
 
 test('lists every page of segments, with the key', async () => {
