@@ -89,3 +89,19 @@ test('no post, or a malformed answer, is null', () => {
   assert.equal(summarizePost(null), null);
   assert.equal(summarizePost({ posts: [{ uri: 'nope' }] }), null);
 });
+
+test('a labelled post keeps its alt text but offers no images to look at, as for mentions', () => {
+  for (const val of ['porn', 'graphic-media', '!warn']) {
+    const { post: p, images: look } = summarizePost(post(images('a description'), { labels: [{ val }] }));
+    assert.deepEqual(p.images, [{ alt: 'a description', source: 'the post' }], val);
+    assert.deepEqual(look, [], val);
+  }
+  const quoted = { $type: 'app.bsky.embed.record#view', record: {
+    $type: 'app.bsky.embed.record#viewRecord', uri: 'at://did:plc:other/app.bsky.feed.post/q1',
+    author: { handle: 'other.example' }, value: { text: 'q' }, labels: [{ val: 'nudity' }],
+    embeds: [images('their alt')] } };
+  const { post: p, images: look } = summarizePost(post(quoted));
+  assert.deepEqual(p.quote.images, [{ alt: 'their alt' }]);
+  assert.deepEqual(look, []);
+  assert.equal(summarizePost(post(images('fine'), { labels: [{ val: 'bridged' }] })).images.length, 1, 'other labels change nothing');
+});
