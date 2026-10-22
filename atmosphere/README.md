@@ -451,6 +451,39 @@ needed.
 `--host` picks another v2 instance (default `https://jetstream.us-east.bsky.network`),
 and `JETSTREAM_SDK_DIR` another SDK folder.
 
+### Backfilling who was active on each host
+
+`src/backfill-host-activity.js` fills `atmosphere_host_active_day` for the days before
+the station counted it ("Who's active on each host", above), from the same archive with
+the same key and SDK: every commit in a UTC day, looked up in the station's directory of
+where accounts live, into the same per-host sketches. Wait until the station has saved
+its directory (`host-directory.json` in the data folder, 10 to 30 minutes after it
+starts, and `host directory read` in its log); without one the script reads every host
+itself first.
+
+A dry run of one day prints the day's line (active accounts on independent hosts, how
+many hosts, the busiest three) and writes nothing:
+
+```bash
+cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
+  /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-21 --to 2026-10-21 --dry-run
+```
+
+Then every day the archive has as live stream, up to yesterday, in `tmux` (about
+3.5 GB to download and a few minutes to read per day):
+
+```bash
+cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
+  /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-21
+```
+
+Days only, whole ones, never today (the station rewrites today from memory). Each day is
+merged with whatever rows it already has, so a stopped run can be started again as it
+was, and a day run twice comes out the same. It goes by where accounts live now: an
+account that moved between hosts in the window counts for the one it's on now, and one
+that has since left independent hosts isn't counted. That's a few hundred accounts
+against tens of thousands active (`atmosphere_plc_day` has the moves).
+
 ## Config
 
 `/root/atpotato-weather/.env` on the droplet, mode 600. Start from
@@ -517,6 +550,7 @@ src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and th
 src/plc.js         reading the PLC directory's log of identity changes
 src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day
 src/host-activity.js  who's active on each independent host, a sketch a day, into atmosphere_host_active_day
+src/backfill-host-activity.js  the same, for days before the station counted, from the archive
 src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
