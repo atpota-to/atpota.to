@@ -1,7 +1,8 @@
 /**
  * /overlay: Poe and the atmosphere's weather for a livestream, as an OBS browser source.
  * The page is transparent. /overlay?streamer=<handle> takes its settings from that
- * streamer's to.atpota.poe.overlay record (config.ts, store.ts), saved by /overlay/setup,
+ * streamer's to.atpota.poe.overlay record (config.ts, store.ts: their main layout, or
+ * &layout=<id> for another), saved by /overlay/setup,
  * and follows it live: a save shows on stream as soon as Jetstream relays it. Settings in
  * the URL override the record (params.ts); without a streamer it's the defaults.
  *
@@ -127,7 +128,7 @@ async function start(): Promise<void> {
   if (streamerDid) {
     const wait = new Promise<undefined>((r) => window.setTimeout(r, CONFIG_WAIT_MS));
     const id = sceneParams.id;
-    const [own, ownScene] = await Promise.all([Promise.race([readPublicConfig(streamerDid), wait]), id ? Promise.race([readPublicScene(streamerDid, id, fetch, sceneHint), wait]) : undefined]);
+    const [own, ownScene] = await Promise.all([Promise.race([readPublicConfig(streamerDid, fetch, params.layout), wait]), id ? Promise.race([readPublicScene(streamerDid, id, fetch, sceneHint), wait]) : undefined]);
     if (own) saved = withOverrides(own.config, params.overrides);
     if (id && ownScene) scene = withSceneOverrides(ownScene.scene, sceneParams.overrides);
   }
@@ -179,7 +180,7 @@ async function start(): Promise<void> {
   const regulars = createRegulars(streamer);
   const said = new Set<string>();
   const onEvent = async (e: StreamEvent) => {
-    if (e.kind === 'config') return apply(withOverrides(fromRecord(e.value), params.overrides));
+    if (e.kind === 'config') return e.rkey !== params.layout ? undefined : apply(withOverrides(fromRecord(e.value), params.overrides));
     if (e.kind === 'scene') {
       if (!sceneParams.id || e.rkey !== sceneParams.id) return;
       scene = withSceneOverrides(fromSceneRecord(sceneHint, e.value), sceneParams.overrides);

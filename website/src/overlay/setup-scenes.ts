@@ -1,27 +1,25 @@
 /**
- * The setup page's screens (overlay/setup.html, data-ovs-scenes): a tab for each of the
- * streamer's screens (scenes.ts), one form that edits whichever tab is open, a preview of
- * the overlay with that screen, its URL, and for a screen share where its windows are, so
- * the screen capture and camera can go exactly under them in OBS.
+ * The setup page's screen editor (overlay/setup.html, data-ovs-scenes): one form for the
+ * screen the studio opened (setup.ts, from its card), a preview of the overlay with that
+ * screen, its URL, and for a screen share where its windows are, so the screen capture and
+ * camera can go exactly under them in OBS. A change is saved to to.atpota.poe.scene/<id>
+ * SCENE_SAVE_DELAY_MS after the last one, the same way a layout is.
  *
- * The tabs are the screens everyone starts with (starting, brb, ending, screenshare,
- * loading: their defaults until changed) and then any the streamer has added, read from their repo
- * in one listRecords. "+ new screen" adds one of any kind with a name, at an id made from
- * that name; a screen they added can be removed, and one of the starters reset to its defaults.
- * Each is saved to to.atpota.poe.scene/<id> SCENE_SAVE_DELAY_MS after the last change, the
- * same way the overlay's settings are (setup.ts).
+ * The screens are the ones everyone starts with (starting, brb, ending, screenshare,
+ * loading: their defaults until changed) and then any the streamer has added, read from
+ * their repo in one listRecords (screensFrom).
  */
 
-import type { Session } from '../blog/auth';
-import { troubleFrom } from '../scripts/pet-sync';
 import type { OverlayConfig } from './config';
 import { toSearch } from './params';
-import { cleanText, copyScene, frameHoles, GROUNDS, isSceneKind, LINK_MAX, MAX_LINKS, MAX_SCREENS, NAME_MAX, newScreenId, SCENE_DEFAULTS, SCENE_KINDS, SCENE_NAMES, sceneSearch, type Ground, type Scene, type SceneKind } from './scenes';
-import { deleteScene, listOwnScenes, saveScene, type SavedScreen } from './store';
+import { cleanText, copyScene, frameHoles, GROUNDS, isSceneKind, LINK_MAX, MAX_LINKS, MAX_SCREENS, NAME_MAX, SCENE_DEFAULTS, SCENE_KINDS, SCENE_NAMES, sceneSearch, type Ground, type Scene } from './scenes';
+import type { SavedScreen } from './store';
 
 export const SCENE_SAVE_DELAY_MS = 1200;
 const PREVIEW_DELAY_MS = 400;
 const WIDTH = 1920;
+
+export { MAX_SCREENS };
 
 export const SCENE_COPY = {
   loading: 'reading your saved screens…',
@@ -116,15 +114,7 @@ export function holeLines(s: Scene): string[] {
   return [line('screen capture', h.screen), ...(h.camera ? [line(`camera${s.camera.shape === 'circle' ? ' (it shows as a circle)' : ''}`, h.camera)] : [])];
 }
 
-export interface ScenesOptions {
-  win?: Window;
-  fetchImpl?: typeof fetch;
-  save?: (session: Session, id: string, scene: Scene, createdAt: string) => Promise<void>;
-  remove?: (session: Session, id: string) => Promise<void>;
-  confirm?: (question: string) => boolean;
-}
-
-interface Entry {
+export interface ScreenEntry {
   id: string;
   scene: Scene;
   createdAt: string;
@@ -134,11 +124,11 @@ interface Entry {
 }
 
 /** The screens everyone has, as defaults. */
-const starters = (): Entry[] =>
+export const starters = (): ScreenEntry[] =>
   SCENE_KINDS.map((kind) => ({ id: kind, scene: copyScene(SCENE_DEFAULTS[kind]), createdAt: new Date().toISOString(), note: SCENE_COPY.fresh, saved: false }));
 
-/** The tabs in order: the starters (saved or not), then the rest oldest first. */
-export function screensFrom(saved: SavedScreen[]): Entry[] {
+/** In order: the starters (saved or not), then the rest oldest first. */
+export function screensFrom(saved: SavedScreen[]): ScreenEntry[] {
   const byId = new Map(saved.map((s) => [s.id, s]));
   const out = starters().map((e) => {
     const own = byId.get(e.id);
@@ -148,57 +138,63 @@ export function screensFrom(saved: SavedScreen[]): Entry[] {
   return out;
 }
 
-/** Wires up the screens section for a signed-in streamer. `draft` is the overlay's settings as the form has them now. */
-export function mountScenes(root: HTMLElement, session: Session, streamer: string, draft: () => OverlayConfig, onReconsent: () => void, opts: ScenesOptions = {}): { refresh(): void; ready: Promise<void> } {
+/** A screen's URL for OBS. */
+export function screenUrl(origin: string, streamer: string, id: string): string {
+  return `${origin}/overlay?streamer=${streamer}&scene=${id}`;
+}
+
+export interface ScreenEditorOptions {
+  win?: Window;
+  streamer: string;
+  /** The main layout's settings as they are now: Poe and the widgets come from it. */
+  draft: () => OverlayConfig;
+  /** Saves it; the note it comes back with goes under the title. */
+  save: (entry: ScreenEntry) => Promise<void>;
+  /** Removing (or resetting) it, asked from the editor's button. */
+  remove: (entry: ScreenEntry) => void;
+  /** It changed (its name, say): the library card wants redrawing. */
+  changed?: (entry: ScreenEntry) => void;
+}
+
+export interface ScreenEditor {
+  open(entry: ScreenEntry): void;
+  /** Saves a change still waiting, now. */
+  flush(): void;
+  /** The main layout changed: the preview shows it too. */
+  refresh(): void;
+  /** The entry now showing, if any. */
+  current(): ScreenEntry | null;
+  /** The entry's note changed while it shows. */
+  note(entry: ScreenEntry): void;
+}
+
+export function mountScreenEditor(root: HTMLElement, opts: ScreenEditorOptions): ScreenEditor {
   const win = opts.win ?? window;
-  const fetchImpl = opts.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => win.fetch(input, init));
-  const save = opts.save ?? ((s: Session, id: string, scene: Scene, createdAt: string) => saveScene(s, id, scene, createdAt));
-  const remove = opts.remove ?? ((s: Session, id: string) => deleteScene(s, id));
-  const confirm = opts.confirm ?? ((question: string) => win.confirm(question));
   const doc = root.ownerDocument;
   const q = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
   const form = q<HTMLFormElement>('[data-ovs-scene-form]');
   const frame = q<HTMLIFrameElement>('[data-ovs-scene-frame]');
   const preview = q<HTMLElement>('[data-ovs-scene-preview]');
   const url = q<HTMLTextAreaElement>('[data-ovs-scene-url]');
+  const open = q<HTMLAnchorElement>('[data-ovs-scene-open]');
   const saved = q<HTMLElement>('[data-ovs-scene-saved]');
   const status = q<HTMLElement>('[data-ovs-scene-status]');
   const holes = q<HTMLElement>('[data-ovs-holes]');
-  const tabList = q<HTMLElement>('[data-ovs-scene-tabs]');
+  const heading = q<HTMLElement>('[data-ovs-screen-heading]');
   const removeButton = q<HTMLButtonElement>('[data-ovs-scene-remove]');
-  const adder = q<HTMLDetailsElement>('[data-ovs-new]');
-  const addForm = q<HTMLFormElement>('[data-ovs-new-form]');
-  const addNote = q<HTMLElement>('[data-ovs-new-note]');
 
-  let screens: Entry[] = [];
-  let current: Entry | null = null;
+  let current: ScreenEntry | null = null;
   let saveTimer: number | undefined;
   let previewTimer: number | undefined;
   let shown = '';
-
-  const renderTabs = () => {
-    tabList.replaceChildren(
-      ...screens.map((e) => {
-        const tab = doc.createElement('button');
-        tab.type = 'button';
-        tab.className = 'ovs-tab';
-        tab.setAttribute('role', 'tab');
-        tab.dataset.scene = e.id;
-        tab.setAttribute('aria-selected', String(e === current));
-        tab.textContent = e.scene.name;
-        tab.addEventListener('click', () => {
-          if (e !== current) open(e);
-        });
-        return tab;
-      }),
-    );
-  };
 
   const show = () => {
     const e = current;
     if (!e) return;
     const s = e.scene;
-    url.value = `${location.origin}/overlay?streamer=${streamer}&scene=${e.id}`;
+    heading.textContent = s.name;
+    url.value = screenUrl(location.origin, opts.streamer, e.id);
+    open.href = url.value;
     holes.replaceChildren(
       ...holeLines(s).map((line) => {
         const li = doc.createElement('li');
@@ -210,30 +206,22 @@ export function mountScenes(root: HTMLElement, session: Session, streamer: strin
     removeButton.hidden = isSceneKind(e.id) && !e.saved;
     win.clearTimeout(previewTimer);
     previewTimer = win.setTimeout(() => {
-      const main = toSearch({ ...draft(), volume: 0 }, { demo: true });
+      const main = toSearch({ ...opts.draft(), volume: 0 }, { demo: true });
       const src = `/overlay${main || '?'}${main ? '&' : ''}${sceneSearch(s, e.id)}`;
       if (src !== shown) frame.src = shown = src;
     }, PREVIEW_DELAY_MS);
   };
 
-  const saveNow = async (entry: Entry) => {
+  const saveNow = async (entry: ScreenEntry) => {
     if (current === entry) saved.textContent = SCENE_COPY.saving;
-    try {
-      await save(session, entry.id, entry.scene, entry.createdAt);
-      entry.saved = true;
-      entry.note = SCENE_COPY.saved;
-    } catch (error) {
-      const trouble = troubleFrom(error);
-      entry.note = trouble ? SCENE_COPY.reconsent : SCENE_COPY.failed;
-      if (trouble) onReconsent();
-    }
+    await opts.save(entry);
     if (current === entry) {
       saved.textContent = entry.note;
       show();
     }
+    opts.changed?.(entry);
   };
 
-  /** A change waiting to save is saved now, before the form shows another screen. */
   const flush = () => {
     if (saveTimer === undefined || !current) return;
     win.clearTimeout(saveTimer);
@@ -241,23 +229,12 @@ export function mountScenes(root: HTMLElement, session: Session, streamer: strin
     void saveNow(current);
   };
 
-  function open(next: Entry) {
-    flush();
-    current = next;
-    renderTabs();
-    q('[data-ovs-scene-panel]').setAttribute('aria-label', next.scene.name);
-    fillSceneForm(form, next.scene);
-    saved.textContent = next.note;
-    show();
-  }
-
   form.addEventListener('input', () => {
     const entry = current;
     if (!entry) return;
-    const name = entry.scene.name;
     entry.scene = sceneFrom(form, entry.scene);
-    if (entry.scene.name !== name) renderTabs();
     show();
+    opts.changed?.(entry);
     win.clearTimeout(saveTimer);
     saveTimer = win.setTimeout(() => {
       saveTimer = undefined;
@@ -266,52 +243,11 @@ export function mountScenes(root: HTMLElement, session: Session, streamer: strin
   });
   form.addEventListener('submit', (e) => e.preventDefault());
 
-  addForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (screens.length >= MAX_SCREENS) {
-      addNote.textContent = SCENE_COPY.full;
-      return;
-    }
-    const data = new FormData(addForm);
-    const kind = String(data.get('kind'));
-    if (!isSceneKind(kind)) return;
-    const name = cleanText(String(data.get('name') ?? ''), NAME_MAX) || SCENE_NAMES[kind];
-    const id = newScreenId(name, kind, screens.map((s) => s.id).concat(SCENE_KINDS));
-    const entry: Entry = { id, scene: { ...copyScene(SCENE_DEFAULTS[kind]), name }, createdAt: new Date().toISOString(), note: SCENE_COPY.added, saved: false };
-    screens.push(entry);
-    addForm.reset();
-    addNote.textContent = '';
-    adder.open = false;
-    open(entry);
-    void saveNow(entry);
-  });
-
-  removeButton.addEventListener('click', async () => {
-    const entry = current;
-    if (!entry) return;
-    const starter = isSceneKind(entry.id);
-    if (!confirm(starter ? `put "${entry.scene.name}" back to its defaults?` : `remove "${entry.scene.name}"? its URL will show the defaults.`)) return;
+  removeButton.addEventListener('click', () => {
+    if (!current) return;
     win.clearTimeout(saveTimer);
     saveTimer = undefined;
-    if (entry.saved) {
-      try {
-        await remove(session, entry.id);
-      } catch (error) {
-        if (troubleFrom(error)) onReconsent();
-        saved.textContent = troubleFrom(error) ? SCENE_COPY.reconsent : SCENE_COPY.removeFailed;
-        return;
-      }
-    }
-    if (starter) {
-      const fresh = starters().find((s) => s.id === entry.id)!;
-      Object.assign(entry, fresh, { note: SCENE_COPY.reset });
-      open(entry);
-    } else {
-      screens = screens.filter((s) => s !== entry);
-      current = null;
-      open(screens[0]!);
-      saved.textContent = SCENE_COPY.removed;
-    }
+    opts.remove(current);
   });
 
   q<HTMLButtonElement>('[data-ovs-scene-copy]').addEventListener('click', async () => {
@@ -327,17 +263,24 @@ export function mountScenes(root: HTMLElement, session: Session, streamer: strin
 
   const fit = () => preview.style.setProperty('--scale', String(preview.clientWidth / WIDTH));
   if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(preview);
-  root.hidden = false;
-  fit();
-  saved.textContent = SCENE_COPY.loading;
-  const ready = listOwnScenes(session, fetchImpl).then((list) => {
-    screens = screensFrom(list ?? []);
-    open(screens[0]!);
-    if (!list) saved.textContent = SCENE_COPY.unreadable;
-  });
+
   return {
-    // the overlay's settings changed: the preview shows them too
+    open(entry) {
+      flush();
+      current = entry;
+      fillSceneForm(form, entry.scene);
+      saved.textContent = entry.note;
+      show();
+      fit();
+    },
+    flush,
     refresh: () => show(),
-    ready,
+    current: () => current,
+    note(entry) {
+      if (current === entry) {
+        saved.textContent = entry.note;
+        show();
+      }
+    },
   };
 }

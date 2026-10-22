@@ -1,5 +1,6 @@
-/* The overlay's setup page (overlay/setup.html, src/overlay/setup.ts): the settings, the
-   URL they make, and a live preview of the overlay over a pretend stream. On a phone it's
+/* The overlay's setup page (overlay/setup.html, src/overlay/setup.ts): the studio's library of
+   layouts and screens as cards, and the editor for one of them: its settings, the URL they make,
+   and a live preview of the overlay over a pretend stream. On a phone it's
    one column with roomier rows to tap, and the preview opens full screen (turned on its
    side while the phone is upright), since the whole 1920x1080 overlay is tiny in a column. */
 
@@ -392,53 +393,7 @@ html.ovs-full-open {
   color: var(--text-soft);
 }
 
-/* ---------- scenes (setup-scenes.ts) ---------- */
-
-.ovs-scenes {
-  display: grid;
-  gap: 18px;
-}
-
-.ovs-scenes__head {
-  display: grid;
-  gap: 6px;
-}
-
-.ovs-scenes__lede {
-  margin: 0;
-  max-width: 70ch;
-  color: var(--text-soft);
-}
-
-.ovs-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.ovs-tab {
-  min-height: 40px;
-  padding: 8px 18px;
-  border: 2px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  background: var(--paper);
-  color: var(--text);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ovs-tab[aria-selected="true"] {
-  border-color: var(--brown);
-  background: var(--brown);
-  color: var(--on-brown);
-}
-
-.ovs-tab:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
+/* ---------- a screen (setup-scenes.ts) ---------- */
 
 .ovs-field input[type="datetime-local"] {
   min-height: 40px;
@@ -516,4 +471,337 @@ html.ovs-full-open {
 
 .ovs-remove {
   margin-left: auto;
+}
+
+/* ---------- the library: a shelf of cards for layouts, another for screens ---------- */
+
+.ovs-library {
+  display: grid;
+  gap: 20px;
+}
+
+.ovs-shelf {
+  display: grid;
+  gap: 16px;
+}
+
+.ovs-shelf__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.ovs-shelf__head > div {
+  flex: 1 1 360px;
+}
+
+.ovs-shelf__title {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.ovs-shelf__lede {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--text-soft);
+}
+
+.ovs-shelf__note {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.ovs-shelf__note:empty {
+  display: none;
+}
+
+/* the "+ new" forms open under their button, on the right */
+.ovs-shelf__head .ovs-new {
+  display: grid;
+  justify-items: end;
+}
+
+.ovs-shelf__head .ovs-new__form {
+  justify-items: stretch;
+  width: min(360px, 100%);
+}
+
+.ovs-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ovs-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  padding: 12px 12px 14px;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+}
+
+.ovs-card__words {
+  display: grid;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.ovs-card__name {
+  margin: 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.ovs-card__badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--leaf-tint);
+  color: var(--leaf);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.ovs-card__meta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.ovs-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+/* a card's sketch: the 1920x1080 screen as a little 16:9 box */
+.ovs-sketch {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(circle at 70% 30%, rgba(255, 217, 120, 0.35), transparent 40%),
+    linear-gradient(160deg, #3B4A6B 0%, #5B4A6E 55%, #2E3B32 56%, #23301F 100%);
+}
+
+.ovs-sketch__slot {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ovs-sketch__slot--top-left { top: 6%; left: 3%; align-items: flex-start; }
+.ovs-sketch__slot--top-center { top: 6%; left: 50%; transform: translateX(-50%); align-items: center; }
+.ovs-sketch__slot--top-right { top: 6%; right: 3%; align-items: flex-end; }
+.ovs-sketch__slot--bottom-left { bottom: 6%; left: 3%; align-items: flex-start; flex-direction: column-reverse; }
+.ovs-sketch__slot--bottom-center { bottom: 6%; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column-reverse; }
+.ovs-sketch__slot--bottom-right { bottom: 6%; right: 3%; align-items: flex-end; flex-direction: column-reverse; }
+
+/* a bottom slot on Poe's side sits above Poe, as on stream */
+.ovs-sketch:has(.ovs-sketch__poe--left) .ovs-sketch__slot--bottom-left,
+.ovs-sketch:has(.ovs-sketch__poe--right) .ovs-sketch__slot--bottom-right {
+  bottom: 36%;
+}
+
+.ovs-sketch__chip {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--sky);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.ovs-sketch[data-theme="dark"] .ovs-sketch__chip {
+  background: #243645;
+  color: #F7EFDA;
+}
+
+/* Anisota's are square, white on black, as on stream */
+.ovs-sketch__chip.is-anisota {
+  border-radius: 0;
+  background: #000000;
+  color: #FFFFFF;
+}
+
+.ovs-sketch[data-theme="light"] .ovs-sketch__chip.is-anisota {
+  background: #FFFFFF;
+  color: #000000;
+}
+
+.ovs-sketch__poe {
+  position: absolute;
+  bottom: 0;
+  width: 18%;
+  height: auto;
+}
+
+.ovs-sketch__poe--left { left: 2%; transform: scaleX(-1); }
+.ovs-sketch__poe--right { right: 2%; }
+
+/* a screen's sketch: its sky, and its title */
+.ovs-sketch--screen {
+  display: grid;
+  place-items: center;
+  background: var(--sky);
+}
+
+.ovs-sketch--screen[data-background="night"] { background: #1E2A44; }
+.ovs-sketch--screen[data-background="garden"] { background: var(--butter); }
+.ovs-sketch--screen[data-background="butter"] { background: var(--sun); }
+.ovs-sketch--screen[data-kind="loading"] { background: #000000; }
+
+.ovs-sketch__title {
+  max-width: 80%;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovs-sketch--screen[data-kind="loading"] .ovs-sketch__title {
+  border-radius: 0;
+  background: transparent;
+  color: #FFFFFF;
+  font-weight: 400;
+}
+
+.ovs-sketch__window,
+.ovs-sketch__cam {
+  position: absolute;
+  top: 4%;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.ovs-sketch__window { left: 2%; width: 75%; height: 75%; }
+.ovs-sketch__cam { width: 19%; height: 34%; right: 2%; }
+.ovs-sketch__cam--left { right: auto; left: 2%; }
+.ovs-sketch--screen:has(.ovs-sketch__cam--left) .ovs-sketch__window { left: auto; right: 2%; }
+
+/* ---------- the editor: a bar on top, the form beside a preview that stays in view ---------- */
+
+.ovs-editor {
+  display: grid;
+  gap: 20px;
+}
+
+.ovs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.ovs-bar__title {
+  margin: 0;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.ovs-bar__saved {
+  margin: 0 0 0 auto;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+@media (min-width: 901px) {
+  .ovs-editor .ovs-out {
+    position: sticky;
+    top: 16px;
+  }
+}
+
+/* the form's groups fold away */
+.ovs-group {
+  border-top: 2px solid var(--line);
+  padding-top: 12px;
+}
+
+.ovs-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ovs-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ovs-group > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.ovs-group[open] > summary::after {
+  content: "\2013";
+}
+
+.ovs-group > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.ovs-group__count {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--leaf-tint);
+  color: var(--leaf);
+  font-size: 12px;
+}
+
+.ovs-group__count:empty {
+  display: none;
+}
+
+.ovs-group__body {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 4px;
+}
+
+.ovs-hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.ovs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ovs-obs .ovs-steps {
+  margin-top: 8px;
 }
