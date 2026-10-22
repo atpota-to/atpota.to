@@ -14,10 +14,7 @@ import type { Lens, LensState } from './weather-lens';
 export function dockSummary(controls: HTMLElement, s: LensState): string {
   const word = (sel: string) => controls.querySelector(sel)?.textContent?.trim() ?? '';
   const parts = [word(`[data-lens-window="${s.window}"]`), word(`[data-lens-measure="${s.measure}"]`)];
-  if (s.measure === 'records') {
-    const unit = word(`[data-lens-unit] option[value="${s.unit}"]`);
-    parts.push(s.unit === 'total' ? unit : `per ${unit}`);
-  }
+  if (s.measure === 'records') parts.push(word(`[data-lens-unit] option[value="${s.unit}"]`));
   return parts.filter(Boolean).join(' · ');
 }
 

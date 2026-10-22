@@ -1972,31 +1972,6 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 /* ---------- the lens (weather-lens.ts): what every tile shows ---------- */
 
-.weather-lens__group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-}
-
-.weather-lens__label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.weather-lens__note {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* Its room is kept when it's away: the panel grows upward from the strip, so a line coming
-   and going would move the buttons above it out from under the finger. */
-.weather-dock .weather-lens__note[hidden] {
-  display: inline !important;
-  visibility: hidden;
-}
-
 /* The lens at hand (weather-dock.ts): a thin strip floating along the bottom, beside Poe,
    that opens upward to the controls. It leaves Poe's corner clear (poe.css .poe-potato).
    Out of the page's flow, nothing the tiles do can move it out from under a finger. */
@@ -2040,11 +2015,6 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-}
-
-.weather-dock__label {
-  color: var(--muted);
-  font-weight: 700;
 }
 
 .weather-dock__now {
@@ -2156,9 +2126,10 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   cursor: pointer;
 }
 
+/* counting accounts, it has nothing to say; its room is kept, so the panel (growing upward
+   from the strip) doesn't move the buttons above out from under the finger */
 .weather-lens__select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  visibility: hidden;
 }
 
 /* The header's unit ("rec/sec"): a tap moves it on, like °C and °F. */

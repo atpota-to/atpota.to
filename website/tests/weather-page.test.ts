@@ -649,7 +649,6 @@ describe('the lens', () => {
     expect(l.get().unit).toBe('second');
     report.querySelector<HTMLButtonElement>('[data-lens-measure="accounts"]')!.click();
     expect(select.disabled).toBe(true);
-    expect(report.querySelector<HTMLElement>('[data-lens-unit-note]')!.hidden).toBe(false);
   });
 });
 
