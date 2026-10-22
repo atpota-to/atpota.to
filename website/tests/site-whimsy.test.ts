@@ -37,6 +37,9 @@ import {
   fetchReading,
   formatIndex,
   initWeather,
+  HOUR_LINE_ENDPOINT,
+  readHourLine,
+  renderHourLine,
   diversityText,
   ratioText,
   READING_EVENT,
@@ -255,14 +258,27 @@ describe('atmospheric conditions', () => {
     expect(diversityText({ share: 80, spread: 3 })).toBe("most accounts active just now wrote outside bluesky, spread across about 3 apps' worth");
   });
 
+  it("draws the last hour's line once it has two minutes", async () => {
+    document.body.innerHTML = tileHtml();
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
+    const line = tile.querySelector<HTMLElement>('[data-weather-line]')!;
+    const points = [{ creates: 6000, seconds: 60 }, { creates: 0, seconds: 0 }, { creates: 9000, seconds: 60 }];
+    const values = await readHourLine((async () => Response.json({ range: 'hour', points })) as typeof fetch);
+    expect(values).toEqual([100, null, 150]);
+    renderHourLine(tile, values);
+    expect(line.hidden).toBe(false);
+    expect(tile.querySelector('[data-weather-line-chart] path')).not.toBeNull();
+    expect(await readHourLine((async () => Response.json({ error: 'unavailable' }, { status: 503 })) as typeof fetch)).toBeNull();
+    renderHourLine(tile, [100]);
+    expect(line.hidden).toBe(true);
+  });
+
   it('shows the reading and the weather', () => {
     document.body.innerHTML = tileHtml();
     const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
     renderReading(tile, READING);
     expect(tile.dataset.state).toBe('ready');
-    expect(tile.querySelector('[data-weather-posts]')!.textContent).toBe('31');
-    expect(tile.querySelector('[data-weather-likes]')!.textContent).toBe('170');
-    expect(tile.querySelector('[data-weather-follows]')!.textContent).toBe('15');
+    expect(tile.querySelector('[data-weather-records]')!.textContent).toBe('31');
     expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(CONDITION_TEXT.gusty);
     // a failed refresh keeps the last reading
     renderWeatherError(tile);
@@ -283,16 +299,18 @@ describe('atmospheric conditions', () => {
         observe() {}
       },
     );
-    const fetchImpl = vi.fn(async () => Response.json({ ...READING, source: 'station' }));
+    const fetchImpl = vi.fn(async (url: string) => (url === HOUR_LINE_ENDPOINT ? Response.json({ range: 'hour', points: [] }) : Response.json({ ...READING, source: 'station' })));
+    // the reading's requests, leaving out the hour's line
+    const readings = () => fetchImpl.mock.calls.filter(([url]) => url !== HOUR_LINE_ENDPOINT).length;
     initWeather(document, fetchImpl as unknown as typeof fetch);
     const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
     await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(readings()).toBe(1);
     expect(document.querySelector<HTMLElement>('[data-scene]')!.dataset.weatherBound).toBeUndefined();
     expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(CONDITION_TEXT.gusty);
     // scrolled to straight away, the reading is still fresh: no second request
     seen[0]!([{ isIntersecting: true }]);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(readings()).toBe(1);
     vi.unstubAllGlobals();
   });
 

@@ -33,7 +33,7 @@
 
 import { rollText } from './roll';
 import { cloudCount, renderClouds } from './weather-sky';
-import { renderSpark } from './weather-spark';
+import { renderSpark, renderSparkline } from './weather-spark';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
@@ -430,6 +430,33 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
   tile.dataset.state = 'ready';
 }
 
+/** The weather report's header line for the last hour: new records a second, a minute at a time. */
+export const HOUR_LINE_ENDPOINT = '/api/weather-history?range=hour';
+/** The history's minutes come in whole, so once a minute is plenty. */
+export const HOUR_LINE_MS = 60_000;
+
+/** The last hour's minutes as new records a second (null for a minute nobody heard), or null if it can't be read. */
+export async function readHourLine(fetchImpl: typeof fetch = fetch): Promise<Array<number | null> | null> {
+  try {
+    const res = await fetchImpl(HOUR_LINE_ENDPOINT, { headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    if (!obj(body) || !Array.isArray(body.points)) return null;
+    return body.points.map((p) => (obj(p) && num(p.creates) && num(p.seconds) && p.seconds > 0 ? p.creates / p.seconds : null));
+  } catch {
+    return null;
+  }
+}
+
+/** Draws the last hour's line on the home tile, or hides it with fewer than two minutes to draw. */
+export function renderHourLine(tile: HTMLElement, values: Array<number | null> | null): void {
+  const line = tile.querySelector<HTMLElement>('[data-weather-line]');
+  const chart = tile.querySelector<HTMLElement>('[data-weather-line-chart]');
+  if (!line || !chart) return;
+  line.hidden = !values || values.filter((v) => v !== null).length < 2;
+  if (values && !line.hidden) renderSparkline(chart, values);
+}
+
 export function renderWeatherError(tile: HTMLElement): void {
   // A reading already on screen stays; only a tile that never loaded says so.
   if (tile.dataset.state === 'ready') return;
@@ -452,6 +479,9 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
   let checkedAt = -Infinity;
   let checking = false;
   let timer: number | undefined;
+  // the hour's line, after the reading so the reading comes first
+  const hasLine = !!tile.querySelector('[data-weather-line]');
+  let lineAt = -Infinity;
   const due = () => onScreen && document.visibilityState !== 'hidden';
   const check = async () => {
     if (checking) return;
@@ -462,6 +492,10 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
     checking = false;
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
+    if (hasLine && Date.now() - lineAt >= HOUR_LINE_MS) {
+      lineAt = Date.now();
+      void readHourLine(fetchImpl).then((values) => renderHourLine(tile, values));
+    }
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
     timer = window.setTimeout(() => {
       if (due()) void check();

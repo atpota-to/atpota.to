@@ -226,16 +226,13 @@
             <div class="home-weather__reading">
               <p class="home-weather__big"><span data-weather-records>&ndash;</span> <span class="home-weather__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
               <p class="home-weather__cond" data-weather-cond>checking the sky…</p>
-              <!-- new records a second over the station's 60 seconds, when it's live (src/scripts/weather-spark.ts) -->
-              <div class="weather-spark home-weather__spark" data-weather-spark aria-hidden="true"></div>
             </div>
           </div>
-          <dl class="home-weather__row">
-            <div><dt>posts</dt><dd data-weather-posts>&ndash;</dd></div>
-            <div><dt>likes</dt><dd data-weather-likes>&ndash;</dd></div>
-            <div><dt>reposts</dt><dd data-weather-reposts>&ndash;</dd></div>
-            <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
-          </dl>
+          <!-- new records a second over the last hour, the weather report's header line (src/scripts/weather.ts renderHourLine) -->
+          <figure class="home-weather__line" data-weather-line>
+            <figcaption class="home-weather__line-label">the last hour</figcaption>
+            <div class="weather-spark home-weather__line-chart" data-weather-line-chart aria-hidden="true"></div>
+          </figure>
           <!-- the diversity index: how much of the atmosphere isn't bluesky (its room kept while the tile loads) -->
           <div class="home-weather__mix" data-weather-mix>
             <p class="home-weather__mix-head"><span class="home-weather__mix-label">diversity index</span> <strong class="home-weather__index" data-weather-index>&ndash;</strong> <span class="home-weather__level" data-weather-level></span></p>
