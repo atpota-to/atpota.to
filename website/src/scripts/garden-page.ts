@@ -14,6 +14,8 @@
  *                            numbers, connections and field guide (the "flowers" level): every
  *                            kind there is, the ones they've grown drawn in, the rest dark,
  *                            with where each comes from
+ *   /garden/dame.is/tending  the tending: who's looked after their flowers, and whose
+ *                            flowers they've looked after, newest first (the "tending" level)
  *
  * A garden is a to.atpota.garden.patch record in its keeper's own repo (record key "self");
  * signed in on your own page you can set one up or change it, including whether visitors
@@ -88,12 +90,14 @@ export { actorOf, gardenPath } from './garden';
 
 /** localStorage: the blooms this reader has already seen open ({ uris }). */
 export const SEEN_KEY = 'garden:seen';
+/** Tending shown on the tending level, per list. */
+export const TENDS_SHOWN = 50;
 /** Neighbours who help count towards a flower's care, up to this many (server/garden.ts). */
 const MAX_HELPERS = 3;
 /** People shown on a board; your own place is added under them when it's further down. */
 export const LEADERS_SHOWN = 10;
 
-export type Level = 'garden' | 'flowers';
+export type Level = 'garden' | 'flowers' | 'tending';
 export type Filter = 'all' | 'growing' | 'bloom' | 'pressed';
 
 export const COPY = {
@@ -133,7 +137,7 @@ export const COPY = {
     pets: (n: number) => (n === 1 ? 'pet for poe' : 'pets for poe'),
     notes: (n: number) => (n === 1 ? 'thing poe remembers' : 'things poe remembers'),
   },
-  levels: { garden: 'garden', flowers: 'flowers' } satisfies Record<Level, string>,
+  levels: { garden: 'garden', flowers: 'flowers', tending: 'tending' } satisfies Record<Level, string>,
   setup: {
     name: (handle: string) => `${handle.split('.')[0]}'s garden`.slice(0, NAME_MAX),
     planting: 'planting…',
@@ -240,6 +244,22 @@ export const COPY = {
       visitors: "share your garden's link to get on the board.",
     } satisfies Record<Board, string>,
   },
+  // the tending, both ways
+  tending: {
+    gotTitle: (owner: boolean, n: number) => `${owner ? "who's tended your flowers" : "who's tended their flowers"} · ${n}`,
+    givenTitle: (owner: boolean, n: number) => `${owner ? 'your tending' : 'their tending'} · ${n}`,
+    verb: { water: 'watered', sun: 'gave sun to', talk: 'talked to' } satisfies Record<TendAction, string>,
+    /** After the tender's handle: " watered your violet". */
+    got: (action: TendAction, owner: boolean, kind: string) => ` ${COPY.tending.verb[action]} ${owner ? 'your' : 'their'} ${kind}`,
+    /** Their own flower: "watered your own violet". */
+    givenOwn: (action: TendAction, owner: boolean, kind: string) => `${COPY.tending.verb[action]} ${owner ? 'your' : 'their'} own ${kind}`,
+    /** Someone else's, either side of their handle: "watered @bo.example's flower". */
+    givenTo: (action: TendAction) => [`${COPY.tending.verb[action]} `, "'s flower"] as const,
+    gotNone: (owner: boolean) =>
+      owner ? "nobody's tended your flowers yet. share your garden's link, or plant somewhere a friend will spot it." : "nobody's tended their flowers yet. you could be the first!",
+    givenNone: (owner: boolean, handle: string) => (owner ? "you haven't tended anything yet. water a flower in any garden, yours or a neighbour's." : `@${handle} hasn't tended anything yet.`),
+    more: (shown: number, total: number) => `the newest ${shown} of ${total}.`,
+  },
   guideCount: (found: number, total: number) => `${found} of ${total} found`,
   notFound: 'not found yet',
   guideFound: (kind: string, looks: string[]) => `${kind}, found${looks.length ? `: ${looks.join(', ')}` : ''}`,
@@ -255,7 +275,7 @@ const DID_RE = /^did:[a-z]+:[A-Za-z0-9._:%-]{1,2000}$/;
 
 /** Which page and level an address is: null when it isn't a garden address. */
 export function parseGardenPath(pathname: string): { actor: string | null; level: Level } | null {
-  const m = /^\/garden(?:\/([^/]+)(\/flowers)?)?\/?$/.exec(pathname);
+  const m = /^\/garden(?:\/([^/]+)(?:\/(flowers|tending))?)?\/?$/.exec(pathname);
   if (!m) return null;
   if (!m[1]) return { actor: null, level: 'garden' };
   let actor: string;
@@ -266,7 +286,7 @@ export function parseGardenPath(pathname: string): { actor: string | null; level
   }
   if (actor === 'index.html') return { actor: null, level: 'garden' };
   if (!HANDLE_RE.test(actor) && !DID_RE.test(actor)) return null;
-  return { actor: actor.startsWith('did:') ? actor : actor.toLowerCase(), level: m[2] ? 'flowers' : 'garden' };
+  return { actor: actor.startsWith('did:') ? actor : actor.toLowerCase(), level: (m[2] as Level | undefined) ?? 'garden' };
 }
 
 /** True once the reader has seen this flower's bloom open. */
@@ -341,6 +361,13 @@ export function numbersFor(person: Pick<GardenerView, 'did' | 'flowers'>, now: n
   n.gardens = gardens.size;
   n.helpers = helpers.size;
   return n;
+}
+
+/** The tending other people gave their flowers, newest first: each tend, and the flower it was for. */
+export function tendsGot(person: Pick<GardenerView, 'did' | 'flowers'>): Array<{ tend: GardenerFlower['tends'][number]; flower: GardenerFlower }> {
+  return person.flowers
+    .flatMap((flower) => flower.tends.filter((t) => t.did !== person.did).map((tend) => ({ tend, flower })))
+    .sort((a, b) => Date.parse(b.tend.at) - Date.parse(a.tend.at));
 }
 
 /** Where to read the notes Poe keeps about someone: its record for their DID, on aturi. */
@@ -879,6 +906,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       if (owner && person) {
         person.given.total++;
         if (f.did !== person.did && !person.given.recent.some((g) => g.flower.owner.did === f.did)) person.given.helped++;
+        person.given.recent.unshift({ at, action, flower: { uri: f.uri, owner: { did: f.did, handle: f.handle } } });
       }
       return true;
     } catch (error) {
@@ -894,6 +922,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     renderList();
     renderNumbers();
     renderPeople();
+    renderTending();
     renderStats();
   }
 
@@ -1151,6 +1180,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       if (featured) renderFeatured();
       renderList();
       renderNumbers();
+      renderPeople();
+      renderTending();
       renderStats();
       if (done) setText(listStatus, COPY.wateredAll(done));
     }
@@ -1256,6 +1287,69 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     );
     setText(guideCard.querySelector<HTMLElement>('[data-guide-count]'), COPY.guideCount(found.size, KINDS.length));
     guideCard.hidden = false;
+  }
+
+  /* ---------- the tending level ---------- */
+
+  const tendsGotCard = q('[data-tends-got]');
+  const tendsGivenCard = q('[data-tends-given]');
+
+  /** One line of tending: who (a face, linked), what, when and how, and the flower if it's known. */
+  function tendItem(p: { did: string; handle: string }, what: Array<string | HTMLElement>, action: TendAction, when: string, flower: GardenerFlower | null): HTMLLIElement {
+    const li = el(doc, 'li', { class: 'garden-tend-item' });
+    const words = el(doc, 'span', { class: 'garden-tend-item__words' });
+    const line = el(doc, 'span', { class: 'garden-tend-item__what' });
+    line.append(...what);
+    const meta = el(doc, 'span', { class: 'garden-tend-item__when' });
+    meta.append(icon(doc, action), when);
+    words.append(line, meta);
+    li.append(face(doc, p, 'garden-chip__face'), words);
+    if (flower) {
+      const open = flower.patch.open;
+      const stage = stageFor(flower.plantedAt, now(), open);
+      // A bloom its owner hasn't taken a look at yet stays a bud here too: no spoilers.
+      const hidden = owner && open && stage === 'bloom' && (flower.kind === SEED || !seenBloom(local, flower.uri));
+      const bed = el(doc, 'span', { class: 'garden-tend-item__bed', 'aria-hidden': 'true' });
+      bed.append(drawPlanted(doc, flower, hidden ? 'bud' : stage));
+      li.append(bed);
+    }
+    return li;
+  }
+
+  const who = (p: { did: string; handle: string }) => el(doc, 'a', { class: 'garden-tend-item__who', href: gardenPath(actorOf(p)) }, `@${p.handle}`);
+
+  function renderTending(): void {
+    if (!person) return;
+    const T = COPY.tending;
+    const t = now();
+    if (tendsGotCard) {
+      const got = tendsGot(person);
+      setText(tendsGotCard.querySelector<HTMLElement>('[data-tends-got-title]'), T.gotTitle(owner, got.length));
+      tendsGotCard.querySelector('[data-tends-got-list]')?.replaceChildren(
+        ...got.slice(0, TENDS_SHOWN).map(({ tend, flower }) =>
+          tendItem(tend, [who(tend), T.got(tend.action, owner, nameOf(flower))], tend.action, `${COPY.place(flower.patch)} · ${whenText(tend.at, t)}`, flower),
+        ),
+      );
+      setText(tendsGotCard.querySelector<HTMLElement>('[data-tends-got-status]'), !got.length ? T.gotNone(owner) : got.length > TENDS_SHOWN ? T.more(TENDS_SHOWN, got.length) : '');
+      tendsGotCard.hidden = false;
+    }
+    if (tendsGivenCard) {
+      const { total, recent } = person.given;
+      const mine = new Map(person.flowers.map((f) => [f.uri, f]));
+      const shown = recent.slice(0, TENDS_SHOWN);
+      setText(tendsGivenCard.querySelector<HTMLElement>('[data-tends-given-title]'), T.givenTitle(owner, total));
+      tendsGivenCard.querySelector('[data-tends-given-list]')?.replaceChildren(
+        ...shown.map((g) => {
+          const flower = mine.get(g.flower.uri) ?? null;
+          const own = g.flower.owner.did === person!.did;
+          const [before, after] = T.givenTo(g.action);
+          const what = own ? [T.givenOwn(g.action, owner, flower ? nameOf(flower) : 'flower')] : [before, who(g.flower.owner), after];
+          return tendItem(g.flower.owner, what, g.action, whenText(g.at, t), flower);
+        }),
+      );
+      setText(tendsGivenCard.querySelector<HTMLElement>('[data-tends-given-status]'), !total ? T.givenNone(owner, person.handle) : total > shown.length ? T.more(shown.length, total) : '');
+      tendsGivenCard.hidden = false;
+    }
   }
 
   function fillHow(): void {
@@ -1373,8 +1467,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   root.dataset.state = 'ready';
   root.classList.toggle('is-own', owner);
   renderHead();
-  // The community garden's "flowers" would be atpotato's own, so it's just the garden
-  // (unless that's the address asked for).
+  // The community garden's "flowers" and "tending" would be atpotato's own, so it's just the
+  // garden (unless that's the address asked for).
   if (levelsNav) levelsNav.hidden = isCommunity() && route.level === 'garden';
   showLevel(route.level);
   wireForms();
@@ -1385,6 +1479,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   renderNumbers();
   renderPeople();
   renderGuide();
+  renderTending();
   // How it grows: for anyone at the community garden, and on your own page until you plant.
   if (isCommunity() || (owner && !person.flowers.length)) fillHow();
   await Promise.all([showGarden(), loadLeaders()]);

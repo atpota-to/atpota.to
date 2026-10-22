@@ -20,6 +20,7 @@ import {
   parseGardenPath,
   poeNotesUrl,
   seenBloom,
+  tendsGot,
 } from '../src/scripts/garden-page.js';
 import { describeBloom, flowerVariant, GARDEN_SUBJECT, PATCH_NSID, patchUri, SPROUT_NSID, TEND_NSID, type FlowerPatch, type GardenerFlower } from '../src/scripts/garden.js';
 
@@ -244,9 +245,12 @@ describe('garden addresses', () => {
     expect(parseGardenPath('/garden/')).toEqual({ actor: null, level: 'garden' });
     expect(parseGardenPath('/garden/Dame.Is')).toEqual({ actor: 'dame.is', level: 'garden' });
     expect(parseGardenPath(`/garden/${CY}/flowers`)).toEqual({ actor: CY, level: 'flowers' });
+    expect(parseGardenPath('/garden/cy.example/tending/')).toEqual({ actor: 'cy.example', level: 'tending' });
+    expect(parseGardenPath('/garden/cy.example/weeds')).toBeNull();
     expect(parseGardenPath('/garden/did%3Aplc%3Acccccccccccccccccccccccc')).toEqual({ actor: CY, level: 'garden' });
     for (const bad of ['/gardens', '/garden/a/b', '/garden/nodot', '/garden/x.y/z', '/garden/%E0%A4%A']) expect(parseGardenPath(bad), bad).toBeNull();
     expect(gardenPath('dame.is', 'flowers')).toBe('/garden/dame.is/flowers');
+    expect(gardenPath('dame.is', 'tending')).toBe('/garden/dame.is/tending');
     expect(actorOf({ did: CY, handle: 'handle.invalid' })).toBe(CY);
     expect(actorOf({ did: CY, handle: 'cy.example' })).toBe('cy.example');
   });
@@ -260,6 +264,7 @@ describe('garden addresses', () => {
     expect(garden).toEqual([
       { source: '/garden/:actor', destination: '/api/garden-page?actor=:actor' },
       { source: '/garden/:actor/flowers', destination: '/api/garden-page?actor=:actor&level=flowers' },
+      { source: '/garden/:actor/tending', destination: '/api/garden-page?actor=:actor&level=tending' },
     ]);
     expect(PAGE_PATHS).toEqual(['/garden']);
     expect(vercel.rewrites.some((r) => r.destination.endsWith('.html'))).toBe(false);
@@ -467,6 +472,39 @@ describe('the garden page', () => {
     expect(shown('[data-level="garden"]')).toBe(true);
   });
 
+  it("someone's tending: who looked after their flowers, and whose they looked after, newest first", async () => {
+    await rig({ path: '/garden/cy.example/tending' }).run();
+    expect(shown('[data-level="tending"]')).toBe(true);
+    expect(shown('[data-level="flowers"]')).toBe(false);
+    expect($('[data-level-link="tending"]').getAttribute('aria-current')).toBe('page');
+    expect(document.title).toBe(COPY.docTitle('Cy'));
+    // their flowers' tending from neighbours, not their own
+    const got = tendsGot({ did: CY, flowers: [flowerOf(CY), pressedOf(CY, '3kold1', 'daisy')] });
+    expect(got.map((g) => g.tend.did)).toEqual([MO, BO]);
+    expect(text('[data-tends-got-title]')).toBe(COPY.tending.gotTitle(false, 2));
+    const gotItems = [...document.querySelectorAll('[data-tends-got-list] li')];
+    expect(gotItems.map((li) => li.querySelector('.garden-tend-item__what')!.textContent)).toEqual([
+      `@mo.example${COPY.tending.got('sun', false, 'violet')}`,
+      `@bo.example${COPY.tending.got('water', false, 'violet')}`,
+    ]);
+    expect(gotItems[0]!.querySelector('a')!.getAttribute('href')).toBe('/garden/mo.example');
+    expect(gotItems[0]!.querySelector('.garden-tend-item__bed svg')).not.toBeNull();
+    // the tending they've given: someone else's flower, by its keeper's handle
+    expect(text('[data-tends-given-title]')).toBe(COPY.tending.givenTitle(false, 7));
+    const given = [...document.querySelectorAll('[data-tends-given-list] li')];
+    expect(given.map((li) => li.querySelector('.garden-tend-item__what')!.textContent)).toEqual(["watered @bo.example's flower"]);
+    expect(given[0]!.querySelector('a')!.getAttribute('href')).toBe('/garden/bo.example');
+    expect(text('[data-tends-given-status]')).toBe(COPY.tending.more(1, 7));
+  });
+
+  it('nobody tended yet says so, on your own page', async () => {
+    const lonely = { ...flowerOf(ME), tends: [] };
+    await rig({ signedIn: true, path: '/garden/me.test/tending', people: { [ME]: { flowers: [lonely], garden: true } } }).run();
+    expect(text('[data-tends-got-title]')).toBe(COPY.tending.gotTitle(true, 0));
+    expect(document.querySelectorAll('[data-tends-got-list] li')).toHaveLength(0);
+    expect(text('[data-tends-got-status]')).toBe(COPY.tending.gotNone(true));
+  });
+
   it('your flowers: the one that needs you up close, all of them with quick tending', async () => {
     markSeen(createStore(() => window.localStorage), `at://${ME}/${SPROUT_NSID}/3kbo`);
     const r = rig({ signedIn: true, path: '/garden/me.test/flowers' });
@@ -495,6 +533,9 @@ describe('the garden page', () => {
     expect(r.calls[0]!.body!.record).toMatchObject({ subject: { uri: `at://${ME}/${SPROUT_NSID}/3kbo` }, action: 'water' });
     expect(text('[data-flowers-status]')).toBe(COPY.tended.water);
     expect([...document.querySelectorAll<HTMLButtonElement>('.garden-flower')[1]!.querySelectorAll<HTMLButtonElement>('.garden-flower__tool')].every((b) => b.disabled)).toBe(true);
+    // and it's at the top of your tending
+    expect(text('[data-tends-given-title]')).toBe(COPY.tending.givenTitle(true, 8));
+    expect(text('[data-tends-given-list] li .garden-tend-item__what')).toBe(COPY.tending.givenOwn('water', true, 'tulip'));
     // water them all: only the ones still due
     expect(text('[data-water-all]')).toBe(COPY.waterAll(1));
     $('[data-water-all]').click();

@@ -293,9 +293,9 @@ export function freePlotFrom(plot: number, taken: ReadonlySet<number>, plots: nu
 const RKEY_RE = /^[A-Za-z0-9._:~-]{1,512}$/;
 const HANDLE_RE = /^(?=.{3,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 
-/** Someone's garden page (/garden/dame.is), or their flowers (…/flowers). */
-export function gardenPath(actor: string, level: 'garden' | 'flowers' = 'garden'): string {
-  return `/garden/${actor}${level === 'flowers' ? '/flowers' : ''}`;
+/** Someone's garden page (/garden/dame.is), their flowers (…/flowers), or their tending (…/tending). */
+export function gardenPath(actor: string, level: 'garden' | 'flowers' | 'tending' = 'garden'): string {
+  return `/garden/${actor}${level === 'garden' ? '' : `/${level}`}`;
 }
 
 /** The address segment for someone: their handle, or their DID when the handle is broken. */

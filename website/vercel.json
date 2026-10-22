@@ -36,7 +36,8 @@
     { "source": "/og/dispatch/:key", "destination": "/api/og-dispatch?key=:key" },
     { "source": "/og/garden/:actor", "destination": "/api/og-garden?actor=:actor" },
     { "source": "/garden/:actor", "destination": "/api/garden-page?actor=:actor" },
-    { "source": "/garden/:actor/flowers", "destination": "/api/garden-page?actor=:actor&level=flowers" }
+    { "source": "/garden/:actor/flowers", "destination": "/api/garden-page?actor=:actor&level=flowers" },
+    { "source": "/garden/:actor/tending", "destination": "/api/garden-page?actor=:actor&level=tending" }
   ],
   "redirects": [
     {
