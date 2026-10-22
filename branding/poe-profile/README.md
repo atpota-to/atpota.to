@@ -31,11 +31,13 @@ npm run poe-profile -- --sheets     # only the contact sheets
 
 The script is `website/scripts/poe-profile.ts`. It needs a Chromium for Playwright, the same one `npm run og` uses, and `CHROMIUM_PATH` points it at another binary.
 
-## How it will be used
+## How it's used
 
-A job on the droplet (next) changes Poe's profile with the sky over New York, at sunrise, mid-morning, golden hour and nightfall:
+`mentions/src/profile-look.js`, on the droplet, changes Poe's profile with the sky over New York. It cuts each day in four at sunrise and sunset: dawn from 30 minutes before sunrise, day from 90 minutes after it, golden hour from 90 minutes before sunset, and night from 30 minutes after it. Each slot gets one look the first time the job sees it, from a roll seeded on the slot, so a restart picks the same look:
 
-- the avatar: today's season and the time of day, with a face that is usually the time of day's own and sometimes another (sleepy most nights; always sleepy while Poe naps)
-- the banner: the same time of day, with today's season, weather and any special day
+- **Avatar:** today's season and the time of day. The face is usually the time of day's own and sometimes another, sleepy on about 7 nights in 10. While Poe naps, the face is always sleepy.
+- **Banner:** the same time of day, with today's season and the weather station's weather. It switches to dispatch day for a day after an announcement, to Halloween week's nights or New Year's Eve, or now and then to an away day (the moon, the beach, a cloud).
 
-Only the avatar and banner change. The name, bio and pinned post stay as they are.
+Only the avatar and banner change; the name, bio and pinned post stay as they are. If someone changes the avatar or banner by hand, the profile is left alone for the rest of that day.
+
+`PROFILE_LOOK=dry-run` (the default) works each look out and logs it without writing anything. Read the log with `npm run profile-look` on the droplet, then set `PROFILE_LOOK=on` to go live. The kill switch stops every write.

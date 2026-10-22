@@ -314,6 +314,25 @@ function parseWeatherPosts() {
   };
 }
 
+// --- Poe's profile look ----------------------------------------------------
+// Poe's avatar and banner changing with the sky over New York (profile-look.js),
+// picked from the library the website serves (website/scripts/poe-profile.ts).
+//   on       the avatar and banner are changed (stage 4 only)
+//   dry-run  each change is worked out and logged, and nothing is written: read
+//            them with `npm run profile-look` (the default)
+//   off      nothing runs
+function parseProfileLook() {
+  const mode = opt('PROFILE_LOOK', 'dry-run').toLowerCase();
+  if (!['off', 'dry-run', 'on'].includes(mode)) throw new Error(`PROFILE_LOOK must be off, dry-run or on, got ${mode}`);
+  const base = opt('PROFILE_LOOK_BASE', 'https://atpota.to/poe-profile').replace(/\/+$/, '');
+  if (!/^https:\/\/[^/]+(\/.*)?$/.test(base)) throw new Error(`PROFILE_LOOK_BASE must be an https URL: ${base}`);
+  return {
+    mode,
+    base,
+    pollMs: Math.max(num('PROFILE_LOOK_POLL_MS', 300000), 60000),
+  };
+}
+
 export function isAdmin(did) {
   return typeof did === 'string' && config.adminDids.includes(did);
 }
@@ -377,4 +396,5 @@ export const config = {
 
   dispatch: parseDispatch(),
   weather: parseWeatherPosts(),
+  profileLook: parseProfileLook(),
 };
