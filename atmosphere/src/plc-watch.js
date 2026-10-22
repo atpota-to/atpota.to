@@ -24,7 +24,7 @@ export const MAX_AUDITS_PER_POLL = 300;
 
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 
-export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetch(u, i), now = () => Date.now(), maxPages = MAX_PAGES_PER_POLL, maxAudits = MAX_AUDITS_PER_POLL }) {
+export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetch(u, i), now = () => Date.now(), maxPages = MAX_PAGES_PER_POLL, maxAudits = MAX_AUDITS_PER_POLL, onEntry = null }) {
   let day = null;
   let history = null;
   let after = null;
@@ -82,6 +82,8 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
             begin(d);
           }
           history.add(e);
+          // the accounts on independent hosts, kept up to date (host-activity.js)
+          onEntry?.(e, history.relayHosts);
         }
         if (page.length < PAGE_COUNT || after === asked) break;
       }

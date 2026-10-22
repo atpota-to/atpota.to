@@ -745,6 +745,30 @@ export function hostHistoryOf(x: unknown) {
     // day by day (utc), each with the plc directory's sign-ups and moves when the station has them
     days: days.map((d) => ({ ...d, ...(byDate.get(d.date) ? { identities: byDate.get(d.date) } : {}) })),
     identities,
+    // who wrote anything each day: accounts on independent hosts against everyone active, so the share of
+    // the active network living off bluesky's hosts (compare with accountsOnIndependentHostsPercent, which counts quiet accounts too)
+    activeAccountsByDay: list(x.activeDaily).flatMap((d) => {
+      if (!isRecord(d) || typeof d.day !== "string" || !DAY_RE.test(d.day)) return [];
+      const independent = count(d.independent);
+      const all = count(d.all);
+      if (independent === null) return [];
+      return [{ date: d.day, onIndependentHosts: independent, ...(all ? { everyoneActive: all, onIndependentHostsPercent: round2((independent / all) * 100) } : {}) }];
+    }),
+    ...(isRecord(x.liveliest) && typeof x.liveliest.day === "string" && DAY_RE.test(x.liveliest.day)
+      ? {
+        // the independent hosts with the most accounts that wrote anything that day (utc)
+        liveliestHosts: {
+          date: x.liveliest.day,
+          ...(x.liveliest.soFar === true ? { soFar: true } : {}),
+          hosts: list(x.liveliest.hosts).flatMap((h) => {
+            const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+            const active = isRecord(h) ? count(h.active) : null;
+            const accounts = isRecord(h) ? count(h.accounts) : null;
+            return hostname && active !== null ? [{ hostname, activeAccounts: active, ...(accounts ? { accountsHeld: accounts, activePercent: round1((active / accounts) * 100) } : {}) }] : [];
+          }).slice(0, TOP),
+        },
+      }
+      : {}),
   };
 }
 

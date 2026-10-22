@@ -41,9 +41,13 @@ test('reads today from midnight, reads a mover\'s history once, and writes today
     'did:plc:mover': [raw('did:plc:mover', '2025-01-01T00:00:00.000Z', BSKY, { prev: null }), raw('did:plc:mover', '2026-10-22T03:00:00.000Z', 'blacksky.app')],
   });
   const rows = [];
-  const w = createPlcWatch({ census, fetchImpl, upsert: async (table, conflict, r) => rows.push(...r), now: () => Date.parse('2026-10-22T12:00:00Z') });
+  const entries = [];
+  const w = createPlcWatch({ census, fetchImpl, upsert: async (table, conflict, r) => rows.push(...r), now: () => Date.parse('2026-10-22T12:00:00Z'), onEntry: (e, relay) => entries.push([e.did, e.host, relay.has('blacksky.app')]) });
   await w.poll();
   assert.deepEqual(asked, ['did:plc:mover']);
+  // each operation is handed on, with the hosts the relay lists (host-activity.js keeps its directory with them)
+  assert.equal(entries.length, 4);
+  assert.deepEqual(entries.find(([did]) => did === 'did:plc:mover'), ['did:plc:mover', 'blacksky.app', true]);
   assert.deepEqual(rows.at(-1), { day: '2026-10-22', ops: 4, created_bluesky: 1, created_independent: 1, created_unlisted: 1, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: [{ hostname: 'blacksky.app', accounts: 1 }] });
   // nothing new: the same row again, no second history read
   await w.poll();

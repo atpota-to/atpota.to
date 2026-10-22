@@ -78,6 +78,23 @@ alter table public.atmosphere_plc_day add column if not exists destinations json
 alter table public.atmosphere_plc_day enable row level security;
 create policy "anyone can read" on public.atmosphere_plc_day for select using (true);
 
+-- atmosphere_host_active_day is who was active on each independent host each UTC day:
+-- a HyperLogLog sketch of the accounts that wrote anything (atmosphere_accounts.sql has
+-- the format), and its count. The station knows where accounts live from each host's own
+-- list of them, kept up to date from the PLC log (atmosphere/src/host-activity.js); no
+-- DID is kept. hostname '*' is every independent host together, so against the day's
+-- atmosphere_account_sketch it's the share of active accounts living off Bluesky's
+-- hosts. Today's rows are rewritten after each census. Applied 2026-10-22.
+create table if not exists public.atmosphere_host_active_day (
+  day       date    not null,
+  hostname  text    not null check (hostname = '*' or hostname ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'),
+  dids      integer not null check (dids >= 0),
+  sketch    bytea   not null check (public.atmosphere_hll_ok(sketch)),
+  primary key (day, hostname)
+);
+alter table public.atmosphere_host_active_day enable row level security;
+create policy "anyone can read" on public.atmosphere_host_active_day for select using (true);
+
 -- ---------- the trends ----------
 -- For a range starting at `since`, bucketed by `bucket` (minute, hour, day or month, as
 -- atmosphere_apps_over_time):
@@ -165,6 +182,11 @@ as $$
     from days d
     left join census_day c on c.day = d.day
     left join census_day p on p.day = d.day - 1
+  ),
+  -- the latest day of host activity, a finished one if there is one (yesterday, usually)
+  active_last as (
+    select coalesce(max(day) filter (where day < (now() at time zone 'UTC')::date), max(day)) as day
+    from public.atmosphere_host_active_day
   )
   select jsonb_build_object(
     'since', (select day from first_day),
@@ -181,7 +203,20 @@ as $$
         from (select * from grew order by accounts - prev desc, hostname limit max_hosts) x), '[]'::jsonb),
     'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_, 'estimated', d.estimated) order by d.day) from daily d), '[]'::jsonb),
     'identities', coalesce((select jsonb_agg(to_jsonb(p) order by p.day) from public.atmosphere_plc_day p
-        where p.day >= (least(since, now() - interval '6 days') at time zone 'UTC')::date), '[]'::jsonb)
+        where p.day >= (least(since, now() - interval '6 days') at time zone 'UTC')::date), '[]'::jsonb),
+    -- each day's active accounts on independent hosts, and everyone's (atmosphere_account_sketch)
+    'activeDaily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'independent', a.dids, 'all', s.dids) order by d.day)
+        from days d
+        join public.atmosphere_host_active_day a on a.day = d.day and a.hostname = '*'
+        left join public.atmosphere_account_sketch s on s.period = 'day' and s.t = (d.day::timestamp at time zone 'UTC')), '[]'::jsonb),
+    -- the independent hosts with the most accounts active that day, and how many accounts they hold
+    'liveliest', (select jsonb_build_object('day', l.day, 'soFar', l.day >= (now() at time zone 'UTC')::date, 'hosts', coalesce((
+        select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'active', x.dids, 'accounts', x.accounts) order by x.dids desc, x.hostname)
+        from (select a.hostname, a.dids, h.accounts from public.atmosphere_host_active_day a
+              left join public.atmosphere_host_day h on h.day = a.day and h.hostname = a.hostname
+              where a.day = l.day and a.hostname <> '*'
+              order by a.dids desc, a.hostname limit max_hosts) x), '[]'::jsonb))
+      from active_last l where l.day is not null)
   );
 $$;
 revoke all on function public.atmosphere_host_trends(timestamptz, text, integer) from public;

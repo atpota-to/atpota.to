@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axisRange, renderChart, segments } from '../src/scripts/weather-chart.js';
-import { estimatedWords, hostStory, initHostPanel, toOneHost, type OneHost } from '../src/scripts/weather-host-panel.js';
+import { activeStory, estimatedWords, hostStory, initHostPanel, toOneHost, type OneHost } from '../src/scripts/weather-host-panel.js';
 import { renderBars } from '../src/scripts/weather-page.js';
 
 // Tap a host, see its own weather.
@@ -75,6 +75,14 @@ describe('a host in words', () => {
     expect(hostStory({ ...EUROSKY, days: [] })).toMatch(/haven't seen/);
     expect(estimatedWords(EUROSKY)).toBe('days up to oct 21 are estimated from the plc directory, from before i kept count of each host.');
     expect(estimatedWords({ ...EUROSKY, days: EUROSKY.days.slice(-1) })).toBe('');
+  });
+});
+
+describe('who is active on a host', () => {
+  it('says how many wrote something on the latest day counted, and charts it from two days', () => {
+    expect(activeStory(EUROSKY)).toBe('');
+    const counted = { ...EUROSKY, days: EUROSKY.days.map((d, i) => (i ? { ...d, active: 1000 + i } : d)) };
+    expect(activeStory(counted)).toBe('1,002 accounts wrote something on oct 22 (2.6% of them).');
   });
 });
 

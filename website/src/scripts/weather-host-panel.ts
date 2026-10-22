@@ -11,7 +11,8 @@ import { compactCount, formatCount } from './weather';
 export interface OneHost {
   hostname: string;
   bluesky: boolean;
-  days: Array<{ day: string; accounts: number; estimated: boolean }>;
+  /** `active`: the accounts that wrote anything that day, once the station counted them. */
+  days: Array<{ day: string; accounts: number; estimated: boolean; active?: number }>;
 }
 
 const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -28,7 +29,7 @@ export function toOneHost(x: unknown): OneHost | null {
   return {
     hostname: h.hostname,
     bluesky: h.bluesky === true,
-    days: h.days.filter((d): d is OneHost['days'][number] => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && n(d.accounts)).map((d) => ({ day: d.day, accounts: d.accounts, estimated: d.estimated === true })),
+    days: h.days.filter((d): d is OneHost['days'][number] => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && n(d.accounts)).map((d) => ({ day: d.day, accounts: d.accounts, estimated: d.estimated === true, ...(n(d.active) ? { active: d.active } : {}) })),
   };
 }
 
@@ -42,6 +43,14 @@ export function hostStory(h: OneHost): string {
   const gained = last.accounts - first.accounts;
   const change = gained === 0 ? 'no change' : `${gained > 0 ? '+' : '−'}${formatCount(Math.abs(gained))}${first.accounts > 0 ? ` (${gained > 0 ? '+' : '−'}${(Math.abs(gained / first.accounts) * 100).toFixed(1)}%)` : ''}`;
   return `${now} ${change} since ${dayWords(first.day)}, the first day i have for it.`;
+}
+
+/** "1,204 of them wrote something on oct 22 (3.2%)", from the latest day with a count, or nothing before the station counted. */
+export function activeStory(h: OneHost): string {
+  const d = [...h.days].reverse().find((x) => x.active !== undefined);
+  if (!d || d.active === undefined) return '';
+  const share = d.accounts > 0 ? ` (${(Math.min(100, (d.active / d.accounts) * 100)).toFixed(1)}% of them)` : '';
+  return `${formatCount(d.active)} account${d.active === 1 ? '' : 's'} wrote something on ${dayWords(d.day)}${share}.`;
 }
 
 /** The note on estimated days, or nothing when every day was counted. */
@@ -79,10 +88,32 @@ export function renderHostPanel(dialog: HTMLElement, h: OneHost | null | 'loadin
   if (h === 'loading' || h === null) {
     setText(dialog, '[data-hp-story]', h === null ? "i couldn't read this host's history just now. try again in a bit." : 'reading its history…');
     setText(dialog, '[data-hp-estimated]', '');
-    if (card) card.hidden = true;
+    for (const c of Array.from(dialog.querySelectorAll<HTMLElement>('.weather-chart-card'))) c.hidden = true;
+    const line = $(dialog, '[data-hp-active]');
+    if (line) line.hidden = true;
     return;
   }
   setText(dialog, '[data-hp-story]', hostStory(h));
+  const lively = activeStory(h);
+  const line = $(dialog, '[data-hp-active]');
+  if (line) {
+    line.hidden = !lively;
+    line.textContent = lively;
+  }
+  const activeDays = h.days.filter((d) => d.active !== undefined);
+  const activeChart = $(dialog, '[data-hp-active-chart]');
+  const activeCard = activeChart?.closest<HTMLElement>('.weather-chart-card');
+  if (activeCard) activeCard.hidden = activeDays.length < 2;
+  if (activeChart && activeDays.length >= 2) {
+    renderChart(activeChart, activeDays.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: d.active! })), {
+      label: `accounts active on ${hostname} each day`,
+      color: 'var(--weather-bsky)',
+      format: formatCount,
+      formatTick: compactCount,
+      formatTime: (t) => DAY_FORMAT.format(new Date(t)).toLowerCase(),
+      stepMs: 86_400_000,
+    });
+  }
   setText(dialog, '[data-hp-estimated]', estimatedWords(h));
   if (card) card.hidden = h.days.length < 2;
   if (chart && h.days.length >= 2) {

@@ -6,3 +6,6 @@ state.json.tmp
 node_modules/
 # the PLC backfill's cache (src/backfill-hosts.js --cache)
 plc-cache/
+# which independent host each account lives on, by a hash of its DID (src/host-activity.js)
+host-directory.json
+host-directory.json.tmp

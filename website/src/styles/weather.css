@@ -1874,6 +1874,13 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   }
 }
 
+/* New, growing and liveliest hosts: three across on wide screens (two while the liveliest wait for a day). */
+@media (min-width: 1100px) {
+  .weather-hosts__cols--three:has(> [data-h-lively-wrap]:not([hidden])) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* The hosts' four charts: one row of four on wide screens, two by two in between. */
 .weather-hosts__trends .weather-trends__charts {
   grid-template-columns: repeat(auto-fit, minmax(max(220px, calc((100% - 48px) / 4)), 1fr));

@@ -51,6 +51,8 @@ const HOSTS = {
     { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }, { hostname: 'Not A Host', accounts: 1 }, { hostname: 'blacksky.app', accounts: -1 }] },
     { day: '2026-10-23', ops: 'lots' },
   ],
+  activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }, { day: 'x', independent: 1 }],
+  liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }, { hostname: '<b>', active: 1, accounts: 1 }] },
 };
 
 type Rpc = Record<string, () => Response>;
@@ -138,6 +140,8 @@ describe('weather history', () => {
       identities: [
         { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
       ],
+      activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
+      liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
     });
   });
 
@@ -208,14 +212,18 @@ describe('weather history', () => {
   });
 
   it('answers one host\'s days for ?host=, oldest first, and refuses what isn\'t a hostname', async () => {
-    const db = supabase(() =>
-      Response.json([
+    const urls: string[] = [];
+    const fetch = (async (url: string) => {
+      urls.push(url);
+      if (url.includes('atmosphere_host_active_day')) return Response.json([{ day: '2026-10-22', dids: 1204 }, { day: 'nope', dids: 1 }]);
+      return Response.json([
         { day: '2026-10-22', accounts: 38036, estimated: false, bluesky: false },
         { day: '2026-10-21', accounts: '37979', estimated: true, bluesky: false },
         { day: 'yesterday', accounts: 1 },
-      ]),
-    );
-    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+      ]);
+    }) as typeof globalThis.fetch;
+    const db = { urls };
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
     const res = await h.GET(new Request('https://atpota.to/api/weather-history?host=EuroSky.social'));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -224,11 +232,14 @@ describe('weather history', () => {
         bluesky: false,
         days: [
           { day: '2026-10-21', accounts: 37979, estimated: true },
-          { day: '2026-10-22', accounts: 38036, estimated: false },
+          { day: '2026-10-22', accounts: 38036, estimated: false, active: 1204 },
         ],
       },
     });
-    expect(db.urls.at(-1)).toBe(`${SUPABASE_URL}/rest/v1/atmosphere_host_day?hostname=eq.eurosky.social&select=day,accounts,estimated,bluesky&order=day.desc&limit=400`);
+    expect(db.urls).toEqual([
+      `${SUPABASE_URL}/rest/v1/atmosphere_host_day?hostname=eq.eurosky.social&select=day,accounts,estimated,bluesky&order=day.desc&limit=400`,
+      `${SUPABASE_URL}/rest/v1/atmosphere_host_active_day?hostname=eq.eurosky.social&select=day,dids&order=day.desc&limit=400`,
+    ]);
     expect((await h.GET(new Request('https://atpota.to/api/weather-history?host=a%26b'))).status).toBe(400);
     expect((await h.GET(new Request('https://atpota.to/api/weather-history?host='))).status).toBe(400);
   });
