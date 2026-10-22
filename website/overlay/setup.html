@@ -150,20 +150,36 @@
                 </section>
             </div>
 
-            <!-- the scenes (src/overlay/setup.ts): one tab each, saved as to.atpota.poe.scene/<scene> -->
+            <!-- the screens (src/overlay/setup-scenes.ts): one tab each, saved as to.atpota.poe.scene/<screen id> -->
             <section class="tile ovs-scenes" aria-labelledby="ovs-scenes-title" data-ovs-scenes hidden>
                 <div class="ovs-scenes__head">
-                    <h2 class="ovs-out__title" id="ovs-scenes-title">scenes</h2>
-                    <p class="ovs-scenes__lede">full screens for the moments in between, each with its own URL: add each one as a browser source in its own OBS scene. poe and its chat come along.</p>
+                    <h2 class="ovs-out__title" id="ovs-scenes-title">screens</h2>
+                    <p class="ovs-scenes__lede">full screens for the moments in between, each with its own URL: add each one as a browser source in its own OBS scene, and switch between them there. make as many as you like (a brb for each game, a screen share for coding). poe and its chat come along.</p>
                 </div>
-                <div class="ovs-tabs" role="tablist" aria-label="scenes" data-ovs-scene-tabs>
-                    <button type="button" role="tab" class="ovs-tab" data-scene="starting" aria-selected="true">starting soon</button>
-                    <button type="button" role="tab" class="ovs-tab" data-scene="brb" aria-selected="false">be right back</button>
-                    <button type="button" role="tab" class="ovs-tab" data-scene="ending" aria-selected="false">the end</button>
-                    <button type="button" role="tab" class="ovs-tab" data-scene="screenshare" aria-selected="false">screen share</button>
-                </div>
+                <div class="ovs-tabs" role="tablist" aria-label="your screens" data-ovs-scene-tabs></div>
+                <details class="ovs-new" data-ovs-new>
+                    <summary class="btn btn--outline btn--sm">+ new screen</summary>
+                    <form class="ovs-new__form" data-ovs-new-form>
+                        <label class="ovs-field">call it
+                            <input type="text" name="name" maxlength="40" autocomplete="off" placeholder="coding brb" required>
+                        </label>
+                        <label class="ovs-field ovs-field--row">a
+                            <select name="kind">
+                                <option value="starting">starting soon screen</option>
+                                <option value="brb" selected>be right back screen</option>
+                                <option value="ending">end screen</option>
+                                <option value="screenshare">screen share frame</option>
+                            </select>
+                        </label>
+                        <button type="submit" class="btn btn--primary btn--sm">add it</button>
+                        <p class="ovs-new__note" role="status" data-ovs-new-note></p>
+                    </form>
+                </details>
                 <div class="ovs-grid" role="tabpanel" data-ovs-scene-panel>
                     <form class="ovs-form" data-ovs-scene-form>
+                        <label class="ovs-field">screen name <em>just for you, it's not on stream</em>
+                            <input type="text" name="name" maxlength="40" autocomplete="off">
+                        </label>
                         <label class="ovs-field">title
                             <input type="text" name="title" maxlength="80" autocomplete="off">
                         </label>
@@ -174,8 +190,16 @@
                             <select name="background">
                                 <option value="day">day: sky, clouds and the sun</option>
                                 <option value="night">night: stars and tonight's moon</option>
-                                <option value="garden">garden: sprouts in the soil</option>
+                                <option value="garden">garden: a warm butter sky</option>
                                 <option value="butter">butter: sunburst</option>
+                            </select>
+                        </label>
+                        <label class="ovs-field ovs-field--row">ground
+                            <select name="ground">
+                                <option value="meadow">meadow: the hill with buttercups</option>
+                                <option value="grass">grass: a strip along the bottom</option>
+                                <option value="soil">soil: sprouts coming up</option>
+                                <option value="none">none</option>
                             </select>
                         </label>
                         <label class="ovs-check"><input type="checkbox" name="showPoe" checked><span>poe <em>and its chat</em></span></label>
@@ -225,12 +249,13 @@
                             <iframe class="ovs-preview__frame" title="scene preview" data-ovs-scene-frame tabindex="-1"></iframe>
                         </div>
                         <p class="ovs-out__saved" role="status" data-ovs-scene-saved></p>
-                        <label class="ovs-field">this scene's URL
+                        <label class="ovs-field">this screen's URL
                             <textarea class="ovs-url" rows="1" readonly data-ovs-scene-url></textarea>
                         </label>
                         <div class="ovs-out__buttons">
                             <button type="button" class="btn btn--primary btn--sm" data-ovs-scene-copy>copy URL</button>
                             <span class="ovs-out__status" role="status" data-ovs-scene-status></span>
+                            <button type="button" class="btn btn--ghost btn--sm ovs-remove" data-ovs-scene-remove>remove this screen</button>
                         </div>
                         <div class="ovs-holes" data-ovs-for="screenshare">
                             <h3 class="ovs-holes__title">in OBS</h3>

@@ -1,7 +1,8 @@
 /**
- * The overlay's full-screen scenes (/overlay?streamer=<handle>&scene=<kind>), each with
- * its own settings, saved as to.atpota.poe.scene at the scene's name in the streamer's
- * repo (lexicons/to/atpota/poe/scene.json):
+ * The overlay's full-screen scenes (/overlay?streamer=<handle>&scene=<screen>). A streamer
+ * can keep as many screens as they like, each saved as to.atpota.poe.scene at its own
+ * record key (the screen's id, in its URL) in their repo (lexicons/to/atpota/poe/scene.json),
+ * and each one of these kinds:
  *
  *   starting     "starting soon", with a countdown: a timer from when the scene is shown,
  *                or to a time
@@ -10,6 +11,11 @@
  *   screenshare  an atpotato frame with a big window for a screen capture and a small one
  *                for a camera (frameHoles: where to put them in OBS), the stream's title
  *                along the bottom, and the weather beside the camera
+ *
+ * The four screens a streamer starts with have their kind as their id ("starting", "brb",
+ * "ending", "screenshare"), so ?scene=brb works before anything is saved. Every screen has
+ * a backdrop (the sky) and a ground under it: the home page's meadow, the about page's
+ * grass, soil with sprouts, or none.
  *
  * Every scene sits under the rest of the overlay: Poe (unless showPoe is off), its chat,
  * and the weather widgets when showWidgets is on. Like config.ts, the same shape comes
@@ -22,15 +28,20 @@ export const SCENE_KINDS = ['starting', 'brb', 'ending', 'screenshare'] as const
 export type SceneKind = (typeof SCENE_KINDS)[number];
 export const BACKGROUNDS = ['day', 'night', 'garden', 'butter'] as const;
 export type Background = (typeof BACKGROUNDS)[number];
+export const GROUNDS = ['meadow', 'grass', 'soil', 'none'] as const;
+export type Ground = (typeof GROUNDS)[number];
 export type CountdownMode = 'timer' | 'clock' | 'none';
 export type CameraSide = 'right' | 'left' | 'none';
 export type CameraShape = 'rounded' | 'circle' | 'wide';
 
 export interface Scene {
   kind: SceneKind;
+  /** What the streamer calls it, on the setup page only. */
+  name: string;
   title: string;
   subtitle: string;
   background: Background;
+  ground: Ground;
   showPoe: boolean;
   showWidgets: boolean;
   /** The starting screen's. */
@@ -48,22 +59,46 @@ export const SCENE_NAMES: Record<SceneKind, string> = {
   screenshare: 'screen share',
 };
 
+export const NAME_MAX = 40;
 export const TITLE_MAX = 80;
 export const SUBTITLE_MAX = 200;
 export const LINK_MAX = 60;
 export const MAX_LINKS = 4;
 
-const base = { subtitle: '', showPoe: true, showWidgets: false, countdown: { mode: 'none' as CountdownMode, minutes: 5, at: null }, links: [], camera: { side: 'right' as CameraSide, shape: 'rounded' as CameraShape } };
+const base = { ground: 'meadow' as Ground, subtitle: '', showPoe: true, showWidgets: false, countdown: { mode: 'none' as CountdownMode, minutes: 5, at: null }, links: [], camera: { side: 'right' as CameraSide, shape: 'rounded' as CameraShape } };
 
 export const SCENE_DEFAULTS: Record<SceneKind, Scene> = {
-  starting: { ...base, kind: 'starting', title: 'starting soon', subtitle: 'grab a snack, poe is warming up the atmosphere', background: 'day', countdown: { mode: 'timer', minutes: 5, at: null } },
-  brb: { ...base, kind: 'brb', title: 'be right back', subtitle: "poe's keeping your seat warm", background: 'butter' },
-  ending: { ...base, kind: 'ending', title: 'thanks for watching', subtitle: 'see you next time (◕‿◕)', background: 'night' },
-  screenshare: { ...base, kind: 'screenshare', title: '', subtitle: '', background: 'day' },
+  starting: { ...base, kind: 'starting', name: SCENE_NAMES.starting, title: 'starting soon', subtitle: 'grab a snack, poe is warming up the atmosphere', background: 'day', countdown: { mode: 'timer', minutes: 5, at: null } },
+  brb: { ...base, kind: 'brb', name: SCENE_NAMES.brb, title: 'be right back', subtitle: "poe's keeping your seat warm", background: 'butter' },
+  ending: { ...base, kind: 'ending', name: SCENE_NAMES.ending, title: 'thanks for watching', subtitle: 'see you next time (◕‿◕)', background: 'night' },
+  screenshare: { ...base, kind: 'screenshare', name: SCENE_NAMES.screenshare, title: '', subtitle: '', background: 'day' },
 };
 
 export function isSceneKind(v: unknown): v is SceneKind {
   return typeof v === 'string' && (SCENE_KINDS as readonly string[]).includes(v);
+}
+
+/** A screen's id: its record key and its name in the URL ("brb", "coding-brb"). */
+const SCREEN_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
+export const MAX_SCREENS = 24;
+
+export function isScreenId(v: unknown): v is string {
+  return typeof v === 'string' && SCREEN_ID_RE.test(v);
+}
+
+/** A new screen's id from its name ("Coding BRB" is "coding-brb"), not one of `taken`. */
+export function newScreenId(name: string, kind: SceneKind, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  const slug =
+    name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || kind;
+  if (!used.has(slug)) return slug;
+  for (let n = 2; ; n++) if (!used.has(`${slug}-${n}`)) return `${slug}-${n}`;
 }
 
 export function copyScene(s: Scene): Scene {
@@ -93,16 +128,19 @@ function cleanLinks(v: unknown): string[] {
     .slice(0, MAX_LINKS);
 }
 
-/** A scene record's value: what checks out, and the scene's defaults for the rest. */
-export function fromSceneRecord(kind: SceneKind, value: unknown): Scene {
+/** A scene record's value: what checks out, and its kind's defaults for the rest (`hint`'s, when it names no kind). */
+export function fromSceneRecord(hint: SceneKind, value: unknown): Scene {
+  const kind = obj(value) && isSceneKind(value.kind) ? value.kind : hint;
   const d = SCENE_DEFAULTS[kind];
   if (!obj(value)) return copyScene(d);
   const camera = obj(value.camera) ? value.camera : {};
   return {
     kind,
+    name: cleanText(value.name, NAME_MAX) || d.name,
     title: cleanText(value.title, TITLE_MAX) ?? d.title,
     subtitle: cleanText(value.subtitle, SUBTITLE_MAX) ?? d.subtitle,
     background: (BACKGROUNDS as readonly string[]).includes(value.background as string) ? (value.background as Background) : d.background,
+    ground: (GROUNDS as readonly string[]).includes(value.ground as string) ? (value.ground as Ground) : d.ground,
     showPoe: typeof value.showPoe === 'boolean' ? value.showPoe : d.showPoe,
     showWidgets: typeof value.showWidgets === 'boolean' ? value.showWidgets : d.showWidgets,
     countdown: cleanCountdown(value.countdown, d.countdown),
@@ -114,15 +152,18 @@ export function fromSceneRecord(kind: SceneKind, value: unknown): Scene {
   };
 }
 
-/** The record to save at the scene's name. */
+/** The record to save at the screen's id. */
 export function toSceneRecord(s: Scene, createdAt: string, now: Date): Record<string, unknown> {
   const countdown: Record<string, unknown> = { mode: s.countdown.mode, minutes: s.countdown.minutes };
   if (s.countdown.at) countdown.at = s.countdown.at;
   return {
     $type: SCENE_NSID,
+    kind: s.kind,
+    name: cleanText(s.name, NAME_MAX) || SCENE_NAMES[s.kind],
     title: cleanText(s.title, TITLE_MAX) ?? '',
     subtitle: cleanText(s.subtitle, SUBTITLE_MAX) ?? '',
     background: s.background,
+    ground: s.ground,
     showPoe: s.showPoe,
     showWidgets: s.showWidgets,
     countdown,
@@ -138,18 +179,27 @@ export function toSceneRecord(s: Scene, createdAt: string, now: Date): Record<st
 const off = (v: string | null) => v !== null && /^(off|no|false|0)$/i.test(v);
 const on = (v: string | null) => v !== null && /^(on|yes|true|1)$/i.test(v);
 
-/** The scene the URL asks for, and any of its settings the URL overrides. */
-export function readSceneParams(search: string): { kind: SceneKind | null; overrides: Partial<Scene> } {
+/**
+ * The screen the URL asks for (its id), its kind when the URL says (sk=, or an id that is
+ * a kind), and any of its settings the URL overrides.
+ */
+export function readSceneParams(search: string): { id: string | null; kind: SceneKind | null; overrides: Partial<Scene> } {
   const q = new URLSearchParams(search);
-  const kind = q.get('scene');
-  if (!isSceneKind(kind)) return { kind: null, overrides: {} };
+  const id = q.get('scene');
+  if (!isScreenId(id)) return { id: null, kind: null, overrides: {} };
+  const sk = q.get('sk');
+  const named = isSceneKind(sk) ? sk : isSceneKind(id) ? id : null;
+  const kind = named ?? 'starting';
   const o: Partial<Scene> = {};
+  if (isSceneKind(sk)) o.kind = sk;
   const title = q.get('st');
   if (title !== null) o.title = cleanText(title, TITLE_MAX) ?? '';
   const sub = q.get('ss');
   if (sub !== null) o.subtitle = cleanText(sub, SUBTITLE_MAX) ?? '';
   const bg = q.get('bg');
   if ((BACKGROUNDS as readonly string[]).includes(bg ?? '')) o.background = bg as Background;
+  const gr = q.get('gr');
+  if ((GROUNDS as readonly string[]).includes(gr ?? '')) o.ground = gr as Ground;
   if (off(q.get('sp'))) o.showPoe = false;
   else if (on(q.get('sp'))) o.showPoe = true;
   if (on(q.get('sw'))) o.showWidgets = true;
@@ -168,12 +218,12 @@ export function readSceneParams(search: string): { kind: SceneKind | null; overr
     const [side, shape] = cam.split(':');
     o.camera = fromSceneRecord(kind, { camera: { side, shape } }).camera;
   }
-  return { kind, overrides: o };
+  return { id, kind: named, overrides: o };
 }
 
-/** A whole scene as URL settings, for the preview ("&scene=brb&st=..."). */
-export function sceneSearch(s: Scene): string {
-  const q = new URLSearchParams({ scene: s.kind, st: s.title, ss: s.subtitle, bg: s.background, sp: s.showPoe ? 'on' : 'off', sw: s.showWidgets ? 'on' : 'off' });
+/** A whole screen as URL settings, for the preview ("&scene=brb&sk=brb&st=..."). */
+export function sceneSearch(s: Scene, id: string = s.kind): string {
+  const q = new URLSearchParams({ scene: id, sk: s.kind, st: s.title, ss: s.subtitle, bg: s.background, gr: s.ground, sp: s.showPoe ? 'on' : 'off', sw: s.showWidgets ? 'on' : 'off' });
   if (s.kind === 'starting') q.set('cd', s.countdown.mode === 'timer' ? `timer:${s.countdown.minutes}` : s.countdown.mode === 'clock' && s.countdown.at ? `clock:${s.countdown.at}` : 'none');
   if (s.kind === 'ending') q.set('sl', s.links.join('|'));
   if (s.kind === 'screenshare') q.set('cam', `${s.camera.side}:${s.camera.shape}`);
@@ -181,7 +231,7 @@ export function sceneSearch(s: Scene): string {
 }
 
 export function withSceneOverrides(s: Scene, o: Partial<Scene>): Scene {
-  return { ...copyScene(s), ...o, kind: s.kind };
+  return { ...copyScene(s), ...o, kind: o.kind ?? s.kind };
 }
 
 // ---------- the screen share's windows ----------

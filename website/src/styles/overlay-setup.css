@@ -478,3 +478,42 @@ html.ovs-full-open {
   font-family: var(--font-mono);
   font-size: 14px;
 }
+
+/* "+ new screen": a name and a kind, opened from its button */
+.ovs-new > summary {
+  width: fit-content;
+  list-style: none;
+}
+
+.ovs-new > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ovs-new__form {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 480px;
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+}
+
+.ovs-new__form .ovs-field {
+  width: 100%;
+}
+
+.ovs-new__note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.ovs-new__note:empty {
+  display: none;
+}
+
+.ovs-remove {
+  margin-left: auto;
+}

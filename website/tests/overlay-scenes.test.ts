@@ -10,6 +10,8 @@ import {
   frameHoles,
   framePath,
   fromSceneRecord,
+  isScreenId,
+  newScreenId,
   readSceneParams,
   SCENE_DEFAULTS,
   SCENE_KINDS,
@@ -154,6 +156,10 @@ describe('the scene on the overlay', () => {
     view.show({ ...SCENE_DEFAULTS.ending, links: ['atpota.to', 'bsky.app/profile/dame.is'] });
     expect([...root.querySelectorAll('[data-ovsc-links] li')].map((li) => li.textContent)).toEqual(['atpota.to', 'bsky.app/profile/dame.is']);
     expect(root.querySelector<HTMLElement>('[data-ovsc-count]')!.hidden).toBe(true);
+    expect(root.dataset).toMatchObject({ background: 'night', ground: 'meadow' });
+    expect(root.querySelectorAll('.ovsc__meadow .ovsc__tuft').length).toBeGreaterThan(0);
+    view.show({ ...SCENE_DEFAULTS.screenshare, ground: 'grass' } as Scene);
+    expect(root.dataset.ground).toBe('grass');
     view.show({ ...SCENE_DEFAULTS.screenshare, title: 'building things', camera: { side: 'left', shape: 'circle' } });
     expect(root.querySelector<HTMLElement>('[data-ovsc-panel]')!.hidden).toBe(true);
     expect(root.querySelector<HTMLElement>('[data-ovsc-bar]')!.hidden).toBe(false);
@@ -194,28 +200,98 @@ describe('the scenes on the setup page', () => {
     expect(holeLines({ ...SCENE_DEFAULTS.screenshare, camera: { side: 'none', shape: 'rounded' } })).toHaveLength(1);
   });
 
-  it('loads each scene when its tab opens, and saves changes to the repo', async () => {
-    const root = page();
-    const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
-    const fetchImpl = vi.fn(async (url: string) =>
-      url.includes('rkey=brb')
-        ? new Response(JSON.stringify({ value: { title: 'snack break', createdAt: '2026-10-01T00:00:00.000Z' } }))
-        : new Response(JSON.stringify({ error: 'RecordNotFound' }), { status: 400 }),
+  const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
+  const listing = (records: { rkey: string; value: Record<string, unknown> }[]) =>
+    vi.fn(async (url: string) =>
+      url.includes('listRecords') && url.includes(`collection=${SCENE_NSID}`)
+        ? new Response(JSON.stringify({ records: records.map((r) => ({ uri: `at://${STREAMER}/${SCENE_NSID}/${r.rkey}`, cid: 'x', value: r.value })) }))
+        : new Response('{}', { status: 500 }),
     ) as unknown as typeof fetch;
+  const titleField = () => document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="title"]')!;
+  const tabs = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>('[data-ovs-scene-tabs] [data-scene]')].map((t) => `${t.dataset.scene}:${t.textContent}`);
+
+  it('lists the four starters and the streamer\'s own screens, and saves changes to the repo', async () => {
+    const root = page();
+    const fetchImpl = listing([
+      { rkey: 'brb', value: { title: 'snack break', createdAt: '2026-10-01T00:00:00.000Z' } },
+      { rkey: 'coding-brb', value: { kind: 'brb', name: 'coding brb', title: 'debugging', ground: 'grass', createdAt: '2026-10-02T00:00:00.000Z' } },
+      { rkey: 'Not An Id', value: { createdAt: '2026-10-02T00:00:00.000Z' } },
+    ]);
     const save = vi.fn(async () => undefined);
-    mountScenes(root, session as never, 'dame.is', () => DEFAULT_CONFIG, vi.fn(), { fetchImpl, save });
-    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="title"]')!.value).toBe('starting soon'));
+    const scenes = mountScenes(root, session as never, 'dame.is', () => DEFAULT_CONFIG, vi.fn(), { fetchImpl, save });
+    await scenes.ready;
+    expect(tabs(root)).toEqual(['starting:starting soon', 'brb:be right back', 'ending:the end', 'screenshare:screen share', 'coding-brb:coding brb']);
+    expect(titleField().value).toBe('starting soon');
     expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is&scene=starting`);
+    expect(root.querySelector<HTMLElement>('[data-ovs-scene-remove]')!.hidden).toBe(true);
     root.querySelector<HTMLButtonElement>('[data-scene="brb"]')!.click();
-    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="title"]')!.value).toBe('snack break'));
+    expect(titleField().value).toBe('snack break');
+    root.querySelector<HTMLButtonElement>('[data-scene="coding-brb"]')!.click();
+    expect(titleField().value).toBe('debugging');
+    expect(document.querySelector<HTMLSelectElement>('[data-ovs-scene-form] [name="ground"]')!.value).toBe('grass');
+    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is&scene=coding-brb`);
+    expect(root.querySelector<HTMLElement>('[data-ovs-scene-remove]')!.textContent).toBe('remove this screen');
+
     vi.useFakeTimers();
-    const title = document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="title"]')!;
-    title.value = 'back in five';
-    title.dispatchEvent(new Event('input', { bubbles: true }));
+    titleField().value = 'back in five';
+    titleField().dispatchEvent(new Event('input', { bubbles: true }));
+    const name = document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="name"]')!;
+    name.value = 'code break';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(tabs(root)).toContain('coding-brb:code break');
     await vi.advanceTimersByTimeAsync(SCENE_SAVE_DELAY_MS);
     expect(save).toHaveBeenCalledTimes(1);
-    const [, scene, createdAt] = save.mock.calls[0] as unknown as [unknown, Scene, string];
-    expect(scene).toMatchObject({ kind: 'brb', title: 'back in five' });
-    expect(createdAt).toBe('2026-10-01T00:00:00.000Z');
+    const [, id, scene, createdAt] = save.mock.calls[0] as unknown as [unknown, string, Scene, string];
+    expect(id).toBe('coding-brb');
+    expect(scene).toMatchObject({ kind: 'brb', name: 'code break', title: 'back in five', ground: 'grass' });
+    expect(createdAt).toBe('2026-10-02T00:00:00.000Z');
+  });
+
+  it('adds a named screen of any kind at its own id, and removes it', async () => {
+    const root = page();
+    const save = vi.fn(async () => undefined);
+    const remove = vi.fn(async () => undefined);
+    const scenes = mountScenes(root, session as never, 'dame.is', () => DEFAULT_CONFIG, vi.fn(), { fetchImpl: listing([]), save, remove, confirm: () => true });
+    await scenes.ready;
+    const add = root.querySelector<HTMLFormElement>('[data-ovs-new-form]')!;
+    (add.elements.namedItem('name') as HTMLInputElement).value = 'Coding Share!';
+    (add.elements.namedItem('kind') as HTMLSelectElement).value = 'screenshare';
+    add.dispatchEvent(new Event('submit', { cancelable: true }));
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const [, id, scene] = save.mock.calls[0] as unknown as [unknown, string, Scene];
+    expect(id).toBe('coding-share');
+    expect(scene).toMatchObject({ kind: 'screenshare', name: 'Coding Share!' });
+    expect(tabs(root).at(-1)).toBe('coding-share:Coding Share!');
+    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toContain('&scene=coding-share');
+    // the same name again gets an id of its own
+    (add.elements.namedItem('name') as HTMLInputElement).value = 'coding share';
+    add.dispatchEvent(new Event('submit', { cancelable: true }));
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect((save.mock.calls[1] as unknown as [unknown, string])[1]).toBe('coding-share-2');
+
+    root.querySelector<HTMLButtonElement>('[data-ovs-scene-remove]')!.click();
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledWith(session, 'coding-share-2'));
+    await vi.waitFor(() => expect(tabs(root)).toHaveLength(5));
+  });
+
+  it('makes ids from names that fit a record key and the URL', () => {
+    expect(newScreenId('Coding BRB', 'brb', [])).toBe('coding-brb');
+    expect(newScreenId('brb', 'brb', ['brb'])).toBe('brb-2');
+    expect(newScreenId('(◕‿◕)', 'ending', [])).toBe('ending');
+    expect(newScreenId('café time', 'brb', [])).toBe('cafe-time');
+    expect(isScreenId('coding-brb')).toBe(true);
+    expect(isScreenId('../x')).toBe(false);
+  });
+
+  it('screens remember their kind, name and ground in the record, and in the URL', () => {
+    const s: Scene = { ...SCENE_DEFAULTS.ending, name: 'late night end', ground: 'soil' };
+    const rec = toSceneRecord(s, '2026-10-01T00:00:00.000Z', new Date());
+    expect(rec).toMatchObject({ kind: 'ending', name: 'late night end', ground: 'soil' });
+    expect(fromSceneRecord('starting', rec)).toEqual(s);
+    const url = readSceneParams(`?${sceneSearch(s, 'late-end')}`);
+    expect(url.id).toBe('late-end');
+    expect(url.kind).toBe('ending');
+    expect(withSceneOverrides(SCENE_DEFAULTS.starting, url.overrides)).toMatchObject({ kind: 'ending', ground: 'soil' });
+    expect(SCENE_DEFAULTS.brb.ground).toBe('meadow');
   });
 });

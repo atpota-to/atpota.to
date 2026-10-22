@@ -120,12 +120,16 @@ via OBS* to hear Poe, and leave *shutdown source when not visible* off.
   what people wrote.
 
 **Scenes** are full screens for the moments in between, each with its own URL and its
-own record (`to.atpota.poe.scene`, at the scene's name,
+own record (`to.atpota.poe.scene`, at the screen's id,
 [`website/lexicons/to/atpota/poe/scene.json`](website/lexicons/to/atpota/poe/scene.json)),
-set up in the scenes section of `/overlay/setup` and followed live like the rest. Add
-each as a browser source in its own OBS scene: `/overlay?streamer=dame.is&scene=starting`.
+set up in the screens section of `/overlay/setup` and followed live like the rest. Add
+each as a browser source in its own OBS scene, and switch between them there:
+`/overlay?streamer=dame.is&scene=starting`. Everyone starts with one of each kind (its id
+is its kind); **+ new screen** adds as many more as you like, of any kind, with a name
+("coding brb" is `&scene=coding-brb`). Added screens can be removed, and the starting four
+reset to their defaults.
 
-| scene | what's on it |
+| kind | what's on it |
 | --- | --- |
 | `starting` | "starting soon", a line under it, and a countdown: a timer from when the scene comes on (tick *refresh browser when scene becomes active*), or to a time. When it runs out Poe cheers |
 | `brb` | "be right back" |
@@ -133,8 +137,10 @@ each as a browser source in its own OBS scene: `/overlay?streamer=dame.is&scene=
 | `screenshare` | an atpotato frame with a big 16:9 window for a screen capture and a camera window beside it (rounded, circle or wide; right, left or none), the title along the bottom and the weather in the column, Poe on the camera's side. The setup page gives each window's exact spot to put the OBS sources under it |
 
 Each has a title and a line under it, a backdrop (day: sky, clouds and the sun; night:
-stars and tonight's moon; garden: sprouts in the soil; butter: a turning sunburst), and
-whether Poe (with its chat) and the weather widgets come along.
+stars and tonight's moon; garden: a warm butter sky; butter: a turning sunburst), a ground
+(meadow: the home page's hill with buttercups and grass tufts, the default; grass: the
+about page's scalloped strip; soil with sprouts; or none), and whether Poe (with its chat)
+and the weather widgets come along.
 
 Settings in the URL override the saved ones, for that browser source only (the setup
 page's preview passes its whole draft this way):

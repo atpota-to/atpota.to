@@ -15,10 +15,11 @@
  *             goodbye when it ends, hellos to new chatters and welcome-backs to regulars
  *             (regulars.ts), thanks to new followers, and the commands !weather,
  *             !forecast, !apps, !pet and !poe
- *   scene     with &scene=starting|brb|ending|screenshare, a full-screen scene under it all
- *             (scenes.ts, scene-view.ts), from the streamer's to.atpota.poe.scene record at
- *             that name, followed live too; a scene can hide Poe and the widgets, and the
- *             screen share puts Poe on its camera's side
+ *   scene     with &scene=<screen>, a full-screen scene under it all (scenes.ts,
+ *             scene-view.ts), from the streamer's to.atpota.poe.scene record at that id
+ *             (starting, brb, ending, screenshare, or one they named), followed live too; a
+ *             scene can hide Poe and the widgets, and the screen share puts Poe on its
+ *             camera's side
  *   demo      example lines every DEMO_MS, and visitors more often, to see where things land
  */
 
@@ -88,7 +89,8 @@ async function start(): Promise<void> {
   // ---------- settings ----------
   let saved: OverlayConfig = withOverrides(DEFAULT_CONFIG, params.overrides);
   let config = saved;
-  let scene: Scene | null = sceneParams.kind ? withSceneOverrides(SCENE_DEFAULTS[sceneParams.kind], sceneParams.overrides) : null;
+  const sceneHint = sceneParams.kind ?? 'starting';
+  let scene: Scene | null = sceneParams.id ? withSceneOverrides(SCENE_DEFAULTS[sceneHint], sceneParams.overrides) : null;
   let skip = new Set<string>();
   let volume = -1;
   /** The settings as the scene shows them: without Poe or the widgets, or with Poe on the camera's side. */
@@ -120,10 +122,10 @@ async function start(): Promise<void> {
   if (params.streamer && !streamerDid) console.warn(`[overlay] couldn't find the streamer "${params.streamer}"`);
   if (streamerDid) {
     const wait = new Promise<undefined>((r) => window.setTimeout(r, CONFIG_WAIT_MS));
-    const kind = sceneParams.kind;
-    const [own, ownScene] = await Promise.all([Promise.race([readPublicConfig(streamerDid), wait]), kind ? Promise.race([readPublicScene(streamerDid, kind), wait]) : undefined]);
+    const id = sceneParams.id;
+    const [own, ownScene] = await Promise.all([Promise.race([readPublicConfig(streamerDid), wait]), id ? Promise.race([readPublicScene(streamerDid, id, fetch, sceneHint), wait]) : undefined]);
     if (own) saved = withOverrides(own.config, params.overrides);
-    if (kind && ownScene) scene = withSceneOverrides(ownScene.scene, sceneParams.overrides);
+    if (id && ownScene) scene = withSceneOverrides(ownScene.scene, sceneParams.overrides);
   }
   apply(saved);
 
@@ -175,8 +177,8 @@ async function start(): Promise<void> {
   const onEvent = async (e: StreamEvent) => {
     if (e.kind === 'config') return apply(withOverrides(fromRecord(e.value), params.overrides));
     if (e.kind === 'scene') {
-      if (!sceneParams.kind || e.rkey !== sceneParams.kind) return;
-      scene = withSceneOverrides(fromSceneRecord(sceneParams.kind, e.value), sceneParams.overrides);
+      if (!sceneParams.id || e.rkey !== sceneParams.id) return;
+      scene = withSceneOverrides(fromSceneRecord(sceneHint, e.value), sceneParams.overrides);
       return apply(saved);
     }
     if (!config.poe.show) return;

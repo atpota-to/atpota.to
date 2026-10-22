@@ -2,9 +2,11 @@
  * Draws a scene (scenes.ts) under the rest of the overlay: the backdrop, and either the
  * centre panel (starting, brb, ending) or the screen share's frame.
  *
- *   backdrops   day: the sky blue with drifting clouds, the sun and a green hill; night:
- *               deep blue with stars, tonight's moon and a dark hill; garden: butter sky
- *               over soil with sprouts; butter: sunburst rays turning slowly
+ *   backdrops   day: the sky blue with drifting clouds and the sun; night: deep blue with
+ *               stars and tonight's moon; garden: a butter sky with the sun and a cloud or
+ *               two; butter: sunburst rays turning slowly
+ *   grounds     meadow: the home page's hill with buttercups and grass tufts; grass: the
+ *               about page's scalloped strip; soil with sprouts; or none (dimmed at night)
  *   panel       the wordmark, the title and subtitle, and on the starting screen the
  *               countdown (a timer from when the scene is shown, or to a time; when it
  *               runs out it says so, and onDone lets Poe cheer), on the end screen the
@@ -86,6 +88,7 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
       }
       doc.body.dataset.scene = scene.kind;
       root.dataset.background = scene.background;
+      root.dataset.ground = scene.ground;
       if (clouds) renderClouds(clouds, scene.background === 'day' ? 6 : scene.background === 'garden' ? 3 : 0, win);
 
       const framed = scene.kind === 'screenshare';

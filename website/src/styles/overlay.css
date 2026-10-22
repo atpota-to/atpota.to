@@ -1009,8 +1009,11 @@ body[data-side="left"] .ov-bubble {
   --ovsc-sky: #B3DDF0;
   --ovsc-sky-deep: #8CCBEA;
   --ovsc-ink: #2C3A3E;
-  --ovsc-hill: #9FD38A;
-  --ovsc-hill-deep: #7FBF6A;
+  --ovsc-ground: #B9DE93;
+  --ovsc-ground-shade: color-mix(in srgb, #B9DE93, #4C7A33 26%);
+  --ovsc-tuft: color-mix(in srgb, #B9DE93, #2F5A22 50%);
+  --ovsc-grass: #C5E3B0;
+  --ovsc-ground-dim: none;
 }
 
 .ovsc__back {
@@ -1024,8 +1027,7 @@ body[data-side="left"] .ov-bubble {
   --ovsc-sky: #2C3A5C;
   --ovsc-sky-deep: #172038;
   --ovsc-ink: #F7EFDA;
-  --ovsc-hill: #22311F;
-  --ovsc-hill-deep: #1A2618;
+  --ovsc-ground-dim: brightness(0.45) saturate(0.75);
 }
 
 .ovsc[data-background="garden"] {
@@ -1057,20 +1059,21 @@ body[data-side="left"] .ov-bubble {
 /* each backdrop's own parts */
 .ovsc__rays,
 .ovsc__stars,
-.ovsc__hill,
+.ovsc__meadow,
+.ovsc__grass,
 .ovsc__soil,
 .ovsc__sun {
   display: none;
 }
 
-.ovsc[data-background="day"] .ovsc__hill,
-.ovsc[data-background="night"] .ovsc__hill,
 .ovsc[data-background="day"] .ovsc__sun,
 .ovsc[data-background="night"] .ovsc__sun,
 .ovsc[data-background="garden"] .ovsc__sun,
 .ovsc[data-background="night"] .ovsc__stars,
-.ovsc[data-background="garden"] .ovsc__soil,
-.ovsc[data-background="butter"] .ovsc__rays {
+.ovsc[data-background="butter"] .ovsc__rays,
+.ovsc[data-ground="meadow"] .ovsc__meadow,
+.ovsc[data-ground="grass"] .ovsc__grass,
+.ovsc[data-ground="soil"] .ovsc__soil {
   display: block;
 }
 
@@ -1124,14 +1127,62 @@ body[data-side="left"] .ov-bubble {
   display: inline;
 }
 
-.ovsc__hill {
+/* The meadow: the home page's hill (home.css .home-sun__mound), wide and low, with its
+   summer buttercups and grass tufts along the crest. Dimmed at night. */
+.ovsc__meadow {
   position: absolute;
-  left: -10%;
-  right: -10%;
-  bottom: -62%;
-  height: 80%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at 50% 20%, var(--ovsc-hill), var(--ovsc-hill-deep));
+  left: -8%;
+  right: -8%;
+  bottom: -10px;
+  height: 240px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background:
+    radial-gradient(56.6% 94% at 50% 136%, var(--ovsc-ground-shade) 99%, transparent 100%),
+    var(--ovsc-ground);
+  filter: var(--ovsc-ground-dim);
+}
+
+.ovsc__meadow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    url("../assets/scene/buttercups.svg") 10px 40px / 375px 96px repeat-x,
+    url("../assets/scene/buttercups.svg") 200px 120px / 435px 111px repeat-x;
+}
+
+.ovsc__tuft {
+  position: absolute;
+  left: var(--p);
+  bottom: var(--b);
+  width: 40px;
+  height: 40px;
+  margin: 0 0 -14px -20px;
+  background: var(--ovsc-tuft);
+  -webkit-mask: url("../assets/scene/tuft.svg") center / contain no-repeat;
+  mask: url("../assets/scene/tuft.svg") center / contain no-repeat;
+}
+
+/* The grass: the about page's strip of sage with a scalloped edge (about.css .about-story__head). */
+.ovsc__grass {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120px;
+  background: var(--ovsc-grass);
+  filter: var(--ovsc-ground-dim);
+}
+
+.ovsc__grass::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -23px;
+  height: 24px;
+  background: radial-gradient(circle at 20px 25px, var(--ovsc-grass) 19px, transparent 20px) 0 0 / 40px 25px repeat-x;
 }
 
 .ovsc__stars {

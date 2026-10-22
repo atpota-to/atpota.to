@@ -41,7 +41,7 @@
           "type": "permission",
           "resource": "repo",
           "collection": ["to.atpota.poe.scene"],
-          "action": ["create", "update"]
+          "action": ["create", "update", "delete"]
         },
         {
           "type": "permission",

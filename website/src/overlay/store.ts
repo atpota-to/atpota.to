@@ -1,15 +1,15 @@
 /**
  * The streamer's overlay settings in their own repo: to.atpota.poe.overlay at "self"
- * (config.ts), and each scene's at to.atpota.poe.scene/<scene> (scenes.ts). The overlay
+ * (config.ts), and each screen's at to.atpota.poe.scene/<screen id> (scenes.ts). The overlay
  * reads them without credentials (repos are public), from the PDS the streamer's DID
  * document names; the setup page writes them with the signed-in session. Reading never
  * throws for a record that isn't there: that's a streamer with the defaults.
  */
 
 import type { Session } from '../blog/auth';
-import { putRecord } from '../blog/repo';
+import { deleteRecord, putRecord } from '../blog/repo';
 import { fromRecord, OVERLAY_NSID, OVERLAY_RKEY, toRecord, type OverlayConfig } from './config';
-import { fromSceneRecord, SCENE_NSID, toSceneRecord, type Scene, type SceneKind } from './scenes';
+import { fromSceneRecord, isSceneKind, isScreenId, MAX_SCREENS, SCENE_NSID, toSceneRecord, type Scene, type SceneKind } from './scenes';
 
 export const PLC = 'https://plc.directory';
 const TIMEOUT_MS = 8000;
@@ -94,7 +94,7 @@ async function readOwn(session: Session, collection: string, rkey: string, fetch
 }
 
 const asConfig = (r: { value: unknown; createdAt: string } | null | undefined): Saved | null | undefined => (r ? { config: fromRecord(r.value), createdAt: r.createdAt } : r);
-const asScene = (kind: SceneKind, r: { value: unknown; createdAt: string } | null | undefined): SavedScene | null | undefined => (r ? { scene: fromSceneRecord(kind, r.value), createdAt: r.createdAt } : r);
+const asScene = (hint: SceneKind, r: { value: unknown; createdAt: string } | null | undefined): SavedScene | null | undefined => (r ? { scene: fromSceneRecord(hint, r.value), createdAt: r.createdAt } : r);
 
 export interface SavedScene {
   scene: Scene;
@@ -111,19 +111,50 @@ export async function readOwnConfig(session: Session, fetchImpl: typeof fetch = 
   return asConfig(await readOwn(session, OVERLAY_NSID, OVERLAY_RKEY, fetchImpl));
 }
 
-/** Anyone's saved scene, read publicly. */
-export async function readPublicScene(did: string, kind: SceneKind, fetchImpl: typeof fetch = fetch): Promise<SavedScene | null | undefined> {
-  return asScene(kind, await readPublic(did, SCENE_NSID, kind, fetchImpl));
+/** The kind a screen is before its record says: its id's, when the id is a kind. */
+const hintFor = (id: string): SceneKind => (isSceneKind(id) ? id : 'starting');
+
+/** Anyone's saved screen, read publicly. */
+export async function readPublicScene(did: string, id: string, fetchImpl: typeof fetch = fetch, hint: SceneKind = hintFor(id)): Promise<SavedScene | null | undefined> {
+  return asScene(hint, await readPublic(did, SCENE_NSID, id, fetchImpl));
 }
 
-/** The signed-in streamer's own saved scene. */
-export async function readOwnScene(session: Session, kind: SceneKind, fetchImpl: typeof fetch = fetch): Promise<SavedScene | null | undefined> {
-  return asScene(kind, await readOwn(session, SCENE_NSID, kind, fetchImpl));
+/** The signed-in streamer's own saved screen. */
+export async function readOwnScene(session: Session, id: string, fetchImpl: typeof fetch = fetch): Promise<SavedScene | null | undefined> {
+  return asScene(hintFor(id), await readOwn(session, SCENE_NSID, id, fetchImpl));
 }
 
-/** Saves a scene to the signed-in streamer's repo, at the scene's name (throws a RepoError when refused). */
-export async function saveScene(session: Session, scene: Scene, createdAt: string, now = new Date()): Promise<void> {
-  await putRecord(session, SCENE_NSID, scene.kind, toSceneRecord(scene, createdAt, now));
+export interface SavedScreen extends SavedScene {
+  id: string;
+}
+
+/** All of the signed-in streamer's saved screens, oldest first: undefined when they couldn't be read. */
+export async function listOwnScenes(session: Session, fetchImpl: typeof fetch = fetch): Promise<SavedScreen[] | undefined> {
+  try {
+    const q = new URLSearchParams({ repo: session.did, collection: SCENE_NSID, limit: String(MAX_SCREENS * 2) });
+    const res = await json(fetchImpl, `${session.pds}/xrpc/com.atproto.repo.listRecords?${q}`);
+    if (res.status !== 200 || !obj(res.body) || !Array.isArray(res.body.records)) return undefined;
+    const out: SavedScreen[] = [];
+    for (const r of res.body.records) {
+      if (!obj(r) || typeof r.uri !== 'string') continue;
+      const id = r.uri.slice(r.uri.lastIndexOf('/') + 1);
+      const saved = isScreenId(id) ? valueFrom(200, r) : undefined;
+      if (saved) out.push({ id, scene: fromSceneRecord(hintFor(id), saved.value), createdAt: saved.createdAt });
+    }
+    return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, MAX_SCREENS);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Saves a screen to the signed-in streamer's repo, at its id (throws a RepoError when refused). */
+export async function saveScene(session: Session, id: string, scene: Scene, createdAt: string, now = new Date()): Promise<void> {
+  await putRecord(session, SCENE_NSID, id, toSceneRecord(scene, createdAt, now));
+}
+
+/** Removes a screen from the signed-in streamer's repo (throws a RepoError when refused). */
+export async function deleteScene(session: Session, id: string): Promise<void> {
+  await deleteRecord(session, `at://${session.did}/${SCENE_NSID}/${id}`);
 }
 
 /** Saves the settings to the signed-in streamer's repo (throws a RepoError when refused). */

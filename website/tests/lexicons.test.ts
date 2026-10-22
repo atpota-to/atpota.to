@@ -39,7 +39,7 @@ describe('the lexicons in the repo', () => {
     expect(grants(TEND_NSID)).toEqual(['create']);
     expect(grants(PETS_NSID)).toEqual(['create', 'update']);
     expect(grants(OVERLAY_NSID)).toEqual(['create', 'update']);
-    expect(grants(SCENE_NSID)).toEqual(['create', 'update']);
+    expect(grants(SCENE_NSID)).toEqual(['create', 'update', 'delete']);
     expect(AUTH_FULL.permissions.filter((p) => p.resource === 'rpc')).toEqual([{ type: 'permission', resource: 'rpc', lxm: [POE_LXM, POE_FORGET_LXM], aud: '*' }]);
     expect(AUTH_FULL.permissions).toHaveLength(7);
   });
