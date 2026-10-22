@@ -8,7 +8,7 @@ import {
 } from '../src/dispatch.js';
 import { pollOperatorDms, settleCommands } from '../src/operator-dm.js';
 import { graphemeLength, shortenLinks } from '../src/richtext.js';
-import { docUri, pageFor, documentValue, network } from './fixtures/dispatch.js';
+import { docUri, pageFor, documentValue, network, publicationRecord } from './fixtures/dispatch.js';
 
 const POE = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
 const PUBLISHER = config.dispatch.publisherDid;
@@ -115,6 +115,10 @@ test('announce posts once, links the issue with swapRecord, and keeps every othe
   assert.deepEqual(record.langs, ['en']);
   assert.equal(record.embed.$type, 'app.bsky.embed.external');
   assert.equal(record.embed.external.uri, `https://atpota.to/blog/${k}`);
+  assert.deepEqual(record.embed.external.associatedRefs, [
+    { $type: 'com.atproto.repo.strongRef', uri: docUri(k), cid: original.cid },
+    { $type: 'com.atproto.repo.strongRef', uri: PUBLICATION, cid: 'bafypublication' },
+  ]);
   assert.equal(record.embed.external.title, original.value.title);
   assert.equal(record.embed.external.description, original.value.description);
   assert.equal(record.embed.external.thumb.ref.$link, 'bafkthumb');
@@ -210,6 +214,30 @@ test('buildAnnouncement links the blog URL too, and nothing else', () => {
   });
   assert.deepEqual(record.facets.map((f) => f.features[0].uri), ['https://atpota.to/blog/x']);
   assert.equal(record.embed.external.thumb, undefined);
+});
+
+test('the refs go on when the publication url joined to the document path is the card, as Bluesky checks', async () => {
+  const k = 'issuecardurl';
+  const { s, deps } = network(k, { publication: publicationRecord('https://ATPOTA.to/blog/') });
+  await announce({ rkey: k }, deps);
+  assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${k}`);
+  assert.equal(s.created[0].record.embed.external.associatedRefs.length, 2);
+});
+
+test('a publication that does not back the card, or cannot be read, gets a plain card on atpota.to', async () => {
+  for (const [k, publication, why] of [
+    ['issuenopub01', null, /the publication has no url/],
+    ['issuenopub02', () => { throw new Error('getRecord failed: 502'); }, /getRecord failed: 502/],
+    ['issuenopub03', publicationRecord('https://poe.leaflet.pub'), /the publication's url is https:\/\/poe\.leaflet\.pub, so bluesky won't enrich/],
+  ]) {
+    const { s, deps } = network(k, { publication });
+    const reply = await announce({ rkey: k }, deps);
+    assert.equal(s.created.length, 1, k);
+    assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${k}`, k);
+    assert.equal(s.created[0].record.embed.external.associatedRefs, undefined, k);
+    assert.match(reply, /the card is a plain link card/, k);
+    assert.match(reply, why, k);
+  }
 });
 
 test('with no atpota.to credential it posts and DMs the manual link command', async () => {

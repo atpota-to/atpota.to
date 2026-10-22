@@ -222,7 +222,7 @@ export function pageUrls(rkey) {
  * The announcement post. The link to the issue is its only facet: featured
  * people are not pinged, and nothing else in the text becomes clickable.
  */
-export function buildAnnouncement({ text, pageUrl, alsoLinks = [], title, description, thumb = null }) {
+export function buildAnnouncement({ text, pageUrl, associatedRefs = null, alsoLinks = [], title, description, thumb = null }) {
   const linkable = new Set([pageUrl, ...alsoLinks]);
   const facets = detectLinks(text)
     .filter((l) => linkable.has(l.uri.replace(/\/+$/, '')))
@@ -237,11 +237,63 @@ export function buildAnnouncement({ text, pageUrl, alsoLinks = [], title, descri
     langs: ['en'],
     embed: {
       $type: 'app.bsky.embed.external',
-      external: { uri: pageUrl, title, description, ...(thumb ? { thumb } : {}) },
+      external: {
+        uri: pageUrl, title, description,
+        ...(thumb ? { thumb } : {}),
+        ...(associatedRefs ? { associatedRefs } : {}),
+      },
     },
   };
   if (facets.length) record.facets = facets;
   return record;
+}
+
+/** `base` and `path` with one slash between, the way the AppView joins them. */
+function joinPath(base, path) {
+  if (!path) return base;
+  return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+}
+
+/** A URL reduced the way the AppView compares them: host lowercased, no trailing slash, query or fragment. */
+function canonicalUrl(url) {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}${u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The associatedRefs that make Bluesky draw the card on pageUrl as a
+ * standard.site card (publication name, icon, byline, reading time), or null
+ * with the reason. The AppView enriches a card only when its uri is the
+ * publication's url joined to the document's path and both records are pinned,
+ * so the refs go on only when the publication's url backs pageUrl. Never
+ * throws, because a plain card is still an announcement.
+ */
+export async function cardRefs(doc, pageUrl, deps) {
+  let publication;
+  try {
+    publication = await deps.getPublication();
+  } catch (err) {
+    return { associatedRefs: null, note: err.message };
+  }
+  const url = publication?.value?.url;
+  if (typeof url !== 'string' || typeof publication.cid !== 'string') {
+    return { associatedRefs: null, note: 'the publication has no url' };
+  }
+  const backed = canonicalUrl(joinPath(url, String(doc.value.path ?? '')));
+  if (!backed || backed !== canonicalUrl(pageUrl)) {
+    return { associatedRefs: null, note: `the publication's url is ${url}, so bluesky won't enrich a card on ${pageUrl}` };
+  }
+  return {
+    associatedRefs: [
+      { $type: 'com.atproto.repo.strongRef', uri: doc.uri, cid: doc.cid },
+      { $type: 'com.atproto.repo.strongRef', uri: config.dispatch.publicationUri, cid: publication.cid },
+    ],
+    note: null,
+  };
 }
 
 // --- pages ----------------------------------------------------------------------
@@ -414,6 +466,8 @@ export async function latestDocument(deps) {
 export const defaultDeps = {
   listDocuments,
   getDocument: (rkey) => atproto.getPublicRecord(config.dispatch.publisherDid, 'site.standard.document', rkey),
+  getPublication: () => atproto.getPublicRecord(config.dispatch.publisherDid, 'site.standard.publication',
+    config.dispatch.publicationRkey),
   getOwnPost: (rkey) => atproto.getPublicRecord(config.botDid, 'app.bsky.feed.post', rkey),
   createPost: (record, rkey) => atproto.createPost(record, { rkey }),
   uploadBlob: (bytes, mimeType) => atproto.uploadBlob(bytes, mimeType),
@@ -485,23 +539,25 @@ async function postOnce(documentUri, text, page, pageUrl, alsoLinks, doc, deps) 
     if (earlier) {
       recordPost(documentUri, earlier.uri, earlier.cid);
       event(documentUri, 'post_found', { uri: earlier.uri });
-      return { uri: earlier.uri, cid: earlier.cid, thumbNote: null };
+      return { uri: earlier.uri, cid: earlier.cid, thumbNote: null, cardNote: null };
     }
   }
   db.prepare('UPDATE dispatch_document SET post_text = ?, page_url = ?, updated_at = ? WHERE document_uri = ?')
     .run(text, pageUrl, nowIso(), documentUri);
+  const card = await cardRefs(doc, pageUrl, deps);
   const { thumb, note } = await cardThumb(page.html, pageUrl, deps);
   const record = buildAnnouncement({
-    text, pageUrl, alsoLinks,
+    text, pageUrl, alsoLinks, associatedRefs: card.associatedRefs,
     title: String(doc.value.title ?? ''),
     description: String(doc.value.description ?? ''),
     thumb,
   });
   const res = await deps.createPost(record, row.post_rkey);
   recordPost(documentUri, res.uri, res.cid);   // before anything else
-  event(documentUri, 'posted', { uri: res.uri, thumb: !!thumb });
+  event(documentUri, 'posted', { uri: res.uri, thumb: !!thumb, richCard: !!card.associatedRefs });
+  if (card.note) logger.warn('dispatch announcement posted with a plain card', { documentUri, reason: card.note });
   logger.info('dispatch announcement posted', { documentUri, uri: res.uri });
-  return { uri: res.uri, cid: res.cid, thumbNote: note };
+  return { uri: res.uri, cid: res.cid, thumbNote: note, cardNote: card.note };
 }
 
 /**
@@ -560,6 +616,7 @@ export async function announce({ rkey, text = null }, deps = defaultDeps) {
     `announced ⸜(｡˃ ᵕ ˂ )⸝ ${postUrl(post.uri)}`,
     note,
     ...(post.thumbNote ? [`the card has no image: ${post.thumbNote}.`] : []),
+    ...(post.cardNote ? [`the card is a plain link card: ${post.cardNote}.`] : []),
   ].join('\n\n');
 }
 
