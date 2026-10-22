@@ -21,11 +21,11 @@
  * while the lens is on now; the apps elsewhere list the busiest over it, each with an
  * arrow for how it did against the same span a day (or a week, or 30 days) earlier.
  *
- * The lens (weather-lens.ts, the bar under the header) says what the page shows: a window
- * (now, or the last hour, 24 hours, 7 days or 30 days), new records or active accounts,
- * and what a rate is per. The tiles that follow it (the header's reading, the diversity
- * index, bluesky and everyone else, the apps elsewhere, bluesky, the trends and the stats
- * tile) are drawn from a Sky: the live reading's (skyOfReading) for now, a history's
+ * The lens (weather-lens.ts, floating along the bottom: weather-dock.ts) says what the
+ * page shows: a window (now, or the last hour, 24 hours, 7 days or 30 days), new records
+ * or active accounts, and what a rate is per. The tiles that follow it (the header's
+ * reading, the diversity index, bluesky and everyone else, the apps elsewhere, bluesky,
+ * the trends and the stats tile) are drawn from a Sky: the live reading's (skyOfReading) for now, a history's
  * (skyOfHistory) for a window, so each tile is drawn the same way from either. A tile that
  * can't count what the lens asks (bluesky's collections have no accounts; the diversity
  * index is always by accounts) says what it counts instead, in a tag by its title.
@@ -1082,7 +1082,6 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   bindHush(root, desk);
   bindExplainers(root);
   const lens = createLens();
-  // before bindLens, so the dock's copy of the controls is bound with the bar's
   initLensDock(report, lens);
   bindLens(report, lens);
   const feed = createHistoryFeed(fetchImpl);

@@ -38,7 +38,7 @@ import {
 import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
-import { dockSummary } from '../src/scripts/weather-dock.js';
+import { dockSummary, initLensDock } from '../src/scripts/weather-dock.js';
 
 /** The live reading, counting records, unless the test says otherwise (the page's own default is the last hour, by accounts). */
 const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, window: 'now', measure: 'records', ...change });
@@ -539,10 +539,13 @@ describe('the lens', () => {
     history.replaceState(null, '', '/weather');
   });
 
-  it('sits under the header, before every tile that follows it', () => {
+  it('floats in the dock, which comes right after the header, before every tile that follows it', () => {
     const kids = [...report.children];
-    const bar = report.querySelector('.weather-lens')!;
-    expect(kids.indexOf(bar)).toBe(kids.indexOf(report.querySelector('[data-weather-hero]')!) + 1);
+    const dock = report.querySelector('[data-weather-dock]')!;
+    expect(kids.indexOf(dock)).toBe(kids.indexOf(report.querySelector('[data-weather-hero]')!) + 1);
+    // no bar in the page as well: the dock's are the only controls
+    expect(report.querySelectorAll('[data-lens-window="hour"]')).toHaveLength(1);
+    const bar = dock.querySelector<HTMLElement>('.weather-dock__panel')!;
     expect([...bar.querySelectorAll<HTMLElement>('[data-lens-window]')].map((b) => [b.dataset.lensWindow, b.textContent])).toEqual([
       ['now', 'now'],
       ['hour', '1h'],
@@ -560,11 +563,36 @@ describe('the lens', () => {
     for (const id of ['weather-trends-title', 'weather-apps-title', 'weather-minute-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeLessThan(group);
   });
 
-  it("the dock's strip says it in the bar's words", () => {
-    const bar = report.querySelector<HTMLElement>('.weather-lens')!;
+  it("the dock's strip says it in the controls' words", () => {
+    const bar = report.querySelector<HTMLElement>('.weather-dock__panel')!;
     expect(dockSummary(bar, LENS_DEFAULT)).toBe('1h · accounts');
     expect(dockSummary(bar, { window: 'day', measure: 'records', unit: 'hour' })).toBe('24h · records · per hour');
     expect(dockSummary(bar, { window: 'now', measure: 'records', unit: 'total' })).toBe('now · records · in all');
+  });
+
+  it('the dock shows once bound, opens to the controls with a tap on its strip, and a tap elsewhere puts it away', () => {
+    const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
+    const panel = dock.querySelector<HTMLElement>('.weather-dock__panel')!;
+    const strip = dock.querySelector<HTMLButtonElement>('.weather-dock__strip')!;
+    expect(dock.hidden).toBe(true);
+    const l = createLens('');
+    initLensDock(report, l);
+    bindLens(report, l);
+    expect(dock.hidden).toBe(false);
+    expect(panel.hidden).toBe(true);
+    expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('1h · accounts');
+    strip.click();
+    expect(panel.hidden).toBe(false);
+    expect(strip.getAttribute('aria-expanded')).toBe('true');
+    // a choice keeps it open, to make another
+    panel.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
+    expect(l.get().window).toBe('week');
+    expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('7d · accounts');
+    panel.querySelector<HTMLButtonElement>('[data-lens-measure="records"]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(panel.hidden).toBe(false);
+    report.querySelector('[data-weather-hero]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(panel.hidden).toBe(true);
+    expect(strip.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('starts from the address, else this browser, else the last hour, accounts, a second', () => {
@@ -621,7 +649,6 @@ describe('the lens', () => {
     expect(l.get().unit).toBe('second');
     report.querySelector<HTMLButtonElement>('[data-lens-measure="accounts"]')!.click();
     expect(select.disabled).toBe(true);
-    expect(report.querySelector<HTMLElement>('[data-lens-unit-note]')!.hidden).toBe(false);
   });
 });
 

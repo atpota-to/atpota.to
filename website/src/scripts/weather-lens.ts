@@ -1,6 +1,6 @@
 /**
- * The weather report's lens (weather/index.html, the bar under the header): one place to
- * say what the page shows, for every tile that can follow it.
+ * The weather report's lens (weather/index.html, the strip floating along the bottom): one
+ * place to say what the page shows, for every tile that can follow it.
  *
  *   window   now (the station's live 60 seconds), or the last hour, 24 hours, 7 days or
  *            30 days, from /api/weather-history and /api/weather-span
@@ -191,7 +191,7 @@ export function createLens(search = typeof location === 'undefined' ? '' : locat
 const UNIT_HINT = 'accounts are counted once over the whole window, so they have no rate';
 
 /**
- * The bar's controls ([data-lens-window], [data-lens-measure] buttons and the [data-lens-unit]
+ * The lens's controls ([data-lens-window], [data-lens-measure] buttons and the [data-lens-unit]
  * select), and anything on the page that cycles the unit with a tap ([data-lens-cycle-unit]),
  * kept in step with the lens. The lens is also on `root` as data-window, data-measure and
  * data-unit, for the styles.
@@ -199,9 +199,7 @@ const UNIT_HINT = 'accounts are counted once over the whole window, so they have
 export function bindLens(root: HTMLElement, lens: Lens): void {
   const windows = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-window]')];
   const measures = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-measure]')];
-  // the bar's, and the dock's copy of them (weather-dock.ts)
   const units = [...root.querySelectorAll<HTMLSelectElement>('[data-lens-unit]')];
-  const unitNotes = [...root.querySelectorAll<HTMLElement>('[data-lens-unit-note]')];
   const show = (s: LensState) => {
     root.dataset.window = s.window;
     root.dataset.measure = s.measure;
@@ -213,7 +211,6 @@ export function bindLens(root: HTMLElement, lens: Lens): void {
       unit.disabled = s.measure === 'accounts';
       unit.title = unit.disabled ? UNIT_HINT : '';
     }
-    for (const note of unitNotes) note.hidden = s.measure !== 'accounts';
   };
   for (const b of windows) b.addEventListener('click', () => WINDOWS.includes(b.dataset.lensWindow as Window) && lens.set({ window: b.dataset.lensWindow as Window }));
   for (const b of measures) b.addEventListener('click', () => MEASURES.includes(b.dataset.lensMeasure as Measure) && lens.set({ measure: b.dataset.lensMeasure as Measure }));

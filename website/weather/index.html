@@ -77,38 +77,37 @@
                 <p class="visually-hidden" role="status" data-r-status></p>
             </header>
 
-            <!-- The lens (src/scripts/weather-lens.ts): what every tile below it shows, down to the stats.
-                 It's kept in the address (?w=24h&m=accounts&u=hour) and in this browser. -->
-            <nav class="tile weather-lens" aria-label="what the report shows">
-                <div class="weather-lens__group" role="group" aria-labelledby="weather-lens-window">
-                    <span class="weather-lens__label" id="weather-lens-window">over</span>
-                    <div class="weather-seg">
+            <!-- The lens (src/scripts/weather-lens.ts): what every tile shows, down to the stats.
+                 It's kept in the address (?w=24h&m=accounts&u=hour) and in this browser. It floats
+                 over the page along the bottom, beside Poe (weather-dock.ts): a strip that says
+                 what's showing and opens upward to the controls. -->
+            <div class="weather-dock" data-weather-dock hidden>
+                <div class="weather-dock__panel" id="weather-dock-panel" role="group" aria-label="what the report shows" hidden>
+                    <div class="weather-seg" role="group" aria-label="over">
                         <button type="button" class="weather-seg__btn" data-lens-window="now" aria-pressed="false" aria-label="now: the last minute, live">now</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="hour" aria-pressed="true" aria-label="the last hour">1h</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="day" aria-pressed="false" aria-label="the last 24 hours">24h</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="week" aria-pressed="false" aria-label="the last 7 days">7d</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="month" aria-pressed="false" aria-label="the last 30 days">30d</button>
                     </div>
-                </div>
-                <div class="weather-lens__group" role="group" aria-labelledby="weather-lens-measure">
-                    <span class="weather-lens__label" id="weather-lens-measure">counting</span>
-                    <div class="weather-seg">
+                    <div class="weather-seg" role="group" aria-label="counting">
                         <button type="button" class="weather-seg__btn" data-lens-measure="accounts" aria-pressed="true" aria-label="active accounts">accounts</button>
                         <button type="button" class="weather-seg__btn" data-lens-measure="records" aria-pressed="false" aria-label="new records">records</button>
                     </div>
-                </div>
-                <div class="weather-lens__group">
-                    <label class="weather-lens__label" for="weather-lens-unit">per</label>
-                    <select class="weather-lens__select" id="weather-lens-unit" data-lens-unit aria-describedby="weather-lens-unit-note">
-                        <option value="second">second</option>
-                        <option value="minute">minute</option>
-                        <option value="hour">hour</option>
-                        <option value="day">day</option>
+                    <!-- records only: accounts are counted once over the whole window, so they have no rate (faint and off then) -->
+                    <select class="weather-lens__select" data-lens-unit aria-label="new records">
+                        <option value="second">per second</option>
+                        <option value="minute">per minute</option>
+                        <option value="hour">per hour</option>
+                        <option value="day">per day</option>
                         <option value="total">in all</option>
                     </select>
-                    <span class="weather-lens__note" id="weather-lens-unit-note" data-lens-unit-note hidden>accounts count once a window</span>
                 </div>
-            </nav>
+                <button type="button" class="weather-dock__strip" aria-expanded="false" aria-controls="weather-dock-panel">
+                    <span class="weather-dock__now" data-dock-now></span>
+                    <svg class="weather-dock__chev" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M6 12l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
 
             <section class="tile weather-tile weather-diversity" aria-labelledby="weather-diversity-title" data-lensed>
                 <div class="weather-tile__titled">
