@@ -197,13 +197,25 @@ export function supabaseReplace({ url, key, fetch = globalThis.fetch }) {
     return method === 'GET' ? res.json() : null;
   }
   const db = {
-    /** Rewrites a batch of minutes (an hour, say) in three requests. */
+    /**
+     * Rewrites a batch of minutes (an hour, say) in three requests. The minute rows go first
+     * (app rows reference them), so if the apps don't make it the minutes are deleted again:
+     * a minute with no app rows reads as an hour with no apps at all, and archive.js leaves a
+     * minute that has a row alone, so only a missing one gets written again.
+     */
     async minutes(list) {
       if (!list.length) return;
+      const where = `minute=in.(${list.map((r) => encodeURIComponent(r.minute.minute)).join(',')})`;
       await call('POST', 'atmosphere_minute?on_conflict=minute', list.map((r) => r.minute), 'resolution=merge-duplicates,return=minimal');
-      await call('DELETE', `atmosphere_minute_app?minute=in.(${list.map((r) => encodeURIComponent(r.minute.minute)).join(',')})`, undefined, 'return=minimal');
-      const apps = list.flatMap((r) => r.apps);
-      if (apps.length) await call('POST', 'atmosphere_minute_app?on_conflict=minute,domain', apps, 'resolution=merge-duplicates,return=minimal');
+      try {
+        await call('DELETE', `atmosphere_minute_app?${where}`, undefined, 'return=minimal');
+        const apps = list.flatMap((r) => r.apps);
+        if (apps.length) await call('POST', 'atmosphere_minute_app?on_conflict=minute,domain', apps, 'resolution=merge-duplicates,return=minimal');
+      } catch (err) {
+        // Their app rows go with them (on delete cascade).
+        await call('DELETE', `atmosphere_minute?${where}`, undefined, 'return=minimal').catch(() => {});
+        throw err;
+      }
     },
     async minute(rows) {
       await db.minutes([rows]);

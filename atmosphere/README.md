@@ -221,6 +221,19 @@ clear them, run `replay.js --from 2026-10-20T17:37Z --to 2026-10-20T17:39Z` here
 while those minutes are still inside Jetstream's lookback (before about
 2026-10-22T05:00Z).
 
+**Two holes to fill (found 2026-10-22).** They show as gaps in the week's trends:
+
+- *2026-10-18 16:00Z, apps.* The backfill wrote the hour's minute rows but not their
+  app rows, and a rerun leaves a minute with a row alone. Fixed going forward
+  (`supabaseReplace` deletes the minutes again when their apps fail). To fill it:
+  `archive.js --from 2026-10-18T16:00Z --to 2026-10-18T17:00Z --overwrite` (archive
+  minutes over archive minutes, so nothing better is lost).
+- *2026-10-20 16:00Z to 21:00Z, accounts.* The station went live at 16:50 and counted
+  accounts only from about 21:30, so those hours have no hour sketch. To fill it:
+  `archive.js --from 2026-10-20T16:00Z --to 2026-10-20T21:00Z` without `--overwrite`:
+  the station's minutes stay, and the five missing hour sketches are written from the
+  archive. That day's own sketch already exists and stays a little low.
+
 ## Backfilling from the archive
 
 `src/archive.js` fills minutes from Jetstream v2's archive
