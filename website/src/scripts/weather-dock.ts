@@ -8,7 +8,10 @@
  * reading, a bar in the page slid out from under the finger with every change.
  */
 
-import type { Lens, LensState } from './weather-lens';
+import { WINDOW_INFO, type Lens, type LensState, type Window } from './weather-lens';
+
+/** The header's period, above its number: "right now", or "the last 24 hours". */
+export const periodWords = (w: Window) => (w === 'now' ? 'right now' : WINDOW_INFO[w].words);
 
 /** What the strip says: the window as the controls have it, the measure, and records' unit. */
 export function dockSummary(controls: HTMLElement, s: LensState): string {
@@ -34,6 +37,13 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
     else delete dock.dataset.open;
   };
   strip.addEventListener('click', () => open(panel.hidden));
+  // the header's period ("the last 24 hours") opens it too, on the window that's showing
+  for (const opener of report.querySelectorAll<HTMLElement>('[data-lens-open]')) {
+    opener.addEventListener('click', () => {
+      open(true);
+      panel.querySelector<HTMLElement>('[data-lens-window][aria-pressed="true"]')?.focus();
+    });
+  }
   dock.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || panel.hidden) return;
     open(false);
@@ -48,7 +58,14 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
     { passive: true },
   );
 
-  const show = (s: LensState) => void (now.textContent = dockSummary(panel, s));
+  const periods = report.querySelectorAll<HTMLElement>('[data-r-period]');
+  const show = (s: LensState) => {
+    now.textContent = dockSummary(panel, s);
+    for (const el of periods) {
+      el.textContent = periodWords(s.window);
+      el.setAttribute('aria-label', `${periodWords(s.window)}. change what the report shows`);
+    }
+  };
   show(lens.get());
   lens.onChange(show);
 }

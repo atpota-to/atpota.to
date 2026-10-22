@@ -2172,6 +2172,12 @@ html[data-theme="dark"] .weather-sun__night {
   stroke-linecap: round;
 }
 
+/* a bucket still filling up: dashed out to its estimate (weather-spark.ts) */
+.weather-spark .weather-spark__projected {
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
 @media (forced-colors: active) {
   .weather-spark path {
     stroke: CanvasText;

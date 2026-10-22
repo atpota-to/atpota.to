@@ -7,6 +7,10 @@
  * The curve is monotone (smoothPath): it bends between points but never overshoots
  * them, so a smooth line never shows a peak or a dip that isn't in the data.
  *
+ * The newest step is often still filling up (today, this hour), which would draw as a dip
+ * that isn't there. projectLast turns it into an estimate for the whole step, drawn as a
+ * dashed line to a hollow dot; the tooltip has what's in so far and the estimate.
+ *
  * Hover, touch or the arrow keys move a crosshair to the nearest point and show its value
  * and time, read out politely for the arrow keys, so no value needs a mouse to reach.
  * Labels only reach the DOM through textContent.
@@ -17,6 +21,8 @@ export interface ChartPoint {
   t: number;
   /** null for a step with no data. */
   v: number | null;
+  /** A step still filling up: what's in so far, with `v` the estimate for the whole step (projectLast). */
+  soFar?: number;
 }
 
 export interface ChartOptions {
@@ -85,6 +91,28 @@ export function smoothPath(pts: ReadonlyArray<readonly [number, number]>): strin
   return d;
 }
 
+/** Too little of a step heard to say where it's going: under this share, no estimate. */
+export const MIN_PROJECT = 0.1;
+
+/**
+ * The last point, when its step (starting at its `t`) is still under way at `now`, as an
+ * estimate for the whole step: what's in so far, scaled by how much of the step was heard
+ * (`heardMs`, the station's own seconds, since a cached history is a little behind the
+ * clock; or the time gone since the step began). A count that adds up (records) scales
+ * straight; one that doesn't (active accounts, who come back through the day) grows as
+ * the share heard to the power `exponent` (accountsExponent). `scale: false` keeps the
+ * value as it is and only marks it as so far (a share, or the apps heard, which mostly
+ * turn up early on). Too early in a step to guess (MIN_PROJECT), the point has no value,
+ * only what's in so far.
+ */
+export function projectLast(points: ChartPoint[], now: number, stepMs: number, opts: { scale?: boolean; heardMs?: number; exponent?: number } = {}): ChartPoint[] {
+  const last = points[points.length - 1];
+  if (!last || last.v === null || now < last.t || now - last.t >= stepMs) return points;
+  const gone = Math.min(1, (opts.heardMs ?? now - last.t) / stepMs);
+  const v = opts.scale === false ? last.v : gone >= MIN_PROJECT ? last.v / gone ** (opts.exponent ?? 1) : null;
+  return [...points.slice(0, -1), { t: last.t, v, soFar: last.v }];
+}
+
 /** Runs of consecutive points with data, split wherever a step is missing. */
 export function segments(points: ChartPoint[], stepMs: number): ChartPoint[][] {
   const runs: ChartPoint[][] = [];
@@ -100,6 +128,11 @@ export function segments(points: ChartPoint[], stepMs: number): ChartPoint[][] {
   }
   if (run.length) runs.push(run);
   return runs;
+}
+
+/** A step still filling up, in the tooltip: "1,234 so far", and "on pace for about 5,678" when there's an estimate. */
+export function soFarWords(p: ChartPoint, format: (v: number) => string): { value: string; pace: string } {
+  return { value: `${format(p.soFar!)} so far`, pace: p.v === null || p.v === p.soFar ? '' : `on pace for about ${format(p.v)}` };
 }
 
 function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
@@ -164,7 +197,16 @@ function draw(host: HTMLElement): void {
     svg.append(label);
   });
 
-  for (const run of segments(points, opts.stepMs)) {
+  for (const all of segments(points, opts.stepMs)) {
+    // a step still filling up: a dashed line out to its estimate, a hollow dot at the end
+    const end = all[all.length - 1]!;
+    const run = end.soFar === undefined ? all : all.slice(0, -1);
+    if (run !== all) {
+      const from = run[run.length - 1];
+      if (from) svg.append(el('path', { class: 'weather-chart__line weather-chart__line--projected', d: `M${x(from.t).toFixed(1)},${y(from.v!).toFixed(1)}L${x(end.t).toFixed(1)},${y(end.v!).toFixed(1)}` }));
+      svg.append(el('circle', { class: 'weather-chart__dot weather-chart__dot--projected', cx: x(end.t), cy: y(end.v!), r: 4 }));
+    }
+    if (!run.length) continue;
     const line = smoothPath(run.map((p) => [x(p.t), y(p.v!)] as const));
     if (run.length === 1) {
       svg.append(el('circle', { class: 'weather-chart__dot', cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
@@ -185,7 +227,9 @@ function draw(host: HTMLElement): void {
   tip.setAttribute('aria-hidden', 'true');
   const tipValue = document.createElement('strong');
   const tipTime = document.createElement('span');
-  tip.append(tipValue, tipTime);
+  const tipPace = document.createElement('span');
+  tipPace.hidden = true;
+  tip.append(tipValue, tipTime, tipPace);
 
   const live = document.createElement('p');
   live.className = 'visually-hidden';
@@ -200,7 +244,8 @@ function draw(host: HTMLElement): void {
     cross.setAttribute('x1', String(px));
     cross.setAttribute('x2', String(px));
     cross.setAttribute('visibility', 'visible');
-    const value = p.v === null ? 'no reading' : opts.format(p.v);
+    const words = p.soFar !== undefined ? soFarWords(p, opts.format) : { value: p.v === null ? 'no reading' : opts.format(p.v), pace: '' };
+    const value = words.value;
     if (p.v === null) mark.setAttribute('visibility', 'hidden');
     else {
       mark.setAttribute('cx', String(px));
@@ -209,9 +254,13 @@ function draw(host: HTMLElement): void {
     }
     tipValue.textContent = value;
     tipTime.textContent = (opts.formatTipTime ?? opts.formatTime)(p.t);
+    tipPace.textContent = words.pace;
+    tipPace.hidden = !words.pace;
     tip.hidden = false;
-    tip.style.left = `${Math.min(Math.max(px, 70), width - 70)}px`;
-    if (announce) live.textContent = `${(opts.formatTipTime ?? opts.formatTime)(p.t)}: ${value}`;
+    // centred on the point, but never past either edge
+    const half = (tip.offsetWidth || 140) / 2;
+    tip.style.left = `${Math.min(Math.max(px, half), width - half)}px`;
+    if (announce) live.textContent = `${(opts.formatTipTime ?? opts.formatTime)(p.t)}: ${value}${words.pace ? `, ${words.pace}` : ''}`;
   };
   const hide = () => {
     at = -1;

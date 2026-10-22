@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { niceMax, segments } from '../src/scripts/weather-chart.js';
+import { niceMax, projectLast, segments, soFarWords } from '../src/scripts/weather-chart.js';
+import { renderSparkline } from '../src/scripts/weather-spark.js';
 import {
   APPS_EMPTY,
   APPS_TRICKLE,
@@ -13,6 +14,7 @@ import {
   renderHeadlineChange,
   renderSky,
   accountSummary,
+  accountsExponent,
   bigAmount,
   bindExplainers,
   diversityParts,
@@ -322,6 +324,33 @@ describe('trends', () => {
     );
     expect(runs.map((r) => r.map((p) => p.v))).toEqual([[1, 2], [3], [4]]);
   });
+
+  it('a step still filling up is an estimate for the whole step, so it never draws as a dip', () => {
+    const pts = [
+      { t: 0, v: 100 },
+      { t: 60_000, v: 30 },
+    ];
+    // a quarter of the way in by the clock, or a third by the seconds heard
+    expect(projectLast(pts, 75_000, 60_000)[1]).toEqual({ t: 60_000, v: 120, soFar: 30 });
+    expect(projectLast(pts, 75_000, 60_000, { heardMs: 20_000 })[1]).toEqual({ t: 60_000, v: 90, soFar: 30 });
+    // not scaled, only marked; too early to guess; and a step that's over is left alone
+    expect(projectLast(pts, 75_000, 60_000, { scale: false })[1]).toEqual({ t: 60_000, v: 30, soFar: 30 });
+    expect(projectLast(pts, 63_000, 60_000)[1]).toEqual({ t: 60_000, v: null, soFar: 30 });
+    expect(projectLast(pts, 120_000, 60_000)).toBe(pts);
+    expect(soFarWords({ t: 0, v: 120, soFar: 30 }, String)).toEqual({ value: '30 so far', pace: 'on pace for about 120' });
+    expect(soFarWords({ t: 0, v: null, soFar: 30 }, String)).toEqual({ value: '30 so far', pace: '' });
+    // a count that doesn't add up grows slower than the time heard: a quarter in, ×4^0.5
+    expect(projectLast(pts, 75_000, 60_000, { exponent: 0.5 })[1]).toEqual({ t: 60_000, v: 60, soFar: 30 });
+  });
+
+  it("the header's line goes out dashed to an estimate, and solid when there's none", () => {
+    const host = document.createElement('div');
+    renderSparkline(host, [10, 20, 30], undefined, true);
+    expect(host.querySelectorAll('path:not(.weather-spark__projected)')).toHaveLength(1);
+    expect(host.querySelector('.weather-spark__projected')!.getAttribute('d')).toMatch(/^M120\.0,[\d.]+L240\.0,[\d.]+$/);
+    renderSparkline(host, [10, 20, 30]);
+    expect(host.querySelector('.weather-spark__projected')).toBeNull();
+  });
 });
 
 describe('records or accounts', () => {
@@ -402,9 +431,21 @@ describe('records or accounts', () => {
     };
     expect(newest('records')[0]).toBe('22,000');
     expect(newest('index')[0]).toBe('2.7%');
-    expect(newest('records')[1]).not.toMatch(/so far/); // 16:59 is over at 17:00
+    expect(newest('records')[0]).not.toMatch(/so far/); // 16:59 is over at 17:00
+    expect(s.querySelector('.weather-chart__line--projected')).toBeNull();
+    // still filling up: what's in so far, and where it's going by the seconds heard of it
     renderTrends(section(), HISTORY, NOW - 30_000, 'accounts');
-    expect(newest('records')[1]).toMatch(/\(so far\)$/);
+    expect(newest('records')).toEqual(['22,000 so far', '4:59 pm', '']);
+    const half = { ...acct, points: [...acct.points.slice(0, -1), point('2026-10-20T16:59:00.000Z', 22_000, 600, 9.2, 30)] };
+    renderTrends(section(), { ...HISTORY, accounts: half }, NOW - 30_000, 'accounts');
+    // half heard, and 40,000 over three minutes of about 20,500 each says accounts grow as time^0.61: not 44,000
+    expect(accountsExponent(acct)).toBeCloseTo(0.608, 3);
+    expect(accountsExponent({ ...acct, points: acct.points.slice(-2) })).toBe(1); // one full bucket says nothing
+    expect(accountsExponent({ ...acct, total: { ...acct.total, active: 100 } })).toBe(0.3); // never wilder than that
+    expect(newest('records')).toEqual(['22,000 so far', '4:59 pm', 'on pace for about 33,542']);
+    expect(newest('index')).toEqual(['2.7% so far', '4:59 pm', '']); // a share isn't scaled
+    expect(s.querySelector('[data-t-chart="records"] .weather-chart__line--projected')).not.toBeNull();
+    expect(s.querySelector('[data-t-chart="records"] .weather-chart__dot--projected')).not.toBeNull();
 
     // and back: records put their own titles back, and the diversity index comes from the accounts
     renderTrends(section(), HISTORY, NOW, 'records');
@@ -622,6 +663,17 @@ describe('the lens', () => {
     expect(dock.hidden).toBe(false);
     expect(panel.hidden).toBe(true);
     expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('1h · accounts');
+    // the header says what the number is over, and a tap on it opens the controls too
+    const period = report.querySelector<HTMLButtonElement>('[data-r-period]')!;
+    expect(period.textContent).toBe('the last hour');
+    period.click();
+    expect(panel.hidden).toBe(false);
+    expect(report.ownerDocument.activeElement).toBe(panel.querySelector('[data-lens-window="hour"]'));
+    l.set({ window: 'now' });
+    expect(period.textContent).toBe('right now');
+    l.set({ window: 'hour' });
+    strip.click();
+    expect(panel.hidden).toBe(true);
     strip.click();
     expect(panel.hidden).toBe(false);
     expect(strip.getAttribute('aria-expanded')).toBe('true');
