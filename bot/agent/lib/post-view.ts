@@ -12,6 +12,10 @@ const HANDLE = /^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA
 const RKEY = /^[a-zA-Z0-9._~:-]{1,512}$/;
 /** The appview's own image thumbnails; lib/vision.ts describes only these. */
 const THUMB = /^https:\/\/cdn\.bsky\.app\/img\/feed_thumbnail\//;
+// The droplet's rule for mentions (mentions/src/thread.js): a post labelled
+// with any of these, by its author or by moderation, never has its pixels sent
+// to a model. Its alt text still comes through as words.
+const WITHHELD_LABELS = new Set(["porn", "sexual", "nudity", "graphic-media", "gore", "!hide", "!warn"]);
 const MAX_TEXT = 3000;
 const MAX_ALT = 2000;
 
@@ -78,7 +82,12 @@ export type PostSummary = {
   other?: string;
 };
 
-function imagesOf(view: Obj | null, source: string, out: EventImage[]): { alt?: string; source: string }[] {
+function withheld(labels: unknown): boolean {
+  return Array.isArray(labels) && labels.some((l) => WITHHELD_LABELS.has(String(obj(l)?.val ?? "")));
+}
+
+/** A view's images by alt text; their thumbnails go to `out` to be looked at, unless `out` is null. */
+function imagesOf(view: Obj | null, source: string, out: EventImage[] | null): { alt?: string; source: string }[] {
   if (!view || !String(view.$type ?? "").startsWith("app.bsky.embed.images")) return [];
   const list = Array.isArray(view.images) ? view.images : [];
   return list.slice(0, 4).flatMap((raw) => {
@@ -86,7 +95,7 @@ function imagesOf(view: Obj | null, source: string, out: EventImage[]): { alt?: 
     if (!image) return [];
     const alt = str(image.alt, MAX_ALT);
     const thumb = typeof image.thumb === "string" && THUMB.test(image.thumb) ? image.thumb : null;
-    if (thumb) out.push({ url: thumb, ...(alt ? { alt } : {}), source });
+    if (thumb && out) out.push({ url: thumb, ...(alt ? { alt } : {}), source });
     return [{ ...(alt ? { alt } : {}), source }];
   });
 }
@@ -103,11 +112,12 @@ function quoteOf(view: Obj | null, out: EventImage[]): QuotedPost | undefined {
     const author = obj(inner.author);
     const value = obj(inner.value);
     const embeds = Array.isArray(inner.embeds) ? inner.embeds : [];
+    const look = withheld(inner.labels) ? null : out;
     const images = embeds.flatMap((e) => {
       const embed = obj(e);
       return [
-        ...imagesOf(embed, "the post it quotes", out),
-        ...imagesOf(obj(embed?.media), "the post it quotes", out),
+        ...imagesOf(embed, "the post it quotes", look),
+        ...imagesOf(obj(embed?.media), "the post it quotes", look),
       ];
     }).map(({ alt }) => (alt ? { alt } : {}));
     return {
@@ -141,7 +151,7 @@ export function summarizePost(body: unknown): { post: PostSummary; images: Event
   const mediaType = String(media?.$type ?? "");
   const external = mediaType.startsWith("app.bsky.embed.external") ? obj(media?.external) : null;
   const quote = type.startsWith("app.bsky.embed.record") ? quoteOf(embed, images) : undefined;
-  const ownImages = imagesOf(media, "the post", images);
+  const ownImages = imagesOf(media, "the post", withheld(view.labels) ? null : images);
   const recordUri = type === "app.bsky.embed.record#view" ? str(obj(embed?.record)?.uri, 600) : undefined;
   const handle = str(author?.handle, 253);
   return {
