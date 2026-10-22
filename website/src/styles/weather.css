@@ -2143,8 +2143,12 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   cursor: pointer;
 }
 
-.weather-seg__btn:hover {
-  color: var(--text);
+/* only where there's a pointer to hover: on a phone a tapped button keeps its hover, and
+   a darker word that isn't the chosen one reads as a tap that half took */
+@media (hover: hover) {
+  .weather-seg__btn:hover {
+    color: var(--text);
+  }
 }
 
 .weather-seg__btn[aria-pressed="true"] {

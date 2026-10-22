@@ -101,6 +101,17 @@ button {
   cursor: pointer;
 }
 
+/* No double-tap-to-zoom on controls: otherwise a phone holds back a tap to see if a second
+   follows, and swallows the second of two quick taps (24h, then 7d) as a zoom. */
+a,
+button,
+select,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 button:disabled {
   cursor: not-allowed;
 }
