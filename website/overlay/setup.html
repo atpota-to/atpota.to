@@ -169,6 +169,7 @@
                                 <option value="brb" selected>be right back screen</option>
                                 <option value="ending">end screen</option>
                                 <option value="screenshare">screen share frame</option>
+                                <option value="loading">anisota loading screen</option>
                             </select>
                         </label>
                         <button type="submit" class="btn btn--primary btn--sm">add it</button>
@@ -186,7 +187,8 @@
                         <label class="ovs-field">a line under it <em>what the stream is about</em>
                             <input type="text" name="subtitle" maxlength="200" autocomplete="off">
                         </label>
-                        <label class="ovs-field ovs-field--row">backdrop
+                        <p class="ovs-field" data-ovs-for="loading"><em>anisota's mark on black, its moon running through its phases. leave the title empty and it says anisota's own loading lines in turn.</em></p>
+                        <label class="ovs-field ovs-field--row" data-ovs-for="starting brb ending screenshare">backdrop
                             <select name="background">
                                 <option value="day">day: sky, clouds and the sun</option>
                                 <option value="night">night: stars and tonight's moon</option>
@@ -194,7 +196,7 @@
                                 <option value="butter">butter: sunburst</option>
                             </select>
                         </label>
-                        <label class="ovs-field ovs-field--row">ground
+                        <label class="ovs-field ovs-field--row" data-ovs-for="starting brb ending screenshare">ground
                             <select name="ground">
                                 <option value="meadow">meadow: the hill with buttercups</option>
                                 <option value="grass">grass: a strip along the bottom</option>

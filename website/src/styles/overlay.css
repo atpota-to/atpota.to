@@ -1414,3 +1414,155 @@ body[data-scene="screenshare"][data-side="left"] .ov-poe {
     animation: none;
   }
 }
+
+/* ---------- Anisota's moon, mark and loader (src/overlay/anisota.ts) ----------
+   Anisota's own look, not atpotato's: square edges, Crimson Pro at light weights, white
+   ink on black (its nocturnal theme), or black on white with theme=light. */
+
+@font-face {
+  font-family: 'Crimson Pro';
+  src: url('/fonts/CrimsonPro-VariableFont_wght.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+.ov-symbols {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.ov-anisota {
+  --ani-paper: #ffffff;
+  --ani-ink: #000000;
+  --ani-muted: #555555;
+  --ani-edge: #dddddd;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: max-content;
+  padding: 16px 26px 16px 18px;
+  border: 1px solid var(--ani-edge);
+  border-radius: 0;
+  background: var(--ani-paper);
+  color: var(--ani-ink);
+  font-family: 'Crimson Pro', Georgia, serif;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"] .ov-anisota {
+  --ani-paper: #000000;
+  --ani-ink: #ffffff;
+  --ani-muted: #b3b3b3;
+  --ani-edge: #333333;
+}
+
+.ov-anisota__moon-box,
+.ov-anisota__mark-box {
+  display: grid;
+}
+
+.ov-anisota__moon {
+  width: 84px;
+  height: 84px;
+}
+
+.ov-anisota__mark {
+  width: 120px;
+  height: 172.4px;
+}
+
+.ov-anisota--mark {
+  padding: 22px;
+}
+
+.ov-anisota__words {
+  display: grid;
+  gap: 2px;
+}
+
+.ov-anisota__phase {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 200;
+  line-height: 1.1;
+}
+
+.ov-anisota__lit {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 200;
+  font-style: italic;
+  color: var(--ani-muted);
+}
+
+/* ---------- the loading screen: Anisota's splash ---------- */
+
+.ovsc[data-kind="loading"] {
+  background: #000000;
+}
+
+.ovsc[data-kind="loading"] .ovsc__back {
+  display: none;
+}
+
+.ovsc__splash {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: 'Crimson Pro', Georgia, serif;
+  text-align: center;
+}
+
+.ovsc__splash[hidden] {
+  display: none;
+}
+
+.ovsc__splash .ov-anisota__mark {
+  width: 240px;
+  height: 344.8px;
+  margin-bottom: 48px;
+  animation: ov-anisota-pulse 1.5s ease-in-out infinite;
+}
+
+.ovsc__splash-line {
+  margin: 0;
+  max-width: 1400px;
+  font-size: 44px;
+  font-weight: 200;
+  opacity: 0.8;
+  animation: ov-anisota-pulse 1.5s ease-in-out infinite;
+}
+
+.ovsc__splash-sub {
+  margin: 18px 0 0;
+  max-width: 1400px;
+  font-size: 28px;
+  font-weight: 200;
+  font-style: italic;
+  color: #b3b3b3;
+}
+
+@keyframes ov-anisota-pulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ovsc__splash .ov-anisota__mark,
+  .ovsc__splash-line {
+    animation: none;
+  }
+}

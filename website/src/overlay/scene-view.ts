@@ -13,6 +13,9 @@
  *               streamer's links
  *   frame       the backdrop with frameHoles cut out (clip-path), a soft rim round each
  *               window, the title along the bottom, and the weather in the column
+ *   splash      Anisota's loading screen in place of the backdrop and panel: its mark
+ *               (anisota.ts draws it), the title under it, or with no title one of
+ *               SPLASH_LINES every SPLASH_LINE_MS
  *
  * Every word is the streamer's and goes in through textContent.
  */
@@ -23,6 +26,9 @@ import { countdownText, frameHoles, framePath, type Scene } from './scenes';
 /** How often the countdown ticks. */
 export const TICK_MS = 250;
 export const DONE_TEXT = 'any second now…';
+/** Anisota's own loading lines (its splashMessages.js), for a loading screen without a title. */
+export const SPLASH_LINES = ['Powering on', 'Wiring the lights', 'Striking a match', 'Lighting the lamp', 'Turning on the lights', 'Checking conditions', 'Preparing your space', 'Adjusting the space'] as const;
+export const SPLASH_LINE_MS = 3000;
 
 export interface SceneView {
   /** Shows a scene, or none. A timer starts again only when its length changes. */
@@ -52,9 +58,14 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
   const weather = q('[data-ovsc-weather]');
   const holes = q('[data-ovsc-holes]');
   const clouds = root.querySelector<HTMLElement>('[data-ovsc-clouds]');
+  const splash = q('[data-ovsc-splash]');
+  const splashLine = q('[data-ovsc-splash-line]');
+  const splashSub = q('[data-ovsc-splash-sub]');
   const doc = root.ownerDocument;
 
   let timer: number | undefined;
+  let lineTimer: number | undefined;
+  let line = 0;
   let endsAt: number | null = null;
   let countdownKey = '';
   let done = false;
@@ -82,6 +93,7 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
     show(scene) {
       root.hidden = !scene;
       win.clearInterval(timer);
+      win.clearInterval(lineTimer);
       if (!scene) {
         doc.body.removeAttribute('data-scene');
         return;
@@ -89,10 +101,21 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
       doc.body.dataset.scene = scene.kind;
       root.dataset.background = scene.background;
       root.dataset.ground = scene.ground;
+      root.dataset.kind = scene.kind;
+
+      const splashing = scene.kind === 'loading';
+      splash.hidden = !splashing;
+      if (splashing) {
+        splashSub.textContent = scene.subtitle;
+        splashSub.hidden = !scene.subtitle;
+        const say = () => (splashLine.textContent = scene.title || SPLASH_LINES[line++ % SPLASH_LINES.length]!);
+        say();
+        if (!scene.title) lineTimer = win.setInterval(say, SPLASH_LINE_MS);
+      }
       if (clouds) renderClouds(clouds, scene.background === 'day' ? 6 : scene.background === 'garden' ? 3 : 0, win);
 
       const framed = scene.kind === 'screenshare';
-      panel.hidden = framed;
+      panel.hidden = framed || splashing;
       bar.hidden = !framed;
       weather.hidden = !framed;
       holes.hidden = !framed;

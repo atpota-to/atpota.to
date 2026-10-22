@@ -48,7 +48,7 @@
       "type": "object",
       "required": ["kind", "slot", "scale"],
       "properties": {
-        "kind": { "type": "string", "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse"] },
+        "kind": { "type": "string", "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse", "moon", "mark", "loader"] },
         "slot": {
           "type": "string",
           "knownValues": ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"],

@@ -20,6 +20,8 @@
  *             (starting, brb, ending, screenshare, or one they named), followed live too; a
  *             scene can hide Poe and the widgets, and the screen share puts Poe on its
  *             camera's side
+ *   anisota   Anisota's moon, mark and loader as widgets, and its loading screen as a
+ *             scene (anisota.ts), for streamers who use it
  *   demo      example lines every DEMO_MS, and visitors more often, to see where things land
  */
 
@@ -30,6 +32,7 @@ import { paintMoons } from '../scripts/moon';
 import { fetchReading, LIVE_REFRESH_MS, recordsPerSecond, REFRESH_MS, type Reading } from '../scripts/weather';
 import { createNames, listen, NOBODY, resolveActor, type StreamEvent, type Who } from './chat';
 import { DEFAULT_CONFIG, fromRecord, withOverrides, type OverlayConfig } from './config';
+import { mountAnisota } from './anisota';
 import { createLayout } from './layout';
 import {
   alertLine,
@@ -75,6 +78,7 @@ async function start(): Promise<void> {
   preloadFaces();
   // the weather suns turn into tonight's moon in the dark theme, as everywhere on the site
   paintMoons();
+  mountAnisota(document);
   const visitors = createVisitors({ corner, react: (face, ms) => poe.react(face, ms), side: 'right', scale: 1, demo: params.demo });
   const gate = createGate();
 

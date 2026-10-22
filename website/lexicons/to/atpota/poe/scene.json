@@ -1,7 +1,7 @@
 {
   "lexicon": 1,
   "id": "to.atpota.poe.scene",
-  "description": "One of the full-screen screens of Poe's stream overlay (atpota.to/overlay?scene=<record key>): a countdown before a stream, a be-right-back screen, an end screen, or a frame for sharing a screen with a camera. A streamer can keep as many as they like, one record each; the record key is the screen's id in its URL (lowercase letters, digits and dashes). The four a streamer starts with are keyed by their kind: \"starting\", \"brb\", \"ending\" and \"screenshare\". The overlay reads it from your repo and follows changes live.",
+  "description": "One of the full-screen screens of Poe's stream overlay (atpota.to/overlay?scene=<record key>): a countdown before a stream, a be-right-back screen, an end screen, or a frame for sharing a screen with a camera. A streamer can keep as many as they like, one record each; the record key is the screen's id in its URL (lowercase letters, digits and dashes). The ones a streamer starts with are keyed by their kind: \"starting\", \"brb\", \"ending\", \"screenshare\" and \"loading\". The overlay reads it from your repo and follows changes live.",
   "defs": {
     "main": {
       "type": "record",
@@ -10,7 +10,7 @@
         "type": "object",
         "required": ["createdAt", "updatedAt"],
         "properties": {
-          "kind": { "type": "string", "knownValues": ["starting", "brb", "ending", "screenshare"], "description": "Which sort of screen it is. Without it, the record key's kind, or starting." },
+          "kind": { "type": "string", "knownValues": ["starting", "brb", "ending", "screenshare", "loading"], "description": "Which sort of screen it is (loading: Anisota's loading screen, its brand mark with the moon running through its phases, on black). Without it, the record key's kind, or starting." },
           "name": { "type": "string", "maxLength": 200, "maxGraphemes": 40, "description": "What the streamer calls this screen (\"coding brb\"), on the setup page only." },
           "title": { "type": "string", "maxLength": 400, "maxGraphemes": 80, "description": "The big words (\"starting soon\")." },
           "subtitle": { "type": "string", "maxLength": 1000, "maxGraphemes": 200, "description": "A line under them: what the stream is about." },

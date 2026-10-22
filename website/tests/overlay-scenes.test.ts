@@ -210,7 +210,7 @@ describe('the scenes on the setup page', () => {
   const titleField = () => document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="title"]')!;
   const tabs = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>('[data-ovs-scene-tabs] [data-scene]')].map((t) => `${t.dataset.scene}:${t.textContent}`);
 
-  it('lists the four starters and the streamer\'s own screens, and saves changes to the repo', async () => {
+  it('lists the starters and the streamer\'s own screens, and saves changes to the repo', async () => {
     const root = page();
     const fetchImpl = listing([
       { rkey: 'brb', value: { title: 'snack break', createdAt: '2026-10-01T00:00:00.000Z' } },
@@ -220,7 +220,7 @@ describe('the scenes on the setup page', () => {
     const save = vi.fn(async () => undefined);
     const scenes = mountScenes(root, session as never, 'dame.is', () => DEFAULT_CONFIG, vi.fn(), { fetchImpl, save });
     await scenes.ready;
-    expect(tabs(root)).toEqual(['starting:starting soon', 'brb:be right back', 'ending:the end', 'screenshare:screen share', 'coding-brb:coding brb']);
+    expect(tabs(root)).toEqual(['starting:starting soon', 'brb:be right back', 'ending:the end', 'screenshare:screen share', 'loading:anisota loading', 'coding-brb:coding brb']);
     expect(titleField().value).toBe('starting soon');
     expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is&scene=starting`);
     expect(root.querySelector<HTMLElement>('[data-ovs-scene-remove]')!.hidden).toBe(true);
@@ -271,7 +271,7 @@ describe('the scenes on the setup page', () => {
 
     root.querySelector<HTMLButtonElement>('[data-ovs-scene-remove]')!.click();
     await vi.waitFor(() => expect(remove).toHaveBeenCalledWith(session, 'coding-share-2'));
-    await vi.waitFor(() => expect(tabs(root)).toHaveLength(5));
+    await vi.waitFor(() => expect(tabs(root)).toHaveLength(6));
   });
 
   it('makes ids from names that fit a record key and the URL', () => {
