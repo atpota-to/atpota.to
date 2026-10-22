@@ -25,8 +25,11 @@
 //   - only hosts the relay lists count. The log is full of hosts nobody relays (test
 //     servers, bulk sign-ups to one-off domains): they're counted as `created_unlisted`
 //     and nothing else
-//   - a host counts as active on a day if the relay calls it active now and it had an
-//     account that day (or has none now): one that went offline since is missed
+//   - a host counts as active on a day if the relay calls it active now (or the station
+//     has seen it active: small hosts drift between active and idle) and it had an account
+//     that day (or has none now): one that went offline since is missed. The relay's count
+//     can lag a bulk sign-up, so a host the walk back would leave out is asked for its own
+//     list of accounts (hostsBefore): one with an account from before the window stays
 //   - "wrote in the last hour" has no history, so it's null
 //   - accounts are the relay's count, moved by the log; did:web accounts and
 //     deactivations never touch the log, so they're as they are today
@@ -240,20 +243,57 @@ export class PlcHistory {
 }
 
 /**
- * The census of one past day: each host the relay calls active now, with that day's
- * accounts, leaving out a host all of whose accounts arrived after the day (it wasn't
- * there yet). A host with no accounts now stays: it can't be told apart.
+ * The census of one past day: each host the relay calls active now (or that the station
+ * has seen active: small hosts drift between active and idle), with that day's accounts,
+ * leaving out a host all of whose accounts arrived after the day (it wasn't there yet). A
+ * host with no accounts now stays: it can't be told apart. `floors` (hostsBefore) names
+ * hosts known to have had accounts before the window, with how many: one of those is never
+ * left out, however far the walk back goes (the relay's count can lag a bulk sign-up).
  */
-export function hostsOnDay(census, history, delta) {
+export function hostsOnDay(census, history, delta, { floors = new Map(), seenActive = new Set() } = {}) {
   const out = [];
   for (const h of census) {
-    if (h.status !== 'active') continue;
+    if (h.status !== 'active' && !seenActive.has(h.hostname)) continue;
     const i = history.hostIndex.get(h.hostname);
-    const accounts = h.accounts + (i === undefined ? 0 : delta[i]);
-    if (h.accounts > 0 && accounts <= 0) continue;
+    let accounts = h.accounts + (i === undefined ? 0 : delta[i]);
+    const floor = floors.get(h.hostname);
+    if (floor !== undefined) accounts = Math.max(accounts, floor);
+    else if (h.accounts > 0 && accounts <= 0) continue;
     out.push({ hostname: h.hostname, status: 'active', accounts: Math.max(0, accounts), seq: null });
   }
   return out;
+}
+
+/**
+ * Hosts the walk back would leave out on some day, that in fact had accounts before the
+ * window: their own list of accounts (com.atproto.sync.listRepos, the first page) names
+ * one that didn't arrive in the window. Each comes back with how many such accounts that
+ * page has. A host that won't answer is left as the walk back has it.
+ */
+export async function hostsBefore({ fetchImpl, census, history, deltas, concurrency = 4, log }) {
+  const candidates = census.filter((h) => {
+    const i = history.hostIndex.get(h.hostname);
+    return h.accounts > 0 && i !== undefined && isHostname(h.hostname) && !isBlueskyHost(h.hostname) && deltas.some((d) => h.accounts + d[i] <= 0);
+  });
+  const floors = new Map();
+  await pool(candidates, concurrency, async (h) => {
+    const i = history.hostIndex.get(h.hostname);
+    try {
+      const res = await fetchImpl(`https://${h.hostname}/xrpc/com.atproto.sync.listRepos?limit=1000`, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) return;
+      const body = await res.json();
+      // an account that didn't change in the window was there all along; one that changed but started here, too
+      const before = (Array.isArray(body?.repos) ? body.repos : []).filter((r) => {
+        const rec = typeof r?.did === 'string' ? history.dids.get(r.did) : undefined;
+        return typeof r?.did === 'string' && (!rec || rec.start === i);
+      }).length;
+      if (before > 0) floors.set(h.hostname, before);
+    } catch {
+      // unreachable: leave it to the walk back
+    }
+  });
+  log?.(`checked ${candidates.length} host(s) the walk back would leave out; ${floors.size} had accounts from before`);
+  return floors;
 }
 
 /** A past day's rows: its atmosphere_hosts row (as at the end of the day) and its atmosphere_host_day rows. */
@@ -412,6 +452,8 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   log(`audited ${a.fetched.toLocaleString('en-US')} (${a.cached.toLocaleString('en-US')} from the cache)`);
   history.settle();
   const delta = history.deltas();
+  const floors = await hostsBefore({ fetchImpl, census, history, deltas: delta, concurrency: args.concurrency, log });
+  const seenActive = db ? await db.seenActive() : new Set();
 
   let skipBefore = null;
   if (db && !args.overwrite) skipBefore = await db.firstLiveDay();
@@ -421,7 +463,7 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   log('day          active  indep   accounts elsewhere  diversity   new: bsky  indep  unlisted  own-domain   moved: out  in  between   deleted');
   for (let d = 0; d < days.length; d++) {
     const day = days[d];
-    const rows = dayRows(day, hostsOnDay(census, history, delta[d]), listed);
+    const rows = dayRows(day, hostsOnDay(census, history, delta[d], { floors, seenActive }), listed);
     const s = history.signals[d];
     const plc = { day, ...s };
     log(
@@ -447,7 +489,13 @@ async function main(argv) {
   const url = process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!args.dryRun && !(url && key)) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (or pass --dry-run)');
-  const db = args.dryRun ? null : { ...supabaseRest({ url, key }), firstLiveDay: () => firstLiveDay({ url, key, fetchImpl: fetch }) };
+  const rest = args.dryRun ? null : supabaseRest({ url, key });
+  const db = rest && {
+    ...rest,
+    firstLiveDay: () => firstLiveDay({ url, key, fetchImpl: fetch }),
+    // hosts the station has seen active in its own censuses over the last two days
+    seenActive: async () => new Set((await rest.getAll(`atmosphere_host_day?select=hostname&estimated=eq.false&day=gte.${dayOf(Date.now() - 2 * DAY_MS)}&order=day.asc,hostname.asc`)).map((r) => r.hostname)),
+  };
   console.log(`backfilling hosts from ${args.from} to yesterday${args.dryRun ? ' (dry run: nothing is written)' : ''}`);
   await backfill({ args, db });
 }

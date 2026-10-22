@@ -207,9 +207,20 @@ What it writes, for each day from `--from` to yesterday:
 - `atmosphere_hosts` (one row, as at 23:59:59Z) and `atmosphere_host_day` (a row per host),
   marked `estimated`. Only hosts the relay lists count: the log is full of hosts nobody
   relays (on 2026-10-22, three days of it held 4,265 new accounts on `pds.trump.com` and 61
-  on `pds.test`). A host counts as active on a day if the relay calls it active now and it
-  had an account then, so one that went offline since is missed; `writing` is null; and
-  `listed` is today's.
+  on `pds.test`). A host counts as active on a day if the relay calls it active now (or the
+  station has seen it active in the last two days: small hosts drift between active and
+  idle) and it had an account then, so one that went offline since is missed; `writing` is
+  null; and `listed` is today's. The relay's account count can lag a bulk sign-up, which
+  would walk a host back to no accounts at all, so before leaving one out the script asks
+  the host for its own list of accounts (`listRepos`) and keeps it if any was there before
+  the window.
+
+  The first run (2026-10-22, from 2026-10-08) didn't have those two checks yet and left
+  out four hosts on every estimated day: goodmkt.id, which took 3,903 accounts in one
+  sweep that day while the relay still counted a few hundred, and three small ones that
+  were idle when it ran. Their rows were added by hand from their own account lists and
+  the PLC log, and the estimated days' `atmosphere_hosts` rows recomputed from
+  `atmosphere_host_day`; a run of the fixed script gives the same numbers.
 - `atmosphere_plc_day`: the day's identity weather, counted exactly from the log: new
   accounts on Bluesky's hosts, on independent ones and on unlisted ones; how many new
   accounts on listed hosts started with a handle on their own domain; accounts moving out of

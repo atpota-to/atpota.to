@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backfill, daysOf, hostsOnDay, parseArgs, PlcHistory, readExport } from '../src/backfill-hosts.js';
+import { backfill, daysOf, hostsBefore, hostsOnDay, parseArgs, PlcHistory, readExport } from '../src/backfill-hosts.js';
 import { handleOfOp, hostOfOp, isCustomHandle, sideOf, slimEntry } from '../src/plc.js';
 
 const BSKY = 'amanita.us-east.host.bsky.network';
@@ -170,4 +170,50 @@ test('backfill: a dry run reads, audits and prints, and writes nothing', async (
   // blacksky had 2 accounts on the 20th, before the new one came
   assert.match(row, /^2026-10-20\s+2\s+1\s+2\s/);
   assert.ok(lines.some((l) => l.startsWith('dry run')));
+});
+
+test('hostsOnDay: a host with accounts from before stays, and one the station saw active counts while idle', () => {
+  const h = scenario();
+  h.settle();
+  const delta = h.deltas();
+  const census = [
+    { hostname: 'blacksky.app', status: 'active', accounts: 2, seq: 1 },
+    { hostname: 'eurosky.social', status: 'idle', accounts: 1, seq: 1 },
+  ];
+  // the 19th: blacksky's two accounts both arrived later, so it would be left out
+  assert.deepEqual(hostsOnDay(census, h, delta[0]).map((x) => x.hostname), []);
+  // unless it had one from before the window; and eurosky, idle now, counts if the station saw it active
+  assert.deepEqual(
+    hostsOnDay(census, h, delta[0], { floors: new Map([['blacksky.app', 1]]), seenActive: new Set(['eurosky.social']) }).map((x) => [x.hostname, x.accounts]),
+    [['blacksky.app', 1], ['eurosky.social', 1]],
+  );
+});
+
+test('hostsBefore: asks a host the walk back would leave out for its accounts, and keeps it if one is from before', async () => {
+  const h = scenario();
+  // the mover came to eurosky in the window, from Bluesky's hosts
+  h.fromAudit('did:plc:mover', audit([
+    { createdAt: '2026-01-01T00:00:00Z', operation: { prev: null, services: { atproto_pds: { endpoint: `https://${BSKY}` } } } },
+    { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
+  ].map((e) => ({ did: 'did:plc:mover', cid: e.createdAt, ...e }))));
+  h.settle();
+  const deltas = h.deltas();
+  const census = [
+    { hostname: 'blacksky.app', status: 'active', accounts: 2, seq: 1 },
+    { hostname: 'eurosky.social', status: 'active', accounts: 1, seq: 1 },
+  ];
+  const asked = [];
+  const fetchImpl = async (url) => {
+    const host = new URL(url).hostname;
+    asked.push(host);
+    // blacksky lists the new account and one nobody touched in the window: that one was there before
+    if (host === 'blacksky.app') return Response.json({ repos: [{ did: 'did:plc:new' }, { did: 'did:plc:old' }] });
+    // eurosky lists only the account that moved in: it wasn't there before
+    return Response.json({ repos: [{ did: 'did:plc:mover' }] });
+  };
+  const floors = await hostsBefore({ fetchImpl, census, history: h, deltas, log: () => {} });
+  assert.deepEqual(asked.sort(), ['blacksky.app', 'eurosky.social']);
+  assert.deepEqual([...floors], [['blacksky.app', 1]]);
+  // one that won't answer is left to the walk back
+  assert.equal((await hostsBefore({ fetchImpl: async () => { throw new Error('down'); }, census, history: h, deltas, log: () => {} })).size, 0);
 });
