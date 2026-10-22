@@ -76,6 +76,8 @@ export const WRITE_TRIES = 5;
  * 30 s unless told otherwise, so it would ask again too soon and be refused again.
  */
 export const MAX_RETRY_WAIT_MS = 15 * 60_000;
+/** A dense stretch shorter than this can be left out instead of refusing the range (planRange's skipShort). */
+export const SHORT_DENSE_US = 3600e6;
 
 const iso = (second) => new Date(second * 1000).toISOString();
 const isoUs = (us) => new Date(Math.floor(us / 1000)).toISOString();
@@ -118,9 +120,12 @@ const rateOf = (s) => s.eventCount / Math.max(1, (s.maxWitnessedAt - s.minWitnes
  * from the segment list. Throws unless the whole range is live stream (no segment it
  * touches runs at a crawl's rate), with enough after it for the last minute to settle.
  * Only segments the range touches count: a crawl (or one dense segment) elsewhere in the
- * archive, before or after, doesn't refuse a range clear of it.
+ * archive, before or after, doesn't refuse a range clear of it. With `skipShort`, a dense
+ * stretch shorter than SHORT_DENSE_US (a few minutes of re-crawl or flushed backlog, like
+ * #7571 on 2026-10-22) is handed back in `skip`, as [fromUs, toUs] of witnessed time, for
+ * the caller to leave out rather than refusing the range; a long one still refuses it.
  */
-export function planRange(segments, fromSec, toSec) {
+export function planRange(segments, fromSec, toSec, { skipShort = false } = {}) {
   if (!segments.length) throw new Error('the archive lists no segments');
   const tipUs = Math.max(...segments.map((s) => s.maxWitnessedAt));
   const startUs = (fromSec - LEAD_S) * 1e6;
@@ -131,7 +136,19 @@ export function planRange(segments, fromSec, toSec) {
   if (endUs > tipUs) throw new Error(`--to must be before ${isoUs(tipUs - (MAX_EARLIER_S + LEAD_S) * 1e6)}: the archive's last sealed segment ends at ${isoUs(tipUs)}`);
   const picked = segments.filter((s) => s.maxWitnessedAt >= startUs && s.minWitnessedAt <= endUs);
   if (!picked.length) throw new Error(`the archive has no segment for ${iso(fromSec)} to ${iso(toSec)}`);
-  const crawl = picked.filter((s) => rateOf(s) >= LIVE_MAX_RATE);
+  // dense segments in runs of consecutive ones: the 2026-10-02 crawl is thousands of short
+  // segments back to back, so it's a run's length that says crawl or blip, not a segment's
+  const runs = [];
+  for (const s of segments) {
+    if (rateOf(s) < LIVE_MAX_RATE) continue;
+    const run = runs.at(-1);
+    if (run && run.at(-1).index === s.index - 1) run.push(s);
+    else runs.push([s]);
+  }
+  const short = new Set(skipShort ? runs.filter((r) => r.at(-1).maxWitnessedAt - r[0].minWitnessedAt < SHORT_DENSE_US).flat() : []);
+  const dense = picked.filter((s) => rateOf(s) >= LIVE_MAX_RATE);
+  const skip = dense.filter((s) => short.has(s));
+  const crawl = dense.filter((s) => !short.has(s));
   if (crawl.length) {
     const lastUs = Math.max(...crawl.map((s) => s.maxWitnessedAt));
     const which = crawl.slice(0, 3).map((s) => `#${s.index} ${isoUs(s.minWitnessedAt)} to ${isoUs(s.maxWitnessedAt)}, ${Math.round(rateOf(s)).toLocaleString('en-US')} events/s`).join('; ');
@@ -142,6 +159,7 @@ export function planRange(segments, fromSec, toSec) {
     beforeSeq: picked.at(-1).maxSeq,
     segments: picked.length,
     bytes: picked.reduce((a, s) => a + s.sizeBytes, 0),
+    skip: skip.map((s) => [s.minWitnessedAt, s.maxWitnessedAt, s.index]),
   };
 }
 

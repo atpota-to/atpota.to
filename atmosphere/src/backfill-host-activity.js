@@ -80,10 +80,10 @@ export function parseArgs(argv, nowMs = Date.now()) {
  * `days`, handing each to `onDay(day)` once the stream is SETTLE_S past its end (and
  * waiting for it), the last one when the events run out. Resolves with what it read.
  */
-export async function countDays({ events, days, directory, onDay }) {
+export async function countDays({ events, days, directory, onDay, skip = [] }) {
   const wanted = new Set(days);
   const open = new Map();
-  const read = { events: 0, commits: 0, counted: 0, firstMs: null, lastMs: null };
+  const read = { events: 0, commits: 0, counted: 0, skipped: 0, firstMs: null, lastMs: null };
   const lastEnd = (startOf(days.at(-1)) + DAY_S + SETTLE_S) * 1000;
   for await (const evt of events) {
     read.events++;
@@ -101,6 +101,11 @@ export async function countDays({ events, days, directory, onDay }) {
     }
     if (read.lastMs >= lastEnd) break;
     if (m.kind !== 'commit' || typeof m.did !== 'string') continue;
+    // a short dense stretch (planRange's skip): a re-crawl or a flushed backlog, not who was active then
+    if (skip.some(([from, to]) => m.time_us >= from && m.time_us <= to)) {
+      read.skipped++;
+      continue;
+    }
     read.commits++;
     const day = dayOf(ms);
     if (!wanted.has(day)) continue;
@@ -142,7 +147,8 @@ export async function backfillActivity({ args, host, apiKey, rest, Jetstream, di
   const withToday = args.days.at(-1) === today;
   const toSec = withToday ? Math.min(startOf(today) + DAY_S, tipSec) : startOf(args.days.at(-1)) + DAY_S;
   if (withToday && toSec <= startOf(today)) throw new Error(`the archive doesn't reach today yet (its last sealed segment ends ${new Date(tipSec * 1000).toISOString()}): try again later, or end at yesterday`);
-  const plan = planRange(segments, fromSec, toSec);
+  const plan = planRange(segments, fromSec, toSec, { skipShort: true });
+  for (const [from, to, index] of plan.skip) log(`leaving out segment #${index}, ${new Date(from / 1000).toISOString()} to ${new Date(to / 1000).toISOString()}: too dense for the live stream (a re-crawl or a flushed backlog), and too short to matter`);
   if (withToday) log(`today is counted up to ${new Date(toSec * 1000).toISOString()}, where the archive ends for now; the station counts the rest`);
   log(`counting who was active on independent hosts, ${args.days[0]} to ${args.days.at(-1)} (${args.days.length} day${args.days.length === 1 ? '' : 's'}): ${plan.segments} segments, about ${(plan.bytes / 1e9).toFixed(1)} GB to download${rest ? '' : ' (dry run: nothing is written)'}`);
   const started = Date.now();
@@ -177,8 +183,9 @@ export async function backfillActivity({ args, host, apiKey, rest, Jetstream, di
     days: args.days,
     directory,
     onDay,
+    skip: plan.skip,
   });
-  log(`read ${read.events.toLocaleString('en-US')} events (${read.commits.toLocaleString('en-US')} commits, ${read.counted.toLocaleString('en-US')} by accounts on independent hosts) in ${Math.round((Date.now() - started) / 60_000)} min`);
+  log(`read ${read.events.toLocaleString('en-US')} events (${read.commits.toLocaleString('en-US')} commits, ${read.counted.toLocaleString('en-US')} by accounts on independent hosts${read.skipped ? `, ${read.skipped.toLocaleString('en-US')} left out in dense stretches` : ''}) in ${Math.round((Date.now() - started) / 60_000)} min`);
   const missing = args.days.filter((day) => !written.some((w) => w.day === day));
   if (missing.length) throw new Error(`the archive ran out before ${missing.join(', ')}`);
   if (withToday && rest) {

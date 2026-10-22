@@ -81,7 +81,7 @@ const ARCHIVE = [
 test('plans just the live segments a range needs', () => {
   const plan = planRange(ARCHIVE, CRAWL_END + 6000, CRAWL_END + 12_000);
   // segment 2 holds the lead-in, 3 the hour and a half, 4 the minute or so after it
-  assert.deepEqual(plan, { afterSeq: 6_000_000, beforeSeq: 6_000_001 + 3 * 3_000_000 - 1, segments: 3, bytes: 750e6 });
+  assert.deepEqual(plan, { afterSeq: 6_000_000, beforeSeq: 6_000_001 + 3 * 3_000_000 - 1, segments: 3, bytes: 750e6, skip: [] });
   assert.equal(planRange(ARCHIVE, CRAWL_END + 6060, CRAWL_END + 11_880).segments, 1);
 });
 
@@ -95,6 +95,11 @@ test('refuses the crawl, and anything past the last sealed segment', () => {
   const later = [...ARCHIVE, segment(99, CRAWL_END + 30 * 6000, CRAWL_END + 30 * 6000 + 10, 3_000_000, 900_000_000), segment(100, CRAWL_END + 30 * 6000 + 10, CRAWL_END + 31 * 6000, 3_000_000, 903_000_000)];
   assert.equal(planRange(later, CRAWL_END + 6000, CRAWL_END + 12_000).segments, 3);
   assert.throws(() => planRange(later, CRAWL_END + 6000, CRAWL_END + 30 * 6000 + 5), /reaches into a crawl.*#99/);
+  // a short dense stretch can be left out instead (the host activity backfill does), a long one still refuses
+  assert.deepEqual(planRange(later, CRAWL_END + 6000, CRAWL_END + 30 * 6000 + 5, { skipShort: true }).skip, [[(CRAWL_END + 30 * 6000) * 1e6, (CRAWL_END + 30 * 6000 + 10) * 1e6, 99]]);
+  // a crawl of many short segments back to back is long all the same
+  const longCrawl = [...Array.from({ length: 40 }, (_, i) => segment(i, CRAWL_END - 40 * 100 + i * 100, CRAWL_END - 40 * 100 + (i + 1) * 100, 3_000_000, 1 + i * 3_000_000)), ...ARCHIVE.slice(2).map((x, i) => ({ ...x, index: 40 + i }))];
+  assert.throws(() => planRange(longCrawl, CRAWL_END - 150, CRAWL_END + 3600, { skipShort: true }), /reaches into a crawl/);
 });
 
 test('lists every page of segments, with the key', async () => {
