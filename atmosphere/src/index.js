@@ -6,6 +6,7 @@
 import { loadConfig } from './config.js';
 import { createHostWatch, createHostWriter } from './hosts.js';
 import { createJetstream, REWIND_US } from './jetstream.js';
+import { createPlcWatch } from './plc-watch.js';
 import { createLogger } from './logger.js';
 import { createServer, health } from './server.js';
 import { loadState, resumePoint, saveState } from './state.js';
@@ -42,8 +43,21 @@ if (config.supabase) {
 }
 
 // the PDS hosts on the network, from the relay's list of them (hosts.js), kept in Supabase for the trends
-const hostWriter = config.supabase ? createHostWriter({ upsert: supabaseRest(config.supabase).upsert, log }) : null;
-const hostWatch = createHostWatch({ log, relay: config.relayUrl, onCensus: hostWriter ? (census) => hostWriter.write(census) : null });
+// and, after each census, today's identity changes from the PLC directory's log (plc-watch.js)
+const rest = config.supabase ? supabaseRest(config.supabase) : null;
+const hostWriter = rest ? createHostWriter({ upsert: rest.upsert, log }) : null;
+let plcWatch = null;
+const hostWatch = createHostWatch({
+  log,
+  relay: config.relayUrl,
+  onCensus: hostWriter
+    ? async (census) => {
+        await hostWriter.write(census);
+        plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log });
+        await plcWatch.poll();
+      }
+    : null,
+});
 
 const server = createServer({ station, secret: config.secret, hosts: hostWatch.census });
 server.listen(config.port, config.host, () => log.info('listening', { host: config.host, port: config.port }));

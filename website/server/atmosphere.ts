@@ -151,7 +151,19 @@ export interface Hosts {
   diversity: { index: number; share: number; spread: number };
   /** The independent hosts with the most accounts. */
   top: Array<{ hostname: string; accounts: number }>;
+  /** Every listed host by the relay's state for it, when the station sends it. */
+  statuses?: Record<HostStatus, number>;
+  /** Independent hosts by accounts: 0, 1, up to 10, 100, 1,000, 10,000, and more (HOST_SIZE_BOUNDS). */
+  sizes?: number[];
+  /** The top-level domains with the most independent hosts. */
+  tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
 }
+
+export const HOST_STATUSES = ['active', 'idle', 'offline', 'throttled', 'banned', 'other'] as const;
+export type HostStatus = (typeof HOST_STATUSES)[number];
+/** The station's size buckets (atmosphere/src/hosts.js SIZE_BOUNDS): each holds hosts with at most this many accounts, then one for more. */
+export const HOST_SIZE_BOUNDS = [0, 1, 10, 100, 1000, 10000] as const;
+const TLD_RE = /^[a-z0-9-]{2,63}$/;
 
 /** How many hosts the reading names. */
 export const TOP_HOSTS = 10;
@@ -515,7 +527,23 @@ export function hostsOf(x: unknown): Hosts | undefined {
       .filter((h): h is Record<string, unknown> => isRecord(h) && typeof h.hostname === 'string' && HOSTNAME_RE.test(h.hostname) && isCount(h.accounts))
       .slice(0, TOP_HOSTS)
       .map((h) => ({ hostname: h.hostname as string, accounts: h.accounts as number })),
+    ...hostExtras(x),
   };
+}
+
+/** A census's statuses, sizes and top-level domains, each left out if it doesn't check out. */
+function hostExtras(x: Record<string, unknown>): Pick<Hosts, 'statuses' | 'sizes' | 'tlds'> {
+  const out: Pick<Hosts, 'statuses' | 'sizes' | 'tlds'> = {};
+  const statuses = counts(x.statuses, HOST_STATUSES);
+  if (statuses) out.statuses = statuses;
+  if (Array.isArray(x.sizes) && x.sizes.length === HOST_SIZE_BOUNDS.length + 1 && x.sizes.every(isCount)) out.sizes = x.sizes as number[];
+  if (Array.isArray(x.tlds)) {
+    out.tlds = x.tlds
+      .filter((t): t is Record<string, unknown> => isRecord(t) && typeof t.tld === 'string' && TLD_RE.test(t.tld) && isCount(t.hosts) && isCount(t.accounts))
+      .slice(0, 8)
+      .map((t) => ({ tld: t.tld as string, hosts: t.hosts as number, accounts: t.accounts as number }));
+  }
+  return out;
 }
 
 /**

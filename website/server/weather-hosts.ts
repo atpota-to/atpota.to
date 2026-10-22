@@ -14,6 +14,10 @@
  *   daily     day by day (UTC), over the range but at least a week: active hosts at the
  *             day's last census and the change from the day before, and the independent
  *             hosts that joined and left. Each is null where there's nothing to compare.
+ *   identities  day by day over the same days: new accounts by where they signed up,
+ *             own-domain handles among them, accounts moving out of Bluesky's hosts, back
+ *             in and between independent hosts, and deletions, from the PLC directory's log
+ *             (atmosphere/src/plc-watch.js; today's so far)
  *
  * Hostnames are someone else's text, so each is checked again here.
  */
@@ -45,6 +49,42 @@ export interface HostHistory {
   new: Array<{ hostname: string; accounts: number; first: string }>;
   growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
   daily: HostDay[];
+  identities: IdentityDay[];
+}
+
+/** A day of the PLC directory's log (atmosphere_plc_day). */
+export interface IdentityDay {
+  day: string;
+  ops: number;
+  createdBluesky: number;
+  createdIndependent: number;
+  /** On hosts the relay doesn't list: test servers, bulk sign-ups nobody relays. */
+  createdUnlisted: number;
+  /** New accounts on listed hosts with a handle on their own domain. */
+  createdCustomHandle: number;
+  movedOut: number;
+  movedIn: number;
+  movedBetween: number;
+  deleted: number;
+}
+
+const IDENTITY_KEYS = {
+  ops: 'ops',
+  createdBluesky: 'created_bluesky',
+  createdIndependent: 'created_independent',
+  createdUnlisted: 'created_unlisted',
+  createdCustomHandle: 'created_custom_handle',
+  movedOut: 'moved_out',
+  movedIn: 'moved_in',
+  movedBetween: 'moved_between',
+  deleted: 'deleted',
+} as const;
+
+export function toIdentityDay(x: unknown): IdentityDay | null {
+  if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
+  const c = counts(x, Object.values(IDENTITY_KEYS));
+  if (!c) return null;
+  return { day: x.day, ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day'>) };
 }
 
 export interface HostDay {
@@ -108,6 +148,7 @@ export function toHostHistory(body: unknown, bucket: HostBucket): HostHistory | 
       })
       .slice(0, TOP_HOSTS),
     daily: (Array.isArray(body.daily) ? body.daily : []).map(toHostDay).filter((d): d is HostDay => d !== null),
+    identities: (Array.isArray(body.identities) ? body.identities : []).map(toIdentityDay).filter((d): d is IdentityDay => d !== null),
   };
 }
 

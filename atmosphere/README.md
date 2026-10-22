@@ -160,6 +160,25 @@ left.
   biggest independent host and counts like any other.
 - `top`: the 10 independent hosts with the most accounts.
 
+A census reading also has every listed host by the relay's state for it (`statuses`),
+the independent hosts by size (`sizes`: how many hold 0, 1, up to 10, 100, 1,000, 10,000
+accounts, and more) and their top-level domains (`tlds`), for the website's "where the
+atmosphere lives" tiles.
+
+### Today's identity weather, live
+
+After each census the station also reads the PLC directory's log of identity changes
+([`src/plc-watch.js`](src/plc-watch.js), with [`src/plc.js`](src/plc.js)) and keeps today's
+row of `atmosphere_plc_day` up to date: new accounts by where they signed up, new accounts
+with a handle on their own domain, accounts moving out of Bluesky's hosts, back in and
+between independent hosts, and deletions (the columns are under "Backfilling hosts" below).
+It counts exactly as the backfill does. A move needs to know where the account was
+before, so an account that names an independent host (or deletes itself), and wasn't seen
+earlier today, has its history read once. The log runs at about 250,000 operations a day,
+about 250 pages, so each poll reads a few dozen; on 2026-10-22 reading the day from midnight
+took 17 s and 137 MB. After a restart it reads today again from midnight UTC. A day the
+station was down across the end of isn't finished, and the backfill rewrites it.
+
 ### Backfilling hosts from the PLC directory
 
 The relay's list only says how hosts stand now, so the days before the station kept them
@@ -418,7 +437,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 123 tests, about a second, no network
+npm test                                         # node:test, 127 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -463,6 +482,7 @@ src/replay.js      recount and rewrite minutes from Jetstream's history (repairs
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
 src/plc.js         reading the PLC directory's log of identity changes
+src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day
 src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart

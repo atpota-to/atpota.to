@@ -20,7 +20,7 @@
 
 import { renderChart, type ChartPoint } from './weather-chart';
 import { WINDOW_INFO, type Lens, type Window } from './weather-lens';
-import { compactCount, formatCount, formatIndex } from './weather';
+import { compactCount, formatCount, formatIndex, renderShare } from './weather';
 import type { Bar } from './weather-page';
 
 export type HostRange = 'day' | 'week' | 'month';
@@ -49,7 +49,24 @@ export interface HostHistory {
   growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
   /** Day by day (UTC), oldest first (server/weather-hosts.ts HostDay). */
   daily: HostDay[];
+  /** The PLC directory's log day by day, oldest first; the last is usually today, so far (server/weather-hosts.ts IdentityDay). */
+  identities: IdentityDay[];
 }
+
+export interface IdentityDay {
+  day: string;
+  ops: number;
+  createdBluesky: number;
+  createdIndependent: number;
+  createdUnlisted: number;
+  createdCustomHandle: number;
+  movedOut: number;
+  movedIn: number;
+  movedBetween: number;
+  deleted: number;
+}
+
+const IDENTITY_COUNTS = ['ops', 'createdBluesky', 'createdIndependent', 'createdUnlisted', 'createdCustomHandle', 'movedOut', 'movedIn', 'movedBetween', 'deleted'] as const;
 
 export interface HostDay {
   day: string;
@@ -101,6 +118,7 @@ export function toHostHistory(x: unknown): HostHistory | null {
     new: x.new.filter((h): h is HostHistory['new'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && typeof h.first === 'string' && DAY_RE.test(h.first)).slice(0, 10),
     growing: x.growing.filter((h): h is HostHistory['growing'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.prevAccounts)).slice(0, 10),
     daily: Array.isArray(x.daily) ? x.daily.filter(isDay) : [],
+    identities: Array.isArray(x.identities) ? x.identities.filter((d): d is IdentityDay => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && IDENTITY_COUNTS.every((k) => n(d[k]))) : [],
   };
 }
 
@@ -218,16 +236,22 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   }
 }
 
-/** Follows the lens: the range's hosts on load, on a window change, and every 5 minutes while the tab is visible. */
-export function initHostTrends(part: HTMLElement, feed: HostFeed, lens: Lens, drawBars: (list: HTMLElement, bars: Bar[]) => void): void {
+/**
+ * Follows the lens: the range's hosts on load, on a window change, and every 5 minutes
+ * while the tab is visible, into the hosts tile's trends part and the identity tiles.
+ */
+export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, drawBars: (list: HTMLElement, bars: Bar[]) => void): void {
+  const part = $(report, '[data-h-trends]');
   let asked = 0;
   const load = async (quietly = false) => {
     const range = hostRange(lens.get().window);
     const mine = ++asked;
     const history = await feed.get(range, quietly ? 295_000 : 30_000);
     if (mine !== asked) return; // the lens moved on
-    if (history) renderHostTrends(part, history.hosts, range, drawBars);
-    else if (!quietly) part.hidden = true;
+    if (history) {
+      if (part) renderHostTrends(part, history.hosts, range, drawBars);
+      renderIdentities(report, history.hosts?.identities ?? []);
+    } else if (!quietly && part) part.hidden = true;
   };
   lens.onChange((l, was) => {
     if (hostRange(l.window) !== hostRange(was.window)) void load();
@@ -239,4 +263,97 @@ export function initHostTrends(part: HTMLElement, feed: HostFeed, lens: Lens, dr
       tick();
     }, 300_000);
   tick();
+}
+
+// ---------- the identity tiles: new arrivals, migration winds, air quality ----------
+
+/** "today so far", "yesterday" or the day, for the identity tiles' asides. */
+export function identityDayWords(day: string, now = Date.now()): string {
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (day === today) return 'today so far (utc)';
+  if (day === new Date(now - 86_400_000).toISOString().slice(0, 10)) return 'yesterday (utc)';
+  return dayWords(day);
+}
+
+/** How smoggy a day was: the share of its sign-ups that went to hosts no relay carries. */
+export const SMOG_LEVELS = [
+  ['thick smog', 90],
+  ['smoggy', 50],
+  ['hazy', 10],
+] as const;
+
+export function smogOf(d: IdentityDay): { share: number; level: string } {
+  const all = d.createdBluesky + d.createdIndependent + d.createdUnlisted;
+  const share = all > 0 ? (d.createdUnlisted / all) * 100 : 0;
+  return { share, level: SMOG_LEVELS.find(([, from]) => share >= from)?.[0] ?? 'clear' };
+}
+
+/** Which way the migration wind blows: out of Bluesky's hosts, back in, or calm. */
+export function compassOf(out: number, back: number): string {
+  if (out === 0 && back === 0) return 'still air: nobody moved between bluesky and an independent host';
+  if (out === back) return `calm: ${formatCount(out)} each way`;
+  return out > back ? `blowing out of bluesky, ${formatCount(out)} to ${formatCount(back)}` : `blowing back to bluesky, ${formatCount(back)} to ${formatCount(out)}`;
+}
+
+const plural = (v: number, one: string, many = `${one}s`) => `${formatCount(v)} ${v === 1 ? one : many}`;
+
+/** The three identity tiles from the PLC directory's days; each stays hidden without a day to show. */
+export function renderIdentities(report: ParentNode, days: IdentityDay[], now = Date.now()): void {
+  const tiles = ['[data-p-arrivals]', '[data-p-winds]', '[data-p-smog]'].map((sel) => $(report, sel));
+  const d = days[days.length - 1];
+  for (const tile of tiles) if (tile) tile.hidden = !d;
+  if (!d) return;
+  for (const el of Array.from(report.querySelectorAll<HTMLElement>('[data-p-day]'))) el.textContent = identityDayWords(d.day, now);
+
+  // new arrivals: on listed hosts only; unlisted sign-ups are the smog
+  const listed = d.createdBluesky + d.createdIndependent;
+  setText(report, '[data-p-signups]', formatCount(listed));
+  setText(report, '[data-p-bsky]', formatCount(d.createdBluesky));
+  setText(report, '[data-p-indep]', formatCount(d.createdIndependent));
+  renderShare($(report, '[data-p-bar-bsky]'), $(report, '[data-p-bar-else]'), listed > 0 ? (d.createdIndependent / listed) * 100 : 0);
+  setText(
+    report,
+    '[data-p-own]',
+    listed > 0
+      ? `${formatIndex((d.createdIndependent / listed) * 100)}% signed up somewhere other than bluesky, and ${plural(d.createdCustomHandle, 'new account')} started out with a handle on their own domain.`
+      : 'nobody has signed up yet.',
+  );
+  const card = $(report, '[data-p-arrivals-card]');
+  const chart = $(report, '[data-p-chart="arrivals"]');
+  if (card) card.hidden = days.length < 2;
+  if (chart && days.length >= 2) {
+    const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
+    renderChart(chart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.createdIndependent })), { label: 'new accounts on independent hosts each day', color: 'var(--weather-else)', format: formatCount, formatTick: compactCount, formatTime: dayFmt, stepMs: 86_400_000 });
+  }
+
+  // migration winds
+  setText(report, '[data-p-compass]', compassOf(d.movedOut, d.movedIn));
+  setText(report, '[data-p-out]', formatCount(d.movedOut));
+  setText(report, '[data-p-in]', formatCount(d.movedIn));
+  setText(report, '[data-p-between]', formatCount(d.movedBetween));
+  const week = days.slice(-7);
+  const sum = (k: 'movedOut' | 'movedIn') => week.reduce((t, x) => t + x[k], 0);
+  const windsCard = $(report, '[data-p-winds-card]');
+  const windsChart = $(report, '[data-p-chart="winds"]');
+  if (windsCard) windsCard.hidden = days.length < 2;
+  if (windsChart && days.length >= 2) {
+    const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
+    renderChart(windsChart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.movedOut })), { label: 'accounts moving out of bluesky each day', color: 'var(--weather-bsky)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
+  }
+  setText(report, '[data-p-week]', week.length > 1 ? `over the last ${week.length} days: ${plural(sum('movedOut'), 'account')} moved out, ${formatCount(sum('movedIn'))} moved back.` : '');
+
+  // air quality
+  const smog = smogOf(d);
+  setText(report, '[data-p-smog-level]', smog.level);
+  setText(report, '[data-p-smog-words]', `${formatIndex(smog.share)}% of sign-ups went to hosts no relay carries`);
+  setText(
+    report,
+    '[data-p-smog-line]',
+    d.createdUnlisted === 0
+      ? 'every new account went somewhere the relay listens. clear skies.'
+      : listed > 0
+        ? `for every account that signed up where the relay listens, ${formatCount(Math.round(d.createdUnlisted / listed))} signed up somewhere it doesn't: test servers, typos, and bulk sign-ups nobody relays (${compactCount(d.createdUnlisted)} in all).`
+        : `${compactCount(d.createdUnlisted)} sign-ups on hosts nobody relays, and none anywhere else.`,
+  );
+  setText(report, '[data-p-deleted]', `${plural(d.deleted, 'account')} deleted ${d.deleted === 1 ? 'itself' : 'themselves'}.`);
 }

@@ -38,6 +38,15 @@ export const MAX_PAGES = 50;
 export const PAGE_TIMEOUT_MS = 15_000;
 /** How many independent hosts a reading names. */
 export const TOP_HOSTS = 10;
+/**
+ * Independent hosts by how many accounts they hold: none, one (someone's own), up to 10,
+ * 100, 1,000, 10,000, and more. `sizes` counts the hosts in each.
+ */
+export const SIZE_BOUNDS = [0, 1, 10, 100, 1000, 10000];
+/** How many top-level domains a reading names. */
+export const TOP_TLDS = 8;
+/** The relay's states for a host, in the order a reading lists them. */
+export const STATUSES = ['active', 'idle', 'offline', 'throttled', 'banned'];
 
 /** Bluesky's own PDS hosts. */
 const BLUESKY_HOST_RE = /\.host\.bsky\.network$/;
@@ -160,7 +169,41 @@ export function summarizeHosts(hosts, { measuredAt, writing = () => false, writi
       .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1))
       .slice(0, TOP_HOSTS)
       .map((h) => ({ hostname: h.hostname, accounts: h.accounts })),
+    statuses: statusesOf(hosts),
+    sizes: sizesOf(independent),
+    tlds: tldsOf(independent),
   };
+}
+
+/** Every listed host by the relay's state for it ({ active, idle, offline, throttled, banned, other }). */
+export function statusesOf(hosts) {
+  const out = Object.fromEntries([...STATUSES, 'other'].map((k) => [k, 0]));
+  for (const h of hosts) out[STATUSES.includes(h.status) ? h.status : 'other']++;
+  return out;
+}
+
+/** How many hosts hold at most each of SIZE_BOUNDS accounts (and more than the one before), then more than the last. */
+export function sizesOf(hosts) {
+  const out = new Array(SIZE_BOUNDS.length + 1).fill(0);
+  for (const h of hosts) {
+    const i = SIZE_BOUNDS.findIndex((max) => h.accounts <= max);
+    out[i < 0 ? SIZE_BOUNDS.length : i]++;
+  }
+  return out;
+}
+
+/** The top-level domains with the most hosts: [{ tld, hosts, accounts }]. */
+export function tldsOf(hosts) {
+  const by = new Map();
+  for (const h of hosts) {
+    if (!isHostname(h.hostname)) continue;
+    const tld = h.hostname.slice(h.hostname.lastIndexOf('.') + 1);
+    const t = by.get(tld) ?? { tld, hosts: 0, accounts: 0 };
+    t.hosts++;
+    t.accounts += h.accounts;
+    by.set(tld, t);
+  }
+  return [...by.values()].sort((a, b) => b.hosts - a.hosts || b.accounts - a.accounts || (a.tld < b.tld ? -1 : 1)).slice(0, TOP_TLDS);
 }
 
 /** Census rows waiting while Supabase is down: a day of them. Past that the oldest go. */

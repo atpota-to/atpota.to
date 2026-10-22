@@ -47,6 +47,10 @@ const HOSTS = {
     { day: '2026-10-23', active: '1885', change: -2, joined: 4, left: 6, estimated: false },
     { day: 'tomorrow', active: 1 },
   ],
+  identities: [
+    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1 },
+    { day: '2026-10-23', ops: 'lots' },
+  ],
 };
 
 type Rpc = Record<string, () => Response>;
@@ -130,6 +134,9 @@ describe('weather history', () => {
       daily: [
         { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
+      ],
+      identities: [
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1 },
       ],
     });
   });

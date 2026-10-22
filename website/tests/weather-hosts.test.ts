@@ -2,8 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { hostBars, hostRange, newHostsWords, renderHostTrends, signed, toHostHistory, type HostHistory } from '../src/scripts/weather-hosts.js';
-import { fetchHistory, renderBars } from '../src/scripts/weather-page.js';
+import { compassOf, hostBars, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { fetchHistory, renderBars, renderHostCensus } from '../src/scripts/weather-page.js';
 
 // Where accounts live, over time: the hosts tile's charts and lists.
 
@@ -29,7 +29,10 @@ const HOSTS: HostHistory = {
     { day: '2026-10-26', active: 1884, change: -6, joined: 1, left: 7 },
     { day: '2026-10-29', active: 1886, change: 0, joined: 0, left: 0 },
   ],
+  identities: [],
 };
+
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, ...extra });
 
 let part: HTMLElement;
 const bars = (list: HTMLElement, b: Parameters<typeof renderBars>[1]) => renderBars(list, b, undefined);
@@ -119,5 +122,86 @@ describe('where accounts live, over time', () => {
     expect(newHostsWords({ ...HOSTS, newHosts: 0 }, 'day')).toBe('no new independent hosts in the last 24 hours.');
     expect(newHostsWords({ ...HOSTS, newHosts: 1 }, 'day')).toBe('1 new independent host in the last 24 hours.');
     expect(hostBars(HOSTS.growing, true)).toEqual([{ label: 'blacksky.app', perSecond: 534, count: 534, value: '+534' }]);
+  });
+});
+
+describe('where the atmosphere lives: the identity tiles', () => {
+  let report: HTMLElement;
+  beforeEach(() => {
+    report = document.querySelector<HTMLElement>('[data-weather-report]')!;
+  });
+  const text = (sel: string) => report.querySelector(sel)!.textContent;
+
+  it('stays hidden without a day, and fills all three from the last one', () => {
+    renderIdentities(report, [], NOW);
+    expect(report.querySelector<HTMLElement>('[data-p-arrivals]')!.hidden).toBe(true);
+    renderIdentities(report, [idDay('2026-10-28', { movedOut: 30, movedIn: 2 }), idDay('2026-10-29')], NOW);
+    for (const sel of ['[data-p-arrivals]', '[data-p-winds]', '[data-p-smog]']) expect(report.querySelector<HTMLElement>(sel)!.hidden).toBe(false);
+    expect(text('[data-p-day]')).toBe('today so far (utc)');
+    expect(text('[data-p-signups]')).toBe('14,329');
+    expect(text('[data-p-indep]')).toBe('4,383');
+    expect(text('[data-p-own]')).toBe('31% signed up somewhere other than bluesky, and 122 new accounts started out with a handle on their own domain.');
+    expect(report.querySelector('[data-p-chart="arrivals"] svg')).not.toBeNull();
+    expect(text('[data-p-compass]')).toBe('blowing out of bluesky, 19 to 0');
+    expect(report.querySelector('[data-p-chart="winds"] svg')).not.toBeNull();
+    expect(text('[data-p-week]')).toBe('over the last 2 days: 49 accounts moved out, 2 moved back.');
+    expect(text('[data-p-smog-level]')).toBe('thick smog');
+    expect(text('[data-p-smog-line]')).toMatch(/^for every account that signed up where the relay listens, 11 signed up somewhere it doesn't/);
+    expect(text('[data-p-deleted]')).toBe('1 account deleted itself.');
+  });
+
+  it('keeps the chart back with only one day', () => {
+    renderIdentities(report, [idDay('2026-10-29')], NOW);
+    expect(report.querySelector<HTMLElement>('[data-p-arrivals-card]')!.hidden).toBe(true);
+  });
+
+  it('reads the wind and the air in words', () => {
+    expect(compassOf(0, 0)).toMatch(/^still air/);
+    expect(compassOf(3, 3)).toBe('calm: 3 each way');
+    expect(compassOf(1, 4)).toBe('blowing back to bluesky, 4 to 1');
+    expect(smogOf(idDay('d', { createdUnlisted: 0 })).level).toBe('clear');
+    expect(smogOf(idDay('d', { createdUnlisted: 2000 })).level).toBe('hazy');
+    expect(smogOf(idDay('d', { createdBluesky: 0, createdIndependent: 0, createdUnlisted: 0 })).share).toBe(0);
+    expect(identityDayWords('2026-10-28', NOW)).toBe('yesterday (utc)');
+  });
+
+  it('reads identity days from the history, dropping ones that do not check out', () => {
+    const h = toHostHistory({ ...HOSTS, identities: [idDay('2026-10-29'), { day: '2026-10-30', ops: 'lots' }] })!;
+    expect(h.identities).toHaveLength(1);
+    expect(toHostHistory({ ...HOSTS, identities: undefined })!.identities).toEqual([]);
+  });
+});
+
+describe('where the atmosphere lives: the census tiles', () => {
+  const census = {
+    measuredAt: '2026-10-29T11:50:00.000Z',
+    listed: 6442,
+    active: 1888,
+    bluesky: 90,
+    independent: 1798,
+    writing: null,
+    accounts: { bluesky: 23767508, independent: 363866 },
+    diversity: { index: 7.48, share: 1.51, spread: 24.54 },
+    top: [],
+  };
+
+  it('stays hidden without the census extras, and draws sizes, domains and the roll call with them', () => {
+    const report = document.querySelector<HTMLElement>('[data-weather-report]')!;
+    renderHostCensus(report, census);
+    expect(report.querySelector<HTMLElement>('[data-p-sizes]')!.hidden).toBe(true);
+    renderHostCensus(report, {
+      ...census,
+      statuses: { active: 1888, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 },
+      sizes: [8, 764, 737, 204, 58, 18, 9],
+      tlds: [{ tld: 'com', hosts: 257, accounts: 7455 }, { tld: 'social', hosts: 110, accounts: 53643 }],
+    });
+    const labels = (sel: string) => [...report.querySelectorAll(`${sel} .weather-bars__label`)].map((el) => el.textContent);
+    expect(labels('[data-p-size-list]')).toEqual(['just one person', 'a household (2 to 10)', 'a village (11 to 100)', 'a town (101 to 1,000)', 'a city (1,001 to 10,000)', 'a metropolis (10,000+)']);
+    expect(report.querySelector('[data-p-solo]')!.textContent).toBe('764 independent hosts hold just one account: someone running their own.');
+    expect(labels('[data-p-tld-list]')).toEqual(['.com', '.social']);
+    expect(report.querySelector('[data-p-tld-lede]')!.textContent).toBe('.com is the most popular ending, on 257 of 1,798 independent hosts.');
+    // throttled (0) is left out
+    expect(labels('[data-p-roll-list]')).toEqual(['active', 'idle', 'offline', 'banned']);
+    expect(report.querySelector<HTMLElement>('[data-p-rollcall]')!.hidden).toBe(false);
   });
 });

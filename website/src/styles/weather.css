@@ -1711,6 +1711,98 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   }
 }
 
+/* ---------- where the atmosphere lives: the pds tiles (weather-page.ts renderHostCensus, weather-hosts.ts renderIdentities) ---------- */
+
+.weather-pds__now {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.weather-pds__big {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-pds__words {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.weather-pds__line {
+  color: var(--text-soft);
+}
+
+.weather-pds__lede {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.weather-pds__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.weather-pds__stats--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weather-pds__stats div {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.weather-pds__stats dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.weather-pds__stats dd {
+  margin: 2px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The wind's direction in words, big enough to read as the tile's headline. */
+.weather-winds__compass {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+/* A pds tile's last note sits at the bottom when its row is taller than it. */
+.weather-pds > .weather-tile__note:last-child {
+  margin-top: auto;
+}
+
+/* The air quality's level is a word, not a number: a little smaller than the other big numbers. */
+.weather-smog .weather-pds__big {
+  font-size: 40px;
+}
+
+@media (max-width: 640px) {
+  .weather-pds__stats--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .weather-pds__big {
+    font-size: 40px;
+  }
+}
+
 /* ---------- trends (weather-page.ts initTrends, weather-chart.ts) ---------- */
 
 .weather-trends {

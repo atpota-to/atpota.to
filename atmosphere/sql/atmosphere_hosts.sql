@@ -89,6 +89,8 @@ create policy "anyone can read" on public.atmosphere_plc_day for select using (t
 --            independent hosts joined (active that day, not the day before) and left (the
 --            other way round). Joined and left are null on the first day kept, and
 --            `estimated` marks a day from the backfill (src/backfill-hosts.js).
+--   identities  atmosphere_plc_day's rows over the same days: each day's sign-ups, moves
+--            and deletions from the PLC directory's log (today's so far).
 
 create or replace function public.atmosphere_host_trends(since timestamptz, bucket text, max_hosts integer default 10)
 returns jsonb
@@ -174,7 +176,9 @@ as $$
         from (select * from fresh order by accounts desc, hostname limit max_hosts) x), '[]'::jsonb),
     'growing', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'prevAccounts', x.prev) order by x.accounts - x.prev desc, x.hostname)
         from (select * from grew order by accounts - prev desc, hostname limit max_hosts) x), '[]'::jsonb),
-    'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_, 'estimated', d.estimated) order by d.day) from daily d), '[]'::jsonb)
+    'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_, 'estimated', d.estimated) order by d.day) from daily d), '[]'::jsonb),
+    'identities', coalesce((select jsonb_agg(to_jsonb(p) order by p.day) from public.atmosphere_plc_day p
+        where p.day >= (least(since, now() - interval '6 days') at time zone 'UTC')::date), '[]'::jsonb)
   );
 $$;
 revoke all on function public.atmosphere_host_trends(timestamptz, text, integer) from public;
