@@ -578,6 +578,12 @@ When the poll picks up an operator DM, Poe reacts to it with 👀 (`SEEN_REACTIO
 "seen, working on it" shows before the answer does. It is best effort: a reaction
 that fails is logged and never holds up the reply, and a message request gets none,
 because the convo is only accepted when the reply goes out.
+
+A chat message holds 1000 graphemes and 10000 bytes. A longer reply is sent as up to
+`DM_MAX_PARTS` (4) messages in a row, cut at paragraph breaks, then sentences, then words
+(`splitDmText`); the first answers the operator's message and the rest follow it, and past
+the fourth the reply ends with an ellipsis. `parts_sent` records how far a reply got: a part
+that fails leaves the row in `sending` for review, like a single send, and is never resent.
 An operator-confirmed fact about Poe may go into shared self memory only if it
 is safe to recall in public conversation. Prefix `style:` to store a private,
 standing voice note in droplet SQLite; future public Bluesky turns receive up
