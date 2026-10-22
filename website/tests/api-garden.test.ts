@@ -135,6 +135,7 @@ describe('patch records', () => {
     expect(toOwner(view, did(2))).toBeNull();
     expect(toOwner({ ...view, avatar: 'http://cdn.bsky.app/a.jpg', displayName: '' }, did(1))).toMatchObject({ avatar: null, displayName: null });
     expect(toOwner({ ...view, labels: [{ val: '!hide' }] }, did(1))).toBeNull();
+    expect(toOwner({ ...view, labels: [{ val: '!no-unauthenticated', src: did(1) }] }, did(1))).toMatchObject({ did: did(1) });
     expect(toOwner({ ...view, handle: 'handle.invalid' }, did(1))).toMatchObject({ handle: did(1) });
   });
 
