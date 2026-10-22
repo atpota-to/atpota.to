@@ -401,6 +401,8 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   const value = byAcct ? sky.accounts!.active : sky.records ? amountIn(sky.records.perSecond, lens.unit, sky.seconds) : sky.reading ? amountIn(recordsPerSecond(sky.reading), lens.unit, sky.seconds) : undefined;
   if (value === undefined) setText(report, '[data-r-records]', '–');
   else count(report, '[data-r-records]', value, bigAmount);
+  // the first number lands: no more bar in its place (weather.css)
+  $(report, '[data-r-records]')?.removeAttribute('data-waiting');
   const unit = $<HTMLButtonElement>(report, '[data-r-unit]');
   if (unit) {
     // by accounts the line under the number already says "accounts"
@@ -416,6 +418,7 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   else setText(report, '[data-r-cond]', `${cond}${sky.coverage}`);
   const spark = $(report, '[data-r-spark]');
   if (!spark) return;
+  spark.removeAttribute('data-waiting');
   if (sky.reading) {
     if (byAcct) spark.hidden = true;
     else renderSpark(spark, sky.reading);
@@ -436,6 +439,8 @@ export function renderHeadlineChange(report: HTMLElement, changes?: Record<Chang
   if (changes !== undefined) headlineChanges.set(report, changes);
   const el = $(report, '[data-r-headline-change]');
   if (!el) return;
+  // its pill stays until the "last hour" tile has its answer, or gives up on it (weather.css)
+  if (changes !== undefined && $(report, '[data-s-tile]')?.dataset.state !== 'loading') el.removeAttribute('data-waiting');
   const key = report.dataset.headline === 'active' ? 'active' : 'creates';
   chip(el, headlineChanges.get(report)?.[key] ?? null);
 }

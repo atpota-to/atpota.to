@@ -528,6 +528,75 @@ html[data-theme="dark"] .weather-hero {
   margin-top: 14px;
 }
 
+/* Until each comes (data-waiting, which weather-page.ts takes off): a bar where the number
+   goes, a pill where its chip goes and a faint line where the sparkline goes, each the size
+   of what's coming, so the header is already about as tall as it'll be. Whatever's left
+   over the header eases away (weather-hero.ts smoothHeight, which clips it while it does).
+   Only with JS, and not once the report has given up: then there's nothing coming. */
+.weather-hero[data-easing] {
+  overflow: clip;
+}
+
+html.js .weather:not([data-state="error"]) .weather-hero [data-r-records][data-waiting] {
+  display: inline-block;
+  width: 2.3em;
+  height: 0.78em;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--weather-sky-text) 14%, transparent);
+  color: transparent;
+}
+
+html.js .weather:not([data-state="error"]) .weather-hero .weather-hero__change[data-waiting]:empty {
+  display: block;
+  width: 64px;
+  height: 21px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--weather-sky-text) 14%, transparent);
+}
+
+html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-waiting]:empty::before {
+  content: "";
+  display: block;
+  height: 100%;
+  background: currentColor;
+  opacity: 0.2;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 36' preserveAspectRatio='none'%3E%3Cpath d='M0 22 C20 14 40 14 60 20 S100 28 120 18 S160 10 180 18 S220 24 240 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 36' preserveAspectRatio='none'%3E%3Cpath d='M0 22 C20 14 40 14 60 20 S100 28 120 18 S160 10 180 18 S220 24 240 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.js .weather:not([data-state="error"]) .weather-hero :is([data-r-records], .weather-hero__change:empty)[data-waiting],
+  html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-waiting]:empty::before {
+    animation: weather-hero-wait 1.4s ease-in-out infinite alternate;
+  }
+
+  /* and what comes in place of them fades up */
+  .weather-hero [data-r-records]:not([data-waiting]),
+  .weather-hero .weather-hero__change[data-trend],
+  .weather-hero .weather-spark svg {
+    animation: weather-hero-in 0.5s var(--ease-out) both;
+  }
+}
+
+@keyframes weather-hero-wait {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@keyframes weather-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (forced-colors: active) {
+  html.js .weather:not([data-state="error"]) .weather-hero :is([data-r-records], .weather-hero__change:empty)[data-waiting] {
+    border: 1px solid CanvasText;
+  }
+}
+
 /* ---------- the almanac: today so far, new in the atmosphere (weather-almanac.ts) ---------- */
 
 /* The barometer beside the headline; the detail runs under both. */

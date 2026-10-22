@@ -19,7 +19,7 @@
 
 import { say, type PoeLine, type PoeSpeech } from '../poe/say';
 import type { MascotFace } from './mascot';
-import { motionOK } from './roll';
+import { motionOK, ROLL_EASE, ROLL_MS } from './roll';
 import { seasonOf, timeOfDay, type Season, type TimeOfDay } from './sky-clock';
 import { getTheme } from './theme';
 import type { Condition } from './weather';
@@ -212,6 +212,46 @@ export function initHero(hero: HTMLElement, opts: SunOptions = {}): void {
   win?.setInterval(() => setHeroTime(hero), 60_000);
   win?.addEventListener('theme:change', () => setHeroTime(hero));
   bindSun(hero, opts);
+  const reading = hero.querySelector<HTMLElement>('.weather-hero__reading');
+  if (reading) smoothHeight(hero, reading);
+}
+
+/**
+ * Eases the header to its new height whenever the reading under the sun grows or shrinks
+ * (the first numbers landing, a chip coming or going, the line hiding), instead of the
+ * tiles below jumping. A ResizeObserver hears it after layout and before paint, so the
+ * first frame still shows the old height. A change of width (the window resizing) just
+ * lets the header be. data-easing on the header clips it while it eases.
+ */
+export function smoothHeight(hero: HTMLElement, reading: HTMLElement): void {
+  if (typeof ResizeObserver !== 'function') return;
+  let height = hero.offsetHeight;
+  let width = hero.offsetWidth;
+  let easing: Animation | null = null;
+  new ResizeObserver(() => {
+    // where it is now, mid-ease or not, then where it's going
+    const from = hero.getBoundingClientRect().height;
+    easing?.cancel();
+    delete hero.dataset.easing;
+    const to = hero.offsetHeight;
+    const resized = hero.offsetWidth !== width;
+    width = hero.offsetWidth;
+    const before = easing ? from : height;
+    height = to;
+    easing = null;
+    if (resized || Math.abs(before - to) < 1 || !motionOK() || typeof hero.animate !== 'function') return;
+    hero.dataset.easing = '';
+    const ease = hero.animate([{ height: `${before}px` }, { height: `${to}px` }], { duration: ROLL_MS, easing: ROLL_EASE });
+    easing = ease;
+    ease.finished.then(
+      () => {
+        if (easing !== ease) return;
+        easing = null;
+        delete hero.dataset.easing;
+      },
+      () => {},
+    );
+  }).observe(reading);
 }
 
 /** The air for a reading, in the reader's season now. */
