@@ -66,6 +66,34 @@ export function describeShared(embed) {
   return `(attached to this message: the post https://bsky.app/profile/${who}/post/${post[2]}, ${uri})`;
 }
 
+try { db.exec('ALTER TABLE operator_dm ADD COLUMN seen_reaction TEXT'); }
+catch { /* already added */ }
+
+// Put on a DM as soon as it is picked up and taken off once the reply is sent,
+// so the operator can tell "seen, working on it" from "not seen yet".
+export const SEEN_REACTION = '👀';
+
+/** React to a DM Poe has picked up. Best effort: a reply never waits on it. */
+async function markSeen(api, convoId, messageId) {
+  if (!api.addDmReaction) return;
+  try {
+    await api.addDmReaction(convoId, messageId, SEEN_REACTION);
+    db.prepare('UPDATE operator_dm SET seen_reaction = ? WHERE message_id = ?').run(SEEN_REACTION, messageId);
+  } catch (err) {
+    logger.warn('operator DM seen reaction failed', { messageId, error: err.message });
+  }
+}
+
+async function clearSeen(api, row) {
+  if (!row.seen_reaction || !api.removeDmReaction) return;
+  try {
+    await api.removeDmReaction(row.convo_id, row.message_id, row.seen_reaction);
+    db.prepare('UPDATE operator_dm SET seen_reaction = NULL WHERE message_id = ?').run(row.message_id);
+  } catch (err) {
+    logger.warn('operator DM seen reaction not removed', { messageId: row.message_id, error: err.message });
+  }
+}
+
 export function baseline() {
   // First enablement deliberately ignores old inbox messages, even across restarts.
   db.prepare('INSERT OR IGNORE INTO operator_dm_state(id, started_at) VALUES (1, ?)').run(nowIso());
@@ -133,6 +161,7 @@ export async function deliverDm(row, api = chat) {
     db.prepare(`UPDATE operator_dm SET status = 'sent', reply_id = ?, updated_at = ?
       WHERE message_id = ?`).run(reply.id, nowIso(), row.message_id);
     logger.info('operator DM delivered', { messageId: row.message_id });
+    await clearSeen(api, db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id));
   } catch (err) {
     logger.error('operator DM send uncertain; manual review required', {
       messageId: row.message_id, error: err.message,
@@ -214,6 +243,9 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
             // the full URL only in the facet.
             db.prepare('UPDATE operator_dm SET draft_text = ?, shared_text = ? WHERE message_id = ?')
               .run(expandLinks(message.text, message.facets), describeShared(message.embed), message.id);
+            // A request convo isn't accepted until the reply goes out, and
+            // reacting in one would accept it early.
+            if (source !== 'requests') await markSeen(api, convo.id, message.id);
           }
         }
         msgCursor = messages.cursor;

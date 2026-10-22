@@ -572,6 +572,12 @@ An ordinary operator DM gets a private answer. Poe can selectively save private
 notes about the operator and memorable moments from DMs without a command prefix.
 These notes are recalled only in operator DMs and never become public person notes
 or lessons. Poe can also recall its public-conversation life journal in DMs.
+
+When the poll picks up an operator DM, Poe reacts to it with 👀 (`SEEN_REACTION`,
+`chat.bsky.convo.addReaction`) and takes the reaction off once its reply is sent, so
+"seen, working on it" shows before the answer does. It is best effort: a reaction
+that fails is logged and never holds up the reply, and a message request gets none,
+because the convo is only accepted when the reply goes out.
 An operator-confirmed fact about Poe may go into shared self memory only if it
 is safe to recall in public conversation. Prefix `style:` to store a private,
 standing voice note in droplet SQLite; future public Bluesky turns receive up
