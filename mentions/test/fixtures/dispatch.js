@@ -31,9 +31,18 @@ export function documentValue(rkey, extra = {}) {
   };
 }
 
+export const publicationRecord = (url = 'https://poe.leaflet.pub') => ({
+  uri: PUBLICATION, cid: 'bafypublication',
+  value: { $type: 'site.standard.publication', url, name: "poe's atmosphere dispatch" },
+});
+
 let seq = 0;
-/** An in-memory PDS and web, standing in for every network call announce makes. */
-export function network(rkey, { value = documentValue(rkey), page, publisher = true } = {}) {
+/**
+ * An in-memory PDS and web, standing in for every network call announce makes.
+ * `publication` is the dispatch's publication record: null when it is missing,
+ * a function to make reading it throw.
+ */
+export function network(rkey, { value = documentValue(rkey), page, publisher = true, publication = publicationRecord() } = {}) {
   const s = {
     docs: new Map([[rkey, { uri: docUri(rkey), cid: `bafydoc${++seq}`, value }]]),
     posts: new Map(), created: [], puts: [], uploads: [], images: [], pageUrls: [],
@@ -43,6 +52,7 @@ export function network(rkey, { value = documentValue(rkey), page, publisher = t
   const deps = {
     listDocuments: async () => [...s.docs.values()].map(clone),
     getDocument: async (k) => clone(s.docs.get(k)),
+    getPublication: async () => (typeof publication === 'function' ? publication() : clone(publication)),
     getOwnPost: async (k) => clone(s.posts.get(k)),
     createPost: async (record, k) => {
       assert.ok(k, 'posts under a stored key');

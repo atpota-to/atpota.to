@@ -8,7 +8,7 @@ import {
 } from '../src/dispatch.js';
 import { pollOperatorDms, settleCommands } from '../src/operator-dm.js';
 import { graphemeLength, shortenLinks } from '../src/richtext.js';
-import { docUri, pageFor, documentValue, network } from './fixtures/dispatch.js';
+import { docUri, pageFor, documentValue, network, publicationRecord } from './fixtures/dispatch.js';
 
 const POE = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
 const PUBLISHER = config.dispatch.publisherDid;
@@ -114,7 +114,11 @@ test('announce posts once, links the issue with swapRecord, and keeps every othe
   assert.equal(record.text, `${original.value.title}\n\n${original.value.description}`);
   assert.deepEqual(record.langs, ['en']);
   assert.equal(record.embed.$type, 'app.bsky.embed.external');
-  assert.equal(record.embed.external.uri, `https://atpota.to/blog/${k}`);
+  assert.equal(record.embed.external.uri, `https://poe.leaflet.pub/${k}`);
+  assert.deepEqual(record.embed.external.associatedRefs, [
+    { $type: 'com.atproto.repo.strongRef', uri: docUri(k), cid: original.cid },
+    { $type: 'com.atproto.repo.strongRef', uri: PUBLICATION, cid: 'bafypublication' },
+  ]);
   assert.equal(record.embed.external.title, original.value.title);
   assert.equal(record.embed.external.description, original.value.description);
   assert.equal(record.embed.external.thumb.ref.$link, 'bafkthumb');
@@ -210,6 +214,31 @@ test('buildAnnouncement links the blog URL too, and nothing else', () => {
   });
   assert.deepEqual(record.facets.map((f) => f.features[0].uri), ['https://atpota.to/blog/x']);
   assert.equal(record.embed.external.thumb, undefined);
+});
+
+test('the card links the publication url joined to the document path, which is what Bluesky checks', async () => {
+  const k = 'issuecardurl';
+  const { s, deps } = network(k, { publication: publicationRecord('https://atpota.to/blog/') });
+  await announce({ rkey: k }, deps);
+  assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${k}`);
+  assert.equal(s.created[0].record.embed.external.associatedRefs.length, 2);
+  assert.ok(!s.created[0].record.facets, 'the card url is not a facet unless the text has it');
+});
+
+test('without the publication record the post still goes out, with a plain card on the page', async () => {
+  for (const [k, publication, why] of [
+    ['issuenopub01', null, /the publication has no url/],
+    ['issuenopub02', () => { throw new Error('getRecord failed: 502'); }, /getRecord failed: 502/],
+    ['issuenopub03', publicationRecord('http://poe.leaflet.pub'), /the publication has no url/],
+  ]) {
+    const { s, deps } = network(k, { publication });
+    const reply = await announce({ rkey: k }, deps);
+    assert.equal(s.created.length, 1, k);
+    assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${k}`, k);
+    assert.equal(s.created[0].record.embed.external.associatedRefs, undefined, k);
+    assert.match(reply, /the card is a plain link card/, k);
+    assert.match(reply, why, k);
+  }
 });
 
 test('with no atpota.to credential it posts and DMs the manual link command', async () => {
@@ -347,7 +376,7 @@ test('announce latest over DM picks the newest issue, says which, and stores it'
   await pollOperatorDms({ api: inbox([message], sent), fetcher: async () => { throw new Error('agent'); }, dispatchDeps: deps });
   await settleCommands();
   assert.equal(s.created.length, 1);
-  assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${k}`);
+  assert.equal(s.created[0].record.embed.external.uri, `https://poe.leaflet.pub/${k}`);
   assert.match(sent[0].text, /^the latest issue is "attie sites, spaces near beta, and a brand new cow"\.\n\nannounced/);
   const cmd = db.prepare('SELECT kind, document_rkey FROM dispatch_command WHERE message_id = ?').get(message.id);
   assert.deepEqual({ ...cmd }, { kind: 'announce_latest', document_rkey: k });

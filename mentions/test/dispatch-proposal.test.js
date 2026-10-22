@@ -161,7 +161,7 @@ test('ask in plain words, see the exact post, say yes, and that exact post goes 
   assert.equal(c.sent.length, 1);
   const shown = c.sent[0].text;
   assert.ok(shown.startsWith("ooh yes! here's what i'd say:\n\nhere's the post, with a card for \"attie sites"));
-  assert.ok(shown.includes(`(https://atpota.to/blog/${RKEY}):\n\n${text}\n\n`));
+  assert.ok(shown.includes(`(https://poe.leaflet.pub/${RKEY}):\n\n${text}\n\n`), 'names the url the card links');
   assert.match(shown, /reply "yes" to post it from poe, or "no" to drop it\.$/);
   assert.equal(s.created.length, 0, 'nothing posts on a proposal');
 
@@ -170,7 +170,7 @@ test('ask in plain words, see the exact post, say yes, and that exact post goes 
   assert.equal(c.toAgent.length, 1, 'the yes is not sent to Poe');
   assert.equal(s.created.length, 1);
   assert.equal(s.created[0].record.text, text);
-  assert.equal(s.created[0].record.embed.external.uri, `https://atpota.to/blog/${RKEY}`);
+  assert.equal(s.created[0].record.embed.external.uri, `https://poe.leaflet.pub/${RKEY}`);
   assert.match(c.sent[1].text, /^announced ⸜\(｡˃ ᵕ ˂ \)⸝ https:\/\/bsky\.app\/profile\/poe\.atpota\.to\/post\//);
   assert.equal(c.sent[1].replyTo, yes.id);
 

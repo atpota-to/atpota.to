@@ -222,8 +222,8 @@ export function pageUrls(rkey) {
  * The announcement post. The link to the issue is its only facet: featured
  * people are not pinged, and nothing else in the text becomes clickable.
  */
-export function buildAnnouncement({ text, pageUrl, alsoLinks = [], title, description, thumb = null }) {
-  const linkable = new Set([pageUrl, ...alsoLinks]);
+export function buildAnnouncement({ text, pageUrl, cardUrl = pageUrl, associatedRefs = null, alsoLinks = [], title, description, thumb = null }) {
+  const linkable = new Set([pageUrl, cardUrl, ...alsoLinks]);
   const facets = detectLinks(text)
     .filter((l) => linkable.has(l.uri.replace(/\/+$/, '')))
     .map((l) => ({
@@ -237,11 +237,51 @@ export function buildAnnouncement({ text, pageUrl, alsoLinks = [], title, descri
     langs: ['en'],
     embed: {
       $type: 'app.bsky.embed.external',
-      external: { uri: pageUrl, title, description, ...(thumb ? { thumb } : {}) },
+      external: {
+        uri: cardUrl, title, description,
+        ...(thumb ? { thumb } : {}),
+        ...(associatedRefs ? { associatedRefs } : {}),
+      },
     },
   };
   if (facets.length) record.facets = facets;
   return record;
+}
+
+/** `base` and `path` with one slash between, the way the AppView joins them. */
+function joinPath(base, path) {
+  if (!path) return base;
+  return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+}
+
+/**
+ * Where the card links, and the records that make Bluesky draw it as a
+ * standard.site card (publication name, icon, byline, reading time). The
+ * AppView enriches a card only when its uri is the publication's url joined to
+ * the document's path and both records are pinned in associatedRefs, so the
+ * card links the publication's own page (poe.leaflet.pub), not pageUrl. Falls
+ * back to a plain card on pageUrl when the publication can't be read; never
+ * throws, because a plain card is still an announcement.
+ */
+export async function cardTarget(doc, pageUrl, deps) {
+  let publication;
+  try {
+    publication = await deps.getPublication();
+  } catch (err) {
+    return { cardUrl: pageUrl, associatedRefs: null, note: `no rich card: ${err.message}` };
+  }
+  const url = publication?.value?.url;
+  if (typeof url !== 'string' || !/^https:\/\//.test(url) || typeof publication.cid !== 'string') {
+    return { cardUrl: pageUrl, associatedRefs: null, note: 'no rich card: the publication has no url' };
+  }
+  return {
+    cardUrl: joinPath(url, String(doc.value.path ?? '')),
+    associatedRefs: [
+      { $type: 'com.atproto.repo.strongRef', uri: doc.uri, cid: doc.cid },
+      { $type: 'com.atproto.repo.strongRef', uri: config.dispatch.publicationUri, cid: publication.cid },
+    ],
+    note: null,
+  };
 }
 
 // --- pages ----------------------------------------------------------------------
@@ -414,6 +454,8 @@ export async function latestDocument(deps) {
 export const defaultDeps = {
   listDocuments,
   getDocument: (rkey) => atproto.getPublicRecord(config.dispatch.publisherDid, 'site.standard.document', rkey),
+  getPublication: () => atproto.getPublicRecord(config.dispatch.publisherDid, 'site.standard.publication',
+    config.dispatch.publicationRkey),
   getOwnPost: (rkey) => atproto.getPublicRecord(config.botDid, 'app.bsky.feed.post', rkey),
   createPost: (record, rkey) => atproto.createPost(record, { rkey }),
   uploadBlob: (bytes, mimeType) => atproto.uploadBlob(bytes, mimeType),
@@ -485,23 +527,25 @@ async function postOnce(documentUri, text, page, pageUrl, alsoLinks, doc, deps) 
     if (earlier) {
       recordPost(documentUri, earlier.uri, earlier.cid);
       event(documentUri, 'post_found', { uri: earlier.uri });
-      return { uri: earlier.uri, cid: earlier.cid, thumbNote: null };
+      return { uri: earlier.uri, cid: earlier.cid, thumbNote: null, cardNote: null };
     }
   }
+  const card = await cardTarget(doc, pageUrl, deps);
   db.prepare('UPDATE dispatch_document SET post_text = ?, page_url = ?, updated_at = ? WHERE document_uri = ?')
-    .run(text, pageUrl, nowIso(), documentUri);
+    .run(text, card.cardUrl, nowIso(), documentUri);
   const { thumb, note } = await cardThumb(page.html, pageUrl, deps);
   const record = buildAnnouncement({
-    text, pageUrl, alsoLinks,
+    text, pageUrl, alsoLinks, cardUrl: card.cardUrl, associatedRefs: card.associatedRefs,
     title: String(doc.value.title ?? ''),
     description: String(doc.value.description ?? ''),
     thumb,
   });
   const res = await deps.createPost(record, row.post_rkey);
   recordPost(documentUri, res.uri, res.cid);   // before anything else
-  event(documentUri, 'posted', { uri: res.uri, thumb: !!thumb });
+  event(documentUri, 'posted', { uri: res.uri, thumb: !!thumb, richCard: !!card.associatedRefs });
+  if (card.note) logger.warn('dispatch announcement posted with a plain card', { documentUri, reason: card.note });
   logger.info('dispatch announcement posted', { documentUri, uri: res.uri });
-  return { uri: res.uri, cid: res.cid, thumbNote: note };
+  return { uri: res.uri, cid: res.cid, thumbNote: note, cardNote: card.note };
 }
 
 /**
@@ -560,6 +604,7 @@ export async function announce({ rkey, text = null }, deps = defaultDeps) {
     `announced ⸜(｡˃ ᵕ ˂ )⸝ ${postUrl(post.uri)}`,
     note,
     ...(post.thumbNote ? [`the card has no image: ${post.thumbNote}.`] : []),
+    ...(post.cardNote ? [`the card is a plain link card (${post.cardNote}).`] : []),
   ].join('\n\n');
 }
 
@@ -736,13 +781,15 @@ export async function handleAnnounceProposal(body, deps = defaultDeps) {
   const problem = proposalTextProblem(text, rkey);
   if (problem) return { status: 200, body: { accepted: false, reason: problem, issue } };
 
+  // What the operator is told the card links, so it is the link that posts.
+  const { cardUrl } = await cardTarget(doc, issue.url, deps);
   db.exec('BEGIN IMMEDIATE');
   try {
     // One live proposal at a time: this one replaces every earlier one.
     db.prepare(`UPDATE dispatch_proposal SET status = 'superseded', decided_at = ?
       WHERE status IN ('proposed', 'attached')`).run(nowIso());
     db.prepare(`INSERT INTO dispatch_proposal (dm_message_id, operator_did, document_rkey, title, page_url, text, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(body.dmId, body.operatorDid, rkey, issue.title, issue.url, text, nowIso());
+      VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(body.dmId, body.operatorDid, rkey, issue.title, cardUrl, text, nowIso());
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

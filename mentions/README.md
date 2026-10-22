@@ -616,7 +616,13 @@ agent. `src/dispatch.js` then:
 3. posts from Poe: the operator's text (refused, not cut, over 300 graphemes)
    or the title and description, an `app.bsky.embed.external` card with the
    page's og:image as its thumbnail, `langs: ["en"]`, and no facet but the
-   issue link. The post's TID record key is stored **before** `createRecord`,
+   issue link. The card is a standard.site card: its `associatedRefs` pin the
+   document and the publication (public `getRecord`), and its uri is the
+   publication's `url` joined to the document's `path`
+   (`https://poe.leaflet.pub/<rkey>`), because that is the only URL the Bluesky
+   AppView enriches for these records. If the publication can't be read, the
+   post goes out with a plain card on the page URL and the reply says so.
+   The post's TID record key is stored **before** `createRecord`,
    so a retry after a crash or timeout finds the post under that key instead
    of posting twice;
 4. puts the document back with `bskyPostRef` and `updatedAt` set, every other
