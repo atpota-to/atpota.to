@@ -283,6 +283,7 @@ function parseDispatch() {
     announceUrlBase,
     publicationUri,
     publisherDid: pub[1],
+    publicationRkey: pub[2],
     // Signs in by DID when no identifier is given, for the reason createSession
     // in atproto.js gives. Either way the session's DID is checked.
     publisherIdentifier: opt('DISPATCH_PUBLISHER_IDENTIFIER', pub[1]),

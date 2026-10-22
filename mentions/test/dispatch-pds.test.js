@@ -41,6 +41,10 @@ before(async () => {
       content: { $type: 'pub.leaflet.content', pages: [] },
     },
   });
+  pds.records.set(key(PUBLISHER, 'site.standard.publication', config.dispatch.publicationRkey), {
+    cid: 'bafypublication',
+    value: { $type: 'site.standard.publication', url: 'https://atpota.to/blog', name: "poe's atmosphere dispatch" },
+  });
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     const chunks = [];
@@ -147,6 +151,8 @@ test('announce over HTTP: posts under a stored key from Poe, links from atpota.t
   assert.equal(createBody.collection, 'app.bsky.feed.post');
   assert.match(createBody.rkey, /^[234567a-j][234567a-z]{12}$/);
   assert.equal(createBody.record.embed.external.thumb.ref.$link, 'bafkthumb');
+  assert.equal(createBody.record.embed.external.uri, `https://atpota.to/blog/${RKEY}`);
+  assert.deepEqual(createBody.record.embed.external.associatedRefs.map((r) => r.cid), ['bafyoriginal', 'bafypublication']);
 
   const upload = pds.calls.find((c) => c.nsid === 'com.atproto.repo.uploadBlob');
   assert.equal(upload.contentType, 'image/png');
