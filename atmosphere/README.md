@@ -193,8 +193,9 @@ or `HOST_DIRECTORY_FILE`), so a restart doesn't wait a week or read every host a
 
 Every Jetstream commit by an account in the directory goes into its host's HyperLogLog
 sketch for the UTC day, and into one for all independent hosts together (`*`). After each
-census today's sketches are written to `atmosphere_host_active_day`; after a restart the
-station reads today's rows back and merges into them, so nothing's lost or counted twice.
+census today's sketches are written to `atmosphere_host_active_day`, merged first with
+what's there (an earlier run's after a restart, a backfill's), so nothing's lost or
+counted twice.
 The website shares `*` against the day's `atmosphere_account_sketch` (everyone active),
 and lists the liveliest hosts. Until the directory is first read (the first census after
 the first deploy, plus a few minutes), nothing is counted.
@@ -469,17 +470,20 @@ cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
   /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-21 --to 2026-10-21 --dry-run
 ```
 
-Then every day the archive has as live stream, up to yesterday, in `tmux` (about
-3.5 GB to download and a few minutes to read per day):
+Then every day the archive has as live stream, up to today, in `tmux` (about 3.5 GB
+to download and a few minutes to read per day):
 
 ```bash
 cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
-  /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-21
+  /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-22
 ```
 
-Days only, whole ones, never today (the station rewrites today from memory). Each day is
-merged with whatever rows it already has, so a stopped run can be started again as it
-was, and a day run twice comes out the same. It goes by where accounts live now: an
+Today goes as far as the archive does (its last sealed segment, usually within the hour),
+which covers the morning before the station started counting; the station merges what's
+in Supabase before each of its writes, so the two add up. With today in the range, the
+run ends by writing today once more after the station's next census (11 minutes), in case
+the two writes crossed. Each day is merged with whatever rows it already has, so a
+stopped run can be started again as it was, and a day run twice comes out the same. It goes by where accounts live now: an
 account that moved between hosts in the window counts for the one it's on now, and one
 that has since left independent hosts isn't counted. That's a few hundred accounts
 against tens of thousands active (`atmosphere_plc_day` has the moves).

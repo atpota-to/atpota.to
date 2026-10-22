@@ -193,3 +193,38 @@ test('moves made while the directory is being read are carried over into it', as
   assert.equal(a.directory.hostOf('did:plc:arrives'), 'blacksky.app');
   assert.equal(a.directory.hostOf('did:plc:leaves'), null);
 });
+
+test('keeps what a backfill wrote for today between two writes of its own', async () => {
+  const d = new HostDirectory();
+  d.place('did:plc:1', 'eurosky.social');
+  d.readAt = NOON;
+  const db = [];
+  const a = createHostActivity({
+    upsert: async (table, conflict, rows) => {
+      for (const r of rows) {
+        const i = db.findIndex((x) => x.day === r.day && x.hostname === r.hostname);
+        if (i >= 0) db[i] = r;
+        else db.push(r);
+      }
+    },
+    getAll: async () => db,
+    now: () => NOON,
+    read: async () => d,
+  });
+  a.see(commit('did:plc:1'));
+  await a.onCensus([]);
+  // a backfill counts this morning: someone the station never heard
+  const morning = new ActivityDay(DAY);
+  morning.add('blacksky.app', registerOf('did:plc:early'));
+  morning.merge(db);
+  for (const r of morning.rows()) {
+    const i = db.findIndex((x) => x.day === r.day && x.hostname === r.hostname);
+    if (i >= 0) db[i] = r;
+    else db.push(r);
+  }
+  a.see(commit('did:plc:1'));
+  await a.onCensus([]);
+  const all = db.find((r) => r.hostname === ALL_INDEPENDENT);
+  assert.equal(all.dids, 2, 'the station\'s next write kept the morning');
+  assert.ok(db.some((r) => r.hostname === 'blacksky.app'));
+});

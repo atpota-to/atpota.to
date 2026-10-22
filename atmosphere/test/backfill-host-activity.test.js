@@ -28,7 +28,8 @@ async function* stream(list) {
 test('parseArgs: whole UTC days before today, at most a month', () => {
   assert.deepEqual(parseArgs(['--from', '2026-10-20', '--to', '2026-10-21'], NOW).days, ['2026-10-20', '2026-10-21']);
   assert.equal(parseArgs(['--from', '2026-10-21', '--to', '2026-10-21', '--dry-run'], NOW).dryRun, true);
-  assert.throws(() => parseArgs(['--from', '2026-10-21', '--to', '2026-10-22'], NOW), /before today/);
+  assert.deepEqual(parseArgs(['--from', '2026-10-21', '--to', '2026-10-22'], NOW).days, ['2026-10-21', '2026-10-22'], 'today, as far as the archive goes');
+  assert.throws(() => parseArgs(['--from', '2026-10-21', '--to', '2026-10-23'], NOW), /not be after today/);
   assert.throws(() => parseArgs(['--from', '2026-10-21', '--to', '2026-10-20'], NOW), /not be before/);
   assert.throws(() => parseArgs(['--from', '2026-10-21T00:00Z', '--to', '2026-10-21'], NOW), /must be days/);
   assert.throws(() => parseArgs(['--from', '2026-08-01', '--to', '2026-10-21'], NOW), /at most 31 days/);
@@ -86,7 +87,7 @@ test('backfillActivity: reads the archive\'s segments for the days, merges with 
   before.add('blacksky.app', registerOf('did:plc:black'));
   const upserts = [];
   const rest = { getAll: async () => before.rows(), upsert: async (table, conflict, rows) => upserts.push({ table, conflict, rows }) };
-  const out = await backfillActivity({ args: parseArgs(['--from', '2026-10-20', '--to', '2026-10-20'], NOW), host: 'https://js.example', apiKey: 'k', rest, Jetstream, directory: directory(), fetch, log: () => {}, warn: () => {} });
+  const out = await backfillActivity({ args: parseArgs(['--from', '2026-10-20', '--to', '2026-10-20'], NOW), host: 'https://js.example', apiKey: 'k', rest, Jetstream, directory: directory(), fetch, log: () => {}, warn: () => {}, now: () => NOW });
   assert.equal(asked.raw, true);
   assert.equal(upserts.length, 1);
   assert.equal(upserts[0].table, 'atmosphere_host_active_day');
@@ -103,7 +104,54 @@ test('backfillActivity: a dry run writes nothing, and a day the archive never re
     }
   }
   await assert.rejects(
-    backfillActivity({ args: parseArgs(['--from', '2026-10-20', '--to', '2026-10-21'], NOW), host: 'https://js.example', apiKey: 'k', rest: null, Jetstream, directory: directory(), fetch: async () => Response.json({ segments }), log: () => {}, warn: () => {} }),
+    backfillActivity({ args: parseArgs(['--from', '2026-10-20', '--to', '2026-10-21'], NOW), host: 'https://js.example', apiKey: 'k', rest: null, Jetstream, directory: directory(), fetch: async () => Response.json({ segments }), log: () => {}, warn: () => {}, now: () => NOW }),
     /ran out before 2026-10-21/,
+  );
+});
+
+test('backfillActivity: today, as far as the archive goes, written again after the station\'s next write', async () => {
+  const today = Date.parse('2026-10-22T00:00:00Z') * 1000;
+  // the archive's last sealed segment ends at 15:00 today
+  const segments = [{ name: 's0', index: 0, sizeBytes: 1e9, eventCount: 1000, minSeq: 1, maxSeq: 1000, minWitnessedAt: today - 86_400e6, maxWitnessedAt: today + 15 * 3600e6 }];
+  class Jetstream {
+    snapshot() {
+      return stream([commit('did:plc:euro1', '2026-10-22T06:00:00Z'), commit('did:plc:black', '2026-10-22T14:00:00Z')]);
+    }
+  }
+  const db = [];
+  const station = new ActivityDay('2026-10-22');
+  station.add('eurosky.social', registerOf('did:plc:euro2')); // what the station heard this afternoon
+  db.push(...station.rows());
+  const rest = {
+    getAll: async () => db.slice(),
+    upsert: async (table, conflict, rows) => {
+      for (const r of rows) {
+        const i = db.findIndex((x) => x.day === r.day && x.hostname === r.hostname);
+        if (i >= 0) db[i] = r;
+        else db.push(r);
+      }
+    },
+  };
+  const slept = [];
+  const said = [];
+  await backfillActivity({
+    args: parseArgs(['--from', '2026-10-22', '--to', '2026-10-22'], NOW), host: 'https://js.example', apiKey: 'k', rest, Jetstream, directory: directory(),
+    fetch: async () => Response.json({ segments }), log: (m) => said.push(m), warn: () => {}, now: () => NOW,
+    // the station's next write crosses the backfill's and drops the morning
+    sleep: async (ms) => {
+      slept.push(ms);
+      db.splice(0, db.length, ...station.rows());
+    },
+  });
+  assert.match(said.join('\n'), /today is counted up to 2026-10-22T14:58:54/);
+  assert.equal(slept.length, 1);
+  assert.equal(db.find((r) => r.hostname === ALL_INDEPENDENT).dids, 3, 'the morning and the afternoon, both');
+});
+
+test('backfillActivity: today is refused while the archive hasn\'t reached it', async () => {
+  const segments = [{ name: 's0', index: 0, sizeBytes: 1e9, eventCount: 1000, minSeq: 1, maxSeq: 1000, minWitnessedAt: Date.parse('2026-10-21T00:00:00Z') * 1000, maxWitnessedAt: Date.parse('2026-10-21T23:59:00Z') * 1000 }];
+  await assert.rejects(
+    backfillActivity({ args: parseArgs(['--from', '2026-10-22', '--to', '2026-10-22'], NOW), host: 'https://js.example', apiKey: 'k', rest: null, Jetstream: class {}, directory: directory(), fetch: async () => Response.json({ segments }), log: () => {}, warn: () => {}, now: () => NOW }),
+    /doesn't reach today yet/,
   );
 });

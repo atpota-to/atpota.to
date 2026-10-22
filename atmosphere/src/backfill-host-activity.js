@@ -4,13 +4,13 @@
 // in the directory of where accounts live, into the same per-host sketches, written to
 // atmosphere_host_active_day.
 //
-//   node src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-21 [--dry-run] [--directory host-directory.json]
+//   node src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-22 [--dry-run] [--directory host-directory.json]
 //
 // On the droplet, from the data folder (it reads the keys from .env and the station's
 // host-directory.json from there), niced so the live station keeps the CPU it needs:
 //
 //   cd /root/atpotato-weather && nice -n 10 /opt/node22/bin/node --env-file=.env \
-//     /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-21 --dry-run
+//     /root/atpota-live/atmosphere/src/backfill-host-activity.js --from 2026-10-07 --to 2026-10-22 --dry-run
 //
 // It needs what archive.js needs (JETSTREAM_API_KEY, the SDK installed once; README.md,
 // "Backfilling from the archive"), and the station's directory: the station saves it after
@@ -24,24 +24,31 @@
 // many (atmosphere_plc_day). The archive also drops records deleted since, as archive.js
 // says; an account whose every record that day was deleted doesn't count.
 //
-// Days only, whole ones, before today: the station keeps today's sketches in memory and
-// rewrites them every census, so a backfill's additions to today wouldn't last. Each day
-// is merged with whatever rows it already has, so a stopped run can simply be started
-// again, and running a day twice changes nothing. The archive is about 3.5 GB a day to
+// Whole UTC days, and today as far as the archive goes (its last sealed segment, usually
+// within the hour): the morning before the station started counting. Each day is merged
+// with whatever rows it already has, and the station merges what's there before each of
+// its writes, so the two add up, a stopped run can simply be started again, and running a
+// day twice changes nothing. With today in the range it writes today once more after the
+// station's next census (TODAY_AGAIN_MS later), in case the station read today's rows just
+// before the backfill wrote and wrote just after. The archive is about 3.5 GB a day to
 // download (it counts against the key's allowance), a day takes a few minutes to read.
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_HOST, listSegments, loadSdk, MAX_RETRY_WAIT_MS, messageOf, planRange, SDK_DIR } from './archive.js';
+import { MAX_EARLIER_S } from './clock.js';
 import { ActivityDay, HostDirectory, readDirectory } from './host-activity.js';
 import { registerOf } from './hll.js';
 import { DEFAULT_RELAY, fetchHosts } from './hosts.js';
+import { LEAD_S } from './replay.js';
 import { supabaseRest } from './supabase.js';
 
 /** At most this many days in one run. */
 export const MAX_DAYS = 31;
 /** A day is done once the stream is this far past its end (records stamped a little late still count for it). */
 export const SETTLE_S = 120;
+/** Today is written again after this long: past the station's next census, every 10 minutes. */
+export const TODAY_AGAIN_MS = 11 * 60_000;
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_S = 86_400;
@@ -61,7 +68,7 @@ export function parseArgs(argv, nowMs = Date.now()) {
   }
   if (!DAY_RE.test(out.from ?? '') || !DAY_RE.test(out.to ?? '')) throw new Error('--from and --to must be days (YYYY-MM-DD, UTC)');
   if (out.to < out.from) throw new Error('--to must not be before --from');
-  if (out.to >= dayOf(nowMs)) throw new Error(`--to must be before today (${dayOf(nowMs)}): the station counts today itself`);
+  if (out.to > dayOf(nowMs)) throw new Error(`--to must not be after today (${dayOf(nowMs)})`);
   const days = [];
   for (let s = startOf(out.from); s <= startOf(out.to); s += DAY_S) days.push(dayOf(s * 1000));
   if (days.length > MAX_DAYS) throw new Error(`at most ${MAX_DAYS} days in one run`);
@@ -126,19 +133,28 @@ export async function directoryFor({ file, fetchImpl = (u, i) => fetch(u, i), re
   return d;
 }
 
-export async function backfillActivity({ args, host, apiKey, rest, Jetstream, directory, fetch = globalThis.fetch, log = console.log, warn = console.warn }) {
+export async function backfillActivity({ args, host, apiKey, rest, Jetstream, directory, fetch = globalThis.fetch, log = console.log, warn = console.warn, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const fromSec = startOf(args.days[0]);
-  const toSec = startOf(args.days.at(-1)) + DAY_S;
-  const plan = planRange(await listSegments({ host, key: apiKey, fetch }), fromSec, toSec);
+  const segments = await listSegments({ host, key: apiKey, fetch });
+  // today goes as far as the archive does: its last sealed segment, less the time the last minute needs to settle
+  const today = dayOf(now());
+  const tipSec = Math.floor(Math.max(...segments.map((x) => x.maxWitnessedAt)) / 1e6) - MAX_EARLIER_S - LEAD_S - 1;
+  const withToday = args.days.at(-1) === today;
+  const toSec = withToday ? Math.min(startOf(today) + DAY_S, tipSec) : startOf(args.days.at(-1)) + DAY_S;
+  if (withToday && toSec <= startOf(today)) throw new Error(`the archive doesn't reach today yet (its last sealed segment ends ${new Date(tipSec * 1000).toISOString()}): try again later, or end at yesterday`);
+  const plan = planRange(segments, fromSec, toSec);
+  if (withToday) log(`today is counted up to ${new Date(toSec * 1000).toISOString()}, where the archive ends for now; the station counts the rest`);
   log(`counting who was active on independent hosts, ${args.days[0]} to ${args.days.at(-1)} (${args.days.length} day${args.days.length === 1 ? '' : 's'}): ${plan.segments} segments, about ${(plan.bytes / 1e9).toFixed(1)} GB to download${rest ? '' : ' (dry run: nothing is written)'}`);
   const started = Date.now();
   const written = [];
+  let todayRows = null;
 
   async function onDay(d) {
     if (rest) {
       // merged with what's there: a second run of a day changes nothing
       d.merge(await rest.getAll(`atmosphere_host_active_day?day=eq.${d.day}&select=day,hostname,sketch&order=hostname`));
       await rest.upsert('atmosphere_host_active_day', 'day,hostname', d.rows());
+      if (d.day === today) todayRows = d.rows();
     }
     const rows = d.rows();
     const top = rows.slice(1).sort((a, b) => b.dids - a.dids).slice(0, 3).map((r) => `${r.hostname} ${r.dids.toLocaleString('en-US')}`);
@@ -165,6 +181,15 @@ export async function backfillActivity({ args, host, apiKey, rest, Jetstream, di
   log(`read ${read.events.toLocaleString('en-US')} events (${read.commits.toLocaleString('en-US')} commits, ${read.counted.toLocaleString('en-US')} by accounts on independent hosts) in ${Math.round((Date.now() - started) / 60_000)} min`);
   const missing = args.days.filter((day) => !written.some((w) => w.day === day));
   if (missing.length) throw new Error(`the archive ran out before ${missing.join(', ')}`);
+  if (withToday && rest) {
+    log(`writing today once more in ${Math.round(TODAY_AGAIN_MS / 60_000)} minutes, after the station's next write (in case the two crossed)`);
+    await sleep(TODAY_AGAIN_MS);
+    const again = new ActivityDay(today);
+    again.merge(todayRows ?? []);
+    again.merge(await rest.getAll(`atmosphere_host_active_day?day=eq.${today}&select=day,hostname,sketch&order=hostname`));
+    await rest.upsert('atmosphere_host_active_day', 'day,hostname', again.rows());
+    log(`${today}  ${again.rows()[0].dids.toLocaleString('en-US').padStart(7)} active on independent hosts so far today  written again`);
+  }
   return { written, read };
 }
 
