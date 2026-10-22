@@ -75,7 +75,7 @@ export const WIDGET_GROUPS: Record<'weather' | 'anisota' | 'clock' | 'records' |
  * name on the setup page, the first the default. The overlay sets data-style on the widget.
  */
 export const WIDGET_STYLES: Partial<Record<WidgetKind, Readonly<Record<string, string>>>> = {
-  tid: { ticking: 'ticking', decoded: 'with the time it means', mini: 'a little pill' },
+  tid: { ticking: 'with the time', mini: 'just the TID' },
   flushes: { count: 'the count', stats: 'the stats', latest: 'the latest flush' },
   status: { both: 'status and vitals', status: 'just the status', vitals: 'just the vitals' },
   music: { now: 'now playing', history: 'the last few plays', stats: 'listening stats', mini: 'one line' },
@@ -116,7 +116,7 @@ export const WIDGET_HINTS: Record<WidgetKind, string> = {
   moon: "tonight's moon as anisota draws it, with its phase",
   mark: "anisota's brand mark, its moon at tonight's phase",
   loader: "anisota's brand mark, its moon running through its phases",
-  tid: "the time right now as an atproto record key, ticking: anisota's clock in atpotato's letters",
+  tid: "the time right now as an atproto record key, ticking: anisota's clock in atpotato's mono",
   flushes: 'how many times you have flushed on flushes.app, your streak, your latest',
   status: 'your latest is.dame.now status and is.dame.state vitals, as on dame.is',
   music: 'what you are scrobbling to teal.fm: now playing, the last few, your stats',

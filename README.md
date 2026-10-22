@@ -119,8 +119,8 @@ via OBS* to hear Poe, and leave *shutdown source when not visible* off.
   garden's pets leaderboard, one an hour (`garden/`). It only ever says handles, never
   what people wrote.
 - **The TID clock**, from Anisota: the time right now as an atproto record key, ticking,
-  the characters that just changed glowing. Ticking, decoded (its time part and clock id,
-  and the time it means to the microsecond), or a little pill.
+  the characters that just changed glowing, with the time and day it means under it, or
+  just the TID in a little pill.
 - **Your records**, read from your repo and refreshed when Jetstream says they changed:
   your **flushes** on [flushes.app](https://flushes.app) (the count, the stats with your
   streak and favourite emoji, or the latest flush), your **status** and **vitals** as
@@ -149,7 +149,7 @@ reset to their defaults.
 | `brb` | "be right back" |
 | `ending` | "thanks for watching", and up to four places to find you |
 | `loading` | Anisota's loading screen: its mark on black, the moon running through its phases |
-| `clock` | a waiting screen with the TID clock ticking big, what it means to the microsecond, and your title over it |
+| `clock` | a waiting screen with the TID clock ticking big, the time and day under it, and your title over it |
 | `screenshare` | an atpotato frame with a big 16:9 window for a screen capture and a camera window beside it (rounded, circle or wide; right, left or none), the title along the bottom and the weather in the column, Poe on the camera's side. The setup page gives each window's exact spot to put the OBS sources under it |
 
 Each has a title and a line under it, a backdrop (day: sky, clouds and the sun; night:

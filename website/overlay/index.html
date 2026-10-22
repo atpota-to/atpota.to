@@ -62,9 +62,7 @@
             <!-- the TID clock's waiting screen (src/overlay/tid.ts ticks it) -->
             <div class="ovsc__tid" data-ovsc-tid hidden>
                 <p class="ovsc__tid-big" data-ov-tid></p>
-                <p class="ovsc__tid-parts"><span class="ovsc__tid-stamp" data-ov-tid-stamp></span><span class="ovsc__tid-clock" data-ov-tid-clock></span></p>
                 <p class="ovsc__tid-time"><span data-ov-tid-time></span> · <span data-ov-tid-date></span></p>
-                <p class="ovsc__tid-wait" aria-hidden="true">waiting<span>.</span><span>.</span><span>.</span></p>
             </div>
             <ul class="ovsc__links" data-ovsc-links hidden></ul>
         </section>
@@ -185,16 +183,10 @@
         <div class="ov-anisota__mark-box" data-ov-anisota="loader"></div>
     </section>
 
-    <!-- the TID clock (src/overlay/tid.ts); its styles (data-style) show the parts they want -->
+    <!-- the TID clock (src/overlay/tid.ts): the TID, and the time and day it means (mini leaves that out) -->
     <section class="ov-panel ov-tid" data-ov-widget="tid" aria-label="the time as an atproto TID" hidden>
-        <h2 class="ov-panel__title">the time, as a TID</h2>
         <p class="ov-tid__tid" data-ov-tid></p>
-        <dl class="ov-tid__parts">
-            <div><dt>the time, in microseconds</dt><dd data-ov-tid-stamp></dd></div>
-            <div><dt>clock</dt><dd data-ov-tid-clock></dd></div>
-        </dl>
-        <p class="ov-tid__time"><span data-ov-tid-time></span></p>
-        <p class="ov-panel__note ov-tid__date" data-ov-tid-date></p>
+        <p class="ov-tid__when"><span data-ov-tid-time></span> · <span data-ov-tid-date></span></p>
     </section>
 
     <!-- the streamer's records (src/overlay/records.ts): each holds every part its styles need -->

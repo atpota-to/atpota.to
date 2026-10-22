@@ -79,7 +79,7 @@ describe('the TID clock', () => {
     clock.tick();
     expect(tid.textContent).toBe(tidAt(1_700_000_000_000_002, 5));
     expect(tid.querySelectorAll('.is-new')).toHaveLength(1);
-    expect(doc.querySelector('[data-ov-widget="tid"] [data-ov-tid-clock]')!.textContent).toBe(tidAt(0, 5).slice(11));
+    expect(doc.querySelector('[data-ov-widget="tid"] [data-ov-tid-time]')!.textContent).toBe(tidTimeText(1_700_000_000_000_002));
   });
 });
 
@@ -102,11 +102,11 @@ describe('widget styles', () => {
 
   it('round-trips through the record and the address, leaving default styles out of it', () => {
     const widgets = cleanWidgets([
-      { kind: 'tid', slot: 'top-center', scale: 100, style: 'decoded' },
+      { kind: 'tid', slot: 'top-center', scale: 100, style: 'mini' },
       { kind: 'flushes', slot: 'top-left', scale: 90 },
       { kind: 'chat', slot: 'top-right', scale: 100, style: 'side' },
     ]);
-    expect(writeWidgets(widgets)).toBe('tid:tc:100:decoded,flushes:tl:90,chat:tr:100:side');
+    expect(writeWidgets(widgets)).toBe('tid:tc:100:mini,flushes:tl:90,chat:tr:100:side');
     expect(readWidgets(writeWidgets(widgets))).toEqual(widgets);
     const c = { ...fromRecord({}), widgets };
     expect(fromRecord(toRecord(c, '2026-01-01T00:00:00.000Z', new Date())).widgets).toEqual(widgets);
