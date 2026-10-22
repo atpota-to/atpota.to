@@ -172,7 +172,7 @@ as $$
         't', p.t, 'listed', p.listed, 'active', p.active, 'bluesky', p.bluesky, 'independent', p.independent,
         'writing', case when p.writing_minutes is null then null else p.writing_bluesky + p.writing_independent end,
         'accountsBluesky', p.accounts_bluesky, 'accountsIndependent', p.accounts_independent,
-        'share', p.share, 'spread', p.spread
+        'share', p.share, 'spread', p.spread, 'estimated', p.estimated
       ) order by p.b) from pts p), '[]'::jsonb),
     'newHosts', (select count(*) from fresh),
     'new', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'first', x.first) order by x.accounts desc, x.hostname)
