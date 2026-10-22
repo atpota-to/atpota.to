@@ -1970,19 +1970,7 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   max-width: 72ch;
 }
 
-/* ---------- the lens (weather-lens.ts): what every tile under it shows ---------- */
-
-/* Under the header. Once it scrolls away, the dock below brings it along. */
-.weather-lens {
-  --tile-pad: 12px 16px;
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 22px;
-  border: 1.5px solid var(--line-strong);
-  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--text) 45%, transparent);
-}
+/* ---------- the lens (weather-lens.ts): what every tile shows ---------- */
 
 .weather-lens__group {
   display: flex;
@@ -2002,8 +1990,16 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   color: var(--muted);
 }
 
-/* The lens at hand (weather-dock.ts): a thin strip along the bottom, beside Poe, that opens
-   upward to the bar's controls. It leaves Poe's corner clear (poe.css .poe-potato). */
+/* Its room is kept when it's away: the panel grows upward from the strip, so a line coming
+   and going would move the buttons above it out from under the finger. */
+.weather-dock .weather-lens__note[hidden] {
+  display: inline !important;
+  visibility: hidden;
+}
+
+/* The lens at hand (weather-dock.ts): a thin strip floating along the bottom, beside Poe,
+   that opens upward to the controls. It leaves Poe's corner clear (poe.css .poe-potato).
+   Out of the page's flow, nothing the tiles do can move it out from under a finger. */
 .weather-dock {
   position: fixed;
   left: max(16px, env(safe-area-inset-left));
@@ -2014,20 +2010,17 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
+  /* only the strip and the panel take taps, not the space around them */
   pointer-events: none;
-  visibility: hidden;
-  opacity: 0;
-  transform: translateY(12px);
 }
 
-.weather-dock[data-shown] {
-  visibility: visible;
-  opacity: 1;
-  transform: none;
-}
-
-.weather-dock[data-shown] > * {
+.weather-dock > * {
   pointer-events: auto;
+}
+
+/* open, it's over Poe's bubbles (poe.css .poe-say), which would otherwise land on the controls */
+.weather-dock[data-open] {
+  z-index: calc(var(--z-poe) + 1);
 }
 
 .weather-dock__strip {
@@ -2096,19 +2089,6 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .weather-dock {
-    transition:
-      opacity var(--dur-fast) ease,
-      transform var(--dur-fast) var(--ease-out),
-      visibility 0s linear var(--dur-fast);
-  }
-
-  .weather-dock[data-shown] {
-    transition:
-      opacity var(--dur-fast) ease,
-      transform var(--dur-fast) var(--ease-out);
-  }
-
   .weather-dock__chev {
     transition: transform var(--dur-fast) var(--ease-out);
   }
@@ -2284,11 +2264,6 @@ button.weather-hero__unit:disabled {
 @media (max-width: 640px) {
   .weather {
     gap: var(--grid-gap);
-  }
-
-  .weather-lens {
-    --tile-pad: 10px 12px;
-    gap: 8px 14px;
   }
 
   /* beside the phone's smaller potato */
