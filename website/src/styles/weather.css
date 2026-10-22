@@ -1511,6 +1511,37 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   white-space: nowrap;
 }
 
+/* Hosting diversity's scale is logarithmic (weather.ts hostingPosition): each band spans
+   its share of log(1 + index) up to 500, so the early ones are wider. */
+.weather-scale--hosts .weather-scale__bands,
+.weather-scale--hosts .weather-scale__names {
+  grid-template-columns: 386fr 138fr 173fr 156fr 147fr;
+}
+
+/* Too narrow for five names: the ends of the scale, and the card above names the level. */
+@media (max-width: 640px) {
+  .weather-scale--hosts .weather-scale__names {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .weather-scale--hosts .weather-scale__names > span:not(:first-child):not(:last-child) {
+    display: none;
+  }
+}
+
+.weather-hosts__level {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.weather-hosts__level-text {
+  margin-top: -6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .weather-scale__marker {
     transition: none;

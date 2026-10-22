@@ -90,6 +90,9 @@ import {
   formatCount,
   formatIndex,
   formatRate,
+  HOSTING_TEXT,
+  hostingLevelOf,
+  hostingPosition,
   ratioText,
   recordsPerSecond,
   renderRatio,
@@ -662,6 +665,15 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
   roll(tile, '[data-h-split]', hostsSplit(h));
   setText(tile, '[data-h-age]', hostsAge(h.measuredAt, now));
   count(tile, '[data-h-index]', h.diversity.index, formatIndex);
+  // and where that sits on its own scale, with words for it
+  const level = hostingLevelOf(h.diversity.index);
+  setText(tile, '[data-h-level]', level);
+  setText(tile, '[data-h-level-text]', `${HOSTING_TEXT[level]}.`);
+  const marker = $(tile, '[data-h-marker]');
+  if (marker) {
+    marker.hidden = false;
+    marker.style.left = `${hostingPosition(h.diversity.index) * 100}%`;
+  }
   const writing = $(tile, '[data-h-writing-wrap]');
   if (writing) writing.hidden = h.writing === null;
   if (h.writing) {
@@ -781,7 +793,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
       "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
       "- liveliest counts the accounts on each host that actually wrote something that day. i keep a list of which independent host each account lives on (from each host's own list, kept up to date from the plc directory), so i can tell where everyone writing lives without keeping who they are",
-      "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place",
+      "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place. it has its own scale, and a long way to grow: early days below 10, taking root from 10, spreading from 25, well spread from 75, flourishing from 200. 10% of accounts across 100 hosts' worth would be 100",
       '',
       "it goes by where accounts live, not who's writing this minute, so it's its own number and moves slowly. a bigger number means more of the network lives somewhere other than bluesky (◕‿◕)",
     ].join('\n'),

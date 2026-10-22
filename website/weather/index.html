@@ -379,9 +379,15 @@
                             </div>
                         </div>
                         <dl class="weather-hosts__stats">
-                            <div><dt>hosting diversity</dt><dd data-h-index>&ndash;</dd></div>
+                            <div><dt>hosting diversity</dt><dd><span data-h-index>&ndash;</span> <span class="weather-hosts__level" data-h-level></span></dd></div>
                             <div data-h-writing-wrap hidden><dt data-h-writing-words>hosts that wrote in the last hour</dt><dd data-h-writing>&ndash;</dd></div>
                         </dl>
+                        <!-- hosting diversity on its own (logarithmic) scale: weather.ts HOSTING_SCALE -->
+                        <div class="weather-scale weather-scale--hosts" aria-hidden="true">
+                            <div class="weather-scale__bands"><span></span><span></span><span></span><span></span><span></span><i class="weather-scale__marker" data-h-marker hidden></i></div>
+                            <div class="weather-scale__names"><span>early days</span><span>taking root</span><span>spreading</span><span>well spread</span><span>flourishing</span></div>
+                        </div>
+                        <p class="weather-hosts__level-text" data-h-level-text></p>
                         <div class="weather-ratio weather-mix__bar" aria-hidden="true">
                             <span class="weather-ratio__bsky" data-h-bar-bsky></span><span class="weather-ratio__else" data-h-bar-else></span>
                         </div>

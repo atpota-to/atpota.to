@@ -234,6 +234,9 @@ test("the weather words match the website's", (t) => {
   };
   assert.deepEqual(lib.CONDITIONS, table("CONDITIONS"));
   assert.deepEqual(lib.DIVERSITY_LEVELS, table("DIVERSITY_LEVELS"));
+  assert.deepEqual(lib.HOSTING_LEVELS, table("HOSTING_LEVELS"));
+  assert.equal(lib.hostingLevel(7.48), "early days");
+  assert.equal(lib.hostingLevel(30), "spreading");
   assert.equal(lib.conditionFor(299.9), "calm");
   assert.equal(lib.conditionFor(400), "breezy");
   assert.equal(lib.conditionFor(612), "stormy");
@@ -256,7 +259,7 @@ test("now: the last minute, with the words worked out from the numbers and someo
   assert.deepEqual(calls.sort(), ["https://atpota.to/api/atmosphere", "https://atpota.to/api/weather-span?span=hour"]);
   assert.equal(r.condition, "breezy", "from 434 records a second, not the body's own word");
   // the hosts, short; report "hosts" has the rest
-  assert.deepEqual(r.hosts.hostingDiversity, { index: 7.48, accountsOnIndependentHostsPercent: 1.51, spreadAcrossHosts: 24.6 });
+  assert.deepEqual(r.hosts.hostingDiversity, { index: 7.48, level: "early days", accountsOnIndependentHostsPercent: 1.51, spreadAcrossHosts: 24.6 });
   assert.equal(r.hosts.activeHosts, 1889);
   // the page's last-hour tile
   assert.equal(r.lastHour.feelsLikePostsPerSecond, 52.4);

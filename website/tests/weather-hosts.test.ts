@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { activeShareWords, compassOf, destinationsOf, hostBars, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
+import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
+import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
 
 // Where accounts live, over time: the hosts tile's charts and lists.
 
@@ -276,5 +278,21 @@ describe('where the atmosphere lives: the census tiles', () => {
     expect(values[5]).toBe('273.1k accounts');
     expect(report.querySelector('[data-p-top10]')!.textContent).toBe('the 2 biggest independent hosts hold 22% of the accounts on independent hosts; the other 1,796 share the rest.');
     expect(topTenShare({ ...census, top: [] })).toBeNull();
+  });
+});
+
+describe('the hosting diversity scale', () => {
+  it('starts each level where the server does', () => {
+    expect(HOSTING_SCALE.slice(1).map(([name, from]) => [name, from]).reverse()).toEqual(HOSTING_LEVELS.map(([name, from]) => [name, from]));
+    for (const v of [0, 7.5, 10, 24.9, 25, 74, 75, 199, 200, 1000]) expect(hostingLevelOf(v)).toBe(hostingLevel(v));
+  });
+
+  it('is logarithmic, from 0 to the top, and holds past the ends', () => {
+    expect(hostingPosition(0)).toBe(0);
+    expect(hostingPosition(HOSTING_SCALE_MAX)).toBe(1);
+    expect(hostingPosition(HOSTING_SCALE_MAX * 4)).toBe(1);
+    expect(hostingPosition(-3)).toBe(0);
+    // each band starts where the css draws it (386fr 138fr 173fr 156fr 147fr)
+    expect(HOSTING_SCALE.slice(1).map(([, from]) => Math.round(hostingPosition(from) * 1000))).toEqual([386, 524, 697, 853]);
   });
 });

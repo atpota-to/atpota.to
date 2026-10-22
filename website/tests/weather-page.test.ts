@@ -130,6 +130,12 @@ describe('the atmosphere weather report', () => {
     expect(tile.hidden).toBe(false);
     expect(text('[data-h-active]')).toBe('1,887');
     expect(text('[data-h-index]')).toBe('7.5');
+    // on its own scale, in words: early days, a third of the way along the first band
+    expect(text('[data-h-level]')).toBe('early days');
+    expect(text('[data-h-level-text]')).toBe("nearly every account still lives on bluesky's own servers.");
+    const marker = report.querySelector<HTMLElement>('[data-h-marker]')!;
+    expect(marker.hidden).toBe(false);
+    expect(parseFloat(marker.style.left)).toBeCloseTo(34.4, 0);
     expect(text('[data-h-writing]')).toBe('700');
     expect(text('[data-h-writing-words]')).toBe('hosts that wrote in the last 30 minutes');
     expect(text('[data-h-age]')).toBe('counted 7 minutes ago');

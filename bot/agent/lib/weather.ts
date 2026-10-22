@@ -60,6 +60,8 @@ const LIVE_SINCE = Date.parse("2026-10-20T16:50:00Z");
  */
 export const CONDITIONS = [["stormy", 600], ["gusty", 500], ["breezy", 400], ["light", 300]] as const;
 export const DIVERSITY_LEVELS = [["extreme", 11], ["very high", 8], ["high", 6], ["moderate", 3]] as const;
+/** The hosting diversity at which each level starts, on its own (logarithmic) scale; below the first, "early days". */
+export const HOSTING_LEVELS = [["flourishing", 200], ["well spread", 75], ["spreading", 25], ["taking root", 10]] as const;
 
 export type Condition = "calm" | (typeof CONDITIONS)[number][0];
 export type DiversityLevel = "low" | (typeof DIVERSITY_LEVELS)[number][0];
@@ -73,6 +75,11 @@ export function conditionFor(perSecond: number): Condition {
 export function diversityLevel(index: number): DiversityLevel {
   for (const [name, from] of DIVERSITY_LEVELS) if (index >= from) return name;
   return "low";
+}
+
+export function hostingLevel(index: number): "early days" | (typeof HOSTING_LEVELS)[number][0] {
+  for (const [name, from] of HOSTING_LEVELS) if (index >= from) return name;
+  return "early days";
 }
 
 // ---------- checking what came back ----------
@@ -653,7 +660,8 @@ export function hostsNowOf(x: unknown) {
     // every account each host holds, active or not (the relay's count): how big hosts are, not how busy
     accounts: { onBlueskyHosts: accounts.bluesky, onIndependentHosts: accounts.independent },
     // like the diversity index, but by where accounts live: the percent on independent hosts, times the square root of how many hosts' worth they're spread across
-    hostingDiversity: { index: d.index, accountsOnIndependentHostsPercent: d.share, spreadAcrossHosts: round1(d.spread) },
+    // its level on its own scale (early days below 10, taking root, spreading from 25, well spread from 75, flourishing from 200)
+    hostingDiversity: { index: d.index, level: hostingLevel(d.index), accountsOnIndependentHostsPercent: d.share, spreadAcrossHosts: round1(d.spread) },
     biggestIndependentHosts: biggest,
     // how concentrated the independent side is: the share of its accounts on its ten biggest hosts
     ...(biggest.length && accounts.independent > 0 ? { biggestTenHoldPercentOfIndependentAccounts: round1((topTen / accounts.independent) * 100) } : {}),

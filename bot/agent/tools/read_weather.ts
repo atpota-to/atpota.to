@@ -37,7 +37,8 @@ export default defineTool({
     "holds, active or not: how big hosts are, not how busy), the " +
     "hosting diversity (like the diversity index but by where accounts live: the percent of accounts on " +
     "independent hosts times the square root of how many hosts' worth they're spread across; its own " +
-    "scale, about 7.5 in october 2026, never compare it with the diversity index), the biggest independent " +
+    "scale, about 7.5 in october 2026, never compare it with the diversity index; its level: early days " +
+    "below 10, taking root, spreading from 25, well spread from 75, flourishing from 200), the biggest independent " +
     "hosts and the share of independent accounts the ten biggest hold, hosts by size (just one person, " +
     "household, village, town, city, metropolis) and the accounts on each size, top-level " +
     "domains, and the relay's roll call (active, idle, offline, banned). Its history covers the last 7 " +
