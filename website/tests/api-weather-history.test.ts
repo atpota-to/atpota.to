@@ -43,8 +43,8 @@ const HOSTS = {
   new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }, { hostname: '<b>x</b>.com', accounts: 9, first: '2026-10-23' }],
   growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }, { hostname: 'localhost', accounts: 9, prevAccounts: 1 }],
   daily: [
-    { day: '2026-10-22', active: 1880, change: null, joined: null, left: null },
-    { day: '2026-10-23', active: '1885', change: -2, joined: 4, left: 6 },
+    { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
+    { day: '2026-10-23', active: '1885', change: -2, joined: 4, left: 6, estimated: false },
     { day: 'tomorrow', active: 1 },
   ],
 };
@@ -128,8 +128,8 @@ describe('weather history', () => {
       new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }],
       growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }],
       daily: [
-        { day: '2026-10-22', active: 1880, change: null, joined: null, left: null },
-        { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6 },
+        { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
+        { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
     });
   });

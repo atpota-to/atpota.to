@@ -24,7 +24,7 @@ const HOSTS: HostHistory = {
   ],
   growing: [{ hostname: 'blacksky.app', accounts: 42900, prevAccounts: 42366 }],
   daily: [
-    { day: '2026-10-24', active: 1887, change: null, joined: null, left: null },
+    { day: '2026-10-24', active: 1887, change: null, joined: null, left: null, estimated: true },
     { day: '2026-10-25', active: 1890, change: 3, joined: 5, left: 2 },
     { day: '2026-10-26', active: 1884, change: -6, joined: 1, left: 7 },
     { day: '2026-10-29', active: 1886, change: 0, joined: 0, left: 0 },
@@ -95,6 +95,8 @@ describe('where accounts live, over time', () => {
     expect(rows[0]!.slice(1)).toEqual(['1,886', '0', '0', '0']);
     expect(rows[1]!.slice(1)).toEqual(['1,884', '−6', '+1', '−7']);
     expect(rows[3]!.slice(1)).toEqual(['1,887', '–', '–', '–']);
+    expect(rows[3]![0]).toMatch(/ ≈$/); // estimated
+    expect(rows[1]![0]).not.toMatch(/≈/);
     expect(part.querySelector('[data-h-days] tbody tr:nth-child(2) td:nth-of-type(2)')!.getAttribute('data-trend')).toBe('down');
   });
 

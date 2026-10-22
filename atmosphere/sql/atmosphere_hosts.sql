@@ -47,6 +47,34 @@ drop policy if exists "anyone can read" on public.atmosphere_host_day;
 create policy "anyone can read" on public.atmosphere_hosts for select using (true);
 create policy "anyone can read" on public.atmosphere_host_day for select using (true);
 
+-- ---------- estimated days, and the identity weather (src/backfill-hosts.js) ----------
+-- Days from before the station kept hosts can be estimated from the PLC directory's log:
+-- they're marked `estimated`. The station's own rows leave it false.
+--
+-- atmosphere_plc_day is each UTC day's identity changes, counted from the same log (exact,
+-- not estimated): new accounts by where they signed up, how many new accounts on listed
+-- hosts started with a handle on their own domain, accounts moving out of Bluesky's hosts,
+-- back in, and between independent hosts, and deletions. "Unlisted" is a host the relay
+-- doesn't list. ~365 rows a year.
+
+alter table public.atmosphere_hosts add column if not exists estimated boolean not null default false;
+alter table public.atmosphere_host_day add column if not exists estimated boolean not null default false;
+
+create table if not exists public.atmosphere_plc_day (
+  day                    date    not null primary key,  -- UTC
+  ops                    integer not null check (ops >= 0),                    -- operations in the log that day
+  created_bluesky        integer not null check (created_bluesky >= 0),        -- new accounts on Bluesky's hosts
+  created_independent    integer not null check (created_independent >= 0),    -- on independent hosts the relay lists
+  created_unlisted       integer not null check (created_unlisted >= 0),       -- on hosts it doesn't
+  created_custom_handle  integer not null check (created_custom_handle >= 0),  -- new accounts on listed hosts with a handle outside *.bsky.social
+  moved_out              integer not null check (moved_out >= 0),              -- from Bluesky's hosts to an independent one
+  moved_in               integer not null check (moved_in >= 0),               -- the other way
+  moved_between          integer not null check (moved_between >= 0),          -- from one independent host to another
+  deleted                integer not null check (deleted >= 0)                 -- tombstones
+);
+alter table public.atmosphere_plc_day enable row level security;
+create policy "anyone can read" on public.atmosphere_plc_day for select using (true);
+
 -- ---------- the trends ----------
 -- For a range starting at `since`, bucketed by `bucket` (minute, hour, day or month, as
 -- atmosphere_apps_over_time):
@@ -59,7 +87,8 @@ create policy "anyone can read" on public.atmosphere_host_day for select using (
 --   daily    day by day (UTC), over the range but at least the last 7 days: active hosts at
 --            the day's last census and the change from the day before, and how many
 --            independent hosts joined (active that day, not the day before) and left (the
---            other way round). Joined and left are null on the first day kept.
+--            other way round). Joined and left are null on the first day kept, and
+--            `estimated` marks a day from the backfill (src/backfill-hosts.js).
 
 create or replace function public.atmosphere_host_trends(since timestamptz, bucket text, max_hosts integer default 10)
 returns jsonb
@@ -111,13 +140,13 @@ as $$
     where (select day from first_day) is not null
   ),
   census_day as (
-    select distinct on ((h.t at time zone 'UTC')::date) (h.t at time zone 'UTC')::date as day, h.active
+    select distinct on ((h.t at time zone 'UTC')::date) (h.t at time zone 'UTC')::date as day, h.active, h.estimated
     from public.atmosphere_hosts h
     where h.t >= (least(since, now() - interval '6 days') at time zone 'UTC')::date - 1
     order by (h.t at time zone 'UTC')::date, h.t desc
   ),
   daily as (
-    select d.day, c.active, c.active - p.active as change,
+    select d.day, c.active, c.active - p.active as change, coalesce(c.estimated, false) as estimated,
       case when d.day > (select day from first_day) then (
         select count(*) from public.atmosphere_host_day x
         where x.day = d.day and not x.bluesky
@@ -145,7 +174,7 @@ as $$
         from (select * from fresh order by accounts desc, hostname limit max_hosts) x), '[]'::jsonb),
     'growing', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'prevAccounts', x.prev) order by x.accounts - x.prev desc, x.hostname)
         from (select * from grew order by accounts - prev desc, hostname limit max_hosts) x), '[]'::jsonb),
-    'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_) order by d.day) from daily d), '[]'::jsonb)
+    'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_, 'estimated', d.estimated) order by d.day) from daily d), '[]'::jsonb)
   );
 $$;
 revoke all on function public.atmosphere_host_trends(timestamptz, text, integer) from public;

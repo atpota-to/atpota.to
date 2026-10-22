@@ -57,6 +57,8 @@ export interface HostDay {
   change: number | null;
   joined: number | null;
   left: number | null;
+  /** Estimated from the PLC directory's log, from before the station kept hosts. */
+  estimated?: boolean;
 }
 
 /** The parts of a history this needs (weather-page.ts History). */
@@ -136,7 +138,8 @@ export function renderHostDays(table: HTMLTableElement, days: HostDay[], now = D
       const tr = document.createElement('tr');
       const th = document.createElement('th');
       th.scope = 'row';
-      th.textContent = d.day === today ? `${dayWords(d.day)} (so far)` : dayWords(d.day);
+      th.textContent = d.day === today ? `${dayWords(d.day)} (so far)` : d.estimated ? `${dayWords(d.day)} ≈` : dayWords(d.day);
+      if (d.estimated) th.title = 'estimated from the plc directory, from before i kept count';
       tr.append(th);
       const cell = (text: string, trend?: 'up' | 'down') => {
         const td = document.createElement('td');

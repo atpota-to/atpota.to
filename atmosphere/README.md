@@ -160,6 +160,44 @@ left.
   biggest independent host and counts like any other.
 - `top`: the 10 independent hosts with the most accounts.
 
+### Backfilling hosts from the PLC directory
+
+The relay's list only says how hosts stand now, so the days before the station kept them
+are estimated from the PLC directory's public log of identity changes, with
+[`src/backfill-hosts.js`](src/backfill-hosts.js) (and [`src/plc.js`](src/plc.js)). It runs
+anywhere with Node 22, a laptop included, and needs nothing but the Supabase service key
+to write:
+
+```bash
+cd atmosphere
+printf 'SUPABASE_URL=https://zdzjtziydmwkxbzlkwxv.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=%s\n' "<the key>" > .env   # .env is git-ignored
+node --env-file=.env src/backfill-hosts.js --from 2026-10-08 --dry-run   # prints each day, writes nothing
+node --env-file=.env src/backfill-hosts.js --from 2026-10-08             # writes them (reuses the dry run's cache)
+```
+
+It starts from the relay's census now and walks back through the log: an account created
+on a day wasn't on its host before it, and one that moved was on its old host until it
+moved. Only identities that changed in the window are kept in memory. One whose first
+operation in the window isn't its creation, and names an independent host or deletes it,
+has its whole history read to find where it was before. Pages and histories are cached in
+`plc-cache/` (git-ignored), so a stopped run picks up where it was and the real run reuses
+the dry run's reading. Days the station wrote itself are left alone unless `--overwrite`.
+
+What it writes, for each day from `--from` to yesterday:
+
+- `atmosphere_hosts` (one row, as at 23:59:59Z) and `atmosphere_host_day` (a row per host),
+  marked `estimated`. Only hosts the relay lists count: the log is full of hosts nobody
+  relays (on 2026-10-22, three days of it held 4,265 new accounts on `pds.trump.com` and 61
+  on `pds.test`). A host counts as active on a day if the relay calls it active now and it
+  had an account then, so one that went offline since is missed; `writing` is null; and
+  `listed` is today's.
+- `atmosphere_plc_day`: the day's identity weather, counted exactly from the log: new
+  accounts on Bluesky's hosts, on independent ones and on unlisted ones; how many new
+  accounts on listed hosts started with a handle on their own domain; accounts moving out of
+  Bluesky's hosts, back in, and between independent hosts; and deletions.
+
+The log runs at about 190,000 operations a day (October 2026).
+
 ## Minute rows
 
 About a minute and a quarter after a minute ends, the station sums the minute's
@@ -228,6 +266,7 @@ detail of old data never makes the report less accurate.
 | `atmosphere_account_app_sketch`: each app's | minutes 26 h, hours 30 days; days, months forever | ~25 MB a year |
 | `atmosphere_hosts`: a census of the PDS hosts every 10 minutes | forever | ~5 MB a year |
 | `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
+| `atmosphere_plc_day`: each day's identity changes, from the PLC log | forever | tiny |
 
 The per-app minute rows were the long tail, about 23k rows (5 MB) a day.
 pg_cron re-sums each hour of them into `atmosphere_hour_app` every 10 minutes
@@ -379,7 +418,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 115 tests, about a second, no network
+npm test                                         # node:test, 123 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -423,6 +462,8 @@ src/supabase.js    PostgREST upserts and paged reads
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
+src/plc.js         reading the PLC directory's log of identity changes
+src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line

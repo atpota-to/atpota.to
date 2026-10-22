@@ -56,6 +56,8 @@ export interface HostDay {
   /** Independent hosts active that day and not the day before, and the other way round. */
   joined: number | null;
   left: number | null;
+  /** From the backfill's estimate (atmosphere/src/backfill-hosts.js), not the station's census. */
+  estimated: boolean;
 }
 
 /** How many hosts each list names. */
@@ -81,7 +83,7 @@ const countOrNull = (x: unknown): number | null => {
 export function toHostDay(x: unknown): HostDay | null {
   if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
   const change = x.change === null || x.change === undefined ? NaN : num(x.change);
-  return { day: x.day, active: countOrNull(x.active), change: Number.isFinite(change) ? change : null, joined: countOrNull(x.joined), left: countOrNull(x.left) };
+  return { day: x.day, active: countOrNull(x.active), change: Number.isFinite(change) ? change : null, joined: countOrNull(x.joined), left: countOrNull(x.left), estimated: x.estimated === true };
 }
 
 /** atmosphere_host_trends's answer, checked, or null if its shape is off. */
