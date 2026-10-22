@@ -47,6 +47,7 @@
 
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
+import { initLensDock } from './weather-dock';
 import { initForecast } from './weather-forecast';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
 import {
@@ -1076,6 +1077,8 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   bindHush(root, desk);
   bindExplainers(root);
   const lens = createLens();
+  // before bindLens, so the dock's copy of the controls is bound with the bar's
+  initLensDock(report, lens);
   bindLens(report, lens);
   const feed = createHistoryFeed(fetchImpl);
   let watch: Watch | null = null;

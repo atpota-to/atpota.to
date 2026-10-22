@@ -38,6 +38,7 @@ import {
 import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
+import { dockSummary } from '../src/scripts/weather-dock.js';
 
 /** The live reading, counting records, unless the test says otherwise (the page's own default is the last hour, by accounts). */
 const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, window: 'now', measure: 'records', ...change });
@@ -557,6 +558,13 @@ describe('the lens', () => {
     const group = kids.indexOf(report.querySelector('.weather-group')!);
     for (const id of ['weather-today-title', 'weather-forecast-title', 'weather-heat-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeGreaterThan(group);
     for (const id of ['weather-trends-title', 'weather-apps-title', 'weather-minute-title']) expect(kids.indexOf(report.querySelector(`[aria-labelledby="${id}"]`)!)).toBeLessThan(group);
+  });
+
+  it("the dock's strip says it in the bar's words", () => {
+    const bar = report.querySelector<HTMLElement>('.weather-lens')!;
+    expect(dockSummary(bar, LENS_DEFAULT)).toBe('1h · accounts');
+    expect(dockSummary(bar, { window: 'day', measure: 'records', unit: 'hour' })).toBe('24h · records · per hour');
+    expect(dockSummary(bar, { window: 'now', measure: 'records', unit: 'total' })).toBe('now · records · in all');
   });
 
   it('starts from the address, else this browser, else the last hour, accounts, a second', () => {
