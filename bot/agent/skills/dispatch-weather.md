@@ -52,8 +52,18 @@ routine numbers.
    (`bursts`: one app writing a flood of records in a minute, a bulk import) is left
    out of the weather, so it's never the busiest hour or a forecast, but a big one can
    be the thing that stood out: name the app, how many records, and how fast.
-3. **The outlook**, only when it says something worth knowing. See below.
-4. **The weather page's link**, exactly as `page` returned it, on a line of its own,
+3. **Where the atmosphere lives**, only if something there stood out
+   (`whereTheAtmosphereLives`): a week when the migration wind blew hard out of
+   Bluesky (`thisWeek.movingHouse`), a burst of new independent hosts or one growing
+   fast, or the hosting diversity moving (`overTheWeek`). One sentence, one number.
+   The hosting diversity is its own scale (about 7.5 in October 2026); never put it
+   next to the diversity index as if they compare. Days marked `estimated` came from a
+   backfill: don't make news of their day-to-day wiggles. Air quality (sign-ups to
+   hosts nobody relays) is dust, not the network's weather: mention it only if it
+   changed a lot, and never name a host as spam. For more than the week has, call
+   read_weather with `report: "hosts"`.
+4. **The outlook**, only when it says something worth knowing. See below.
+5. **The weather page's link**, exactly as `page` returned it, on a line of its own,
    so it turns into a link card in Leaflet.
 
 The first issue with a weather section explains it in a sentence: the station on

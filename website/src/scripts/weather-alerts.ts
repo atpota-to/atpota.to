@@ -13,6 +13,11 @@
  *   storm    new records a second climb into "stormy"
  *   clear    a storm passes, and the header gets a rainbow (weather-hero.ts clearedUp)
  *   mixed    the diversity index climbs a level
+ *   host     the station's census counts more independent PDS hosts than the last one did
+ *   newhost  a host the hosts history lists as new in the atmosphere that this visit
+ *            hadn't seen listed (watchHosts)
+ *   moving   today's count of accounts moving out of Bluesky's hosts, or back in, goes up
+ *            (watchHosts, from the PLC directory's day)
  *
  * The first reading of a visit only sets the scene; alerts come from what changes after
  * it. Poe says one at a time, at least GAP_MS apart, each for ALERT_MS (held while it's
@@ -30,6 +35,7 @@ import { say, type PoeLine, type PoeSpeech } from '../poe/say';
 import type { MascotFace } from './mascot';
 import { clearedUp } from './weather-hero';
 import { diversityText, formatIndex, ratioText, recordsPerSecond, type DiversityLevel, type Reading } from './weather';
+import type { HostHistory } from './weather-hosts';
 
 /** How long Poe's bubble stays up. */
 export const ALERT_MS = 9000;
@@ -46,7 +52,7 @@ export const RETRY_MS = 5000;
 export const MAX_QUEUE = 2;
 export const ALERTS_KEY = 'weather:alerts';
 
-export type AlertKind = 'arrival' | 'new' | 'record' | 'storm' | 'clear' | 'mixed';
+export type AlertKind = 'arrival' | 'new' | 'record' | 'storm' | 'clear' | 'mixed' | 'host' | 'newhost' | 'moving';
 
 export interface WeatherAlert {
   kind: AlertKind;
@@ -56,10 +62,10 @@ export interface WeatherAlert {
 }
 
 /** Which alert wins a place in a full queue. */
-const RANK: Record<AlertKind, number> = { record: 4, storm: 3, new: 2, clear: 1, mixed: 1, arrival: 0 };
+const RANK: Record<AlertKind, number> = { record: 4, storm: 3, new: 2, newhost: 2, clear: 1, mixed: 1, moving: 1, host: 0, arrival: 0 };
 /** Poe's face while it says each one. */
-const FACE: Record<AlertKind, MascotFace> = { record: 'wow', storm: 'wow', new: 'happy', clear: 'happy', mixed: 'wink', arrival: 'kawaii' };
-const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['record', 'storm', 'clear', 'mixed']);
+const FACE: Record<AlertKind, MascotFace> = { record: 'wow', storm: 'wow', new: 'happy', newhost: 'happy', clear: 'happy', mixed: 'wink', moving: 'wink', host: 'kawaii', arrival: 'kawaii' };
+const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['record', 'storm', 'clear', 'mixed', 'moving', 'host']);
 const LEVELS: DiversityLevel[] = ['low', 'moderate', 'high', 'very high', 'extreme'];
 
 // ---------- what's worth an alert ----------
@@ -69,6 +75,9 @@ export interface Watch {
   seen: Set<string>;
   condition: Reading['condition'];
   level: DiversityLevel | null;
+  /** The last census's independent hosts, and when it was taken. */
+  independentHosts?: number | null;
+  censusAt?: string | null;
 }
 
 /**
@@ -77,7 +86,7 @@ export interface Watch {
  */
 export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alerts: WeatherAlert[] } {
   const apps = r.source === 'station' ? (r.apps ?? []) : [];
-  const watch: Watch = { seen: new Set(prev?.seen), condition: r.condition, level: r.diversity?.level ?? null };
+  const watch: Watch = { seen: new Set(prev?.seen), condition: r.condition, level: r.diversity?.level ?? null, independentHosts: r.hosts?.independent ?? prev?.independentHosts ?? null, censusAt: r.hosts?.measuredAt ?? prev?.censusAt ?? null };
   const fresh = apps.filter((a) => !watch.seen.has(a.domain) && a.count >= ARRIVAL_MIN);
   for (const a of apps) watch.seen.add(a.domain);
   if (!prev) return { watch, alerts: [] };
@@ -93,6 +102,17 @@ export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alert
     const d = r.diversity!;
     const why = d.share !== undefined && d.spread !== undefined ? diversityText({ share: d.share, spread: d.spread }) : ratioText(r.records);
     alerts.push({ kind: 'mixed', label: 'weather alert', text: `the sky's getting mixed: ${level}`, sub: `diversity index ${formatIndex(d.index)}. ${why}.` });
+  }
+  // a new census (every 10 minutes) with more independent hosts than the last
+  const h = r.hosts;
+  if (h && prev.censusAt && h.measuredAt !== prev.censusAt && prev.independentHosts != null && h.independent > prev.independentHosts) {
+    const more = h.independent - prev.independentHosts;
+    alerts.push({
+      kind: 'host',
+      label: 'weather alert',
+      text: more === 1 ? 'a new independent host just came online' : `${more} more independent hosts just came online`,
+      sub: `${h.independent.toLocaleString('en-US')} independent pds hosts now, ${h.active.toLocaleString('en-US')} in all.`,
+    });
   }
   const app = fresh[0];
   if (app) {
@@ -120,6 +140,46 @@ export function recordAlert(record: number | null, r: Reading): WeatherAlert | n
 /** An alert for an app the station has just heard for the very first time. */
 export function newAppAlert(domain: string, at: string): WeatherAlert {
   return { kind: 'new', label: 'new in the atmosphere', text: `${domain} is brand new here (◕‿◕)`, sub: `the station heard it for the first time at ${at}.` };
+}
+
+/**
+ * Alerts from the hosts' history as it's read again (weather-hosts.ts initHostTrends):
+ * a host newly listed as new in the atmosphere, by name, and today's moves out of
+ * Bluesky's hosts or back in going up. The first history only sets the scene.
+ */
+export function watchHosts(desk: Pick<AlertDesk, 'push'>): (h: HostHistory | undefined) => void {
+  let known: Set<string> | null = null;
+  let day: { day: string; out: number; back: number } | null = null;
+  return (h) => {
+    if (!h) return;
+    const names = h.new.map((x) => x.hostname);
+    if (known) {
+      const fresh = h.new.find((x) => !known!.has(x.hostname));
+      if (fresh) desk.push(newHostAlert(fresh.hostname, fresh.accounts));
+    }
+    known = new Set([...(known ?? []), ...names]);
+    const today = h.identities[h.identities.length - 1];
+    if (!today) return;
+    if (day && day.day === today.day) {
+      if (today.movedOut > day.out) desk.push(movingAlert('out', today.movedOut - day.out, today.movedOut, today.movedIn));
+      else if (today.movedIn > day.back) desk.push(movingAlert('in', today.movedIn - day.back, today.movedOut, today.movedIn));
+    }
+    day = { day: today.day, out: today.movedOut, back: today.movedIn };
+  };
+}
+
+export function newHostAlert(hostname: string, accounts: number): WeatherAlert {
+  return { kind: 'newhost', label: 'new in the atmosphere', text: `${hostname} just joined the atmosphere (◕‿◕)`, sub: `a new independent pds host, with ${accounts.toLocaleString('en-US')} account${accounts === 1 ? '' : 's'} so far.` };
+}
+
+export function movingAlert(way: 'out' | 'in', just: number, out: number, back: number): WeatherAlert {
+  const who = just === 1 ? 'someone just' : `${just} accounts just`;
+  return {
+    kind: 'moving',
+    label: 'migration winds',
+    text: way === 'out' ? `${who} moved out of bluesky to an independent host` : `${who} moved back to bluesky`,
+    sub: `today so far: ${out.toLocaleString('en-US')} out, ${back.toLocaleString('en-US')} back in.`,
+  };
 }
 
 // ---------- hushing ----------

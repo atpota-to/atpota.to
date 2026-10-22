@@ -227,6 +227,21 @@ describe('atmospheric conditions', () => {
     expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from outside bluesky');
   });
 
+  it('says where the atmosphere lives once a reading has the hosts', () => {
+    document.body.innerHTML = tileHtml();
+    const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
+    const line = tile.querySelector<HTMLElement>('[data-weather-hosts]')!;
+    expect(line.hidden).toBe(true);
+    renderReading(tile, READING);
+    expect(line.hidden).toBe(true);
+    renderReading(tile, {
+      ...READING,
+      hosts: { measuredAt: '2026-10-22T14:52:36Z', listed: 6442, active: 1889, bluesky: 90, independent: 1799, writing: null, accounts: { bluesky: 1, independent: 1 }, diversity: { index: 7.48, share: 1.51, spread: 24.57 }, top: [] },
+    });
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toBe('1,889 pds hosts, 1,799 independent · hosting diversity 7.5');
+  });
+
   it('words the index and the split', () => {
     expect(formatIndex(0.05)).toBe('0.05');
     expect(formatIndex(2.44)).toBe('2.4');

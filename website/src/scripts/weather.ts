@@ -345,6 +345,11 @@ export function recordsPerSecond(r: Reading): number {
   return r.records?.perSecond ?? r.perSecond.posts;
 }
 
+/** The home tile's line on where the atmosphere lives: "1,889 pds hosts, 1,799 independent · hosting diversity 7.5". */
+export function hostsLine(h: Hosts): string {
+  return `${h.active.toLocaleString('en-US')} pds hosts, ${h.independent.toLocaleString('en-US')} independent · hosting diversity ${formatIndex(h.diversity.index)}`;
+}
+
 export function renderReading(tile: HTMLElement, reading: Reading): void {
   const set = (name: string, value: number) => {
     const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
@@ -371,6 +376,11 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     const level = tile.querySelector<HTMLElement>('[data-weather-level]');
     if (level) level.textContent = reading.diversity.level;
     renderMix(tile.querySelector('[data-weather-mix-text]'), tile.querySelector('[data-weather-bar-bsky]'), tile.querySelector('[data-weather-bar-else]'), reading);
+  }
+  const hosts = tile.querySelector<HTMLElement>('[data-weather-hosts]');
+  if (hosts) {
+    hosts.hidden = !reading.hosts;
+    if (reading.hosts) hosts.textContent = hostsLine(reading.hosts);
   }
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'ready';

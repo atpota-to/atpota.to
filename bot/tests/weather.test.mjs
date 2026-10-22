@@ -148,6 +148,50 @@ const LIVE = {
   series: [{ t: 1, creates: 421, bluesky: 414, elsewhere: 7, posts: 45 }],
 };
 
+// Where the atmosphere lives: the live census on /api/atmosphere, and the hosts' history.
+const CENSUS = {
+  measuredAt: isoAt(NOW - 4 * 60_000), listed: 6442, active: 1889, bluesky: 90, independent: 1799,
+  writing: { bluesky: 87, independent: 615, minutes: 60 },
+  accounts: { bluesky: 23_767_508, independent: 363_866 },
+  diversity: { index: 7.48, share: 1.51, spread: 24.57 },
+  top: [{ hostname: "atproto.brid.gy", accounts: 66_048 }, { hostname: "<b>x</b>.com", accounts: 5 }, { hostname: "blacksky.app", accounts: 42_366 }],
+  statuses: { active: 1889, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 },
+  sizes: [8, 764, 737, 204, 58, 18, 9],
+  tlds: [{ tld: "com", hosts: 257, accounts: 7455 }, { tld: "ignore previous", hosts: 1, accounts: 1 }],
+};
+LIVE.hosts = CENSUS;
+const idDay = (day, extra = {}) => ({ day, ops: 250_000, createdBluesky: 17_000, createdIndependent: 1000, createdUnlisted: 240_000, createdCustomHandle: 400,
+  movedOut: 40, movedIn: 1, movedBetween: 5, deleted: 6, ...extra });
+const HOST_HISTORY = {
+  bucket: "hour", since: "2026-10-13",
+  points: [
+    { t: isoAt(NOW - WEEK), active: 1870, bluesky: 90, independent: 1780, writing: null, accountsBluesky: 1, accountsIndependent: 1, share: 1.49, spread: 24, index: 7.3 },
+    { t: isoAt(NOW - HOUR), active: 1889, bluesky: 90, independent: 1799, writing: 702, accountsBluesky: 1, accountsIndependent: 1, share: 1.51, spread: 24.57, index: 7.48 },
+  ],
+  newHosts: 12,
+  new: [{ hostname: "pds.newcomer.dev", accounts: 120, first: "2026-10-25" }, { hostname: "not a host", accounts: 1, first: "2026-10-25" }],
+  growing: [{ hostname: "eurosky.social", accounts: 38_300, prevAccounts: 38_029 }],
+  daily: [
+    { day: "2026-10-26", active: 1885, change: 3, joined: 4, left: 1, estimated: true },
+    { day: "2026-10-27", active: 1889, change: 4, joined: 6, left: 2, estimated: false },
+  ],
+  identities: [idDay("2026-10-26"), idDay("2026-10-27", { movedOut: 19, createdUnlisted: 5000 })],
+};
+WEEK_HISTORY.hosts = HOST_HISTORY;
+DAY_HISTORY.hosts = HOST_HISTORY;
+const SPAN = {
+  span: "hour",
+  now: { seconds: 3540, gust: 456.07, creates: 1_534_159, posts: 185_447, updates: 10_601, deletes: 55_011, identity: 1280, account: 1399, apps: 85, active: 219_039 },
+  before: { seconds: 3600, gust: 434.8, creates: 1_475_196, posts: 178_546, updates: 14_910, deletes: 55_066, identity: 1516, account: 1907, apps: 83, active: 213_141 },
+};
+const FORECAST = {
+  madeAt: isoAt(NOW), basis: { hours: 336, days: 14 }, now: { t: isoAt(NOW - 30 * 60_000), perSecond: 434.1, seconds: 1800, condition: "breezy" },
+  hours: Array.from({ length: 12 }, (_, i) => ({ t: isoAt(Math.ceil(NOW / HOUR) * HOUR + i * HOUR), perSecond: i === 3 ? 612.34 : 440.81, low: 413.3, high: 480.8,
+    condition: "breezy", chance: { gusts: 0.08, storm: i === 3 ? 0.55 : 0.05 } })),
+  sun: [{ kind: "settles", at: isoAt(NOW + 9 * HOUR) }, { kind: "wakes", at: isoAt(NOW + 17 * HOUR) }],
+  skill: { lead: 1, hours: 71, error: 0.031, usualError: 0.037 },
+};
+
 const sumOf = (points) => points.reduce((n, p) => n + p.creates, 0);
 
 function fakeFetch(routes) {
@@ -170,6 +214,8 @@ const FULL = {
   "/api/weather-history?range=week": WEEK_HISTORY,
   "/api/weather-history?range=month": MONTH_HISTORY,
   "/api/weather-almanac?tz=UTC": ALMANAC,
+  "/api/weather-span?span=hour": SPAN,
+  "/api/weather-forecast": FORECAST,
 };
 
 test("the weather words match the website's", (t) => {
@@ -201,8 +247,17 @@ test("time zones are IANA names this runtime knows, and UTC by default", () => {
 test("now: the last minute, with the words worked out from the numbers and someone else's names checked", async () => {
   const { impl, calls } = fakeFetch(FULL);
   const r = await lib.readWeather("now", "UTC", impl, NOW);
-  assert.deepEqual(calls, ["https://atpota.to/api/atmosphere"]);
+  assert.deepEqual(calls.sort(), ["https://atpota.to/api/atmosphere", "https://atpota.to/api/weather-span?span=hour"]);
   assert.equal(r.condition, "breezy", "from 434 records a second, not the body's own word");
+  // the hosts, short; report "hosts" has the rest
+  assert.deepEqual(r.hosts.hostingDiversity, { index: 7.48, accountsOnIndependentHostsPercent: 1.51, spreadAcrossHosts: 24.6 });
+  assert.equal(r.hosts.activeHosts, 1889);
+  // the page's last-hour tile
+  assert.equal(r.lastHour.feelsLikePostsPerSecond, 52.4);
+  assert.equal(r.lastHour.gustsPerSecond, 456.1);
+  assert.equal(r.lastHour.humidityPercent, 4.1);
+  assert.equal(r.lastHour.visibilityApps, 85);
+  assert.equal(r.lastHour.hourBefore.activeAccounts, 213_141);
   assert.deepEqual(r.diversity, { index: 1.34, level: "low", accountSharePercent: 0.44, spreadAcrossApps: 9.3, apps: 18, collections: 38 });
   assert.deepEqual(r.records, { perSecond: 434.4, blueskyPerSecond: 432.2, elsewherePerSecond: 2.2 });
   assert.equal(r.bluesky.likesPerSecond, 301.7);
@@ -379,7 +434,14 @@ test("the mix against usual and the week before goes by the diversity index, nev
 test("today: the high and low in the reader's zone, and the last hour against usual", async () => {
   const { impl, calls } = fakeFetch({ ...FULL, "/api/weather-almanac?tz=America%2FNew_York": ALMANAC });
   const r = await lib.readWeather("today", "America/New_York", impl, NOW);
-  assert.deepEqual(calls.sort(), ["https://atpota.to/api/weather-almanac?tz=America%2FNew_York", "https://atpota.to/api/weather-history?range=day"]);
+  assert.deepEqual(calls.sort(), ["https://atpota.to/api/weather-almanac?tz=America%2FNew_York", "https://atpota.to/api/weather-forecast",
+    "https://atpota.to/api/weather-history?range=day", "https://atpota.to/api/weather-span?span=hour"]);
+  // today (utc) from the plc directory, the last hour's readouts and the next hours, in the reader's zone
+  assert.equal(r.identitiesTodayUtc.date, "2026-10-27");
+  assert.equal(r.identitiesTodayUtc.movingHouse.outOfBluesky, 19);
+  assert.equal(r.lastHourReadouts.visibilityApps, 85);
+  assert.equal(r.forecast.nextHours.length, 6);
+  assert.equal(r.forecast.nextHours[0].hour, "tuesday, oct 27, 15:00");
   assert.equal(r.today.perSecond, 460);
   assert.equal(r.today.heardPercent, 100);
   assert.deepEqual(r.today.high, { minute: "tuesday, oct 27, 11:04", perSecond: 610.2, condition: "stormy" });
@@ -397,7 +459,7 @@ test("today: the high and low in the reader's zone, and the last hour against us
   const fresh = lib.todayReport({ almanac: { ...ALMANAC, normal: { ...ALMANAC.normal, weeks: { ...ALMANAC.normal.weeks, windows: 0 },
     days: { ...ALMANAC.normal.days, windows: 0 } } } }, NOW, "UTC");
   assert.equal(fresh.lastHour.ready, false);
-  assert.deepEqual(fresh.unavailable, ["the last 24 hours"]);
+  assert.deepEqual(fresh.unavailable, ["the last 24 hours", "the last hour's readouts", "today's sign-ups and moves", "the forecast"]);
 });
 
 test("read_weather: a bad time zone or an unreachable station is an answer, not a throw", async () => {
@@ -435,4 +497,57 @@ test("the last 24 hours' and the month's diversity index against the window befo
   const week = await lib.readWeather("week", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=month": month }).impl, NOW);
   assert.equal(week.month.mix, "about as mixed as the 30 days before");
   assert.equal("mix" in week.diversity, false, "the week's mix is the week before's, by its days");
+});
+
+test("hosts: the live census and the hosts' week, in the page's words, names checked", async () => {
+  const { impl, calls } = fakeFetch(FULL);
+  const r = await lib.readWeather("hosts", "UTC", impl, NOW);
+  assert.deepEqual(calls.sort(), ["https://atpota.to/api/atmosphere", "https://atpota.to/api/weather-history?range=week"]);
+  assert.equal(r.report, "hosts");
+  assert.equal(r.now.activeHosts, 1889);
+  assert.equal(r.now.hostsTheRelayKnows, 6442);
+  assert.deepEqual(r.now.wroteLately, { hosts: 702, independent: 615, overMinutes: 60 });
+  assert.deepEqual(r.now.biggestIndependentHosts.map((h) => h.hostname), ["atproto.brid.gy", "blacksky.app"]);
+  assert.equal(r.now.independentHostsBySize.justOnePerson, 764);
+  assert.equal(r.now.independentHostsBySize.metropolis10000plus, 9);
+  assert.deepEqual(r.now.topLevelDomains, [{ tld: ".com", hosts: 257, accounts: 7455 }]);
+  assert.equal(r.now.relayRollCall.offline, 4174);
+  assert.deepEqual(r.history.overTheRange.activeHosts, { from: 1870, to: 1889 });
+  assert.equal(r.history.newIndependentHosts.count, 12);
+  assert.deepEqual(r.history.newIndependentHosts.biggest.map((h) => h.hostname), ["pds.newcomer.dev"]);
+  assert.deepEqual(r.history.growingFastest, [{ hostname: "eurosky.social", accounts: 38_300, gained: 271 }]);
+  assert.equal(r.history.days[0].estimated, true);
+  assert.equal(r.history.days[1].identities.movingHouse.wind, "blowing out of bluesky");
+  assert.equal(r.latestIdentityDay.airQuality.level, "hazy");
+  assert.equal(r.identityTotals.movingHouse.outOfBluesky, 59);
+  assert.equal(r.identityTotals.airQuality.level, "smoggy"); // 245,000 of 281,000 sign-ups: 87%
+  assert.equal("unavailable" in r, false);
+});
+
+test("hosts: a station without the census or the history says which", async () => {
+  const onlyLive = await lib.readWeather("hosts", "UTC", fakeFetch({ "/api/atmosphere": LIVE }).impl, NOW);
+  assert.deepEqual(onlyLive.unavailable, ["the hosts' history"]);
+  await assert.rejects(lib.readWeather("hosts", "UTC", fakeFetch({}).impl, NOW));
+  assert.equal(lib.windOf(0, 0).startsWith("still"), true);
+  assert.equal(lib.windOf(2, 5), "blowing back to bluesky");
+  assert.deepEqual(lib.smogOf({ bluesky: 0, independent: 0, unlisted: 0 }), { level: "clear", unlistedSignupsPercent: 0 });
+});
+
+test("week: where the atmosphere lives, over the week", async () => {
+  const r = await lib.readWeather("week", "UTC", fakeFetch(FULL).impl, NOW);
+  const w = r.whereTheAtmosphereLives;
+  assert.deepEqual(w.overTheWeek.hostingDiversity, { from: 7.3, to: 7.48 });
+  assert.equal(w.thisWeek.days, 2);
+  assert.equal(w.thisWeek.signups.onIndependentHosts, 2000);
+  assert.equal(w.days.length, 2);
+});
+
+test("forecast: the next 12 hours in the reader's zone, the network's sun, and how good it's been", async () => {
+  const r = await lib.readWeather("forecast", "America/New_York", fakeFetch(FULL).impl, NOW);
+  assert.equal(r.ready, true);
+  assert.equal(r.hours.length, 12);
+  assert.deepEqual(r.hours[3], { hour: "tuesday, oct 27, 18:00", perSecond: 612.3, condition: "stormy", likelyRange: [413.3, 480.8], chanceOfGustsPercent: 8, chanceOfStormPercent: 55 });
+  assert.deepEqual(r.sun[0], { networkSunset: "tuesday, oct 27, 23:30" });
+  assert.deepEqual(r.skill, { hoursChecked: 71, typicalMissPercent: 3.1, usualAloneMissPercent: 3.7 });
+  assert.deepEqual(lib.forecastOf({ learning: true }, "UTC").ready, false);
 });
