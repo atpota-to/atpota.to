@@ -43,7 +43,7 @@ import {
 import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
-import { dockSummary, initLensDock } from '../src/scripts/weather-dock.js';
+import { dockSummary, initLensDock, punctuate } from '../src/scripts/weather-dock.js';
 
 /** The live reading, counting records, unless the test says otherwise (the page's own default is the last hour, by accounts). */
 const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, window: 'now', measure: 'records', ...change });
@@ -131,9 +131,9 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-h-active]')).toBe('1,887');
     expect(text('[data-h-index]')).toBe('7.5');
     expect(text('[data-h-writing]')).toBe('700');
-    expect(text('[data-h-writing-words]')).toBe('wrote in the last 30 minutes');
+    expect(text('[data-h-writing-words]')).toBe('hosts that wrote in the last 30 minutes');
     expect(text('[data-h-age]')).toBe('counted 7 minutes ago');
-    expect(text('[data-h-share]')).toBe("1.5% of 24.1m accounts live on independent hosts, spread across about 25 hosts' worth.");
+    expect(text('[data-h-share]')).toBe("1.5% of all 24.1m accounts, active or not, live on independent hosts, spread across about 25 hosts' worth.");
     expect([...report.querySelectorAll('[data-h-top] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'eurosky.social']);
     renderHosts(report, { ...hosts, writing: null });
     expect(report.querySelector<HTMLElement>('[data-h-writing-wrap]')!.hidden).toBe(true);
@@ -662,7 +662,15 @@ describe('the lens', () => {
     bindLens(report, l);
     expect(dock.hidden).toBe(false);
     expect(panel.hidden).toBe(true);
-    expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('1h · accounts');
+    // jsdom lays every section at the top, so the strip is in the last one, where it lives: the measure doesn't reach it
+    const visible = () => [...dock.querySelectorAll<HTMLElement>('[data-dock-now] [data-part]')].filter((s) => !s.hidden).map((s) => s.textContent).join('');
+    expect(dock.dataset.section).toBe('hosts');
+    expect(visible()).toBe('1h');
+    const now = dock.querySelector<HTMLElement>('[data-dock-now]')!;
+    punctuate(now, '');
+    expect(visible()).toBe('1h · accounts');
+    punctuate(now, 'window measure');
+    expect(visible()).toBe('');
     // the header says what the number is over, and a tap on it opens the controls too
     const period = report.querySelector<HTMLButtonElement>('[data-r-period]')!;
     expect(period.textContent).toBe('the last hour');
@@ -680,7 +688,7 @@ describe('the lens', () => {
     // a choice keeps it open, to make another
     panel.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
     expect(l.get().window).toBe('week');
-    expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('7d · accounts');
+    expect(visible()).toBe('7d'); // still where it lives: the window shows, the measure doesn't
     panel.querySelector<HTMLButtonElement>('[data-lens-measure="records"]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(panel.hidden).toBe(false);
     report.querySelector('[data-weather-hero]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));

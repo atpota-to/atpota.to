@@ -42,8 +42,8 @@ describe('a host in words', () => {
   });
 
   it('tells its story, and owns up to estimated days', () => {
-    expect(hostStory(EUROSKY)).toBe('38,036 accounts on oct 22. +1,763 (+4.9%) since oct 8, the first day i have for it.');
-    expect(hostStory({ ...EUROSKY, days: EUROSKY.days.slice(-1) })).toBe("38,036 accounts on oct 22. that's the only day i've seen it so far.");
+    expect(hostStory(EUROSKY)).toBe('38,036 accounts hosted on oct 22, active or not. +1,763 (+4.9%) since oct 8, the first day i have for it.');
+    expect(hostStory({ ...EUROSKY, days: EUROSKY.days.slice(-1) })).toBe("38,036 accounts hosted on oct 22, active or not. that's the only day i've seen it so far.");
     expect(hostStory({ ...EUROSKY, days: [] })).toMatch(/haven't seen/);
     expect(estimatedWords(EUROSKY)).toBe('days up to oct 21 are estimated from the plc directory, from before i kept count of each host.');
     expect(estimatedWords({ ...EUROSKY, days: EUROSKY.days.slice(-1) })).toBe('');

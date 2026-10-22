@@ -650,6 +650,7 @@ export function hostsNowOf(x: unknown) {
     hostsTheRelayKnows: c.listed,
     // active hosts that sent the relay anything lately
     ...(writing ? { wroteLately: { hosts: writing.bluesky + writing.independent, independent: writing.independent, overMinutes: writing.minutes } } : {}),
+    // every account each host holds, active or not (the relay's count): how big hosts are, not how busy
     accounts: { onBlueskyHosts: accounts.bluesky, onIndependentHosts: accounts.independent },
     // like the diversity index, but by where accounts live: the percent on independent hosts, times the square root of how many hosts' worth they're spread across
     hostingDiversity: { index: d.index, accountsOnIndependentHostsPercent: d.share, spreadAcrossHosts: round1(d.spread) },

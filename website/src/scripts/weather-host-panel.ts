@@ -37,7 +37,7 @@ export function hostStory(h: OneHost): string {
   const first = h.days[0];
   const last = h.days[h.days.length - 1];
   if (!first || !last) return "i haven't seen this host in a census yet.";
-  const now = `${formatCount(last.accounts)} account${last.accounts === 1 ? '' : 's'} on ${dayWords(last.day)}.`;
+  const now = `${formatCount(last.accounts)} account${last.accounts === 1 ? '' : 's'} hosted on ${dayWords(last.day)}, active or not.`;
   if (first === last) return `${now} that's the only day i've seen it so far.`;
   const gained = last.accounts - first.accounts;
   const change = gained === 0 ? 'no change' : `${gained > 0 ? '+' : '−'}${formatCount(Math.abs(gained))}${first.accounts > 0 ? ` (${gained > 0 ? '+' : '−'}${(Math.abs(gained / first.accounts) * 100).toFixed(1)}%)` : ''}`;

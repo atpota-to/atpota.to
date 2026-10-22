@@ -380,7 +380,7 @@
                         </div>
                         <dl class="weather-hosts__stats">
                             <div><dt>hosting diversity</dt><dd data-h-index>&ndash;</dd></div>
-                            <div data-h-writing-wrap hidden><dt data-h-writing-words>wrote in the last hour</dt><dd data-h-writing>&ndash;</dd></div>
+                            <div data-h-writing-wrap hidden><dt data-h-writing-words>hosts that wrote in the last hour</dt><dd data-h-writing>&ndash;</dd></div>
                         </dl>
                         <div class="weather-ratio weather-mix__bar" aria-hidden="true">
                             <span class="weather-ratio__bsky" data-h-bar-bsky></span><span class="weather-ratio__else" data-h-bar-else></span>
@@ -388,8 +388,9 @@
                         <p class="weather-hosts__share" data-h-share></p>
                     </div>
                     <div class="weather-hosts__list">
+                        <h3 class="weather-hosts__subtitle">the biggest independent hosts, by accounts they hold</h3>
                         <ol class="weather-bars weather-bars--hosts" role="list" data-h-top data-host-list></ol>
-                        <p class="weather-tile__note">the independent hosts with the most accounts. bluesky&#39;s own hosts count as one place, the way bluesky counts as one app.</p>
+                        <p class="weather-tile__note">every account a host holds, active or not: the relay&#39;s count, so quiet and deactivated accounts count too. tap a host to see how it&#39;s grown. bluesky&#39;s own hosts count as one place, the way bluesky counts as one app.</p>
                     </div>
                 </div>
                 <!-- the hosts over the lens's window, from the station's censuses (src/scripts/weather-hosts.ts); "now" and the last hour show the last 24 hours -->
@@ -550,7 +551,7 @@
                 </div>
                 <p class="weather-pds__line" data-hp-story></p>
                 <figure class="weather-chart-card" hidden>
-                    <figcaption class="weather-chart-card__title">accounts each day</figcaption>
+                    <figcaption class="weather-chart-card__title">accounts hosted each day</figcaption>
                     <div class="weather-chart" data-hp-chart></div>
                 </figure>
                 <p class="weather-tile__note" data-hp-estimated></p>

@@ -640,7 +640,7 @@ export function hostsShare(h: Hosts): string {
   const total = h.accounts.bluesky + h.accounts.independent;
   if (h.accounts.independent <= 0) return `all ${formatCount(total)} accounts live on bluesky's hosts.`;
   const hosts = Math.max(1, Math.round(h.diversity.spread));
-  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
+  return `${formatIndex(h.diversity.share)}% of all ${compactCount(total)} accounts, active or not, live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
 }
 
 /** How long ago the station counted them: "counted just now", "counted 7 minutes ago". */
@@ -666,7 +666,7 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
   if (writing) writing.hidden = h.writing === null;
   if (h.writing) {
     count(tile, '[data-h-writing]', h.writing.bluesky + h.writing.independent, formatCount);
-    setText(tile, '[data-h-writing-words]', h.writing.minutes >= 60 ? 'wrote in the last hour' : `wrote in the last ${h.writing.minutes} minutes`);
+    setText(tile, '[data-h-writing-words]', h.writing.minutes >= 60 ? 'hosts that wrote in the last hour' : `hosts that wrote in the last ${h.writing.minutes} minutes`);
   }
   renderShare($(tile, '[data-h-bar-bsky]'), $(tile, '[data-h-bar-else]'), h.diversity.share);
   roll(tile, '[data-h-share]', hostsShare(h));
@@ -779,6 +779,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "every ten minutes i read the relay's list of every host it knows about:",
       '- active hosts are the ones the relay is happily listening to right now',
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
+      "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
       "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place",
       '',
       "it goes by where accounts live, not who's writing this minute, so it's its own number and moves slowly. a bigger number means more of the network lives somewhere other than bluesky (◕‿◕)",

@@ -20,12 +20,36 @@ import { WINDOW_INFO, type Lens, type LensState, type Window } from './weather-l
 /** The header's period, above its number: "right now", or "the last 24 hours". */
 export const periodWords = (w: Window) => (w === 'now' ? 'right now' : WINDOW_INFO[w].words);
 
-/** What the strip says: the window as the controls have it, the measure, and records' unit. */
-export function dockSummary(controls: HTMLElement, s: LensState): string {
+/** The strip's parts: the window as the controls have it, the measure, and records' unit. */
+export function dockParts(controls: HTMLElement, s: LensState): Array<[LensPart, string]> {
   const word = (sel: string) => controls.querySelector(sel)?.textContent?.trim() ?? '';
-  const parts = [word(`[data-lens-window="${s.window}"]`), word(`[data-lens-measure="${s.measure}"]`)];
-  if (s.measure === 'records') parts.push(word(`[data-lens-unit] option[value="${s.unit}"]`));
-  return parts.filter(Boolean).join(' · ');
+  const parts: Array<[LensPart, string]> = [
+    ['window', word(`[data-lens-window="${s.window}"]`)],
+    ['measure', word(`[data-lens-measure="${s.measure}"]`)],
+  ];
+  if (s.measure === 'records') parts.push(['unit', word(`[data-lens-unit] option[value="${s.unit}"]`)]);
+  return parts.filter(([, w]) => w);
+}
+
+/** Hides the strip's parts named in `off` ("measure unit") and dots the rest: "1h · accounts". */
+export function punctuate(now: HTMLElement, off: string): void {
+  const hidden = new Set(off.split(' '));
+  let first = true;
+  for (const span of now.querySelectorAll<HTMLElement>('[data-part]')) {
+    const part = span.dataset.part ?? '';
+    span.hidden = hidden.has(part);
+    const word = span.dataset.word ?? span.textContent ?? '';
+    span.dataset.word = word;
+    span.textContent = span.hidden || first ? word : ` · ${word}`;
+    if (!span.hidden) first = false;
+  }
+}
+
+/** What the strip says, in a line: "1h · accounts". */
+export function dockSummary(controls: HTMLElement, s: LensState): string {
+  return dockParts(controls, s)
+    .map(([, w]) => w)
+    .join(' · ');
 }
 
 export function initLensDock(report: HTMLElement, lens: Lens): void {
@@ -68,7 +92,16 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
   const periods = report.querySelectorAll<HTMLElement>('[data-r-period]');
   initSections(report, dock, () => open(false));
   const show = (s: LensState) => {
-    now.textContent = dockSummary(panel, s);
+    // each part its own span, so a section the part doesn't reach can leave it out (initSections)
+    now.replaceChildren(
+      ...dockParts(panel, s).map(([part, w]) => {
+        const span = document.createElement('span');
+        span.dataset.part = part;
+        span.textContent = w;
+        return span;
+      }),
+    );
+    punctuate(now, dock.dataset.lensOff ?? '');
     for (const el of periods) {
       el.textContent = periodWords(s.window);
       el.setAttribute('aria-label', `${periodWords(s.window)}. change what the report shows`);
@@ -168,6 +201,10 @@ export function initSections(report: HTMLElement, dock: HTMLElement, close: () =
       dock.dataset.section = at.key;
       if (label) label.textContent = at.label;
       links.forEach((a, i) => (sections[i] === at ? a.setAttribute('aria-current', 'true') : a.removeAttribute('aria-current')));
+      // the strip leaves out what doesn't reach this section ("accounts" means nothing to the hosts)
+      dock.dataset.lensOff = (Object.keys(parts) as LensPart[]).filter((p) => !at.lens.has(p)).join(' ');
+      const now = dock.querySelector<HTMLElement>('[data-dock-now]');
+      if (now) punctuate(now, dock.dataset.lensOff);
       for (const [part, el] of Object.entries(parts) as Array<[LensPart, HTMLElement | null]>) {
         if (!el) continue;
         if (at.lens.has(part)) delete el.dataset.inactive;

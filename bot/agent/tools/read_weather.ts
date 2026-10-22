@@ -33,7 +33,8 @@ export default defineTool({
     "against just going by usual. It's a real forecast, so say it as one, with its uncertainty. " +
     "\"hosts\" is where the atmosphere lives: the PDS hosts (servers that hold accounts), from the " +
     "station's census of the relay's list every 10 minutes. Active hosts, Bluesky's own (the ~90 " +
-    "*.host.bsky.network) and independent ones, how many wrote lately, the accounts on each side, the " +
+    "*.host.bsky.network) and independent ones, how many wrote lately, the accounts on each side (every account a host " +
+    "holds, active or not: how big hosts are, not how busy), the " +
     "hosting diversity (like the diversity index but by where accounts live: the percent of accounts on " +
     "independent hosts times the square root of how many hosts' worth they're spread across; its own " +
     "scale, about 7.5 in october 2026, never compare it with the diversity index), the biggest independent " +
