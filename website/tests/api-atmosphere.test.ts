@@ -407,6 +407,22 @@ describe('reading the weather station', () => {
       top: [{ hostname: 'blacksky.app', accounts: 42366 }],
     });
     expect(fromStation({ ...STATION, hosts: { ...hosts, writing: null } })!.hosts!.writing).toBeNull();
+    // the census's extras, each kept only when it checks out
+    const extras = fromStation({
+      ...STATION,
+      hosts: {
+        ...hosts,
+        statuses: { active: 1888, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 },
+        sizes: [8, 764, 737, 204, 58, 18, 9],
+        tlds: [{ tld: 'com', hosts: 257, accounts: 7455 }, { tld: '<b>', hosts: 1, accounts: 1 }],
+      },
+    })!.hosts!;
+    expect(extras.statuses).toEqual({ active: 1888, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 });
+    expect(extras.sizes).toEqual([8, 764, 737, 204, 58, 18, 9]);
+    expect(extras.tlds).toEqual([{ tld: 'com', hosts: 257, accounts: 7455 }]);
+    const off = fromStation({ ...STATION, hosts: { ...hosts, statuses: { active: 'many' }, sizes: [1, 2] } })!.hosts!;
+    expect(off.statuses).toBeUndefined();
+    expect(off.sizes).toBeUndefined();
     expect(fromStation(STATION)!.hosts).toBeUndefined();
     expect(fromStation({ ...STATION, hosts: { ...hosts, active: 'lots' } })!.hosts).toBeUndefined();
     expect(fromStation({ ...STATION, hosts: { ...hosts, top: null } })!.hosts).toBeUndefined();

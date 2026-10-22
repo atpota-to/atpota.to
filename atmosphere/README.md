@@ -120,7 +120,24 @@ firehose. Instead, every 10 minutes the station pages through the relay's own li
 them (`com.atproto.sync.listHosts` on `relay1.us-east.bsky.network`, the relay jetstream2
 reads; `RELAY_URL` to change it): about 6,400 hosts in 7 pages, in about 2 s. It keeps the
 last whole list; a page that fails fails that poll, and the last list stays. A list over
-2 hours old isn't served. Nothing is written to Supabase.
+2 hours old isn't served.
+
+Each census is also kept, for the trends ([`sql/atmosphere_hosts.sql`](sql/atmosphere_hosts.sql),
+applied 2026-10-22; `createHostWriter` in `src/hosts.js`):
+
+- `atmosphere_hosts`: one row per census, the counts below and the hosting diversity's
+  `share` and `spread`. Rows that fail wait for the next census (a day of them at most).
+- `atmosphere_host_day`: one row per active host per UTC day (hostname, Bluesky's or not,
+  accounts, seq), rewritten each census, so a day ends with its last one. A host's first
+  row is when the station first saw it active; its seq moving from one day to the next
+  means it wrote that day.
+
+`atmosphere_host_trends(since, bucket)` reads them for `/api/weather-history`'s `hosts`
+(`website/server/weather-hosts.ts`): the last census in each bucket, the independent hosts
+first seen in the range (none count as new on the first day kept), the ones that
+gained the most accounts, and day by day (at least the last 7): active hosts at the day's
+last census, the change from the day before, and the independent hosts that joined and
+left.
 
 `/v1/now` carries it as `hosts` (`src/hosts.js` `summarizeHosts`):
 
@@ -142,6 +159,63 @@ last whole list; a page that fails fails that poll, and the last list stays. A l
   and Poe's copy of its levels. `atproto.brid.gy` (Bridgy Fed's bridged accounts) is the
   biggest independent host and counts like any other.
 - `top`: the 10 independent hosts with the most accounts.
+
+A census reading also has every listed host by the relay's state for it (`statuses`),
+the independent hosts by size (`sizes`: how many hold 0, 1, up to 10, 100, 1,000, 10,000
+accounts, and more) and their top-level domains (`tlds`), for the website's "where the
+atmosphere lives" tiles.
+
+### Today's identity weather, live
+
+After each census the station also reads the PLC directory's log of identity changes
+([`src/plc-watch.js`](src/plc-watch.js), with [`src/plc.js`](src/plc.js)) and keeps today's
+row of `atmosphere_plc_day` up to date: new accounts by where they signed up, new accounts
+with a handle on their own domain, accounts moving out of Bluesky's hosts, back in and
+between independent hosts, and deletions (the columns are under "Backfilling hosts" below).
+It counts exactly as the backfill does. A move needs to know where the account was
+before, so an account that names an independent host (or deletes itself), and wasn't seen
+earlier today, has its history read once. The log runs at about 250,000 operations a day,
+about 250 pages, so each poll reads a few dozen; on 2026-10-22 reading the day from midnight
+took 17 s and 137 MB. After a restart it reads today again from midnight UTC. A day the
+station was down across the end of isn't finished, and the backfill rewrites it.
+
+### Backfilling hosts from the PLC directory
+
+The relay's list only says how hosts stand now, so the days before the station kept them
+are estimated from the PLC directory's public log of identity changes, with
+[`src/backfill-hosts.js`](src/backfill-hosts.js) (and [`src/plc.js`](src/plc.js)). It runs
+anywhere with Node 22, a laptop included, and needs nothing but the Supabase service key
+to write:
+
+```bash
+cd atmosphere
+printf 'SUPABASE_URL=https://zdzjtziydmwkxbzlkwxv.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=%s\n' "<the key>" > .env   # .env is git-ignored
+node --env-file=.env src/backfill-hosts.js --from 2026-10-08 --dry-run   # prints each day, writes nothing
+node --env-file=.env src/backfill-hosts.js --from 2026-10-08             # writes them (reuses the dry run's cache)
+```
+
+It starts from the relay's census now and walks back through the log: an account created
+on a day wasn't on its host before it, and one that moved was on its old host until it
+moved. Only identities that changed in the window are kept in memory. One whose first
+operation in the window isn't its creation, and names an independent host or deletes it,
+has its whole history read to find where it was before. Pages and histories are cached in
+`plc-cache/` (git-ignored), so a stopped run picks up where it was and the real run reuses
+the dry run's reading. Days the station wrote itself are left alone unless `--overwrite`.
+
+What it writes, for each day from `--from` to yesterday:
+
+- `atmosphere_hosts` (one row, as at 23:59:59Z) and `atmosphere_host_day` (a row per host),
+  marked `estimated`. Only hosts the relay lists count: the log is full of hosts nobody
+  relays (on 2026-10-22, three days of it held 4,265 new accounts on `pds.trump.com` and 61
+  on `pds.test`). A host counts as active on a day if the relay calls it active now and it
+  had an account then, so one that went offline since is missed; `writing` is null; and
+  `listed` is today's.
+- `atmosphere_plc_day`: the day's identity weather, counted exactly from the log: new
+  accounts on Bluesky's hosts, on independent ones and on unlisted ones; how many new
+  accounts on listed hosts started with a handle on their own domain; accounts moving out of
+  Bluesky's hosts, back in, and between independent hosts; and deletions.
+
+The log runs at about 190,000 operations a day (October 2026).
 
 ## Minute rows
 
@@ -209,6 +283,9 @@ detail of old data never makes the report less accurate.
 | `atmosphere_day_app`: each app, each day | forever | small |
 | `atmosphere_account_sketch`: everyone's active accounts | minutes 2 h; hours, days, months forever | ~50 MB a year |
 | `atmosphere_account_app_sketch`: each app's | minutes 26 h, hours 30 days; days, months forever | ~25 MB a year |
+| `atmosphere_hosts`: a census of the PDS hosts every 10 minutes | forever | ~5 MB a year |
+| `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
+| `atmosphere_plc_day`: each day's identity changes, from the PLC log | forever | tiny |
 
 The per-app minute rows were the long tail, about 23k rows (5 MB) a day.
 pg_cron re-sums each hour of them into `atmosphere_hour_app` every 10 minutes
@@ -360,7 +437,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 112 tests, about a second, no network
+npm test                                         # node:test, 127 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -403,7 +480,10 @@ src/rollup.js      accounts by hour, day and month: merged in memory, written ev
 src/supabase.js    PostgREST upserts and paged reads
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
-src/hosts.js       the PDS hosts, from the relay's list every 10 minutes
+src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
+src/plc.js         reading the PLC directory's log of identity changes
+src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day
+src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line

@@ -122,6 +122,11 @@ export interface Hosts {
   accounts: { bluesky: number; independent: number };
   diversity: { index: number; share: number; spread: number };
   top: Array<{ hostname: string; accounts: number }>;
+  /** Every listed host by the relay's state for it. */
+  statuses?: { active: number; idle: number; offline: number; throttled: number; banned: number; other: number };
+  /** Independent hosts by accounts: 0, 1, up to 10, 100, 1,000, 10,000, and more. */
+  sizes?: number[];
+  tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
 }
 
 const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
@@ -160,11 +165,15 @@ function clean(r: Reading): Reading {
   }
   const h = r.hosts;
   if (h && nums(h, ['listed', 'active', 'bluesky', 'independent']) && typeof h.measuredAt === 'string' && Number.isFinite(Date.parse(h.measuredAt)) && nums(h.accounts, ['bluesky', 'independent']) && nums(h.diversity, ['index', 'share', 'spread']) && Array.isArray(h.top)) {
+    const { statuses, sizes, tlds, ...rest } = h;
     out.hosts = {
-      ...h,
+      ...rest,
       writing: nums(h.writing, ['bluesky', 'independent', 'minutes']) ? h.writing : null,
       top: h.top.filter((x) => nums(x, ['accounts']) && name(x.hostname)).slice(0, 10),
     };
+    if (nums(statuses, ['active', 'idle', 'offline', 'throttled', 'banned', 'other'])) out.hosts.statuses = statuses;
+    if (Array.isArray(sizes) && sizes.length === 7 && sizes.every(num)) out.hosts.sizes = sizes;
+    if (Array.isArray(tlds)) out.hosts.tlds = tlds.filter((t) => nums(t, ['hosts', 'accounts']) && typeof t.tld === 'string' && /^[a-z0-9-]{2,63}$/.test(t.tld)).slice(0, 8);
   }
   return out;
 }

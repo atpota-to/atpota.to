@@ -4,3 +4,5 @@
 state.json
 state.json.tmp
 node_modules/
+# the PLC backfill's cache (src/backfill-hosts.js --cache)
+plc-cache/

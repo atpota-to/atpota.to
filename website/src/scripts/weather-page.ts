@@ -49,6 +49,7 @@ import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, t
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock } from './weather-dock';
 import { initForecast } from './weather-forecast';
+import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
 import {
   bindLens,
@@ -670,6 +671,41 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
   roll(tile, '[data-h-share]', hostsShare(h));
   const list = $(tile, '[data-h-top]');
   if (list) renderBars(list, h.top.slice(0, LIST_TOP).map((x) => ({ label: x.hostname, perSecond: x.accounts, count: x.accounts, value: compactCount(x.accounts) })), undefined);
+  renderHostCensus(report, h);
+}
+
+/** The size buckets' names, smallest first (server/atmosphere.ts HOST_SIZE_BOUNDS: 0, 1, ≤10, ≤100, ≤1,000, ≤10,000, more). */
+export const HOST_SIZE_NAMES = ['empty', 'just one person', 'a household (2 to 10)', 'a village (11 to 100)', 'a town (101 to 1,000)', 'a city (1,001 to 10,000)', 'a metropolis (10,000+)'] as const;
+const STATUS_NAMES: Record<string, string> = { active: 'active', idle: 'idle', offline: 'offline', throttled: 'throttled', banned: 'banned', other: 'something else' };
+
+/** The census tiles in where the atmosphere lives: hosts by size, by top-level domain, and the relay's roll call. Each stays hidden without its part. */
+export function renderHostCensus(report: HTMLElement, h: Hosts): void {
+  const bar = (label: string, v: number, value = formatCount(v)): Bar => ({ label, perSecond: v, count: v, value });
+  const sizes = $(report, '[data-p-sizes]');
+  if (sizes) sizes.hidden = !h.sizes;
+  if (h.sizes) {
+    const list = $(report, '[data-p-size-list]');
+    // empty hosts aren't much to look at; the rest, smallest first
+    if (list) renderBars(list, h.sizes.slice(1).map((v, i) => bar(HOST_SIZE_NAMES[i + 1]!, v)), undefined);
+    const solo = h.sizes[1] ?? 0;
+    setText(report, '[data-p-solo]', `${formatCount(solo)} independent host${solo === 1 ? ' holds' : 's hold'} just one account: someone running their own.`);
+  }
+  const tlds = $(report, '[data-p-tlds]');
+  if (tlds) tlds.hidden = !h.tlds?.length;
+  if (h.tlds?.length) {
+    const list = $(report, '[data-p-tld-list]');
+    if (list) renderBars(list, h.tlds.map((t) => ({ ...bar(`.${t.tld}`, t.hosts, `${formatCount(t.hosts)} hosts`), sub: `${compactCount(t.accounts)} accounts` })), undefined);
+    const top = h.tlds[0]!;
+    setText(report, '[data-p-tld-lede]', `.${top.tld} is the most popular ending, on ${formatCount(top.hosts)} of ${formatCount(h.independent)} independent hosts.`);
+  }
+  const roll = $(report, '[data-p-rollcall]');
+  if (roll) roll.hidden = !h.statuses;
+  if (h.statuses) {
+    const list = $(report, '[data-p-roll-list]');
+    const entries = Object.entries(h.statuses).filter(([, v]) => v > 0);
+    if (list) renderBars(list, entries.map(([k, v]) => bar(STATUS_NAMES[k] ?? k, v)), undefined);
+    setText(report, '[data-p-roll-lede]', `the relay has heard of ${formatCount(h.listed)} hosts. ${formatCount(h.statuses.active)} are up and about right now.`);
+  }
 }
 
 /** A window's tiles, from its history. */
@@ -717,6 +753,40 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place",
       '',
       "it goes by where accounts live, not who's writing this minute, so it's its own number and moves slowly. a bigger number means more of the network lives somewhere other than bluesky (◕‿◕)",
+    ].join('\n'),
+  },
+  arrivals: {
+    question: 'where do new accounts come from?',
+    answer: [
+      "every account in the atmosphere gets an identity in the plc directory, a public log that says which pds it lives on. i read that log as it goes, so i can count new accounts as they arrive.",
+      '',
+      "- on bluesky's hosts: people signing up through the bluesky app",
+      "- on independent hosts: people signing up anywhere else the relay listens to, like a community's own server or one somebody runs for themselves",
+      "- own domain: new accounts that start out with a handle like yourname.com instead of one their host hands out",
+      '',
+      "sign-ups to hosts the relay doesn't carry don't count here. they go in the air quality instead (◕‿◕)",
+    ].join('\n'),
+  },
+  winds: {
+    question: 'what are migration winds?',
+    answer: [
+      "in the atmosphere you can pack up your account and move it to a different pds, and keep your handle, your posts and everyone who follows you. the plc directory notes every move, so i count them:",
+      '',
+      "- out of bluesky: an account moving from bluesky's hosts to an independent one",
+      '- back in: the other way round',
+      '- host to host: moving between two independent hosts',
+      '',
+      "when more blow out than back in, the wind is blowing out of bluesky. i only count moves between hosts the relay listens to (◕‿◕)",
+    ].join('\n'),
+  },
+  smog: {
+    question: "what's the air quality?",
+    answer: [
+      "anyone can make an identity in the plc directory pointing at any server at all, so lots of new accounts land on hosts the relay doesn't carry: test servers, typos, and bulk sign-ups to one-off domains.",
+      '',
+      "air quality is the share of each day's sign-ups that went somewhere like that. under 10% is clear, then hazy, smoggy from half, and thick smog from 90%.",
+      '',
+      "it's not the network's real weather, more like dust in the air. none of it reaches your feed (◕‿◕)",
     ].join('\n'),
   },
   readouts: {
@@ -797,6 +867,8 @@ export interface History {
   appsOverTime?: { bucket: Bucket; points: Array<{ t: string; apps: number }> };
   /** Active accounts over the range and each bucket (server/weather-accounts.ts). */
   accounts?: HistoryAccounts;
+  /** The PDS hosts over the range, from the station's censuses (server/weather-hosts.ts). */
+  hosts?: HostHistory;
 }
 
 export interface AccountCounts {
@@ -861,7 +933,7 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
   try {
     const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown };
+    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown; hosts?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
     const history: History = { range, points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
@@ -877,6 +949,8 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
     }
     const accounts = toAccounts(body.accounts);
     if (accounts) history.accounts = accounts;
+    const hosts = toHostHistory(body.hosts);
+    if (hosts) history.hosts = hosts;
     return history;
   } catch {
     return null;
@@ -1256,6 +1330,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
 
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, feed, lens);
+  initHostTrends(report, feed, lens, (list, bars) => renderBars(list, bars, undefined));
   const newApps = watchNewApps(desk);
   initAlmanac(
     report,
