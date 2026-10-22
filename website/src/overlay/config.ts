@@ -75,7 +75,7 @@ export const WIDGET_GROUPS: Record<'weather' | 'anisota' | 'clock' | 'records' |
  * name on the setup page, the first the default. The overlay sets data-style on the widget.
  */
 export const WIDGET_STYLES: Partial<Record<WidgetKind, Readonly<Record<string, string>>>> = {
-  tid: { ticking: 'ticking', decoded: 'with the time it means', mini: 'a little pill' },
+  tid: { ticking: 'with the time', mini: 'just the TID' },
   flushes: { count: 'the count', stats: 'the stats', latest: 'the latest flush' },
   status: { both: 'status and vitals', status: 'just the status', vitals: 'just the vitals' },
   music: { now: 'now playing', history: 'the last few plays', stats: 'listening stats', mini: 'one line' },

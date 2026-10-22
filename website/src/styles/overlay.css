@@ -1570,8 +1570,8 @@ html[data-theme="dark"] .ov-anisota {
 /* ---------- the TID clock (src/overlay/tid.ts) ---------- */
 
 .ov-tid {
+  gap: 6px;
   width: auto;
-  min-width: 380px;
 }
 
 .ov-tid__tid {
@@ -1607,51 +1607,20 @@ html[data-theme="dark"] .ov-tid__c.is-new {
   color: var(--sun);
 }
 
-.ov-tid__parts {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  margin: 0;
-}
-
-.ov-tid__parts div {
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: var(--inset);
-}
-
-.ov-tid__parts dt {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.ov-tid__parts dd {
-  margin: 2px 0 0;
-  font-family: var(--font-mono);
-  font-size: 19px;
-}
-
-.ov-tid__time {
-  font-size: 30px;
-  font-weight: 700;
+.ov-tid__when {
+  font-size: 15px;
+  color: var(--text-soft);
   font-variant-numeric: tabular-nums;
 }
 
-/* ticking: the TID and the day it is */
-.ov-tid:not([data-style="decoded"]) .ov-tid__parts,
-.ov-tid:not([data-style="decoded"]) .ov-tid__time {
-  display: none;
-}
-
-/* a little pill: just the TID */
+/* mini: just the TID */
 .ov-tid[data-style="mini"] {
   min-width: 0;
   padding: 10px 24px;
   border-radius: var(--radius-pill);
 }
 
-.ov-tid[data-style="mini"] .ov-panel__title,
-.ov-tid[data-style="mini"] .ov-tid__date {
+.ov-tid[data-style="mini"] .ov-tid__when {
   display: none;
 }
 
@@ -2104,56 +2073,15 @@ body[data-poe="on"][data-side="left"] .ov-slot--top-left:has(> .ov-chat[data-sty
   color: var(--sun);
 }
 
-.ovsc__tid-parts {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  color: var(--muted);
-}
-
-.ovsc__tid-clock {
-  margin-left: 0.6ch;
-  padding-left: 0.6ch;
-  border-left: 2px solid var(--line-strong);
-}
-
 .ovsc__tid-time {
-  font-size: 30px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.ovsc__tid-wait {
-  font-size: 22px;
+  font-size: 28px;
   color: var(--text-soft);
-}
-
-.ovsc__tid-wait span {
-  animation: ov-wait 1.4s infinite;
-}
-
-.ovsc__tid-wait span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.ovsc__tid-wait span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes ov-wait {
-  0%,
-  60%,
-  100% {
-    opacity: 0.2;
-  }
-  30% {
-    opacity: 1;
-  }
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ov-chat__msg,
   .ov-chat[data-style="pop"] .ov-chat__msg,
-  .ovsc__tid-wait span,
   .ov-music[data-live="yes"]:not([data-style="history"], [data-style="stats"]) .ov-panel__title::before {
     animation: none;
   }

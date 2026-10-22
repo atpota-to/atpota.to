@@ -63,8 +63,8 @@
         "style": {
           "type": "string",
           "maxLength": 32,
-          "knownValues": ["ticking", "decoded", "mini", "count", "stats", "latest", "both", "status", "vitals", "now", "history", "corner", "side", "pop"],
-          "description": "How the widget looks, for the kinds with more than one way: tid (ticking, decoded, mini), flushes (count, stats, latest), status (both, status, vitals), music (now, history, stats, mini), chat (corner, side, pop). Absent or unknown is the kind's first."
+          "knownValues": ["ticking", "mini", "count", "stats", "latest", "both", "status", "vitals", "now", "history", "corner", "side", "pop"],
+          "description": "How the widget looks, for the kinds with more than one way: tid (ticking, mini), flushes (count, stats, latest), status (both, status, vitals), music (now, history, stats, mini), chat (corner, side, pop). Absent or unknown is the kind's first."
         }
       }
     }

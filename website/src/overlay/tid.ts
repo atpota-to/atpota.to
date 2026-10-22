@@ -7,9 +7,8 @@
  * so the clock is the record key a post made right now would get.
  *
  * Every [data-ov-tid] under the root gets the TID, one <span> a character so the ones that
- * just changed can glow (.is-new); [data-ov-tid-stamp] and [data-ov-tid-clock] get its two
- * parts, [data-ov-tid-time] the time it means to the microsecond and [data-ov-tid-date]
- * the day. It ticks every TICK_MS, and skips what's hidden.
+ * just changed can glow (.is-new); [data-ov-tid-time] gets the time it means to the
+ * microsecond and [data-ov-tid-date] the day. It ticks every TICK_MS, and skips what's hidden.
  */
 
 export const S32 = '234567abcdefghijklmnopqrstuvwxyz';
@@ -83,7 +82,7 @@ export function mountTid(root: ParentNode, opts: TidOptions = {}): { tick(): voi
     el.setAttribute('translate', 'no');
     return { el, chars, was: '' };
   });
-  const parts = { stamp: all('[data-ov-tid-stamp]'), clock: all('[data-ov-tid-clock]'), time: all('[data-ov-tid-time]'), date: all('[data-ov-tid-date]') };
+  const parts = { time: all('[data-ov-tid-time]'), date: all('[data-ov-tid-date]') };
   const shown = (el: HTMLElement) => !el.closest('[hidden]');
   let day = '';
 
@@ -100,8 +99,6 @@ export function mountTid(root: ParentNode, opts: TidOptions = {}): { tick(): voi
       b.was = tid;
       b.el.setAttribute('aria-label', tid);
     }
-    for (const el of parts.stamp) if (shown(el)) el.textContent = tid.slice(0, 11);
-    for (const el of parts.clock) if (shown(el)) el.textContent = tid.slice(11);
     for (const el of parts.time) if (shown(el)) el.textContent = tidTimeText(us);
     const today = tidDateText(us);
     if (today !== day) {
