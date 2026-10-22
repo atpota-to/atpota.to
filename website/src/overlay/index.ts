@@ -15,6 +15,11 @@
  *             goodbye when it ends, hellos to new chatters and welcome-backs to regulars
  *             (regulars.ts), thanks to new followers, and the commands !weather,
  *             !forecast, !apps, !pet and !poe
+ *   scene     with &scene=<screen>, a full-screen scene under it all (scenes.ts,
+ *             scene-view.ts), from the streamer's to.atpota.poe.scene record at that id
+ *             (starting, brb, ending, screenshare, or one they named), followed live too; a
+ *             scene can hide Poe and the widgets, and the screen share puts Poe on its
+ *             camera's side
  *   demo      example lines every DEMO_MS, and visitors more often, to see where things land
  */
 
@@ -49,9 +54,11 @@ import { readParams } from './params';
 import { mountOverlayPoe } from './poe';
 import { createRegulars } from './regulars';
 import { createSounds } from './sounds';
-import { readPublicConfig } from './store';
+import { mountScene } from './scene-view';
+import { fromSceneRecord, readSceneParams, SCENE_DEFAULTS, withSceneOverrides, type Scene } from './scenes';
+import { readPublicConfig, readPublicScene } from './store';
 import { createVisitors } from './visitors';
-import { mountWidgets } from './weather';
+import { mountWeatherCard, mountWidgets } from './weather';
 
 /** How often ?demo has Poe say another example line. */
 const DEMO_MS = 10_000;
@@ -60,6 +67,7 @@ const CONFIG_WAIT_MS = 4000;
 
 async function start(): Promise<void> {
   const params = readParams(location.search);
+  const sceneParams = readSceneParams(location.search);
   const layout = createLayout();
   const widgets = mountWidgets(document);
   const corner = document.querySelector<HTMLElement>('[data-ov-poe]')!;
@@ -70,12 +78,33 @@ async function start(): Promise<void> {
   const visitors = createVisitors({ corner, react: (face, ms) => poe.react(face, ms), side: 'right', scale: 1, demo: params.demo });
   const gate = createGate();
 
+  const sceneRoot = document.querySelector<HTMLElement>('[data-ov-scene]')!;
+  const sceneView = mountScene(sceneRoot, {
+    onDone: () => {
+      if (config.poe.show) poe.say({ label: "it's time", text: "here we go! (◕‿◕)", face: 'happy', hop: true, burst: 'leaves', sound: 'live', rank: 4 });
+    },
+  });
+  const sceneWeather = mountWeatherCard(sceneRoot.querySelector<HTMLElement>('[data-ovsc-weather]')!);
+
   // ---------- settings ----------
-  let config: OverlayConfig = withOverrides(DEFAULT_CONFIG, params.overrides);
+  let saved: OverlayConfig = withOverrides(DEFAULT_CONFIG, params.overrides);
+  let config = saved;
+  const sceneHint = sceneParams.kind ?? 'starting';
+  let scene: Scene | null = sceneParams.id ? withSceneOverrides(SCENE_DEFAULTS[sceneHint], sceneParams.overrides) : null;
   let skip = new Set<string>();
   let volume = -1;
+  /** The settings as the scene shows them: without Poe or the widgets, or with Poe on the camera's side. */
+  const onScene = (c: OverlayConfig): OverlayConfig => {
+    if (!scene) return c;
+    const out = { ...c, poe: { ...c.poe }, widgets: scene.showWidgets ? c.widgets : [] };
+    if (!scene.showPoe) out.poe.show = false;
+    if (scene.kind === 'screenshare') out.poe.side = scene.camera.side === 'left' ? 'left' : 'right';
+    return out;
+  };
   const apply = (next: OverlayConfig) => {
-    config = next;
+    saved = next;
+    config = onScene(next);
+    sceneView.show(scene);
     widgets.showing(layout.apply(config));
     poe.setNap(config.nap * 60_000);
     if (config.volume !== volume) poe.setSounds(createSounds((volume = config.volume)));
@@ -92,10 +121,13 @@ async function start(): Promise<void> {
   const streamerDid = params.streamer ? await resolveActor(params.streamer) : null;
   if (params.streamer && !streamerDid) console.warn(`[overlay] couldn't find the streamer "${params.streamer}"`);
   if (streamerDid) {
-    const saved = await Promise.race([readPublicConfig(streamerDid), new Promise<undefined>((r) => window.setTimeout(r, CONFIG_WAIT_MS))]);
-    if (saved) config = withOverrides(saved.config, params.overrides);
+    const wait = new Promise<undefined>((r) => window.setTimeout(r, CONFIG_WAIT_MS));
+    const id = sceneParams.id;
+    const [own, ownScene] = await Promise.all([Promise.race([readPublicConfig(streamerDid), wait]), id ? Promise.race([readPublicScene(streamerDid, id, fetch, sceneHint), wait]) : undefined]);
+    if (own) saved = withOverrides(own.config, params.overrides);
+    if (id && ownScene) scene = withSceneOverrides(ownScene.scene, sceneParams.overrides);
   }
-  apply(config);
+  apply(saved);
 
   // ---------- the weather ----------
   let latest: Reading | null = null;
@@ -105,6 +137,7 @@ async function start(): Promise<void> {
     if (reading) {
       latest = reading;
       widgets.render(reading);
+      sceneWeather.render(reading);
       poe.setPace(recordsPerSecond(reading));
       const seen = alertsFor(watch, reading);
       watch = seen.watch;
@@ -143,6 +176,11 @@ async function start(): Promise<void> {
   const said = new Set<string>();
   const onEvent = async (e: StreamEvent) => {
     if (e.kind === 'config') return apply(withOverrides(fromRecord(e.value), params.overrides));
+    if (e.kind === 'scene') {
+      if (!sceneParams.id || e.rkey !== sceneParams.id) return;
+      scene = withSceneOverrides(fromSceneRecord(sceneHint, e.value), sceneParams.overrides);
+      return apply(saved);
+    }
     if (!config.poe.show) return;
     if (e.kind === 'live' || e.kind === 'ended') {
       if (said.has(`${e.kind}:${e.rkey}`)) return;

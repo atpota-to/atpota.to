@@ -1,0 +1,54 @@
+{
+  "lexicon": 1,
+  "id": "to.atpota.poe.scene",
+  "description": "One of the full-screen screens of Poe's stream overlay (atpota.to/overlay?scene=<record key>): a countdown before a stream, a be-right-back screen, an end screen, or a frame for sharing a screen with a camera. A streamer can keep as many as they like, one record each; the record key is the screen's id in its URL (lowercase letters, digits and dashes). The four a streamer starts with are keyed by their kind: \"starting\", \"brb\", \"ending\" and \"screenshare\". The overlay reads it from your repo and follows changes live.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "any",
+      "record": {
+        "type": "object",
+        "required": ["createdAt", "updatedAt"],
+        "properties": {
+          "kind": { "type": "string", "knownValues": ["starting", "brb", "ending", "screenshare"], "description": "Which sort of screen it is. Without it, the record key's kind, or starting." },
+          "name": { "type": "string", "maxLength": 200, "maxGraphemes": 40, "description": "What the streamer calls this screen (\"coding brb\"), on the setup page only." },
+          "title": { "type": "string", "maxLength": 400, "maxGraphemes": 80, "description": "The big words (\"starting soon\")." },
+          "subtitle": { "type": "string", "maxLength": 1000, "maxGraphemes": 200, "description": "A line under them: what the stream is about." },
+          "background": { "type": "string", "knownValues": ["day", "night", "garden", "butter"], "description": "The sky behind it all (the screen share's frame colour)." },
+          "ground": { "type": "string", "knownValues": ["meadow", "grass", "soil", "none"], "description": "What's along the bottom: a meadow hill with flowers, a strip of grass, soil with sprouts, or nothing." },
+          "showPoe": { "type": "boolean" },
+          "showWidgets": { "type": "boolean", "description": "Whether the weather widgets from the overlay's settings show on this scene too." },
+          "countdown": { "type": "ref", "ref": "#countdown" },
+          "links": {
+            "type": "array",
+            "maxLength": 4,
+            "description": "Where to find the streamer, on the end screen (\"bsky.app/profile/dame.is\").",
+            "items": { "type": "string", "maxLength": 300, "maxGraphemes": 60 }
+          },
+          "camera": { "type": "ref", "ref": "#camera" },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "countdown": {
+      "type": "object",
+      "description": "The starting screen's countdown: to a time, or a timer that starts when the scene is shown.",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "knownValues": ["timer", "clock", "none"] },
+        "minutes": { "type": "integer", "minimum": 1, "maximum": 120, "description": "For a timer." },
+        "at": { "type": "string", "format": "datetime", "description": "For a clock: when the stream starts." }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "description": "The screen share's camera window.",
+      "required": ["side", "shape"],
+      "properties": {
+        "side": { "type": "string", "knownValues": ["right", "left", "none"] },
+        "shape": { "type": "string", "knownValues": ["rounded", "circle", "wide"] }
+      }
+    }
+  }
+}

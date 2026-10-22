@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHAT, FOLLOW, HANDLE_MAX, LIVESTREAM, OVERLAY, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
+import { CHAT, FOLLOW, HANDLE_MAX, LIVESTREAM, OVERLAY, SCENE, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
 import { appsLine, createGate, endedLine, followLine, forecastLine, helloLine, liveLine, petLine, weatherLine } from '../src/overlay/lines.js';
 import { readParams, readWidgets, toSearch, writeWidgets } from '../src/overlay/params.js';
 import { DEFAULT_CONFIG, fromRecord, OVERLAY_NSID, SLOTS, toRecord, WIDGET_HOME, WIDGET_KINDS, withOverrides, type OverlayConfig } from '../src/overlay/config.js';
@@ -232,9 +232,9 @@ describe('the stream', () => {
 
   it('asks Jetstream for chat, streams and overlay settings, and follows only when wanted', () => {
     const both = new URL(jetstreamUrl('wss://j.example/subscribe', true, 42));
-    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, FOLLOW]);
+    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, FOLLOW]);
     expect(both.searchParams.get('cursor')).toBe('42');
-    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY]);
+    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE]);
   });
 
   it("hears the streamer's own saved settings, and nobody else's", () => {

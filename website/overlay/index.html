@@ -19,6 +19,61 @@
     <script type="module" src="/src/overlay/index.ts"></script>
 </head>
 <body data-page="overlay">
+    <!-- a full-screen scene under everything else, with ?scene= (src/overlay/scene-view.ts): the backdrop,
+         the starting / brb / ending panel, or the screen share's frame with its windows cut out -->
+    <div class="ovsc" data-ov-scene hidden>
+        <div class="ovsc__back" data-ovsc-back>
+            <div class="weather-sky ovsc__clouds" data-ovsc-clouds aria-hidden="true"></div>
+            <div class="ovsc__rays" aria-hidden="true"></div>
+            <div class="ovsc__stars" aria-hidden="true"></div>
+            <!-- @svg weather-sun.svg class="ovsc__sun weather-sun" -->
+            <!-- the ground (data-ground): the home page's meadow, the about page's grass, or soil -->
+            <div class="ovsc__meadow" aria-hidden="true">
+                <span class="ovsc__tuft" style="--p: 10%; --b: 140px"></span>
+                <span class="ovsc__tuft" style="--p: 20%; --b: 188px"></span>
+                <span class="ovsc__tuft" style="--p: 31%; --b: 218px"></span>
+                <span class="ovsc__tuft" style="--p: 44%; --b: 234px"></span>
+                <span class="ovsc__tuft" style="--p: 58%; --b: 233px"></span>
+                <span class="ovsc__tuft" style="--p: 70%; --b: 216px"></span>
+                <span class="ovsc__tuft" style="--p: 81%; --b: 184px"></span>
+                <span class="ovsc__tuft" style="--p: 91%; --b: 133px"></span>
+            </div>
+            <div class="ovsc__grass" aria-hidden="true"></div>
+            <div class="ovsc__soil" aria-hidden="true">
+                <!-- @svg sprout.svg class="ovsc__sprout" -->
+                <!-- @svg sprout.svg class="ovsc__sprout" -->
+                <!-- @svg sprout.svg class="ovsc__sprout" -->
+                <!-- @svg sprout.svg class="ovsc__sprout" -->
+                <!-- @svg sprout.svg class="ovsc__sprout" -->
+            </div>
+        </div>
+        <div class="ovsc__holes" data-ovsc-holes aria-hidden="true">
+            <div class="ovsc__hole" data-ovsc-hole="screen"></div>
+            <div class="ovsc__hole" data-ovsc-hole="camera"></div>
+        </div>
+
+        <section class="ovsc__panel" data-ovsc-panel aria-labelledby="ovsc-title">
+            <!-- @svg wordmark.svg class="ovsc__wordmark" -->
+            <h1 class="ovsc__title" id="ovsc-title" data-ovsc-title></h1>
+            <p class="ovsc__sub" data-ovsc-sub></p>
+            <p class="ovsc__count" data-ovsc-count hidden></p>
+            <ul class="ovsc__links" data-ovsc-links hidden></ul>
+        </section>
+
+        <div class="ovsc__bar" data-ovsc-bar hidden>
+            <!-- @svg wordmark.svg class="ovsc__bar-mark" -->
+            <div class="ovsc__bar-words">
+                <p class="ovsc__bar-title" data-ovsc-bar-title></p>
+                <p class="ovsc__bar-sub" data-ovsc-bar-sub></p>
+            </div>
+        </div>
+        <section class="ov-badge ovsc__weather" data-ovsc-weather data-state="loading" aria-label="atmospheric conditions" hidden>
+            <!-- @svg weather-sun.svg class="ov-badge__sun weather-sun" -->
+            <p class="ov-badge__big"><span data-weather-records>&ndash;</span> <span class="ov-badge__unit">rec/sec</span></p>
+            <p class="ov-badge__word" data-ov-cond-word></p>
+        </section>
+    </div>
+
     <!-- the slots (src/overlay/layout.ts puts each widget in its own) -->
     <div class="ov-slot ov-slot--top-left" data-ov-slot="top-left" hidden></div>
     <div class="ov-slot ov-slot--top-center" data-ov-slot="top-center" hidden></div>
