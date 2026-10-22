@@ -126,6 +126,8 @@ export interface Hosts {
   statuses?: { active: number; idle: number; offline: number; throttled: number; banned: number; other: number };
   /** Independent hosts by accounts: 0, 1, up to 10, 100, 1,000, 10,000, and more. */
   sizes?: number[];
+  /** The accounts on the hosts in each size. */
+  sizeAccounts?: number[];
   tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
 }
 
@@ -165,7 +167,7 @@ function clean(r: Reading): Reading {
   }
   const h = r.hosts;
   if (h && nums(h, ['listed', 'active', 'bluesky', 'independent']) && typeof h.measuredAt === 'string' && Number.isFinite(Date.parse(h.measuredAt)) && nums(h.accounts, ['bluesky', 'independent']) && nums(h.diversity, ['index', 'share', 'spread']) && Array.isArray(h.top)) {
-    const { statuses, sizes, tlds, ...rest } = h;
+    const { statuses, sizes, sizeAccounts, tlds, ...rest } = h;
     out.hosts = {
       ...rest,
       writing: nums(h.writing, ['bluesky', 'independent', 'minutes']) ? h.writing : null,
@@ -173,6 +175,7 @@ function clean(r: Reading): Reading {
     };
     if (nums(statuses, ['active', 'idle', 'offline', 'throttled', 'banned', 'other'])) out.hosts.statuses = statuses;
     if (Array.isArray(sizes) && sizes.length === 7 && sizes.every(num)) out.hosts.sizes = sizes;
+    if (Array.isArray(sizeAccounts) && sizeAccounts.length === 7 && sizeAccounts.every(num)) out.hosts.sizeAccounts = sizeAccounts;
     if (Array.isArray(tlds)) out.hosts.tlds = tlds.filter((t) => nums(t, ['hosts', 'accounts']) && typeof t.tld === 'string' && /^[a-z0-9-]{2,63}$/.test(t.tld)).slice(0, 8);
   }
   return out;

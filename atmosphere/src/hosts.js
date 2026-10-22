@@ -40,7 +40,8 @@ export const PAGE_TIMEOUT_MS = 15_000;
 export const TOP_HOSTS = 10;
 /**
  * Independent hosts by how many accounts they hold: none, one (someone's own), up to 10,
- * 100, 1,000, 10,000, and more. `sizes` counts the hosts in each.
+ * 100, 1,000, 10,000, and more. `sizes` counts the hosts in each, `sizeAccounts` the
+ * accounts they hold between them.
  */
 export const SIZE_BOUNDS = [0, 1, 10, 100, 1000, 10000];
 /** How many top-level domains a reading names. */
@@ -171,6 +172,7 @@ export function summarizeHosts(hosts, { measuredAt, writing = () => false, writi
       .map((h) => ({ hostname: h.hostname, accounts: h.accounts })),
     statuses: statusesOf(hosts),
     sizes: sizesOf(independent),
+    sizeAccounts: sizesOf(independent, (h) => h.accounts),
     tlds: tldsOf(independent),
   };
 }
@@ -182,12 +184,15 @@ export function statusesOf(hosts) {
   return out;
 }
 
-/** How many hosts hold at most each of SIZE_BOUNDS accounts (and more than the one before), then more than the last. */
-export function sizesOf(hosts) {
+/**
+ * How many hosts hold at most each of SIZE_BOUNDS accounts (and more than the one before),
+ * then more than the last; with `weigh`, what they add up to instead (their accounts).
+ */
+export function sizesOf(hosts, weigh = () => 1) {
   const out = new Array(SIZE_BOUNDS.length + 1).fill(0);
   for (const h of hosts) {
     const i = SIZE_BOUNDS.findIndex((max) => h.accounts <= max);
-    out[i < 0 ? SIZE_BOUNDS.length : i]++;
+    out[i < 0 ? SIZE_BOUNDS.length : i] += weigh(h);
   }
   return out;
 }

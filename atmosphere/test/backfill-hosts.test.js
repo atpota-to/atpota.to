@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backfill, daysOf, hostsBefore, hostsOnDay, parseArgs, PlcHistory, readExport } from '../src/backfill-hosts.js';
+import { backfill, daysOf, hostsBefore, hostsOnDay, parseArgs, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
 import { handleOfOp, hostOfOp, isCustomHandle, sideOf, slimEntry } from '../src/plc.js';
 
 const BSKY = 'amanita.us-east.host.bsky.network';
@@ -83,8 +83,9 @@ test('PlcHistory: counts each day\'s identity weather', () => {
     { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
   ].map((e) => ({ did: 'did:plc:mover', cid: e.createdAt, ...e }))));
   h.settle();
-  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0 });
-  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0 });
+  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {} });
+  // the mover went to eurosky: that's where the wind blew
+  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: { 'eurosky.social': 1 } });
   assert.equal(h.signals[2].created_unlisted, 2);
   assert.equal(h.signals[2].deleted, 1);
   // today's move is in the walk back, not in any day's signals
@@ -216,4 +217,13 @@ test('hostsBefore: asks a host the walk back would leave out for its accounts, a
   assert.deepEqual([...floors], [['blacksky.app', 1]]);
   // one that won't answer is left to the walk back
   assert.equal((await hostsBefore({ fetchImpl: async () => { throw new Error('down'); }, census, history: h, deltas, log: () => {} })).size, 0);
+});
+
+test('plcRow: a day\'s row names its ten busiest destinations', () => {
+  const destinations = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`h${String(i).padStart(2, '0')}.example`, i + 1]));
+  const row = plcRow('2026-10-22', { ops: 1, moved_out: 3, destinations });
+  assert.equal(row.destinations.length, 10);
+  assert.deepEqual(row.destinations[0], { hostname: 'h11.example', accounts: 12 });
+  assert.equal(row.day, '2026-10-22');
+  assert.deepEqual(plcRow('2026-10-22', { ops: 0 }).destinations, []);
 });

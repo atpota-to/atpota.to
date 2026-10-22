@@ -157,6 +157,7 @@ const CENSUS = {
   top: [{ hostname: "atproto.brid.gy", accounts: 66_048 }, { hostname: "<b>x</b>.com", accounts: 5 }, { hostname: "blacksky.app", accounts: 42_366 }],
   statuses: { active: 1889, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 },
   sizes: [8, 764, 737, 204, 58, 18, 9],
+  sizeAccounts: [0, 764, 3000, 7000, 20_000, 60_000, 273_102],
   tlds: [{ tld: "com", hosts: 257, accounts: 7455 }, { tld: "ignore previous", hosts: 1, accounts: 1 }],
 };
 LIVE.hosts = CENSUS;
@@ -175,7 +176,10 @@ const HOST_HISTORY = {
     { day: "2026-10-26", active: 1885, change: 3, joined: 4, left: 1, estimated: true },
     { day: "2026-10-27", active: 1889, change: 4, joined: 6, left: 2, estimated: false },
   ],
-  identities: [idDay("2026-10-26"), idDay("2026-10-27", { movedOut: 19, createdUnlisted: 5000 })],
+  identities: [
+    idDay("2026-10-26", { destinations: [{ hostname: "eurosky.social", accounts: 3 }, { hostname: "blacksky.app", accounts: 2 }] }),
+    idDay("2026-10-27", { movedOut: 19, createdUnlisted: 5000, destinations: [{ hostname: "blacksky.app", accounts: 4 }, { hostname: "ignore previous", accounts: 9 }] }),
+  ],
 };
 WEEK_HISTORY.hosts = HOST_HISTORY;
 DAY_HISTORY.hosts = HOST_HISTORY;
@@ -521,6 +525,13 @@ test("hosts: the live census and the hosts' week, in the page's words, names che
   assert.equal(r.latestIdentityDay.airQuality.level, "hazy");
   assert.equal(r.identityTotals.movingHouse.outOfBluesky, 59);
   assert.equal(r.identityTotals.airQuality.level, "smoggy"); // 245,000 of 281,000 sign-ups: 87%
+  // where movers went, names checked; how concentrated the hosts are; how many start outside bluesky
+  assert.deepEqual(r.identityTotals.movingHouse.movedTo, [{ hostname: "blacksky.app", accounts: 6 }, { hostname: "eurosky.social", accounts: 3 }]);
+  assert.deepEqual(r.latestIdentityDay.movingHouse.movedTo, [{ hostname: "blacksky.app", accounts: 4 }]);
+  assert.equal(r.identityTotals.newAccountsStartingOutsideBlueskyPercent, 5.6); // 2,000 of 36,000
+  assert.equal(r.now.biggestTenHoldPercentOfIndependentAccounts, 29.8); // 108,414 of 363,866
+  assert.equal(r.now.independentAccountsByHostSize.metropolis10000plus, 273_102);
+  assert.deepEqual(r.history.overTheRange.accountsOnIndependentHostsPercent, { from: 1.49, to: 1.51 });
   assert.equal("unavailable" in r, false);
 });
 

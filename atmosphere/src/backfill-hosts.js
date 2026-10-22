@@ -38,7 +38,7 @@
 // new accounts by where they signed up (Bluesky's hosts, independent hosts, unlisted
 // ones), how many of the new accounts on listed hosts started with a handle on their own
 // domain (not one their host hands out), accounts moving out of Bluesky's hosts, back in, and between independent hosts,
-// and deletions. These are counted, not estimated.
+// and deletions, and the independent hosts accounts moved to. These are counted, not estimated.
 //
 // Days the station already wrote itself are left alone unless --overwrite. The log pages
 // and the audit answers are cached in --cache (default ./plc-cache), so a run that stops
@@ -89,7 +89,23 @@ export function daysOf(from, today) {
   return days;
 }
 
-const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0 });
+const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {} });
+
+/** How many destinations a day's row names. */
+export const TOP_DESTINATIONS = 10;
+
+/**
+ * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
+ * accounts moved to, out of Bluesky's hosts or from another independent one, by count) cut
+ * to the TOP_DESTINATIONS busiest as [{ hostname, accounts }].
+ */
+export function plcRow(day, signals) {
+  const destinations = Object.entries(signals.destinations ?? {})
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .slice(0, TOP_DESTINATIONS)
+    .map(([hostname, accounts]) => ({ hostname, accounts }));
+  return { day, ...signals, destinations };
+}
 
 /**
  * Everything the run learns from the log: each changed identity's hosts by day (`dids`:
@@ -141,6 +157,11 @@ export class PlcHistory {
     if (a === 'bluesky' && b === 'independent') s.moved_out++;
     else if (a === 'independent' && b === 'bluesky') s.moved_in++;
     else if (a === 'independent' && b === 'independent') s.moved_between++;
+    // where they went: an independent host, out of Bluesky's or from another
+    if (b === 'independent' && (a === 'bluesky' || a === 'independent')) {
+      const host = this.hosts[to];
+      if (isHostname(host)) s.destinations[host] = (s.destinations[host] ?? 0) + 1;
+    }
   }
 
   /** One export entry, slimmed (plc.js slimEntry). */
@@ -465,7 +486,7 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
     const day = days[d];
     const rows = dayRows(day, hostsOnDay(census, history, delta[d], { floors, seenActive }), listed);
     const s = history.signals[d];
-    const plc = { day, ...s };
+    const plc = plcRow(day, s);
     log(
       `${day}  ${pad(rows.summary.active, 6)} ${pad(rows.summary.independent, 6)}  ${pad(rows.summary.accounts.independent.toLocaleString('en-US'), 18)}  ${pad(rows.summary.diversity.index, 9)}   ${pad(s.created_bluesky, 9)} ${pad(s.created_independent, 6)} ${pad(s.created_unlisted, 9)} ${pad(s.created_custom_handle, 11)}   ${pad(s.moved_out, 10)} ${pad(s.moved_in, 3)} ${pad(s.moved_between, 8)}   ${pad(s.deleted, 7)}`,
     );

@@ -48,6 +48,7 @@
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock } from './weather-dock';
+import { initHostPanel } from './weather-host-panel';
 import { initForecast } from './weather-forecast';
 import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
@@ -678,15 +679,41 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
 export const HOST_SIZE_NAMES = ['empty', 'just one person', 'a household (2 to 10)', 'a village (11 to 100)', 'a town (101 to 1,000)', 'a city (1,001 to 10,000)', 'a metropolis (10,000+)'] as const;
 const STATUS_NAMES: Record<string, string> = { active: 'active', idle: 'idle', offline: 'offline', throttled: 'throttled', banned: 'banned', other: 'something else' };
 
-/** The census tiles in where the atmosphere lives: hosts by size, by top-level domain, and the relay's roll call. Each stays hidden without its part. */
+/** The ten biggest independent hosts' share of the accounts on independent hosts (null without any). */
+export function topTenShare(h: Hosts): number | null {
+  if (h.accounts.independent <= 0 || h.top.length === 0) return null;
+  return (h.top.slice(0, 10).reduce((t, x) => t + x.accounts, 0) / h.accounts.independent) * 100;
+}
+
+/**
+ * The census tiles in where the atmosphere lives: the accounts by the size of host they
+ * live on (or the hosts, from a station that doesn't send accounts yet), and the census
+ * strip: hosts by top-level domain, and the relay's roll call. Each stays hidden without its part.
+ */
 export function renderHostCensus(report: HTMLElement, h: Hosts): void {
   const bar = (label: string, v: number, value = formatCount(v)): Bar => ({ label, perSecond: v, count: v, value });
   const sizes = $(report, '[data-p-sizes]');
   if (sizes) sizes.hidden = !h.sizes;
   if (h.sizes) {
     const list = $(report, '[data-p-size-list]');
-    // empty hosts aren't much to look at; the rest, smallest first
-    if (list) renderBars(list, h.sizes.slice(1).map((v, i) => bar(HOST_SIZE_NAMES[i + 1]!, v)), undefined);
+    const by = h.sizeAccounts;
+    // empty hosts hold nobody and aren't much to look at; the rest, smallest first
+    if (list) {
+      renderBars(
+        list,
+        h.sizes.slice(1).map((hosts, i) => {
+          const label = HOST_SIZE_NAMES[i + 1]!;
+          if (!by) return bar(label, hosts, `${formatCount(hosts)} hosts`);
+          const accounts = by[i + 1] ?? 0;
+          return { ...bar(label, accounts, `${compactCount(accounts)} accounts`), sub: `${formatCount(hosts)} host${hosts === 1 ? '' : 's'}` };
+        }),
+        undefined,
+      );
+    }
+    setText(report, '[data-p-size-note]', by ? "the accounts on independent hosts, by how big a host they live on. bluesky's own hosts hold hundreds of thousands each." : "independent hosts by how many accounts live on them. bluesky's own hosts hold hundreds of thousands each.");
+    const top = topTenShare(h);
+    const ten = Math.min(10, h.top.length);
+    setText(report, '[data-p-top10]', top === null ? '' : `the ${ten} biggest independent hosts hold ${formatIndex(top)}% of the accounts on independent hosts; the other ${formatCount(Math.max(0, h.independent - ten))} share the rest.`);
     const solo = h.sizes[1] ?? 0;
     setText(report, '[data-p-solo]', `${formatCount(solo)} independent host${solo === 1 ? ' holds' : 's hold'} just one account: someone running their own.`);
   }
@@ -706,6 +733,8 @@ export function renderHostCensus(report: HTMLElement, h: Hosts): void {
     if (list) renderBars(list, entries.map(([k, v]) => bar(STATUS_NAMES[k] ?? k, v)), undefined);
     setText(report, '[data-p-roll-lede]', `the relay has heard of ${formatCount(h.listed)} hosts. ${formatCount(h.statuses.active)} are up and about right now.`);
   }
+  const census = $(report, '[data-p-census]');
+  if (census) census.hidden = !h.tlds?.length && !h.statuses;
 }
 
 /** A window's tiles, from its history. */
@@ -1241,6 +1270,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   bindExplainers(root);
   const lens = createLens();
   initLensDock(report, lens);
+  initHostPanel(report, fetchImpl);
   bindLens(report, lens);
   const feed = createHistoryFeed(fetchImpl);
   let watch: Watch | null = null;

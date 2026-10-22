@@ -47,7 +47,7 @@
 
 import { readAccounts } from './weather-accounts.js';
 import { LIVE_SINCE } from './weather-almanac.js';
-import { readHosts } from './weather-hosts.js';
+import { askedHost, readHost, readHosts } from './weather-hosts.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
 
 export { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-public.js';
@@ -209,7 +209,21 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
   const env = deps.env ?? (() => process.env);
   const log = deps.log ?? ((fields) => console.warn(JSON.stringify({ src: 'weather-history', ...fields })));
 
+  /** ?host=: one host's days, for the page's host panel. */
+  async function hostDays(request: Request, asked: string): Promise<Response> {
+    const host = askedHost(asked);
+    if (!host) return json(request, 400, { error: 'host must be a hostname' }, 'no-store');
+    try {
+      return json(request, 200, { host: await readHost(supabase(env(), fetchImpl), host) }, RANGES.day.cache);
+    } catch (error) {
+      log({ event: 'history_host_error', error: (error as Error)?.message ?? 'Error' });
+      return json(request, 503, { error: 'unavailable' }, 'no-store');
+    }
+  }
+
   async function GET(request: Request): Promise<Response> {
+    const asked = new URL(request.url).searchParams.get('host');
+    if (asked !== null) return hostDays(request, asked);
     const range = new URL(request.url).searchParams.get('range') ?? 'day';
     if (!isRange(range)) return json(request, 400, { error: 'range must be hour, day, week, month or year' }, 'no-store');
     const db = supabase(env(), fetchImpl);

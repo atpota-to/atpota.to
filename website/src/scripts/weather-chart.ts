@@ -38,6 +38,8 @@ export interface ChartOptions {
   formatTipTime?: (t: number) => string;
   /** The time between points; a bigger gap breaks the line. */
   stepMs: number;
+  /** false fits the axis to the line instead of starting at zero, for a share that moves by hundredths. */
+  fromZero?: boolean;
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -50,6 +52,23 @@ export function niceMax(max: number): number {
   const power = 10 ** Math.floor(Math.log10(max));
   for (const step of [1, 2, 2.5, 5, 10]) if (step * power >= max) return step * power;
   return 10 * power;
+}
+
+/**
+ * The axis's bottom and top: from zero to a round number, or (not fromZero) a round
+ * range just around the values, three gridlines a round step apart.
+ */
+export function axisRange(values: number[], fromZero = true): [number, number] {
+  const hi = Math.max(0, ...values);
+  if (fromZero || values.length === 0) return [0, niceMax(hi)];
+  const lo = Math.min(...values);
+  let step = niceMax((hi - lo) / 2 || Math.abs(hi) * 0.01 || 1);
+  for (;;) {
+    const round = (v: number) => Number(v.toPrecision(12)); // 1.45, not 1.4500000000000002
+    const bottom = round(Math.max(0, Math.floor(lo / step) * step));
+    if (bottom + 2 * step >= hi) return [bottom, round(bottom + 2 * step)];
+    step = niceMax(step * 1.000001);
+  }
 }
 
 const f = (v: number) => (Math.round(v * 10) / 10).toString();
@@ -171,18 +190,18 @@ function draw(host: HTMLElement): void {
   const known = points.filter((p): p is ChartPoint & { v: number } => p.v !== null);
   const t0 = points[0]?.t ?? 0;
   const t1 = points[points.length - 1]?.t ?? t0;
-  const yMax = niceMax(Math.max(0, ...known.map((p) => p.v)));
+  const [yMin, yMax] = axisRange(known.map((p) => p.v), opts.fromZero ?? true);
   const innerW = width - PAD.left - PAD.right;
   const innerH = HEIGHT - PAD.top - PAD.bottom;
   const x = (t: number) => PAD.left + (t1 === t0 ? innerW / 2 : ((t - t0) / (t1 - t0)) * innerW);
-  const y = (v: number) => PAD.top + innerH - (v / yMax) * innerH;
+  const y = (v: number) => PAD.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
 
   const svg = el('svg', { class: 'weather-chart__svg', width, height: HEIGHT, viewBox: `0 0 ${width} ${HEIGHT}`, tabindex: 0, role: 'img' });
   svg.setAttribute('aria-label', `${opts.label}: a chart. use the arrow keys to read each point.`);
   svg.style.setProperty('--chart-color', opts.color);
 
-  // gridlines and their labels: zero, half, the top
-  for (const v of [0, yMax / 2, yMax]) {
+  // gridlines and their labels: the bottom (usually zero), half way, the top
+  for (const v of [yMin, (yMin + yMax) / 2, yMax]) {
     svg.append(el('line', { class: 'weather-chart__grid', x1: PAD.left, x2: width - PAD.right, y1: y(v), y2: y(v) }));
     const label = el('text', { class: 'weather-chart__tick', x: PAD.left - 8, y: y(v) + 4, 'text-anchor': 'end' });
     label.textContent = (opts.formatTick ?? opts.format)(v);
@@ -212,7 +231,7 @@ function draw(host: HTMLElement): void {
       svg.append(el('circle', { class: 'weather-chart__dot', cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
       continue;
     }
-    const area = `${line}L${x(run[run.length - 1]!.t).toFixed(1)},${y(0)}L${x(run[0]!.t).toFixed(1)},${y(0)}Z`;
+    const area = `${line}L${x(run[run.length - 1]!.t).toFixed(1)},${y(yMin)}L${x(run[0]!.t).toFixed(1)},${y(yMin)}Z`;
     svg.append(el('path', { class: 'weather-chart__area', d: area }), el('path', { class: 'weather-chart__line', d: line }));
   }
 

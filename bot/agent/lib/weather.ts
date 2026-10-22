@@ -634,6 +634,13 @@ export function hostsNowOf(x: unknown) {
   const writing = counts(x.writing, ["bluesky", "independent", "minutes"] as const);
   const statuses = counts(x.statuses, ["active", "idle", "offline", "throttled", "banned", "other"] as const);
   const sizes = Array.isArray(x.sizes) && x.sizes.length === HOST_SIZES.length ? x.sizes.map(count) : null;
+  const sizeAccounts = Array.isArray(x.sizeAccounts) && x.sizeAccounts.length === HOST_SIZES.length ? x.sizeAccounts.map(count) : null;
+  const biggest = list(x.top).flatMap((h) => {
+    const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+    const n = isRecord(h) ? count(h.accounts) : null;
+    return hostname && n !== null ? [{ hostname, accounts: n }] : [];
+  }).slice(0, TOP);
+  const topTen = biggest.slice(0, 10).reduce((n, h) => n + h.accounts, 0);
   return {
     countedAt: measuredAt,
     activeHosts: c.active,
@@ -646,13 +653,13 @@ export function hostsNowOf(x: unknown) {
     accounts: { onBlueskyHosts: accounts.bluesky, onIndependentHosts: accounts.independent },
     // like the diversity index, but by where accounts live: the percent on independent hosts, times the square root of how many hosts' worth they're spread across
     hostingDiversity: { index: d.index, accountsOnIndependentHostsPercent: d.share, spreadAcrossHosts: round1(d.spread) },
-    biggestIndependentHosts: list(x.top).flatMap((h) => {
-      const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
-      const n = isRecord(h) ? count(h.accounts) : null;
-      return hostname && n !== null ? [{ hostname, accounts: n }] : [];
-    }).slice(0, TOP),
+    biggestIndependentHosts: biggest,
+    // how concentrated the independent side is: the share of its accounts on its ten biggest hosts
+    ...(biggest.length && accounts.independent > 0 ? { biggestTenHoldPercentOfIndependentAccounts: round1((topTen / accounts.independent) * 100) } : {}),
     ...(statuses ? { relayRollCall: statuses } : {}),
     ...(sizes && sizes.every((n) => n !== null) ? { independentHostsBySize: Object.fromEntries(HOST_SIZES.map((k, i) => [k, sizes[i]])) } : {}),
+    // the accounts living on hosts of each size (the page's sizes tile weighs by these)
+    ...(sizeAccounts && sizeAccounts.every((n) => n !== null) ? { independentAccountsByHostSize: Object.fromEntries(HOST_SIZES.map((k, i) => [k, sizeAccounts[i]])) } : {}),
     ...(Array.isArray(x.tlds)
       ? { topLevelDomains: list(x.tlds).flatMap((t) => {
         const c2 = counts(t, ["hosts", "accounts"] as const);
@@ -670,7 +677,20 @@ function identityDayOf(x: unknown) {
   return {
     date: x.day,
     signups: { onBlueskyHosts: c.createdBluesky, onIndependentHosts: c.createdIndependent, withOwnDomainHandle: c.createdCustomHandle },
-    movingHouse: { outOfBluesky: c.movedOut, backToBluesky: c.movedIn, betweenIndependentHosts: c.movedBetween, wind: windOf(c.movedOut, c.movedIn) },
+    // of new accounts on hosts the relay carries, the percent that started outside bluesky
+    ...(c.createdBluesky + c.createdIndependent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((c.createdIndependent / (c.createdBluesky + c.createdIndependent)) * 100) } : {}),
+    movingHouse: {
+      outOfBluesky: c.movedOut,
+      backToBluesky: c.movedIn,
+      betweenIndependentHosts: c.movedBetween,
+      wind: windOf(c.movedOut, c.movedIn),
+      // the independent hosts movers went to, busiest first
+      movedTo: list(x.destinations).flatMap((h) => {
+        const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+        const n = isRecord(h) ? count(h.accounts) : null;
+        return hostname && n !== null ? [{ hostname, accounts: n }] : [];
+      }).slice(0, TOP),
+    },
     // sign-ups on hosts no relay carries: test servers, typos, bulk sign-ups nobody relays. not the network's weather
     airQuality: { ...smogOf({ bluesky: c.createdBluesky, independent: c.createdIndependent, unlisted: c.createdUnlisted }), unlistedSignups: c.createdUnlisted },
     deletedAccounts: c.deleted,
@@ -706,7 +726,7 @@ export function hostHistoryOf(x: unknown) {
   return {
     ...(typeof x.since === "string" && DAY_RE.test(x.since) ? { keptSince: x.since } : {}),
     ...(first && last && first !== last
-      ? { overTheRange: { activeHosts: { from: first.active, to: last.active }, independentHosts: { from: first.independent, to: last.independent }, hostingDiversity: { from: first.index, to: last.index } } }
+      ? { overTheRange: { activeHosts: { from: first.active, to: last.active }, independentHosts: { from: first.independent, to: last.independent }, hostingDiversity: { from: first.index, to: last.index }, accountsOnIndependentHostsPercent: { from: first.share, to: last.share } } }
       : {}),
     newIndependentHosts: {
       count: count(x.newHosts) ?? 0,
@@ -727,6 +747,13 @@ export function hostHistoryOf(x: unknown) {
   };
 }
 
+/** Where the days' movers went, adding up each day's busiest destinations. */
+function movedTo(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
+  const by = new Map<string, number>();
+  for (const d of days) for (const h of d.movingHouse.movedTo) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  return [...by].map(([hostname, accounts]) => ({ hostname, accounts })).sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP);
+}
+
 /** Sign-ups, moves and deletions summed over identity days. */
 function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
   const sum = (f: (d: (typeof days)[number]) => number) => days.reduce((n, d) => n + f(d), 0);
@@ -736,7 +763,8 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
   return {
     days: days.length,
     signups: { onBlueskyHosts: created.bluesky, onIndependentHosts: created.independent, withOwnDomainHandle: sum((d) => d.signups.withOwnDomainHandle) },
-    movingHouse: { outOfBluesky: out, backToBluesky: back, betweenIndependentHosts: sum((d) => d.movingHouse.betweenIndependentHosts), wind: windOf(out, back) },
+    ...(created.bluesky + created.independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((created.independent / (created.bluesky + created.independent)) * 100) } : {}),
+    movingHouse: { outOfBluesky: out, backToBluesky: back, betweenIndependentHosts: sum((d) => d.movingHouse.betweenIndependentHosts), wind: windOf(out, back), movedTo: movedTo(days) },
     airQuality: smogOf(created),
     deletedAccounts: sum((d) => d.deletedAccounts),
   };
