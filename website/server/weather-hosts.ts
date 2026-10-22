@@ -52,6 +52,44 @@ export interface HostHistory {
   growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
   daily: HostDay[];
   identities: IdentityDay[];
+  /** Each day's active accounts on independent hosts, and everyone's (null before the station counted them). */
+  activeDaily: ActiveDay[];
+  /** The independent hosts with the most accounts active on the latest day counted (yesterday, usually). */
+  liveliest: Liveliest | null;
+}
+
+export interface ActiveDay {
+  day: string;
+  independent: number;
+  all: number | null;
+}
+
+export interface Liveliest {
+  day: string;
+  /** Today, still counting: there's no finished day yet. */
+  soFar: boolean;
+  hosts: Array<{ hostname: string; active: number; accounts: number | null }>;
+}
+
+export function toActiveDay(x: unknown): ActiveDay | null {
+  if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
+  const c = counts(x, ['independent'] as const);
+  if (!c) return null;
+  return { day: x.day, independent: c.independent, all: countOrNull(x.all) };
+}
+
+export function toLiveliest(x: unknown): Liveliest | null {
+  if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day) || !Array.isArray(x.hosts)) return null;
+  return {
+    day: x.day,
+    soFar: x.soFar === true,
+    hosts: x.hosts
+      .flatMap((h) => {
+        const c = counts(h, ['active'] as const);
+        return isRecord(h) && hostname(h.hostname) && c ? [{ hostname: h.hostname, active: c.active, accounts: countOrNull(h.accounts) }] : [];
+      })
+      .slice(0, TOP_HOSTS),
+  };
 }
 
 /** A day of the PLC directory's log (atmosphere_plc_day). */
@@ -159,6 +197,8 @@ export function toHostHistory(body: unknown, bucket: HostBucket): HostHistory | 
       .slice(0, TOP_HOSTS),
     daily: (Array.isArray(body.daily) ? body.daily : []).map(toHostDay).filter((d): d is HostDay => d !== null),
     identities: (Array.isArray(body.identities) ? body.identities : []).map(toIdentityDay).filter((d): d is IdentityDay => d !== null),
+    activeDaily: (Array.isArray(body.activeDaily) ? body.activeDaily : []).map(toActiveDay).filter((d): d is ActiveDay => d !== null),
+    liveliest: toLiveliest(body.liveliest),
   };
 }
 
@@ -173,7 +213,8 @@ export async function readHosts(db: Supabase, since: string, bucket: HostBucket)
 export interface OneHost {
   hostname: string;
   bluesky: boolean;
-  days: Array<{ day: string; accounts: number; estimated: boolean }>;
+  /** `active`: the accounts that wrote anything that day (atmosphere_host_active_day), when the station counted them. */
+  days: Array<{ day: string; accounts: number; estimated: boolean; active?: number }>;
 }
 
 /** How many days a host's history reaches back. */
@@ -187,13 +228,27 @@ export function askedHost(x: string | null): string | null {
 
 /** A host's days from atmosphere_host_day, checked; no days if the station never kept it. */
 export async function readHost(db: Supabase, host: string): Promise<OneHost> {
-  const rows = await db.get(`atmosphere_host_day?hostname=eq.${encodeURIComponent(host)}&select=day,accounts,estimated,bluesky&order=day.desc&limit=${HOST_DAYS_MAX}`);
+  const [rows, active] = await Promise.all([
+    db.get(`atmosphere_host_day?hostname=eq.${encodeURIComponent(host)}&select=day,accounts,estimated,bluesky&order=day.desc&limit=${HOST_DAYS_MAX}`),
+    // who was active each day: an extra, so the days still come without it
+    db.get(`atmosphere_host_active_day?hostname=eq.${encodeURIComponent(host)}&select=day,dids&order=day.desc&limit=${HOST_DAYS_MAX}`).catch(() => []),
+  ]);
   if (!Array.isArray(rows)) throw new Error('host days did not check out');
+  const activeOn = new Map(
+    (Array.isArray(active) ? active : []).flatMap((r) => {
+      const c = counts(r, ['dids'] as const);
+      return isRecord(r) && typeof r.day === 'string' && DAY_RE.test(r.day) && c ? [[r.day, c.dids] as const] : [];
+    }),
+  );
   const days = rows
     .flatMap((r) => {
       const c = counts(r, ['accounts'] as const);
       return isRecord(r) && typeof r.day === 'string' && DAY_RE.test(r.day) && c ? [{ day: r.day, accounts: c.accounts, estimated: r.estimated === true, bluesky: r.bluesky === true }] : [];
     })
     .reverse();
-  return { hostname: host, bluesky: days.some((d) => d.bluesky), days: days.map(({ day, accounts, estimated }) => ({ day, accounts, estimated })) };
+  return {
+    hostname: host,
+    bluesky: days.some((d) => d.bluesky),
+    days: days.map(({ day, accounts, estimated }) => ({ day, accounts, estimated, ...(activeOn.has(day) ? { active: activeOn.get(day)! } : {}) })),
+  };
 }

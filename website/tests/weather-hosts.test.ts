@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { compassOf, destinationsOf, hostBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, compassOf, destinationsOf, hostBars, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 
 // Where accounts live, over time: the hosts tile's charts and lists.
@@ -86,11 +86,41 @@ describe('where accounts live, over time', () => {
     expect(since.textContent).toMatch(/^i started keeping track of hosts on october 24/);
   });
 
-  it('goes day by day: a chart of hosts joining, and a table newest first', () => {
+  it('hides the day by day table without days', () => {
+    renderHostTrends(part, { ...HOSTS, daily: [] }, 'day', bars, NOW);
+    expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(true);
+  });
+
+  it('says who is active on independent hosts, charts it by day, and lists the liveliest hosts', () => {
+    // nothing counted yet: all of it stays hidden
     renderHostTrends(part, HOSTS, 'week', bars, NOW);
-    const card = part.querySelector('[data-h-chart="joined"]')!.closest<HTMLElement>('.weather-chart-card')!;
-    expect(card.hidden).toBe(false);
-    expect(part.querySelector('[data-h-chart="joined"] svg')).not.toBeNull();
+    expect(part.querySelector<HTMLElement>('[data-h-active-share]')!.hidden).toBe(true);
+    expect(part.querySelector('[data-h-chart="active-share"]')!.closest<HTMLElement>('.weather-chart-card')!.hidden).toBe(true);
+    expect(part.querySelector<HTMLElement>('[data-h-lively-wrap]')!.hidden).toBe(true);
+    const counted: HostHistory = {
+      ...HOSTS,
+      activeDaily: [
+        { day: '2026-10-27', independent: 40_000, all: 1_300_000 },
+        { day: '2026-10-28', independent: 42_000, all: 1_200_000 },
+        { day: '2026-10-29', independent: 20_000, all: 600_000 },
+      ],
+      liveliest: { day: '2026-10-28', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42_900 }, { hostname: 'tiny.example', active: 3, accounts: null }] },
+    };
+    renderHostTrends(part, counted, 'week', bars, NOW);
+    // the latest finished day (the 28th is yesterday), against the share of accounts living on them
+    expect(part.querySelector('[data-h-active-share]')!.textContent).toBe("yesterday, 3.50% of everyone active wrote from an independent host (42,000 accounts), though only 1.51% of accounts live on one: they're busier than most.");
+    expect(part.querySelector('[data-h-chart="active-share"]')!.closest<HTMLElement>('.weather-chart-card')!.hidden).toBe(false);
+    expect(part.querySelector<HTMLElement>('[data-h-lively-wrap]')!.hidden).toBe(false);
+    expect(part.querySelector('[data-h-lively-title]')!.textContent).toBe('liveliest yesterday');
+    expect([...part.querySelectorAll('[data-h-lively] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'tiny.example']);
+    expect(livelyBars(counted.liveliest!.hosts)[0]).toMatchObject({ value: '9k active', sub: '21% of its 42.9k accounts' });
+    expect(livelyBars(counted.liveliest!.hosts)[1]!.sub).toBeUndefined();
+    // a day without everyone's count says nothing
+    expect(activeShareWords({ ...HOSTS, activeDaily: [{ day: '2026-10-28', independent: 5, all: null }] }, NOW)).toBe('');
+  });
+
+  it('goes day by day in a table, newest first', () => {
+    renderHostTrends(part, HOSTS, 'week', bars, NOW);
     expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(false);
     const rows = [...part.querySelectorAll('[data-h-days] tbody tr')].map((tr) => [...tr.children].map((c) => c.textContent));
     expect(rows).toHaveLength(4);
@@ -101,14 +131,6 @@ describe('where accounts live, over time', () => {
     expect(rows[3]![0]).toMatch(/ ≈$/); // estimated
     expect(rows[1]![0]).not.toMatch(/≈/);
     expect(part.querySelector('[data-h-days] tbody tr:nth-child(2) td:nth-of-type(2)')!.getAttribute('data-trend')).toBe('down');
-  });
-
-  it('keeps the joining chart back until there are two days to draw', () => {
-    renderHostTrends(part, { ...HOSTS, daily: HOSTS.daily.slice(0, 2) }, 'day', bars, NOW);
-    expect(part.querySelector('[data-h-chart="joined"]')!.closest<HTMLElement>('.weather-chart-card')!.hidden).toBe(true);
-    expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(false);
-    renderHostTrends(part, { ...HOSTS, daily: [] }, 'day', bars, NOW);
-    expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(true);
   });
 
   it('reads the daily rows, dropping ones that do not check out', () => {

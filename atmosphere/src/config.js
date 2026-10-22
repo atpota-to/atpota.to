@@ -1,6 +1,7 @@
 // config.js
 // Everything comes from the environment (the unit's EnvironmentFile, .env).
 
+import path from 'node:path';
 import { DEFAULT_RELAY } from './hosts.js';
 import { DEFAULT_URLS } from './jetstream.js';
 
@@ -35,6 +36,8 @@ export function loadConfig(env = process.env) {
     // whose list of PDS hosts to count (hosts.js)
     relayUrl: opt(env, 'RELAY_URL', DEFAULT_RELAY),
     stateFile: opt(env, 'STATE_FILE', 'state.json'),
+    // which independent host each account lives on, by a hash of its DID (host-activity.js); beside the state file
+    hostDirectoryFile: opt(env, 'HOST_DIRECTORY_FILE', path.join(path.dirname(opt(env, 'STATE_FILE', 'state.json')), 'host-directory.json')),
     maxReplaySeconds: num(env, 'MAX_REPLAY_SECONDS', 1800),
     logLevel: opt(env, 'LOG_LEVEL', 'info'),
   };

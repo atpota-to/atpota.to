@@ -397,6 +397,7 @@
                 <div class="weather-hosts__trends" data-h-trends hidden>
                     <h3 class="weather-hosts__subtitle">over <span data-h-range>the last 24 hours</span></h3>
                     <p class="weather-hosts__headline" data-h-headline></p>
+                    <p class="weather-pds__line" data-h-active-share hidden></p>
                     <div class="weather-trends__charts">
                         <figure class="weather-chart-card">
                             <figcaption class="weather-chart-card__title">share of accounts off bluesky</figcaption>
@@ -411,8 +412,8 @@
                             <div class="weather-chart" data-h-chart="index"></div>
                         </figure>
                         <figure class="weather-chart-card" hidden>
-                            <figcaption class="weather-chart-card__title">independent hosts joining each day</figcaption>
-                            <div class="weather-chart" data-h-chart="joined"></div>
+                            <figcaption class="weather-chart-card__title">active accounts off bluesky, by day</figcaption>
+                            <div class="weather-chart" data-h-chart="active-share"></div>
                         </figure>
                     </div>
                     <div class="weather-hosts__days" data-h-days-wrap hidden>
@@ -426,7 +427,12 @@
                         </div>
                         <p class="weather-tile__note">days are utc. joined and left count independent hosts: active that day and not the day before, or the other way round. days marked ≈ are from before i kept count, estimated from the plc directory.</p>
                     </div>
-                    <div class="weather-hosts__cols">
+                    <div class="weather-hosts__cols weather-hosts__cols--three">
+                        <div class="weather-hosts__list" data-h-lively-wrap hidden>
+                            <h3 class="weather-hosts__subtitle" data-h-lively-title>liveliest yesterday</h3>
+                            <ol class="weather-bars weather-bars--hosts" role="list" data-h-lively data-host-list></ol>
+                            <p class="weather-tile__note">independent hosts by how many of their accounts wrote anything that day (utc), and what share of all their accounts that is. atproto.brid.gy&#39;s are bridged in from the fediverse.</p>
+                        </div>
                         <div class="weather-hosts__list">
                             <h3 class="weather-hosts__subtitle">new hosts</h3>
                             <ol class="weather-bars weather-bars--hosts" role="list" data-h-new data-host-list></ol>
@@ -550,9 +556,14 @@
                     <button type="button" class="weather-host-panel__close" data-hp-close aria-label="close">&times;</button>
                 </div>
                 <p class="weather-pds__line" data-hp-story></p>
+                <p class="weather-pds__line" data-hp-active hidden></p>
                 <figure class="weather-chart-card" hidden>
                     <figcaption class="weather-chart-card__title">accounts hosted each day</figcaption>
                     <div class="weather-chart" data-hp-chart></div>
+                </figure>
+                <figure class="weather-chart-card" hidden>
+                    <figcaption class="weather-chart-card__title">accounts that wrote something each day</figcaption>
+                    <div class="weather-chart" data-hp-active-chart></div>
                 </figure>
                 <p class="weather-tile__note" data-hp-estimated></p>
                 <p class="weather-tile__note"><a data-hp-visit href="#" rel="noopener nofollow" target="_blank">visit the host</a> (it&#39;s someone else&#39;s server)</p>

@@ -4,6 +4,7 @@
 // See README.md, and atmosphere/SPEC.md in atpota-to/atpota.to for the brief.
 
 import { loadConfig } from './config.js';
+import { createHostActivity } from './host-activity.js';
 import { createHostWatch, createHostWriter } from './hosts.js';
 import { createJetstream, REWIND_US } from './jetstream.js';
 import { createPlcWatch } from './plc-watch.js';
@@ -21,7 +22,11 @@ const station = new Station();
 const { startMinute, startCursorUs } = resumePoint(loadState(config.stateFile), Date.now(), config.maxReplaySeconds, REWIND_US);
 log.info('starting', { startMinute: new Date(startMinute * 1000).toISOString(), replayFrom: startCursorUs === null ? null : new Date(startCursorUs / 1000).toISOString(), writer: config.supabase ? 'supabase' : 'off' });
 
-const jetstream = createJetstream({ station, log, urls: config.jetstreamUrls, maxReplaySeconds: config.maxReplaySeconds, startCursorUs });
+// who's active on each independent PDS host (host-activity.js): every message is looked up in its directory
+const rest = config.supabase ? supabaseRest(config.supabase) : null;
+const hostActivity = rest ? createHostActivity({ upsert: rest.upsert, getAll: rest.getAll, log, file: config.hostDirectoryFile }) : null;
+
+const jetstream = createJetstream({ station, log, urls: config.jetstreamUrls, maxReplaySeconds: config.maxReplaySeconds, startCursorUs, observe: hostActivity?.see });
 
 let writer = null;
 if (config.supabase) {
@@ -44,7 +49,7 @@ if (config.supabase) {
 
 // the PDS hosts on the network, from the relay's list of them (hosts.js), kept in Supabase for the trends
 // and, after each census, today's identity changes from the PLC directory's log (plc-watch.js)
-const rest = config.supabase ? supabaseRest(config.supabase) : null;
+// and who was active on each host (host-activity.js)
 const hostWriter = rest ? createHostWriter({ upsert: rest.upsert, log }) : null;
 let plcWatch = null;
 const hostWatch = createHostWatch({
@@ -53,8 +58,9 @@ const hostWatch = createHostWatch({
   onCensus: hostWriter
     ? async (census) => {
         await hostWriter.write(census);
-        plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log });
+        plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log, onEntry: hostActivity.onPlcEntry });
         await plcWatch.poll();
+        await hostActivity.onCensus(census.hosts);
       }
     : null,
 });

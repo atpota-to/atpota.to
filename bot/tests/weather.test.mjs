@@ -181,6 +181,8 @@ const HOST_HISTORY = {
     idDay("2026-10-27", { movedOut: 19, createdUnlisted: 5000, destinations: [{ hostname: "blacksky.app", accounts: 4 }, { hostname: "ignore previous", accounts: 9 }] }),
   ],
 };
+HOST_HISTORY.activeDaily = [{ day: "2026-10-26", independent: 41_000, all: 1_300_000 }, { day: "2026-10-27", independent: 20_000, all: null }];
+HOST_HISTORY.liveliest = { day: "2026-10-26", soFar: false, hosts: [{ hostname: "blacksky.app", active: 9000, accounts: 42_900 }, { hostname: "ignore previous", active: 1, accounts: 1 }] };
 WEEK_HISTORY.hosts = HOST_HISTORY;
 DAY_HISTORY.hosts = HOST_HISTORY;
 const SPAN = {
@@ -532,6 +534,12 @@ test("hosts: the live census and the hosts' week, in the page's words, names che
   assert.equal(r.now.biggestTenHoldPercentOfIndependentAccounts, 29.8); // 108,414 of 363,866
   assert.equal(r.now.independentAccountsByHostSize.metropolis10000plus, 273_102);
   assert.deepEqual(r.history.overTheRange.accountsOnIndependentHostsPercent, { from: 1.49, to: 1.51 });
+  // who was active: the share of everyone active, and the liveliest hosts, names checked
+  assert.deepEqual(r.history.activeAccountsByDay, [
+    { date: "2026-10-26", onIndependentHosts: 41_000, everyoneActive: 1_300_000, onIndependentHostsPercent: 3.15 },
+    { date: "2026-10-27", onIndependentHosts: 20_000 },
+  ]);
+  assert.deepEqual(r.history.liveliestHosts, { date: "2026-10-26", hosts: [{ hostname: "blacksky.app", activeAccounts: 9000, accountsHeld: 42_900, activePercent: 21 }] });
   assert.equal("unavailable" in r, false);
 });
 

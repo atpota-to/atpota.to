@@ -780,6 +780,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       '- active hosts are the ones the relay is happily listening to right now',
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
       "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
+      "- liveliest counts the accounts on each host that actually wrote something that day. i keep a list of which independent host each account lives on (from each host's own list, kept up to date from the plc directory), so i can tell where everyone writing lives without keeping who they are",
       "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place",
       '',
       "it goes by where accounts live, not who's writing this minute, so it's its own number and moves slowly. a bigger number means more of the network lives somewhere other than bluesky (◕‿◕)",

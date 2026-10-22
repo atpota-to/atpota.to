@@ -53,6 +53,10 @@ export interface HostHistory {
   daily: HostDay[];
   /** The PLC directory's log day by day, oldest first; the last is usually today, so far (server/weather-hosts.ts IdentityDay). */
   identities: IdentityDay[];
+  /** Each day's active accounts on independent hosts, and everyone's (server/weather-hosts.ts ActiveDay). */
+  activeDaily?: Array<{ day: string; independent: number; all: number | null }>;
+  /** The independent hosts with the most accounts active on the latest day counted. */
+  liveliest?: { day: string; soFar: boolean; hosts: Array<{ hostname: string; active: number; accounts: number | null }> } | null;
 }
 
 export interface IdentityDay {
@@ -127,6 +131,17 @@ export function toHostHistory(x: unknown): HostHistory | null {
           .filter((d): d is IdentityDay => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && IDENTITY_COUNTS.every((k) => n(d[k])))
           .map((d) => ({ ...d, destinations: Array.isArray(d.destinations) ? d.destinations.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : [] }))
       : [],
+    activeDaily: Array.isArray(x.activeDaily)
+      ? x.activeDaily.filter((d): d is NonNullable<HostHistory['activeDaily']>[number] => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && n(d.independent) && orNull(d.all))
+      : [],
+    liveliest:
+      obj(x.liveliest) && typeof x.liveliest.day === 'string' && DAY_RE.test(x.liveliest.day) && Array.isArray(x.liveliest.hosts)
+        ? {
+            day: x.liveliest.day,
+            soFar: x.liveliest.soFar === true,
+            hosts: x.liveliest.hosts.filter((h): h is { hostname: string; active: number; accounts: number | null } => obj(h) && hostname(h.hostname) && n(h.active) && orNull(h.accounts)).slice(0, 10),
+          }
+        : null,
   };
 }
 
@@ -160,6 +175,62 @@ export function shareHeadline(h: HostHistory, range: HostRange): string {
   const gained = last.accountsIndependent - first.accountsIndependent;
   const way = last.share > first.share ? 'up from' : last.share < first.share ? 'down from' : 'level with';
   return `${now}, ${way} ${pct(first.share)} over ${WINDOW_INFO[range].words}: ${signed(gained)} accounts on independent hosts.`;
+}
+
+/** The share of a day's active accounts that wrote from independent hosts, or null without everyone's count. */
+export const activeShareOf = (d: { independent: number; all: number | null }): number | null => (d.all && d.all > 0 ? Math.min(100, (d.independent / d.all) * 100) : null);
+
+/**
+ * "yesterday, 3.2% of everyone active wrote from an independent host, though only 1.51%
+ * of accounts live on one.", from the latest finished day (or today, so far, before there is one).
+ */
+export function activeShareWords(h: HostHistory, now = Date.now()): string {
+  const today = new Date(now).toISOString().slice(0, 10);
+  const days = (h.activeDaily ?? []).filter((d) => activeShareOf(d) !== null);
+  const d = [...days].reverse().find((x) => x.day < today) ?? days[days.length - 1];
+  if (!d) return '';
+  const share = activeShareOf(d)!;
+  const when = d.day === today ? 'today so far' : d.day === new Date(now - 86_400_000).toISOString().slice(0, 10) ? 'yesterday' : `on ${dayWords(d.day)}`;
+  const living = h.points[h.points.length - 1]?.share;
+  const versus = living === undefined ? '' : share > living * 1.1 ? `, though only ${pct(living)} of accounts live on one: they're busier than most` : share < living * 0.9 ? `, though ${pct(living)} of accounts live on one: many of them are quiet` : `, about their share of all accounts (${pct(living)})`;
+  return `${when}, ${pct(share)} of everyone active wrote from an independent host (${formatCount(d.independent)} accounts)${versus}.`;
+}
+
+/** The liveliest hosts' bars: who was active, and what share of the host's accounts that is. */
+export function livelyBars(list: NonNullable<HostHistory['liveliest']>['hosts']): Bar[] {
+  return list.slice(0, HOST_LIST_TOP).map((h) => ({
+    label: h.hostname,
+    perSecond: h.active,
+    count: h.active,
+    value: `${compactCount(h.active)} active`,
+    ...(h.accounts ? { sub: `${formatIndex(Math.min(100, (h.active / h.accounts) * 100))}% of its ${compactCount(h.accounts)} accounts` } : {}),
+  }));
+}
+
+/** Who's active on independent hosts: the share in words and by day, and the liveliest hosts. Each stays hidden without its data. */
+function renderActive(part: HTMLElement, h: HostHistory, drawBars: (list: HTMLElement, bars: Bar[]) => void, now: number): void {
+  const words = activeShareWords(h, now);
+  const line = $(part, '[data-h-active-share]');
+  if (line) {
+    line.hidden = !words;
+    line.textContent = words;
+  }
+  const days = (h.activeDaily ?? []).filter((d) => activeShareOf(d) !== null);
+  const chart = $(part, '[data-h-chart="active-share"]');
+  const card = chart?.closest<HTMLElement>('.weather-chart-card');
+  if (card) card.hidden = days.length < 2;
+  if (chart && days.length >= 2) {
+    const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
+    renderChart(chart, days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: activeShareOf(d) })), { label: 'active accounts off bluesky, by day', color: 'var(--weather-else)', format: pct, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime: dayFmt, stepMs: 86_400_000, fromZero: false });
+  }
+  const lively = h.liveliest;
+  const wrap = $(part, '[data-h-lively-wrap]');
+  if (wrap) wrap.hidden = !lively?.hosts.length;
+  if (!lively?.hosts.length) return;
+  const today = new Date(now).toISOString().slice(0, 10);
+  setText(part, '[data-h-lively-title]', lively.soFar || lively.day === today ? 'liveliest today so far' : lively.day === new Date(now - 86_400_000).toISOString().slice(0, 10) ? 'liveliest yesterday' : `liveliest on ${dayWords(lively.day)}`);
+  const list = $(part, '[data-h-lively]');
+  if (list) drawBars(list, livelyBars(lively.hosts));
 }
 
 /** A day's change as text: "+5", "−2", "0", or a dash with nothing to compare. */
@@ -236,15 +307,9 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   if (active) renderChart(active, pts((r) => r.active), { label: 'active pds hosts', color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
   if (index) renderChart(index, pts((r) => r.index), { label: 'hosting diversity', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
 
-  // day by day: joined each day as a chart (from the second day kept), everything in the table
-  const counted = h.daily.filter((d) => d.joined !== null);
-  const joinedCard = $(part, '[data-h-chart="joined"]')?.closest<HTMLElement>('.weather-chart-card');
-  const joined = $(part, '[data-h-chart="joined"]');
-  if (joinedCard) joinedCard.hidden = counted.length < 2;
-  if (joined && counted.length >= 2) {
-    const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
-    renderChart(joined, counted.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: d.joined })), { label: 'independent hosts joining each day', color: 'var(--weather-else)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
-  }
+  renderActive(part, h, drawBars, now);
+
+  // day by day, in the table
   const days = $(part, '[data-h-days-wrap]');
   if (days) days.hidden = h.daily.length === 0;
   const table = $<HTMLTableElement>(part, '[data-h-days]');

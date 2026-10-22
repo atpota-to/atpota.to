@@ -179,6 +179,26 @@ about 250 pages, so each poll reads a few dozen; on 2026-10-22 reading the day f
 took 17 s and 137 MB. After a restart it reads today again from midnight UTC. A day the
 station was down across the end of isn't finished, and the backfill rewrites it.
 
+### Who's active on each host
+
+The relay's account counts are every account a host holds, quiet ones too. To count the
+accounts that actually wrote something, the station keeps a directory of which
+independent host each account lives on ([`src/host-activity.js`](src/host-activity.js)):
+every independent host's own list of accounts (`com.atproto.sync.listRepos`), read once a
+week, about 400 pages for some 364,000 accounts, and kept up to date in between from the
+PLC log above (accounts moving to an independent host, away, or deleting themselves).
+Accounts not in it live on Bluesky's hosts. It's keyed by a 53-bit hash of each DID, not
+the DID, about 40 MB in memory, and saved beside the state file (`host-directory.json`,
+or `HOST_DIRECTORY_FILE`), so a restart doesn't wait a week or read every host again.
+
+Every Jetstream commit by an account in the directory goes into its host's HyperLogLog
+sketch for the UTC day, and into one for all independent hosts together (`*`). After each
+census today's sketches are written to `atmosphere_host_active_day`; after a restart the
+station reads today's rows back and merges into them, so nothing's lost or counted twice.
+The website shares `*` against the day's `atmosphere_account_sketch` (everyone active),
+and lists the liveliest hosts. Until the directory is first read (the first census after
+the first deploy, plus a few minutes), nothing is counted.
+
 ### Backfilling hosts from the PLC directory
 
 The relay's list only says how hosts stand now, so the days before the station kept them
@@ -297,6 +317,7 @@ detail of old data never makes the report less accurate.
 | `atmosphere_hosts`: a census of the PDS hosts every 10 minutes | forever | ~5 MB a year |
 | `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
 | `atmosphere_plc_day`: each day's identity changes, from the PLC log | forever | tiny |
+| `atmosphere_host_active_day`: each independent host's active accounts, a sketch a day | forever | ~150 MB a year |
 
 The per-app minute rows were the long tail, about 23k rows (5 MB) a day.
 pg_cron re-sums each hour of them into `atmosphere_hour_app` every 10 minutes
@@ -444,6 +465,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 | `MAX_REPLAY_SECONDS` | how far back a cursor may reach (1800) |
 | `RELAY_URL` | whose list of PDS hosts to count (`https://relay1.us-east.bsky.network`) |
 | `STATE_FILE`, `LOG_LEVEL` | `state.json`, `info` |
+| `HOST_DIRECTORY_FILE` | where accounts live, by a hash of their DID (`host-directory.json` beside the state file) |
 
 ## Running it
 
@@ -494,6 +516,7 @@ src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
 src/plc.js         reading the PLC directory's log of identity changes
 src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day
+src/host-activity.js  who's active on each independent host, a sketch a day, into atmosphere_host_active_day
 src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
