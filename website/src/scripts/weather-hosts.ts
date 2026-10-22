@@ -3,8 +3,12 @@
  * [data-h-trends]). The weather station counts the PDS hosts every 10 minutes and keeps
  * each census (atmosphere/sql/atmosphere_hosts.sql); /api/weather-history answers them as
  * `hosts` (server/weather-hosts.ts) with the rest of a range's history, so this shares the
- * page's history feed. It draws two charts, active hosts and the hosting diversity, and
- * lists the independent hosts new in the range and the ones that grew most.
+ * page's history feed. It draws three charts (active hosts, the hosting diversity, and
+ * independent hosts joining each day), lists the independent hosts new in the range and
+ * the ones that grew most, and goes day by day in a table: active hosts, the change from
+ * the day before, and the independent hosts that joined and left. A day's change is a
+ * handful of hosts on nearly two thousand, which a chart from zero can't show, so the
+ * table has it in numbers.
  *
  * It follows the lens's window, except that "now" and the last hour show the last 24
  * hours: a census every 10 minutes makes an hour only six points, and hosts don't change
@@ -43,6 +47,16 @@ export interface HostHistory {
   newHosts: number;
   new: Array<{ hostname: string; accounts: number; first: string }>;
   growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
+  /** Day by day (UTC), oldest first (server/weather-hosts.ts HostDay). */
+  daily: HostDay[];
+}
+
+export interface HostDay {
+  day: string;
+  active: number | null;
+  change: number | null;
+  joined: number | null;
+  left: number | null;
 }
 
 /** The parts of a history this needs (weather-page.ts History). */
@@ -60,6 +74,8 @@ export const hostRange = (window: Window): HostRange => (window === 'now' || win
 
 /** How many rows each list shows. */
 export const HOST_LIST_TOP = 5;
+/** How many days the table shows, newest first. */
+export const HOST_DAYS_TOP = 14;
 
 const BUCKET_MS: Record<HostBucket, number> = { minute: 60_000, hour: 3600_000, day: 86_400_000, month: 32 * 86_400_000 };
 const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -67,6 +83,9 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
 const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const hostname = (x: unknown): x is string => typeof x === 'string' && HOSTNAME_RE.test(x);
+const orNull = (x: unknown): x is number | null => x === null || n(x);
+const isDay = (d: unknown): d is HostDay =>
+  obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && orNull(d.active) && (d.change === null || (typeof d.change === 'number' && Number.isFinite(d.change))) && orNull(d.joined) && orNull(d.left);
 
 /** A history answer's `hosts`, checked field by field, or null. */
 export function toHostHistory(x: unknown): HostHistory | null {
@@ -79,6 +98,7 @@ export function toHostHistory(x: unknown): HostHistory | null {
     newHosts: n(x.newHosts) ? x.newHosts : 0,
     new: x.new.filter((h): h is HostHistory['new'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && typeof h.first === 'string' && DAY_RE.test(h.first)).slice(0, 10),
     growing: x.growing.filter((h): h is HostHistory['growing'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.prevAccounts)).slice(0, 10),
+    daily: Array.isArray(x.daily) ? x.daily.filter(isDay) : [],
   };
 }
 
@@ -94,6 +114,43 @@ export function newHostsWords(h: HostHistory, range: HostRange): string {
   const words = WINDOW_INFO[range].words;
   if (h.newHosts === 0) return `no new independent hosts in ${words}.`;
   return `${formatCount(h.newHosts)} new independent host${h.newHosts === 1 ? '' : 's'} in ${words}${h.newHosts > HOST_LIST_TOP ? `, the ${HOST_LIST_TOP} with the most accounts` : ''}.`;
+}
+
+/** A day's change as text: "+5", "−2", "0", or a dash with nothing to compare. */
+export function signed(v: number | null): string {
+  if (v === null) return '–';
+  return v > 0 ? `+${formatCount(v)}` : v < 0 ? `−${formatCount(-v)}` : '0';
+}
+
+const DAY_FORMAT = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+const dayWords = (day: string) => DAY_FORMAT.format(new Date(`${day}T00:00:00Z`)).toLowerCase();
+
+/** The day-by-day table: newest first, today marked as so far. */
+export function renderHostDays(table: HTMLTableElement, days: HostDay[], now = Date.now()): void {
+  const today = new Date(now).toISOString().slice(0, 10);
+  const body = table.tBodies[0] ?? table.createTBody();
+  const rows = [...days]
+    .reverse()
+    .slice(0, HOST_DAYS_TOP)
+    .map((d) => {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.scope = 'row';
+      th.textContent = d.day === today ? `${dayWords(d.day)} (so far)` : dayWords(d.day);
+      tr.append(th);
+      const cell = (text: string, trend?: 'up' | 'down') => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        if (trend) td.dataset.trend = trend;
+        tr.append(td);
+      };
+      cell(d.active === null ? '–' : formatCount(d.active));
+      cell(signed(d.change), d.change === null || d.change === 0 ? undefined : d.change > 0 ? 'up' : 'down');
+      cell(d.joined === null ? '–' : d.joined === 0 ? '0' : `+${formatCount(d.joined)}`, d.joined ? 'up' : undefined);
+      cell(d.left === null ? '–' : d.left === 0 ? '0' : `−${formatCount(d.left)}`, d.left ? 'down' : undefined);
+      return tr;
+    });
+  body.replaceChildren(...rows);
 }
 
 /** The hosts' bars: their accounts, or what they gained ("+134"). */
@@ -128,6 +185,20 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   const index = $(part, '[data-h-chart="index"]');
   if (active) renderChart(active, pts((r) => r.active), { label: 'active pds hosts', color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
   if (index) renderChart(index, pts((r) => r.index), { label: 'hosting diversity', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
+
+  // day by day: joined each day as a chart (from the second day kept), everything in the table
+  const counted = h.daily.filter((d) => d.joined !== null);
+  const joinedCard = $(part, '[data-h-chart="joined"]')?.closest<HTMLElement>('.weather-chart-card');
+  const joined = $(part, '[data-h-chart="joined"]');
+  if (joinedCard) joinedCard.hidden = counted.length < 2;
+  if (joined && counted.length >= 2) {
+    const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
+    renderChart(joined, counted.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: d.joined })), { label: 'independent hosts joining each day', color: 'var(--weather-else)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
+  }
+  const days = $(part, '[data-h-days-wrap]');
+  if (days) days.hidden = h.daily.length === 0;
+  const table = $<HTMLTableElement>(part, '[data-h-days]');
+  if (table) renderHostDays(table, h.daily, now);
 
   const fresh = $(part, '[data-h-new]');
   if (fresh) drawBars(fresh, hostBars(h.new, false));

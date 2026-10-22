@@ -11,6 +11,9 @@
  *   newHosts  how many independent hosts were first seen active in the range, and `new`
  *             the ones with the most accounts now
  *   growing   the independent hosts that gained the most accounts over the range, by day
+ *   daily     day by day (UTC), over the range but at least a week: active hosts at the
+ *             day's last census and the change from the day before, and the independent
+ *             hosts that joined and left. Each is null where there's nothing to compare.
  *
  * Hostnames are someone else's text, so each is checked again here.
  */
@@ -41,6 +44,18 @@ export interface HostHistory {
   newHosts: number;
   new: Array<{ hostname: string; accounts: number; first: string }>;
   growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
+  daily: HostDay[];
+}
+
+export interface HostDay {
+  /** YYYY-MM-DD, UTC. */
+  day: string;
+  active: number | null;
+  /** Active hosts against the day before; can be negative. */
+  change: number | null;
+  /** Independent hosts active that day and not the day before, and the other way round. */
+  joined: number | null;
+  left: number | null;
 }
 
 /** How many hosts each list names. */
@@ -56,6 +71,17 @@ export function toHostPoint(x: unknown): HostPoint | null {
   const writing = x.writing === null || x.writing === undefined ? null : num(x.writing);
   const share = Math.min(c.share, 100);
   return { t, ...c, share, writing: writing !== null && Number.isFinite(writing) && writing >= 0 ? writing : null, index: diversityIndex(share, c.spread) };
+}
+
+const countOrNull = (x: unknown): number | null => {
+  const v = x === null || x === undefined ? NaN : num(x);
+  return Number.isFinite(v) && v >= 0 ? v : null;
+};
+
+export function toHostDay(x: unknown): HostDay | null {
+  if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
+  const change = x.change === null || x.change === undefined ? NaN : num(x.change);
+  return { day: x.day, active: countOrNull(x.active), change: Number.isFinite(change) ? change : null, joined: countOrNull(x.joined), left: countOrNull(x.left) };
 }
 
 /** atmosphere_host_trends's answer, checked, or null if its shape is off. */
@@ -79,6 +105,7 @@ export function toHostHistory(body: unknown, bucket: HostBucket): HostHistory | 
         return isRecord(h) && hostname(h.hostname) && c ? [{ hostname: h.hostname, accounts: c.accounts, prevAccounts: c.prevAccounts }] : [];
       })
       .slice(0, TOP_HOSTS),
+    daily: (Array.isArray(body.daily) ? body.daily : []).map(toHostDay).filter((d): d is HostDay => d !== null),
   };
 }
 

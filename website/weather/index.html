@@ -222,6 +222,21 @@
                             <figcaption class="weather-chart-card__title">hosting diversity</figcaption>
                             <div class="weather-chart" data-h-chart="index"></div>
                         </figure>
+                        <figure class="weather-chart-card" hidden>
+                            <figcaption class="weather-chart-card__title">independent hosts joining each day</figcaption>
+                            <div class="weather-chart" data-h-chart="joined"></div>
+                        </figure>
+                    </div>
+                    <div class="weather-hosts__days" data-h-days-wrap hidden>
+                        <h3 class="weather-hosts__subtitle">day by day</h3>
+                        <div class="weather-hosts__scroll">
+                            <table class="weather-hosts__table" data-h-days>
+                                <caption class="visually-hidden">active pds hosts each day (utc), the change from the day before, and the independent hosts that joined and left</caption>
+                                <thead><tr><th scope="col">day</th><th scope="col">active</th><th scope="col">change</th><th scope="col">joined</th><th scope="col">left</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <p class="weather-tile__note">days are utc. joined and left count independent hosts: active that day and not the day before, or the other way round.</p>
                     </div>
                     <div class="weather-hosts__cols">
                         <div class="weather-hosts__list">

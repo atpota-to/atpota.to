@@ -134,8 +134,10 @@ applied 2026-10-22; `createHostWriter` in `src/hosts.js`):
 
 `atmosphere_host_trends(since, bucket)` reads them for `/api/weather-history`'s `hosts`
 (`website/server/weather-hosts.ts`): the last census in each bucket, the independent hosts
-first seen in the range (none count as new on the first day kept), and the ones that
-gained the most accounts.
+first seen in the range (none count as new on the first day kept), the ones that
+gained the most accounts, and day by day (at least the last 7): active hosts at the day's
+last census, the change from the day before, and the independent hosts that joined and
+left.
 
 `/v1/now` carries it as `hosts` (`src/hosts.js` `summarizeHosts`):
 

@@ -56,6 +56,10 @@ create policy "anyone can read" on public.atmosphere_host_day for select using (
 --            day), with the accounts they have now; newHosts is how many
 --   growing  independent hosts that gained the most accounts over the range: now against
 --            their first day in it (by day, so an hour's range compares with today so far)
+--   daily    day by day (UTC), over the range but at least the last 7 days: active hosts at
+--            the day's last census and the change from the day before, and how many
+--            independent hosts joined (active that day, not the day before) and left (the
+--            other way round). Joined and left are null on the first day kept.
 
 create or replace function public.atmosphere_host_trends(since timestamptz, bucket text, max_hosts integer default 10)
 returns jsonb
@@ -96,6 +100,37 @@ as $$
     select n.hostname, n.accounts, b.accounts as prev
     from now_hosts n join base b using (hostname)
     where n.accounts > b.accounts
+  ),
+  days as (
+    select g::date as day
+    from generate_series(
+      greatest((select day from first_day), (least(since, now() - interval '6 days') at time zone 'UTC')::date),
+      (now() at time zone 'UTC')::date,
+      interval '1 day'
+    ) g
+    where (select day from first_day) is not null
+  ),
+  census_day as (
+    select distinct on ((h.t at time zone 'UTC')::date) (h.t at time zone 'UTC')::date as day, h.active
+    from public.atmosphere_hosts h
+    where h.t >= (least(since, now() - interval '6 days') at time zone 'UTC')::date - 1
+    order by (h.t at time zone 'UTC')::date, h.t desc
+  ),
+  daily as (
+    select d.day, c.active, c.active - p.active as change,
+      case when d.day > (select day from first_day) then (
+        select count(*) from public.atmosphere_host_day x
+        where x.day = d.day and not x.bluesky
+          and not exists (select 1 from public.atmosphere_host_day y where y.day = d.day - 1 and y.hostname = x.hostname)
+      ) end as joined,
+      case when d.day > (select day from first_day) then (
+        select count(*) from public.atmosphere_host_day x
+        where x.day = d.day - 1 and not x.bluesky
+          and not exists (select 1 from public.atmosphere_host_day y where y.day = d.day and y.hostname = x.hostname)
+      ) end as left_
+    from days d
+    left join census_day c on c.day = d.day
+    left join census_day p on p.day = d.day - 1
   )
   select jsonb_build_object(
     'since', (select day from first_day),
@@ -109,7 +144,8 @@ as $$
     'new', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'first', x.first) order by x.accounts desc, x.hostname)
         from (select * from fresh order by accounts desc, hostname limit max_hosts) x), '[]'::jsonb),
     'growing', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'prevAccounts', x.prev) order by x.accounts - x.prev desc, x.hostname)
-        from (select * from grew order by accounts - prev desc, hostname limit max_hosts) x), '[]'::jsonb)
+        from (select * from grew order by accounts - prev desc, hostname limit max_hosts) x), '[]'::jsonb),
+    'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_) order by d.day) from daily d), '[]'::jsonb)
   );
 $$;
 revoke all on function public.atmosphere_host_trends(timestamptz, text, integer) from public;

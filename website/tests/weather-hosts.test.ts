@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { hostBars, hostRange, newHostsWords, renderHostTrends, toHostHistory, type HostHistory } from '../src/scripts/weather-hosts.js';
+import { hostBars, hostRange, newHostsWords, renderHostTrends, signed, toHostHistory, type HostHistory } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars } from '../src/scripts/weather-page.js';
 
 // Where accounts live, over time: the hosts tile's charts and lists.
@@ -23,6 +23,12 @@ const HOSTS: HostHistory = {
     { hostname: 'tiny.example', accounts: 2, first: '2026-10-28' },
   ],
   growing: [{ hostname: 'blacksky.app', accounts: 42900, prevAccounts: 42366 }],
+  daily: [
+    { day: '2026-10-24', active: 1887, change: null, joined: null, left: null },
+    { day: '2026-10-25', active: 1890, change: 3, joined: 5, left: 2 },
+    { day: '2026-10-26', active: 1884, change: -6, joined: 1, left: 7 },
+    { day: '2026-10-29', active: 1886, change: 0, joined: 0, left: 0 },
+  ],
 };
 
 let part: HTMLElement;
@@ -75,6 +81,36 @@ describe('where accounts live, over time', () => {
     const since = part.querySelector<HTMLElement>('[data-h-since]')!;
     expect(since.hidden).toBe(false);
     expect(since.textContent).toMatch(/^i started keeping track of hosts on october 24/);
+  });
+
+  it('goes day by day: a chart of hosts joining, and a table newest first', () => {
+    renderHostTrends(part, HOSTS, 'week', bars, NOW);
+    const card = part.querySelector('[data-h-chart="joined"]')!.closest<HTMLElement>('.weather-chart-card')!;
+    expect(card.hidden).toBe(false);
+    expect(part.querySelector('[data-h-chart="joined"] svg')).not.toBeNull();
+    expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(false);
+    const rows = [...part.querySelectorAll('[data-h-days] tbody tr')].map((tr) => [...tr.children].map((c) => c.textContent));
+    expect(rows).toHaveLength(4);
+    expect(rows[0]![0]).toMatch(/\(so far\)$/); // the 29th is today
+    expect(rows[0]!.slice(1)).toEqual(['1,886', '0', '0', '0']);
+    expect(rows[1]!.slice(1)).toEqual(['1,884', '−6', '+1', '−7']);
+    expect(rows[3]!.slice(1)).toEqual(['1,887', '–', '–', '–']);
+    expect(part.querySelector('[data-h-days] tbody tr:nth-child(2) td:nth-of-type(2)')!.getAttribute('data-trend')).toBe('down');
+  });
+
+  it('keeps the joining chart back until there are two days to draw', () => {
+    renderHostTrends(part, { ...HOSTS, daily: HOSTS.daily.slice(0, 2) }, 'day', bars, NOW);
+    expect(part.querySelector('[data-h-chart="joined"]')!.closest<HTMLElement>('.weather-chart-card')!.hidden).toBe(true);
+    expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(false);
+    renderHostTrends(part, { ...HOSTS, daily: [] }, 'day', bars, NOW);
+    expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(true);
+  });
+
+  it('reads the daily rows, dropping ones that do not check out', () => {
+    const h = toHostHistory({ ...HOSTS, daily: [...HOSTS.daily, { day: 'soon', active: 1 }, { day: '2026-10-30', active: -1, change: 0, joined: 0, left: 0 }] })!;
+    expect(h.daily).toHaveLength(4);
+    expect(toHostHistory({ ...HOSTS, daily: undefined })!.daily).toEqual([]);
+    expect([signed(3), signed(-2), signed(0), signed(null)]).toEqual(['+3', '−2', '0', '–']);
   });
 
   it('says so when nothing is new', () => {

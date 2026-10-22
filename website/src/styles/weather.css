@@ -1658,6 +1658,53 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-size: 18px;
 }
 
+.weather-hosts__days {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A narrow phone scrolls the table, not the page. */
+.weather-hosts__scroll {
+  overflow-x: auto;
+}
+
+.weather-hosts__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-hosts__table :is(th, td) {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.weather-hosts__table :is(thead th, tbody th) {
+  text-align: left;
+}
+
+.weather-hosts__table thead th {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.weather-hosts__table tbody th {
+  font-weight: 400;
+}
+
+/* Like the change chips: green going up; going down keeps the text colour, its minus says it. */
+.weather-hosts__table td[data-trend] {
+  font-weight: 700;
+}
+
+.weather-hosts__table td[data-trend="up"] {
+  color: var(--leaf-strong);
+}
+
 @media (max-width: 760px) {
   .weather-hosts__cols {
     grid-template-columns: minmax(0, 1fr);
