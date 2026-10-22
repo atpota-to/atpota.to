@@ -16,8 +16,8 @@
  * A comment is left off the page when:
  *   - its record no longer points at the post, or has no text
  *   - its author has no Bluesky profile view (deleted, deactivated or taken down)
- *   - its author carries one of HIDDEN_LABELS (Bluesky moderation, or their own
- *     "!no-unauthenticated", which asks logged-out pages not to show them)
+ *   - its author carries one of HIDDEN_LABELS (Bluesky moderation; their own
+ *     "!no-unauthenticated" self-label isn't one, so they're shown like anyone else)
  *   - the publication's owner blocks its author on Bluesky (app.bsky.graph.block records
  *     in the owner's repo), so moderating is "block them as the owner"
  *   - its URI or its author's DID is in BLOG_HIDDEN_COMMENTS (config.ts)
@@ -50,7 +50,7 @@ const CONCURRENCY = 8;
 /** Owner block lists are read up to this many pages of 100. */
 const BLOCK_PAGES = 5;
 
-export const HIDDEN_LABELS: ReadonlySet<string> = new Set(['!hide', '!takedown', '!suspend', 'spam', '!no-unauthenticated']);
+export const HIDDEN_LABELS: ReadonlySet<string> = new Set(['!hide', '!takedown', '!suspend', 'spam']);
 
 export interface CommentAuthor {
   did: string;
