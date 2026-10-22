@@ -115,23 +115,28 @@ const rateOf = (s) => s.eventCount / Math.max(1, (s.maxWitnessedAt - s.minWitnes
 
 /**
  * Which part of the archive holds [fromSec, toSec): the seq bounds to ask the SDK for,
- * from the segment list. Throws unless the whole range is live stream, with enough after
- * it for the last minute to settle.
+ * from the segment list. Throws unless the whole range is live stream (no segment it
+ * touches runs at a crawl's rate), with enough after it for the last minute to settle.
+ * Only segments the range touches count: a crawl (or one dense segment) elsewhere in the
+ * archive, before or after, doesn't refuse a range clear of it.
  */
 export function planRange(segments, fromSec, toSec) {
   if (!segments.length) throw new Error('the archive lists no segments');
-  const crawl = segments.filter((s) => rateOf(s) >= LIVE_MAX_RATE);
-  const liveFromUs = crawl.length ? Math.max(...crawl.map((s) => s.maxWitnessedAt)) : segments[0].minWitnessedAt;
   const tipUs = Math.max(...segments.map((s) => s.maxWitnessedAt));
   const startUs = (fromSec - LEAD_S) * 1e6;
   // The last minute is out once the stream is MAX_EARLIER_S past its end.
   const endUs = (toSec + MAX_EARLIER_S + LEAD_S) * 1e6;
-  if (startUs < liveFromUs) {
-    throw new Error(`--from must be after ${isoUs(liveFromUs + LEAD_S * 1e6)}: before that the archive is ${crawl.length ? 'a crawl of records that already existed, not the live stream' : 'empty'}`);
-  }
+  const firstUs = Math.min(...segments.map((s) => s.minWitnessedAt));
+  if (startUs < firstUs) throw new Error(`--from must be after ${isoUs(firstUs + LEAD_S * 1e6)}: the archive is empty before that`);
   if (endUs > tipUs) throw new Error(`--to must be before ${isoUs(tipUs - (MAX_EARLIER_S + LEAD_S) * 1e6)}: the archive's last sealed segment ends at ${isoUs(tipUs)}`);
   const picked = segments.filter((s) => s.maxWitnessedAt >= startUs && s.minWitnessedAt <= endUs);
   if (!picked.length) throw new Error(`the archive has no segment for ${iso(fromSec)} to ${iso(toSec)}`);
+  const crawl = picked.filter((s) => rateOf(s) >= LIVE_MAX_RATE);
+  if (crawl.length) {
+    const lastUs = Math.max(...crawl.map((s) => s.maxWitnessedAt));
+    const which = crawl.slice(0, 3).map((s) => `#${s.index} ${isoUs(s.minWitnessedAt)} to ${isoUs(s.maxWitnessedAt)}, ${Math.round(rateOf(s)).toLocaleString('en-US')} events/s`).join('; ');
+    throw new Error(`--from must be after ${isoUs(lastUs + LEAD_S * 1e6)}: the range reaches into a crawl of records that already existed, not the live stream (${crawl.length} segment${crawl.length === 1 ? '' : 's'}: ${which}${crawl.length > 3 ? '; …' : ''})`);
+  }
   return {
     afterSeq: picked[0].minSeq - 1,
     beforeSeq: picked.at(-1).maxSeq,

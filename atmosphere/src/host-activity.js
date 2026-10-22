@@ -18,8 +18,10 @@
 // the UTC day (hll.js), and into one for every independent host together ('*'). After
 // each host census (every 10 minutes) today's sketches are written to
 // atmosphere_host_active_day (sql/atmosphere_hosts.sql), and the day before's one last
-// time once the day has turned. A restart reads today's rows back and merges into them,
-// so nothing is counted twice and nothing is lost: merging a sketch is idempotent.
+// time once the day has turned. Before each write it reads the day's rows back and merges
+// them in, so what a restart or a backfill (backfill-host-activity.js, which can count
+// today's morning) put there stays, and nothing is counted twice: merging a sketch is
+// idempotent.
 //
 // No DID is written anywhere: the directory file holds the numbers, Supabase the sketches.
 
@@ -182,8 +184,6 @@ export class ActivityDay {
     this.day = day;
     this.hosts = new Map();
     this.all = new Sketch();
-    /** Whether what was written for it before (by an earlier run) has been merged in. */
-    this.loaded = false;
   }
 
   add(host, packed) {
@@ -236,8 +236,6 @@ export function createHostActivity({ upsert, getAll, log, file = null, fetchImpl
     else if (d > today.day) {
       finished = today;
       today = new ActivityDay(d);
-      // a day that started while the station ran has nothing written to read back
-      today.loaded = d === dayOf(now());
     }
     return today.day === d ? today : finished?.day === d ? finished : null;
   };
@@ -278,11 +276,11 @@ export function createHostActivity({ upsert, getAll, log, file = null, fetchImpl
     const stale = directory.readAt === null || now() - directory.readAt > DIRECTORY_MAX_AGE_MS;
     if (stale && !reading) reading = startReading(census);
     dayFor(now());
+    // what's there already (an earlier run's, a backfill's) merged in before writing over it
     for (const day of [finished, today]) {
-      if (!day || day.loaded) continue;
+      if (!day) continue;
       try {
         day.merge(await getAll(`atmosphere_host_active_day?day=eq.${day.day}&select=day,hostname,sketch&order=hostname`));
-        day.loaded = true;
       } catch (err) {
         log?.warn('could not read back host activity', { day: day.day, err: err?.message ?? String(err) });
         return; // try again next census, rather than overwrite what's there
