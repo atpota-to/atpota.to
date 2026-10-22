@@ -72,6 +72,9 @@ create table if not exists public.atmosphere_plc_day (
   moved_between          integer not null check (moved_between >= 0),          -- from one independent host to another
   deleted                integer not null check (deleted >= 0)                 -- tombstones
 );
+-- the independent hosts accounts moved to that day (out of Bluesky's hosts, or from another
+-- independent one), the ten busiest: [{ hostname, accounts }]. Added 2026-10-22.
+alter table public.atmosphere_plc_day add column if not exists destinations jsonb not null default '[]'::jsonb;
 alter table public.atmosphere_plc_day enable row level security;
 create policy "anyone can read" on public.atmosphere_plc_day for select using (true);
 

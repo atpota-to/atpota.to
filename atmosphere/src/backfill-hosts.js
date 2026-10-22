@@ -25,8 +25,11 @@
 //   - only hosts the relay lists count. The log is full of hosts nobody relays (test
 //     servers, bulk sign-ups to one-off domains): they're counted as `created_unlisted`
 //     and nothing else
-//   - a host counts as active on a day if the relay calls it active now and it had an
-//     account that day (or has none now): one that went offline since is missed
+//   - a host counts as active on a day if the relay calls it active now (or the station
+//     has seen it active: small hosts drift between active and idle) and it had an account
+//     that day (or has none now): one that went offline since is missed. The relay's count
+//     can lag a bulk sign-up, so a host the walk back would leave out is asked for its own
+//     list of accounts (hostsBefore): one with an account from before the window stays
 //   - "wrote in the last hour" has no history, so it's null
 //   - accounts are the relay's count, moved by the log; did:web accounts and
 //     deactivations never touch the log, so they're as they are today
@@ -35,7 +38,7 @@
 // new accounts by where they signed up (Bluesky's hosts, independent hosts, unlisted
 // ones), how many of the new accounts on listed hosts started with a handle on their own
 // domain (not one their host hands out), accounts moving out of Bluesky's hosts, back in, and between independent hosts,
-// and deletions. These are counted, not estimated.
+// and deletions, and the independent hosts accounts moved to. These are counted, not estimated.
 //
 // Days the station already wrote itself are left alone unless --overwrite. The log pages
 // and the audit answers are cached in --cache (default ./plc-cache), so a run that stops
@@ -86,7 +89,23 @@ export function daysOf(from, today) {
   return days;
 }
 
-const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0 });
+const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {} });
+
+/** How many destinations a day's row names. */
+export const TOP_DESTINATIONS = 10;
+
+/**
+ * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
+ * accounts moved to, out of Bluesky's hosts or from another independent one, by count) cut
+ * to the TOP_DESTINATIONS busiest as [{ hostname, accounts }].
+ */
+export function plcRow(day, signals) {
+  const destinations = Object.entries(signals.destinations ?? {})
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .slice(0, TOP_DESTINATIONS)
+    .map(([hostname, accounts]) => ({ hostname, accounts }));
+  return { day, ...signals, destinations };
+}
 
 /**
  * Everything the run learns from the log: each changed identity's hosts by day (`dids`:
@@ -138,6 +157,11 @@ export class PlcHistory {
     if (a === 'bluesky' && b === 'independent') s.moved_out++;
     else if (a === 'independent' && b === 'bluesky') s.moved_in++;
     else if (a === 'independent' && b === 'independent') s.moved_between++;
+    // where they went: an independent host, out of Bluesky's or from another
+    if (b === 'independent' && (a === 'bluesky' || a === 'independent')) {
+      const host = this.hosts[to];
+      if (isHostname(host)) s.destinations[host] = (s.destinations[host] ?? 0) + 1;
+    }
   }
 
   /** One export entry, slimmed (plc.js slimEntry). */
@@ -240,20 +264,57 @@ export class PlcHistory {
 }
 
 /**
- * The census of one past day: each host the relay calls active now, with that day's
- * accounts, leaving out a host all of whose accounts arrived after the day (it wasn't
- * there yet). A host with no accounts now stays: it can't be told apart.
+ * The census of one past day: each host the relay calls active now (or that the station
+ * has seen active: small hosts drift between active and idle), with that day's accounts,
+ * leaving out a host all of whose accounts arrived after the day (it wasn't there yet). A
+ * host with no accounts now stays: it can't be told apart. `floors` (hostsBefore) names
+ * hosts known to have had accounts before the window, with how many: one of those is never
+ * left out, however far the walk back goes (the relay's count can lag a bulk sign-up).
  */
-export function hostsOnDay(census, history, delta) {
+export function hostsOnDay(census, history, delta, { floors = new Map(), seenActive = new Set() } = {}) {
   const out = [];
   for (const h of census) {
-    if (h.status !== 'active') continue;
+    if (h.status !== 'active' && !seenActive.has(h.hostname)) continue;
     const i = history.hostIndex.get(h.hostname);
-    const accounts = h.accounts + (i === undefined ? 0 : delta[i]);
-    if (h.accounts > 0 && accounts <= 0) continue;
+    let accounts = h.accounts + (i === undefined ? 0 : delta[i]);
+    const floor = floors.get(h.hostname);
+    if (floor !== undefined) accounts = Math.max(accounts, floor);
+    else if (h.accounts > 0 && accounts <= 0) continue;
     out.push({ hostname: h.hostname, status: 'active', accounts: Math.max(0, accounts), seq: null });
   }
   return out;
+}
+
+/**
+ * Hosts the walk back would leave out on some day, that in fact had accounts before the
+ * window: their own list of accounts (com.atproto.sync.listRepos, the first page) names
+ * one that didn't arrive in the window. Each comes back with how many such accounts that
+ * page has. A host that won't answer is left as the walk back has it.
+ */
+export async function hostsBefore({ fetchImpl, census, history, deltas, concurrency = 4, log }) {
+  const candidates = census.filter((h) => {
+    const i = history.hostIndex.get(h.hostname);
+    return h.accounts > 0 && i !== undefined && isHostname(h.hostname) && !isBlueskyHost(h.hostname) && deltas.some((d) => h.accounts + d[i] <= 0);
+  });
+  const floors = new Map();
+  await pool(candidates, concurrency, async (h) => {
+    const i = history.hostIndex.get(h.hostname);
+    try {
+      const res = await fetchImpl(`https://${h.hostname}/xrpc/com.atproto.sync.listRepos?limit=1000`, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) return;
+      const body = await res.json();
+      // an account that didn't change in the window was there all along; one that changed but started here, too
+      const before = (Array.isArray(body?.repos) ? body.repos : []).filter((r) => {
+        const rec = typeof r?.did === 'string' ? history.dids.get(r.did) : undefined;
+        return typeof r?.did === 'string' && (!rec || rec.start === i);
+      }).length;
+      if (before > 0) floors.set(h.hostname, before);
+    } catch {
+      // unreachable: leave it to the walk back
+    }
+  });
+  log?.(`checked ${candidates.length} host(s) the walk back would leave out; ${floors.size} had accounts from before`);
+  return floors;
 }
 
 /** A past day's rows: its atmosphere_hosts row (as at the end of the day) and its atmosphere_host_day rows. */
@@ -412,6 +473,8 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   log(`audited ${a.fetched.toLocaleString('en-US')} (${a.cached.toLocaleString('en-US')} from the cache)`);
   history.settle();
   const delta = history.deltas();
+  const floors = await hostsBefore({ fetchImpl, census, history, deltas: delta, concurrency: args.concurrency, log });
+  const seenActive = db ? await db.seenActive() : new Set();
 
   let skipBefore = null;
   if (db && !args.overwrite) skipBefore = await db.firstLiveDay();
@@ -421,9 +484,9 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   log('day          active  indep   accounts elsewhere  diversity   new: bsky  indep  unlisted  own-domain   moved: out  in  between   deleted');
   for (let d = 0; d < days.length; d++) {
     const day = days[d];
-    const rows = dayRows(day, hostsOnDay(census, history, delta[d]), listed);
+    const rows = dayRows(day, hostsOnDay(census, history, delta[d], { floors, seenActive }), listed);
     const s = history.signals[d];
-    const plc = { day, ...s };
+    const plc = plcRow(day, s);
     log(
       `${day}  ${pad(rows.summary.active, 6)} ${pad(rows.summary.independent, 6)}  ${pad(rows.summary.accounts.independent.toLocaleString('en-US'), 18)}  ${pad(rows.summary.diversity.index, 9)}   ${pad(s.created_bluesky, 9)} ${pad(s.created_independent, 6)} ${pad(s.created_unlisted, 9)} ${pad(s.created_custom_handle, 11)}   ${pad(s.moved_out, 10)} ${pad(s.moved_in, 3)} ${pad(s.moved_between, 8)}   ${pad(s.deleted, 7)}`,
     );
@@ -447,7 +510,13 @@ async function main(argv) {
   const url = process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!args.dryRun && !(url && key)) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (or pass --dry-run)');
-  const db = args.dryRun ? null : { ...supabaseRest({ url, key }), firstLiveDay: () => firstLiveDay({ url, key, fetchImpl: fetch }) };
+  const rest = args.dryRun ? null : supabaseRest({ url, key });
+  const db = rest && {
+    ...rest,
+    firstLiveDay: () => firstLiveDay({ url, key, fetchImpl: fetch }),
+    // hosts the station has seen active in its own censuses over the last two days
+    seenActive: async () => new Set((await rest.getAll(`atmosphere_host_day?select=hostname&estimated=eq.false&day=gte.${dayOf(Date.now() - 2 * DAY_MS)}&order=day.asc,hostname.asc`)).map((r) => r.hostname)),
+  };
   console.log(`backfilling hosts from ${args.from} to yesterday${args.dryRun ? ' (dry run: nothing is written)' : ''}`);
   await backfill({ args, db });
 }

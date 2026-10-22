@@ -44,7 +44,7 @@ test('reads today from midnight, reads a mover\'s history once, and writes today
   const w = createPlcWatch({ census, fetchImpl, upsert: async (table, conflict, r) => rows.push(...r), now: () => Date.parse('2026-10-22T12:00:00Z') });
   await w.poll();
   assert.deepEqual(asked, ['did:plc:mover']);
-  assert.deepEqual(rows.at(-1), { day: '2026-10-22', ops: 4, created_bluesky: 1, created_independent: 1, created_unlisted: 1, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0 });
+  assert.deepEqual(rows.at(-1), { day: '2026-10-22', ops: 4, created_bluesky: 1, created_independent: 1, created_unlisted: 1, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: [{ hostname: 'blacksky.app', accounts: 1 }] });
   // nothing new: the same row again, no second history read
   await w.poll();
   assert.deepEqual(asked, ['did:plc:mover']);

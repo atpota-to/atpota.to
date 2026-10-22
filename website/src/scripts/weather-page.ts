@@ -48,6 +48,7 @@
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock } from './weather-dock';
+import { initHostPanel } from './weather-host-panel';
 import { initForecast } from './weather-forecast';
 import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
@@ -639,7 +640,7 @@ export function hostsShare(h: Hosts): string {
   const total = h.accounts.bluesky + h.accounts.independent;
   if (h.accounts.independent <= 0) return `all ${formatCount(total)} accounts live on bluesky's hosts.`;
   const hosts = Math.max(1, Math.round(h.diversity.spread));
-  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
+  return `${formatIndex(h.diversity.share)}% of all ${compactCount(total)} accounts, active or not, live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
 }
 
 /** How long ago the station counted them: "counted just now", "counted 7 minutes ago". */
@@ -665,7 +666,7 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
   if (writing) writing.hidden = h.writing === null;
   if (h.writing) {
     count(tile, '[data-h-writing]', h.writing.bluesky + h.writing.independent, formatCount);
-    setText(tile, '[data-h-writing-words]', h.writing.minutes >= 60 ? 'wrote in the last hour' : `wrote in the last ${h.writing.minutes} minutes`);
+    setText(tile, '[data-h-writing-words]', h.writing.minutes >= 60 ? 'hosts that wrote in the last hour' : `hosts that wrote in the last ${h.writing.minutes} minutes`);
   }
   renderShare($(tile, '[data-h-bar-bsky]'), $(tile, '[data-h-bar-else]'), h.diversity.share);
   roll(tile, '[data-h-share]', hostsShare(h));
@@ -678,15 +679,41 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
 export const HOST_SIZE_NAMES = ['empty', 'just one person', 'a household (2 to 10)', 'a village (11 to 100)', 'a town (101 to 1,000)', 'a city (1,001 to 10,000)', 'a metropolis (10,000+)'] as const;
 const STATUS_NAMES: Record<string, string> = { active: 'active', idle: 'idle', offline: 'offline', throttled: 'throttled', banned: 'banned', other: 'something else' };
 
-/** The census tiles in where the atmosphere lives: hosts by size, by top-level domain, and the relay's roll call. Each stays hidden without its part. */
+/** The ten biggest independent hosts' share of the accounts on independent hosts (null without any). */
+export function topTenShare(h: Hosts): number | null {
+  if (h.accounts.independent <= 0 || h.top.length === 0) return null;
+  return (h.top.slice(0, 10).reduce((t, x) => t + x.accounts, 0) / h.accounts.independent) * 100;
+}
+
+/**
+ * The census tiles in where the atmosphere lives: the accounts by the size of host they
+ * live on (or the hosts, from a station that doesn't send accounts yet), and the census
+ * strip: hosts by top-level domain, and the relay's roll call. Each stays hidden without its part.
+ */
 export function renderHostCensus(report: HTMLElement, h: Hosts): void {
   const bar = (label: string, v: number, value = formatCount(v)): Bar => ({ label, perSecond: v, count: v, value });
   const sizes = $(report, '[data-p-sizes]');
   if (sizes) sizes.hidden = !h.sizes;
   if (h.sizes) {
     const list = $(report, '[data-p-size-list]');
-    // empty hosts aren't much to look at; the rest, smallest first
-    if (list) renderBars(list, h.sizes.slice(1).map((v, i) => bar(HOST_SIZE_NAMES[i + 1]!, v)), undefined);
+    const by = h.sizeAccounts;
+    // empty hosts hold nobody and aren't much to look at; the rest, smallest first
+    if (list) {
+      renderBars(
+        list,
+        h.sizes.slice(1).map((hosts, i) => {
+          const label = HOST_SIZE_NAMES[i + 1]!;
+          if (!by) return bar(label, hosts, `${formatCount(hosts)} hosts`);
+          const accounts = by[i + 1] ?? 0;
+          return { ...bar(label, accounts, `${compactCount(accounts)} accounts`), sub: `${formatCount(hosts)} host${hosts === 1 ? '' : 's'}` };
+        }),
+        undefined,
+      );
+    }
+    setText(report, '[data-p-size-note]', by ? "the accounts on independent hosts, by how big a host they live on. bluesky's own hosts hold hundreds of thousands each." : "independent hosts by how many accounts live on them. bluesky's own hosts hold hundreds of thousands each.");
+    const top = topTenShare(h);
+    const ten = Math.min(10, h.top.length);
+    setText(report, '[data-p-top10]', top === null ? '' : `the ${ten} biggest independent hosts hold ${formatIndex(top)}% of the accounts on independent hosts; the other ${formatCount(Math.max(0, h.independent - ten))} share the rest.`);
     const solo = h.sizes[1] ?? 0;
     setText(report, '[data-p-solo]', `${formatCount(solo)} independent host${solo === 1 ? ' holds' : 's hold'} just one account: someone running their own.`);
   }
@@ -706,6 +733,8 @@ export function renderHostCensus(report: HTMLElement, h: Hosts): void {
     if (list) renderBars(list, entries.map(([k, v]) => bar(STATUS_NAMES[k] ?? k, v)), undefined);
     setText(report, '[data-p-roll-lede]', `the relay has heard of ${formatCount(h.listed)} hosts. ${formatCount(h.statuses.active)} are up and about right now.`);
   }
+  const census = $(report, '[data-p-census]');
+  if (census) census.hidden = !h.tlds?.length && !h.statuses;
 }
 
 /** A window's tiles, from its history. */
@@ -750,6 +779,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "every ten minutes i read the relay's list of every host it knows about:",
       '- active hosts are the ones the relay is happily listening to right now',
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
+      "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
       "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place",
       '',
       "it goes by where accounts live, not who's writing this minute, so it's its own number and moves slowly. a bigger number means more of the network lives somewhere other than bluesky (◕‿◕)",
@@ -1241,6 +1271,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   bindExplainers(root);
   const lens = createLens();
   initLensDock(report, lens);
+  initHostPanel(report, fetchImpl);
   bindLens(report, lens);
   const feed = createHistoryFeed(fetchImpl);
   let watch: Watch | null = null;

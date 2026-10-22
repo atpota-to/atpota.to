@@ -155,6 +155,8 @@ export interface Hosts {
   statuses?: Record<HostStatus, number>;
   /** Independent hosts by accounts: 0, 1, up to 10, 100, 1,000, 10,000, and more (HOST_SIZE_BOUNDS). */
   sizes?: number[];
+  /** The accounts on the hosts in each of those sizes. */
+  sizeAccounts?: number[];
   /** The top-level domains with the most independent hosts. */
   tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
 }
@@ -532,11 +534,12 @@ export function hostsOf(x: unknown): Hosts | undefined {
 }
 
 /** A census's statuses, sizes and top-level domains, each left out if it doesn't check out. */
-function hostExtras(x: Record<string, unknown>): Pick<Hosts, 'statuses' | 'sizes' | 'tlds'> {
-  const out: Pick<Hosts, 'statuses' | 'sizes' | 'tlds'> = {};
+function hostExtras(x: Record<string, unknown>): Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds'> {
+  const out: Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds'> = {};
   const statuses = counts(x.statuses, HOST_STATUSES);
   if (statuses) out.statuses = statuses;
   if (Array.isArray(x.sizes) && x.sizes.length === HOST_SIZE_BOUNDS.length + 1 && x.sizes.every(isCount)) out.sizes = x.sizes as number[];
+  if (Array.isArray(x.sizeAccounts) && x.sizeAccounts.length === HOST_SIZE_BOUNDS.length + 1 && x.sizeAccounts.every(isCount)) out.sizeAccounts = x.sizeAccounts as number[];
   if (Array.isArray(x.tlds)) {
     out.tlds = x.tlds
       .filter((t): t is Record<string, unknown> => isRecord(t) && typeof t.tld === 'string' && TLD_RE.test(t.tld) && isCount(t.hosts) && isCount(t.accounts))

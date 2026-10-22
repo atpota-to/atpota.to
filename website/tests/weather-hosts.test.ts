@@ -2,8 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { compassOf, hostBars, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
-import { fetchHistory, renderBars, renderHostCensus } from '../src/scripts/weather-page.js';
+import { compassOf, destinationsOf, hostBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 
 // Where accounts live, over time: the hosts tile's charts and lists.
 
@@ -32,7 +32,7 @@ const HOSTS: HostHistory = {
   identities: [],
 };
 
-const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, ...extra });
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], ...extra });
 
 let part: HTMLElement;
 const bars = (list: HTMLElement, b: Parameters<typeof renderBars>[1]) => renderBars(list, b, undefined);
@@ -150,6 +150,13 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(text('[data-p-deleted]')).toBe('1 account deleted itself.');
   });
 
+  it('heads the trends with the share off bluesky and which way it went', () => {
+    const up = { ...HOSTS, points: [{ ...point('2026-10-22T13:00:00.000Z', 1887), share: 1.46, accountsIndependent: 361000 }, point('2026-10-29T11:00:00.000Z', 1902)] };
+    expect(shareHeadline(up, 'week')).toBe("1.51% of accounts live off bluesky's servers, up from 1.46% over the last 7 days: +2,866 accounts on independent hosts.");
+    expect(shareHeadline({ ...HOSTS, points: [point('2026-10-29T11:00:00.000Z', 1902)] }, 'day')).toBe("1.51% of accounts live off bluesky's servers.");
+    expect(shareHeadline({ ...HOSTS, points: [] }, 'day')).toBe('');
+  });
+
   it('keeps the chart back with only one day', () => {
     renderIdentities(report, [idDay('2026-10-29')], NOW);
     expect(report.querySelector<HTMLElement>('[data-p-arrivals-card]')!.hidden).toBe(true);
@@ -165,10 +172,42 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(identityDayWords('2026-10-28', NOW)).toBe('yesterday (utc)');
   });
 
+  it('says how many new accounts start outside bluesky, and where movers went', () => {
+    expect(oddsWords([idDay('2026-10-28', { createdBluesky: 900, createdIndependent: 100 }), idDay('2026-10-29', { createdBluesky: 1100, createdIndependent: 100 })])).toBe('over the last 2 days, 1 in 11 new accounts started outside bluesky.');
+    expect(oddsWords([idDay('2026-10-29', { createdIndependent: 0 })])).toBe('');
+    const went = destinationsOf([
+      idDay('2026-10-28', { destinations: [{ hostname: 'eurosky.social', accounts: 3 }, { hostname: 'blacksky.app', accounts: 2 }] }),
+      idDay('2026-10-29', { destinations: [{ hostname: 'blacksky.app', accounts: 4 }] }),
+    ]);
+    expect(went).toEqual([{ hostname: 'blacksky.app', accounts: 6 }, { hostname: 'eurosky.social', accounts: 3 }]);
+  });
+
+  it('lists where movers went, as hosts to tap, only when it knows', () => {
+    const days = [idDay('2026-10-28'), idDay('2026-10-29', { destinations: [{ hostname: 'eurosky.social', accounts: 3 }] })];
+    renderIdentities(report, days, NOW);
+    // without bars to draw with, it stays hidden
+    expect(report.querySelector<HTMLElement>('[data-p-dest-wrap]')!.hidden).toBe(true);
+    renderIdentities(report, days, NOW, bars);
+    expect(report.querySelector<HTMLElement>('[data-p-dest-wrap]')!.hidden).toBe(false);
+    expect([...report.querySelectorAll('[data-p-dest] .weather-bars__label')].map((el) => el.textContent)).toEqual(['eurosky.social']);
+    expect(report.querySelector('[data-p-dest]')!.hasAttribute('data-host-list')).toBe(true);
+    renderIdentities(report, [idDay('2026-10-29')], NOW, bars);
+    expect(report.querySelector<HTMLElement>('[data-p-dest-wrap]')!.hidden).toBe(true);
+  });
+
+  it('puts air quality in a chip on the new arrivals tile', () => {
+    renderIdentities(report, [idDay('2026-10-29')], NOW);
+    const chip = report.querySelector<HTMLElement>('[data-p-smog]')!;
+    expect(chip.closest('[data-p-arrivals]')).not.toBeNull();
+    expect(chip.hidden).toBe(false);
+  });
+
   it('reads identity days from the history, dropping ones that do not check out', () => {
     const h = toHostHistory({ ...HOSTS, identities: [idDay('2026-10-29'), { day: '2026-10-30', ops: 'lots' }] })!;
     expect(h.identities).toHaveLength(1);
     expect(toHostHistory({ ...HOSTS, identities: undefined })!.identities).toEqual([]);
+    const odd = toHostHistory({ ...HOSTS, identities: [{ ...idDay('2026-10-29'), destinations: [{ hostname: 'eurosky.social', accounts: 2 }, { hostname: '<b>', accounts: 1 }] }, { ...idDay('2026-10-28'), destinations: undefined }] })!;
+    expect(odd.identities.map((d) => d.destinations)).toEqual([[{ hostname: 'eurosky.social', accounts: 2 }], []]);
   });
 });
 
@@ -203,5 +242,17 @@ describe('where the atmosphere lives: the census tiles', () => {
     // throttled (0) is left out
     expect(labels('[data-p-roll-list]')).toEqual(['active', 'idle', 'offline', 'banned']);
     expect(report.querySelector<HTMLElement>('[data-p-rollcall]')!.hidden).toBe(false);
+    expect(report.querySelector<HTMLElement>('[data-p-census]')!.hidden).toBe(false);
+  });
+
+  it('weighs the sizes by accounts when the station sends them, and says what the top ten hold', () => {
+    const report = document.querySelector<HTMLElement>('[data-weather-report]')!;
+    const top = [{ hostname: 'eurosky.social', accounts: 38036 }, { hostname: 'blacksky.app', accounts: 42900 }];
+    renderHostCensus(report, { ...census, top, sizes: [8, 764, 737, 204, 58, 18, 9], sizeAccounts: [0, 764, 3000, 7000, 20000, 60000, 273102] });
+    const values = [...report.querySelectorAll('[data-p-size-list] .weather-bars__value')].map((el) => el.textContent);
+    expect(values[0]).toBe('764 accounts');
+    expect(values[5]).toBe('273.1k accounts');
+    expect(report.querySelector('[data-p-top10]')!.textContent).toBe('the 2 biggest independent hosts hold 22% of the accounts on independent hosts; the other 1,796 share the rest.');
+    expect(topTenShare({ ...census, top: [] })).toBeNull();
   });
 });

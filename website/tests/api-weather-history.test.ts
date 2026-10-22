@@ -48,7 +48,7 @@ const HOSTS = {
     { day: 'tomorrow', active: 1 },
   ],
   identities: [
-    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1 },
+    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }, { hostname: 'Not A Host', accounts: 1 }, { hostname: 'blacksky.app', accounts: -1 }] },
     { day: '2026-10-23', ops: 'lots' },
   ],
 };
@@ -136,7 +136,7 @@ describe('weather history', () => {
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
       identities: [
-        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1 },
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
       ],
     });
   });
@@ -205,6 +205,32 @@ describe('weather history', () => {
     const res = await h.GET(new Request('https://atpota.to/api/weather-history?range=day'));
     expect(res.status).toBe(503);
     expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('answers one host\'s days for ?host=, oldest first, and refuses what isn\'t a hostname', async () => {
+    const db = supabase(() =>
+      Response.json([
+        { day: '2026-10-22', accounts: 38036, estimated: false, bluesky: false },
+        { day: '2026-10-21', accounts: '37979', estimated: true, bluesky: false },
+        { day: 'yesterday', accounts: 1 },
+      ]),
+    );
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const res = await h.GET(new Request('https://atpota.to/api/weather-history?host=EuroSky.social'));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      host: {
+        hostname: 'eurosky.social',
+        bluesky: false,
+        days: [
+          { day: '2026-10-21', accounts: 37979, estimated: true },
+          { day: '2026-10-22', accounts: 38036, estimated: false },
+        ],
+      },
+    });
+    expect(db.urls.at(-1)).toBe(`${SUPABASE_URL}/rest/v1/atmosphere_host_day?hostname=eq.eurosky.social&select=day,accounts,estimated,bluesky&order=day.desc&limit=400`);
+    expect((await h.GET(new Request('https://atpota.to/api/weather-history?host=a%26b'))).status).toBe(400);
+    expect((await h.GET(new Request('https://atpota.to/api/weather-history?host='))).status).toBe(400);
   });
 
   it('only takes GET and HEAD', async () => {

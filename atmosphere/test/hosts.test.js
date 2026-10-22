@@ -173,6 +173,7 @@ test('summarizeHosts: every host by its state, independent ones by size and by t
   assert.deepEqual(s.statuses, { active: 6, idle: 1, offline: 1, throttled: 0, banned: 1, other: 1 });
   // 0, 1, ≤10, ≤100, ≤1000, ≤10000, more
   assert.deepEqual(s.sizes, [1, 1, 0, 1, 0, 0, 2]);
+  assert.equal(s.sizeAccounts.reduce((a, b) => a + b, 0), s.accounts.independent);
   assert.deepEqual(s.tlds, [
     { tld: 'social', hosts: 2, accounts: 38079 },
     { tld: 'example', hosts: 2, accounts: 1 },

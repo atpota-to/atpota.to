@@ -66,6 +66,8 @@ export interface IdentityDay {
   movedIn: number;
   movedBetween: number;
   deleted: number;
+  /** Where the day's movers went (out of Bluesky's hosts or between independent ones), busiest first. */
+  destinations: Array<{ hostname: string; accounts: number }>;
 }
 
 const IDENTITY_KEYS = {
@@ -84,7 +86,13 @@ export function toIdentityDay(x: unknown): IdentityDay | null {
   if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
   const c = counts(x, Object.values(IDENTITY_KEYS));
   if (!c) return null;
-  return { day: x.day, ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day'>) };
+  const destinations = (Array.isArray(x.destinations) ? x.destinations : [])
+    .flatMap((h) => {
+      const a = counts(h, ['accounts'] as const);
+      return isRecord(h) && hostname(h.hostname) && a ? [{ hostname: h.hostname, accounts: a.accounts }] : [];
+    })
+    .slice(0, TOP_HOSTS);
+  return { day: x.day, ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations'>), destinations };
 }
 
 export interface HostDay {
@@ -157,4 +165,33 @@ export async function readHosts(db: Supabase, since: string, bucket: HostBucket)
   const hosts = toHostHistory(body, bucket);
   if (!hosts) throw new Error('hosts did not check out');
   return hosts;
+}
+
+/** One host's days, oldest first (atmosphere_host_day), for /api/weather-history?host=. */
+export interface OneHost {
+  hostname: string;
+  bluesky: boolean;
+  days: Array<{ day: string; accounts: number; estimated: boolean }>;
+}
+
+/** How many days a host's history reaches back. */
+export const HOST_DAYS_MAX = 400;
+
+/** A hostname as asked for, lower-cased, or null if it isn't one. */
+export function askedHost(x: string | null): string | null {
+  const h = x?.trim().toLowerCase() ?? '';
+  return hostname(h) ? h : null;
+}
+
+/** A host's days from atmosphere_host_day, checked; no days if the station never kept it. */
+export async function readHost(db: Supabase, host: string): Promise<OneHost> {
+  const rows = await db.get(`atmosphere_host_day?hostname=eq.${encodeURIComponent(host)}&select=day,accounts,estimated,bluesky&order=day.desc&limit=${HOST_DAYS_MAX}`);
+  if (!Array.isArray(rows)) throw new Error('host days did not check out');
+  const days = rows
+    .flatMap((r) => {
+      const c = counts(r, ['accounts'] as const);
+      return isRecord(r) && typeof r.day === 'string' && DAY_RE.test(r.day) && c ? [{ day: r.day, accounts: c.accounts, estimated: r.estimated === true, bluesky: r.bluesky === true }] : [];
+    })
+    .reverse();
+  return { hostname: host, bluesky: days.some((d) => d.bluesky), days: days.map(({ day, accounts, estimated }) => ({ day, accounts, estimated })) };
 }
