@@ -1903,12 +1903,9 @@ html[data-theme="dark"] .weather-hero {
 
 /* ---------- the lens (weather-lens.ts): what every tile under it shows ---------- */
 
-/* Under the header, and along at the top of the screen while the tiles that follow it scroll by. */
+/* Under the header. Once it scrolls away, the dock below brings it along. */
 .weather-lens {
   --tile-pad: 12px 16px;
-  position: sticky;
-  top: 8px;
-  z-index: 5;
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
@@ -1934,6 +1931,124 @@ html[data-theme="dark"] .weather-hero {
 .weather-lens__note {
   font-size: 13px;
   color: var(--muted);
+}
+
+/* The lens at hand (weather-dock.ts): a thin strip along the bottom, beside Poe, that opens
+   upward to the bar's controls. It leaves Poe's corner clear (poe.css .poe-potato). */
+.weather-dock {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  right: 180px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: var(--z-header);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.weather-dock[data-shown] {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+}
+
+.weather-dock[data-shown] > * {
+  pointer-events: auto;
+}
+
+.weather-dock__strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 6px 12px 6px 16px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--text) 45%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.weather-dock__label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.weather-dock__now {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weather-dock__chev {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted);
+}
+
+.weather-dock[data-open] .weather-dock__chev {
+  transform: rotate(180deg);
+}
+
+.weather-dock__strip:hover {
+  border-color: var(--dash);
+}
+
+.weather-dock__strip:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.weather-dock__panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  max-width: 100%;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  padding: 12px 16px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-tile);
+  background: var(--card);
+  box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--text) 55%, transparent);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .weather-dock {
+    transition:
+      opacity var(--dur-fast) ease,
+      transform var(--dur-fast) var(--ease-out),
+      visibility 0s linear var(--dur-fast);
+  }
+
+  .weather-dock[data-shown] {
+    transition:
+      opacity var(--dur-fast) ease,
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .weather-dock__chev {
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+}
+
+@media print {
+  .weather-dock {
+    display: none;
+  }
 }
 
 /* Buttons side by side in one pill: the window, records or accounts. */
@@ -2100,8 +2215,19 @@ button.weather-hero__unit:disabled {
 
   .weather-lens {
     --tile-pad: 10px 12px;
-    top: 4px;
     gap: 8px 14px;
+  }
+
+  /* beside the phone's smaller potato */
+  .weather-dock {
+    left: max(12px, env(safe-area-inset-left));
+    right: 112px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .weather-dock__panel {
+    gap: 8px 14px;
+    padding: 10px 12px;
   }
 
   .weather-seg__btn {

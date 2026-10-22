@@ -199,24 +199,25 @@ const UNIT_HINT = 'accounts are counted once over the whole window, so they have
 export function bindLens(root: HTMLElement, lens: Lens): void {
   const windows = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-window]')];
   const measures = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-measure]')];
-  const unit = root.querySelector<HTMLSelectElement>('[data-lens-unit]');
-  const unitNote = root.querySelector<HTMLElement>('[data-lens-unit-note]');
+  // the bar's, and the dock's copy of them (weather-dock.ts)
+  const units = [...root.querySelectorAll<HTMLSelectElement>('[data-lens-unit]')];
+  const unitNotes = [...root.querySelectorAll<HTMLElement>('[data-lens-unit-note]')];
   const show = (s: LensState) => {
     root.dataset.window = s.window;
     root.dataset.measure = s.measure;
     root.dataset.unit = s.unit;
     for (const b of windows) b.setAttribute('aria-pressed', String(b.dataset.lensWindow === s.window));
     for (const b of measures) b.setAttribute('aria-pressed', String(b.dataset.lensMeasure === s.measure));
-    if (unit) {
+    for (const unit of units) {
       unit.value = s.unit;
       unit.disabled = s.measure === 'accounts';
       unit.title = unit.disabled ? UNIT_HINT : '';
     }
-    if (unitNote) unitNote.hidden = s.measure !== 'accounts';
+    for (const note of unitNotes) note.hidden = s.measure !== 'accounts';
   };
   for (const b of windows) b.addEventListener('click', () => WINDOWS.includes(b.dataset.lensWindow as Window) && lens.set({ window: b.dataset.lensWindow as Window }));
   for (const b of measures) b.addEventListener('click', () => MEASURES.includes(b.dataset.lensMeasure as Measure) && lens.set({ measure: b.dataset.lensMeasure as Measure }));
-  unit?.addEventListener('change', () => UNITS.includes(unit.value as Unit) && lens.set({ unit: unit.value as Unit }));
+  for (const unit of units) unit.addEventListener('change', () => UNITS.includes(unit.value as Unit) && lens.set({ unit: unit.value as Unit }));
   root.addEventListener('click', (event) => {
     const cycle = (event.target as Element | null)?.closest?.<HTMLButtonElement>('[data-lens-cycle-unit]');
     if (cycle && !cycle.disabled && root.contains(cycle)) lens.set({ unit: nextUnit(lens.get().unit) });
