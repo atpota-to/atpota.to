@@ -81,8 +81,9 @@ function markRows(list: HTMLElement): void {
 /** Fills the panel for a host: loading, then its story and chart, or an apology. */
 export function renderHostPanel(dialog: HTMLElement, h: OneHost | null | 'loading', hostname: string): void {
   setText(dialog, '[data-hp-name]', hostname);
+  // the host on aturi: its software, its terms, the accounts it holds
   const visit = $<HTMLAnchorElement>(dialog, '[data-hp-visit]');
-  if (visit) visit.href = `https://${hostname}`;
+  if (visit) visit.href = `https://aturi.to/explore/pds/${encodeURIComponent(hostname)}`;
   const chart = $(dialog, '[data-hp-chart]');
   const card = chart?.closest<HTMLElement>('.weather-chart-card');
   if (h === 'loading' || h === null) {

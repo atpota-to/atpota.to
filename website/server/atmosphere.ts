@@ -96,6 +96,27 @@ export const DIVERSITY_LEVELS = [
 
 export type DiversityLevel = 'low' | (typeof DIVERSITY_LEVELS)[number][0];
 
+/**
+ * The hosting diversity (the same sum, by where accounts live rather than who's writing)
+ * at which each level starts, on its own scale: it grows with both the share of accounts
+ * living off Bluesky's hosts and how many hosts they're spread across, so it can run to
+ * the hundreds (10% of accounts across 100 hosts' worth would be 100). It was about 7.5
+ * in October 2026. Below the first, 'early days'.
+ */
+export const HOSTING_LEVELS = [
+  ['flourishing', 200],
+  ['well spread', 75],
+  ['spreading', 25],
+  ['taking root', 10],
+] as const;
+
+export type HostingLevel = 'early days' | (typeof HOSTING_LEVELS)[number][0];
+
+export function hostingLevel(index: number): HostingLevel {
+  for (const [name, from] of HOSTING_LEVELS) if (index >= from) return name;
+  return 'early days';
+}
+
 /** How many apps and Bluesky collections the reading names. */
 export const TOP_APPS = 10;
 export const TOP_BLUESKY = 8;

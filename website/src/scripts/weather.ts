@@ -73,6 +73,37 @@ export const LEVEL_TEXT: Record<DiversityLevel, string> = {
   extreme: 'bluesky is barely the weather today',
 };
 
+export type HostingLevel = 'early days' | 'taking root' | 'spreading' | 'well spread' | 'flourishing';
+
+/** Where each hosting diversity level starts (server/atmosphere.ts HOSTING_LEVELS; tests/weather-hosts.test.ts checks they match). */
+export const HOSTING_SCALE: ReadonlyArray<readonly [HostingLevel, number]> = [
+  ['early days', 0],
+  ['taking root', 10],
+  ['spreading', 25],
+  ['well spread', 75],
+  ['flourishing', 200],
+];
+
+/** The top of the hosting diversity scale, which is logarithmic: each level spans a bigger stretch than the one before. */
+export const HOSTING_SCALE_MAX = 500;
+
+export const HOSTING_TEXT: Record<HostingLevel, string> = {
+  'early days': "nearly every account still lives on bluesky's own servers",
+  'taking root': 'independent hosts are finding their feet',
+  spreading: 'a real share of the network lives elsewhere, across many hosts',
+  'well spread': 'lots of accounts live off bluesky, spread wide',
+  flourishing: 'the network lives all over the place',
+};
+
+export function hostingLevelOf(index: number): HostingLevel {
+  let level: HostingLevel = 'early days';
+  for (const [name, from] of HOSTING_SCALE) if (index >= from) level = name;
+  return level;
+}
+
+/** Where an index sits on the hosting scale, 0 to 1: log(1 + index) against log(1 + the top). */
+export const hostingPosition = (index: number): number => Math.log1p(Math.min(Math.max(index, 0), HOSTING_SCALE_MAX)) / Math.log1p(HOSTING_SCALE_MAX);
+
 export interface Rate {
   perSecond: number;
   count: number;

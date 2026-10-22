@@ -107,7 +107,7 @@ describe('the host panel', () => {
     expect(dialog.querySelector('[data-hp-name]')!.textContent).toBe('eurosky.social');
     await vi.waitFor(() => expect(dialog.querySelector('[data-hp-story]')!.textContent).toMatch(/^38,036 accounts/));
     expect(fetchImpl).toHaveBeenCalledWith('/api/weather-history?host=eurosky.social', expect.anything());
-    expect(dialog.querySelector<HTMLAnchorElement>('[data-hp-visit]')!.href).toBe('https://eurosky.social/');
+    expect(dialog.querySelector<HTMLAnchorElement>('[data-hp-visit]')!.href).toBe('https://aturi.to/explore/pds/eurosky.social');
     expect(dialog.querySelector<HTMLElement>('.weather-chart-card')!.hidden).toBe(false);
     dialog.querySelector<HTMLElement>('[data-hp-close]')!.click();
     expect(dialog.hasAttribute('open')).toBe(false);
