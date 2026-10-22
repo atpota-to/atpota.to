@@ -698,7 +698,8 @@ describe('in the lens', () => {
     renderReport(report, LIVE, lens({ measure: 'accounts', unit: 'hour' }));
     expect(text('[data-r-records]')).toBe('21,345');
     expect([bigAmount(99_999), bigAmount(222_380), bigAmount(1_234_567), bigAmount(38_400_000)]).toEqual(['99,999', '222k', '1.23m', '38.4m']);
-    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.hidden).toBe(true); // the line under it says accounts
+    expect(text('[data-r-unit]')).toBe('accounts'); // live, the line under it is the weather, not what's counted
+    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.disabled).toBe(true);
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true); // its line is records
   });
 

@@ -405,12 +405,17 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   $(report, '[data-r-records]')?.removeAttribute('data-waiting');
   const unit = $<HTMLButtonElement>(report, '[data-r-unit]');
   if (unit) {
-    // by accounts the line under the number already says "accounts"
-    unit.hidden = byAcct;
+    // accounts are counted once over the window, so they have no rate to tap through; the
+    // words for it are in [data-r-unit-words], so it's only for the eye
     unit.disabled = byAcct;
-    unit.textContent = byAcct ? '' : lens.unit === 'total' ? 'records' : `rec/${UNIT_INFO[lens.unit].short}`;
-    if (byAcct) unit.removeAttribute('aria-label');
-    else unit.setAttribute('aria-label', `${perWords(lens.unit)}. change to ${perWords(nextUnit(lens.unit))}`);
+    unit.textContent = byAcct ? 'accounts' : lens.unit === 'total' ? 'records' : `rec/${UNIT_INFO[lens.unit].short}`;
+    if (byAcct) {
+      unit.removeAttribute('aria-label');
+      unit.setAttribute('aria-hidden', 'true');
+    } else {
+      unit.removeAttribute('aria-hidden');
+      unit.setAttribute('aria-label', `${perWords(lens.unit)}. change to ${perWords(nextUnit(lens.unit))}`);
+    }
   }
   setText(report, '[data-r-unit-words]', byAcct ? `active accounts in ${words}` : lens.unit === 'total' ? `new records in ${words}` : recordsPer(lens.unit));
   const cond = byAcct ? `different accounts wrote something in ${words}` : lens.unit === 'total' ? `new records in ${words}` : `on average over ${words}`;
