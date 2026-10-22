@@ -9,7 +9,7 @@
  *                                ?range=week   the last 7 days, a point an hour
  *                                ?range=month  the last 30 days, a point a day
  *                                ?range=year   the last 12 months, a point a month
- *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts?, bursts? }
+ *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts?, hosts?, bursts? }
  *
  * Points are raw counts with the seconds they cover, never rates: a rate is
  * count / seconds, worked out in the page, so summing points (into months, or into the
@@ -29,6 +29,8 @@
  *                 diversity index they make, and the apps with the most, from the
  *                 station's sketches (weather-accounts.ts); and everyone in the earlier
  *                 window with its diversity index (prev), when that was all heard live
+ *   hosts         the PDS hosts in each bucket from the station's censuses, and the
+ *                 independent hosts new or growing over the range (weather-hosts.ts)
  *   bursts        for a week: the hours that ran far past their steady count
  *                 (below), biggest first, each with the app whose busiest minute made it,
  *                 when one did (atmosphere_minute_app)
@@ -45,6 +47,7 @@
 
 import { readAccounts } from './weather-accounts.js';
 import { LIVE_SINCE } from './weather-almanac.js';
+import { readHosts } from './weather-hosts.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
 
 export { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-public.js';
@@ -244,6 +247,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       const { since, until, prev_since, prev_until } = trendArgs(range, at);
       return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS, liveSince });
     });
+    const hosts = extra('hosts', () => readHosts(db, rangeStart(range, at), bucket));
     let rows: unknown;
     try {
       rows = await db.get(queryPath(range, at));
@@ -255,11 +259,11 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const points = (rows as unknown[]).map((r) => toPoint(r, column)).filter((p): p is Point => p !== null);
     const shaped = range === 'year' ? byMonth(points) : points;
     const bursts = listBursts ? extra('bursts', () => Promise.all(burstHours(points).map((b) => withBurstApp(db, b)))) : undefined;
-    const [t, overTime, acct, burstList] = await Promise.all([trends, appsOverTime, accounts, bursts]);
+    const [t, overTime, acct, hostList, burstList] = await Promise.all([trends, appsOverTime, accounts, hosts, bursts]);
     return json(
       request,
       200,
-      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: overTime, accounts: acct, bursts: burstList },
+      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: overTime, accounts: acct, hosts: hostList, bursts: burstList },
       partial ? PARTIAL_CACHE : cache,
     );
   }

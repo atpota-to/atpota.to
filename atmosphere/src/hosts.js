@@ -19,6 +19,10 @@
 // many independent hosts those accounts are spread across, as an effective number
 // (spreadOf). It goes by accounts hosted, not accounts active, so it is its own number on
 // its own scale, not part of the diversity index.
+//
+// With Supabase, each census is also kept (createHostWriter): a row of its counts in
+// atmosphere_hosts, and a row per active host for the day in atmosphere_host_day
+// (atmosphere/sql/atmosphere_hosts.sql), for the weather report's trends.
 
 import { diversityIndex, spreadOf } from './atmosphere.js';
 
@@ -159,8 +163,71 @@ export function summarizeHosts(hosts, { measuredAt, writing = () => false, writi
   };
 }
 
-/** Polls the relay every POLL_MS into a census; a failed poll keeps the last one. */
-export function createHostWatch({ census = new HostCensus(), log, relay = DEFAULT_RELAY, fetchImpl = (u, i) => fetch(u, i), now = () => Date.now() }) {
+/** Census rows waiting while Supabase is down: a day of them. Past that the oldest go. */
+export const MAX_PENDING_CENSUSES = 144;
+
+/**
+ * A census as rows: { census: an atmosphere_hosts row, days: an atmosphere_host_day row
+ * per active host with a plain hostname }, or null with no census.
+ */
+export function hostRows(census) {
+  const s = census.summary(census.at ?? 0);
+  if (!s) return null;
+  const day = s.measuredAt.slice(0, 10);
+  return {
+    census: {
+      t: s.measuredAt,
+      listed: s.listed,
+      active: s.active,
+      bluesky: s.bluesky,
+      independent: s.independent,
+      writing_bluesky: s.writing?.bluesky ?? null,
+      writing_independent: s.writing?.independent ?? null,
+      writing_minutes: s.writing?.minutes || null,
+      accounts_bluesky: s.accounts.bluesky,
+      accounts_independent: s.accounts.independent,
+      share: s.diversity.share,
+      spread: s.diversity.spread,
+    },
+    days: census.hosts
+      .filter((h) => h.status === 'active' && isHostname(h.hostname))
+      .map((h) => ({ day, hostname: h.hostname, bluesky: isBlueskyHost(h.hostname), accounts: h.accounts, seq: h.seq === null ? null : Math.floor(h.seq) })),
+  };
+}
+
+/**
+ * Writes each census (hostRows) with upserts, so a retry never counts one twice. Census
+ * rows that fail wait for the next census, up to MAX_PENDING_CENSUSES; the hosts' day
+ * rows are only ever the latest, since each census rewrites the day's anyway.
+ */
+export function createHostWriter({ upsert, log }) {
+  let pending = [];
+  return {
+    get pending() {
+      return pending.length;
+    },
+    async write(census) {
+      const rows = hostRows(census);
+      if (!rows) return;
+      pending.push(rows.census);
+      if (pending.length > MAX_PENDING_CENSUSES) {
+        log?.warn('dropping unwritten host censuses', { dropped: pending.length - MAX_PENDING_CENSUSES });
+        pending = pending.slice(-MAX_PENDING_CENSUSES);
+      }
+      try {
+        await upsert('atmosphere_hosts', 't', pending);
+        pending = [];
+        await upsert('atmosphere_host_day', 'day,hostname', rows.days);
+        log?.info('hosts written', { hosts: rows.days.length });
+      } catch (err) {
+        log?.warn('could not write hosts', { err: err?.message ?? String(err), pending: pending.length });
+      }
+    },
+  };
+}
+
+/** Polls the relay every POLL_MS into a census; a failed poll keeps the last one. `onCensus` hears each new one. */
+export function createHostWatch({ census = new HostCensus(), log, relay = DEFAULT_RELAY, fetchImpl = (u, i) => fetch(u, i), now = () => Date.now(), onCensus = null }) {
   let timer = null;
   let running = false;
   async function poll() {
@@ -171,6 +238,7 @@ export function createHostWatch({ census = new HostCensus(), log, relay = DEFAUL
       const hosts = await fetchHosts(fetchImpl, relay);
       census.record(hosts, now());
       log?.info('hosts counted', { listed: hosts.length, ms: now() - started });
+      await onCensus?.(census);
     } catch (err) {
       log?.warn('could not count hosts', { err: err?.message ?? String(err) });
     } finally {

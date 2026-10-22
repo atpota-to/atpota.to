@@ -120,7 +120,22 @@ firehose. Instead, every 10 minutes the station pages through the relay's own li
 them (`com.atproto.sync.listHosts` on `relay1.us-east.bsky.network`, the relay jetstream2
 reads; `RELAY_URL` to change it): about 6,400 hosts in 7 pages, in about 2 s. It keeps the
 last whole list; a page that fails fails that poll, and the last list stays. A list over
-2 hours old isn't served. Nothing is written to Supabase.
+2 hours old isn't served.
+
+Each census is also kept, for the trends ([`sql/atmosphere_hosts.sql`](sql/atmosphere_hosts.sql),
+applied 2026-10-22; `createHostWriter` in `src/hosts.js`):
+
+- `atmosphere_hosts`: one row per census, the counts below and the hosting diversity's
+  `share` and `spread`. Rows that fail wait for the next census (a day of them at most).
+- `atmosphere_host_day`: one row per active host per UTC day (hostname, Bluesky's or not,
+  accounts, seq), rewritten each census, so a day ends with its last one. A host's first
+  row is when the station first saw it active; its seq moving from one day to the next
+  means it wrote that day.
+
+`atmosphere_host_trends(since, bucket)` reads them for `/api/weather-history`'s `hosts`
+(`website/server/weather-hosts.ts`): the last census in each bucket, the independent hosts
+first seen in the range (none count as new on the first day kept), and the ones that
+gained the most accounts.
 
 `/v1/now` carries it as `hosts` (`src/hosts.js` `summarizeHosts`):
 
@@ -209,6 +224,8 @@ detail of old data never makes the report less accurate.
 | `atmosphere_day_app`: each app, each day | forever | small |
 | `atmosphere_account_sketch`: everyone's active accounts | minutes 2 h; hours, days, months forever | ~50 MB a year |
 | `atmosphere_account_app_sketch`: each app's | minutes 26 h, hours 30 days; days, months forever | ~25 MB a year |
+| `atmosphere_hosts`: a census of the PDS hosts every 10 minutes | forever | ~5 MB a year |
+| `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
 
 The per-app minute rows were the long tail, about 23k rows (5 MB) a day.
 pg_cron re-sums each hour of them into `atmosphere_hour_app` every 10 minutes
@@ -360,7 +377,7 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 ## Running it
 
 ```bash
-npm test                                         # node:test, 112 tests, about a second, no network
+npm test                                         # node:test, 115 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -403,7 +420,7 @@ src/rollup.js      accounts by hour, day and month: merged in memory, written ev
 src/supabase.js    PostgREST upserts and paged reads
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
-src/hosts.js       the PDS hosts, from the relay's list every 10 minutes
+src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line

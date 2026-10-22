@@ -49,6 +49,7 @@ import { alertsFor, createAlertDesk, newAppAlert, recordAlert, type AlertDesk, t
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock } from './weather-dock';
 import { initForecast } from './weather-forecast';
+import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
 import {
   bindLens,
@@ -778,6 +779,8 @@ export interface History {
   appsOverTime?: { bucket: Bucket; points: Array<{ t: string; apps: number }> };
   /** Active accounts over the range and each bucket (server/weather-accounts.ts). */
   accounts?: HistoryAccounts;
+  /** The PDS hosts over the range, from the station's censuses (server/weather-hosts.ts). */
+  hosts?: HostHistory;
 }
 
 export interface AccountCounts {
@@ -842,7 +845,7 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
   try {
     const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown };
+    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown; hosts?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
     const history: History = { range, points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
@@ -858,6 +861,8 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
     }
     const accounts = toAccounts(body.accounts);
     if (accounts) history.accounts = accounts;
+    const hosts = toHostHistory(body.hosts);
+    if (hosts) history.hosts = hosts;
     return history;
   } catch {
     return null;
@@ -1236,6 +1241,8 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
 
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, feed, lens);
+  const hostTrends = $(report, '[data-h-trends]');
+  if (hostTrends) initHostTrends(hostTrends, feed, lens, (list, bars) => renderBars(list, bars, undefined));
   const newApps = watchNewApps(desk);
   initAlmanac(
     report,

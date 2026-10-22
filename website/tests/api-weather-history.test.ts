@@ -32,12 +32,24 @@ const TRENDS = {
 };
 const OVER_TIME = [{ t: '2026-10-20T16:59:00+00:00', apps: 14 }, { t: 'nope', apps: 1 }];
 
+const HOSTS = {
+  since: '2026-10-22',
+  points: [
+    { t: '2026-10-20T16:50:00+00:00', listed: 6442, active: 1887, bluesky: 90, independent: 1797, writing: 702, accountsBluesky: 23767508, accountsIndependent: '363866', share: '1.51', spread: 24.54 },
+    { t: '2026-10-20T16:40:00+00:00', listed: 6442, active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54 },
+    { t: 'nope', active: 1 },
+  ],
+  newHosts: 2,
+  new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }, { hostname: '<b>x</b>.com', accounts: 9, first: '2026-10-23' }],
+  growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }, { hostname: 'localhost', accounts: 9, prevAccounts: 1 }],
+};
+
 type Rpc = Record<string, () => Response>;
 
 function supabase(answer: () => Response, rpcs: Rpc = {}) {
   const urls: string[] = [];
   const bodies: Record<string, unknown> = {};
-  const answers: Rpc = { atmosphere_app_trends: () => Response.json(TRENDS), atmosphere_apps_over_time: () => Response.json(OVER_TIME), ...rpcs };
+  const answers: Rpc = { atmosphere_app_trends: () => Response.json(TRENDS), atmosphere_apps_over_time: () => Response.json(OVER_TIME), atmosphere_host_trends: () => Response.json(HOSTS), ...rpcs };
   const fetch = (async (url: string, init?: RequestInit) => {
     urls.push(url);
     const rpc = /\/rpc\/([a-z_]+)$/.exec(url)?.[1];
@@ -93,6 +105,32 @@ describe('weather history', () => {
     expect(body.points).toHaveLength(2);
     expect(body.total).toMatchObject({ seconds: 120, creates: 1200, elsewhere: 12 });
     expect(db.urls.some((u) => u.startsWith(`${SUPABASE_URL}/rest/v1/atmosphere_minute?`))).toBe(true);
+  });
+
+  it('adds the PDS hosts over the range, checked, each census with its hosting diversity', async () => {
+    const db = supabase(() => Response.json([row('2026-10-20T16:59:00+00:00')]));
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=week'))).json()) as { hosts: unknown };
+    expect(db.bodies.atmosphere_host_trends).toEqual({ since: '2026-10-13T17:00:00.000Z', bucket: 'hour', max_hosts: 10 });
+    expect(body.hosts).toEqual({
+      bucket: 'hour',
+      since: '2026-10-22',
+      points: [
+        { t: '2026-10-20T16:50:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: 702, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48 },
+        { t: '2026-10-20T16:40:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48 },
+      ],
+      newHosts: 2,
+      new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }],
+      growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }],
+    });
+  });
+
+  it('leaves the hosts out, and caches briefly, when they do not come', async () => {
+    const db = supabase(() => Response.json([row('2026-10-20T16:59:00+00:00')]), { atmosphere_host_trends: () => Response.json({ points: 'no' }) });
+    const h = createHistoryHandlers({ fetch: db.fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const res = await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'));
+    expect(res.headers.get('cache-control')).toBe(PARTIAL_CACHE);
+    expect(((await res.json()) as { hosts?: unknown }).hosts).toBeUndefined();
   });
 
   it('adds the busiest apps, each against the same span earlier, and apps heard over time', async () => {

@@ -210,6 +210,33 @@
                         <p class="weather-tile__note">the independent hosts with the most accounts. bluesky&#39;s own hosts count as one place, the way bluesky counts as one app.</p>
                     </div>
                 </div>
+                <!-- the hosts over the lens's window, from the station's censuses (src/scripts/weather-hosts.ts); "now" and the last hour show the last 24 hours -->
+                <div class="weather-hosts__trends" data-h-trends hidden>
+                    <h3 class="weather-hosts__subtitle">over <span data-h-range>the last 24 hours</span></h3>
+                    <div class="weather-trends__charts">
+                        <figure class="weather-chart-card">
+                            <figcaption class="weather-chart-card__title">active pds hosts</figcaption>
+                            <div class="weather-chart" data-h-chart="active"></div>
+                        </figure>
+                        <figure class="weather-chart-card">
+                            <figcaption class="weather-chart-card__title">hosting diversity</figcaption>
+                            <div class="weather-chart" data-h-chart="index"></div>
+                        </figure>
+                    </div>
+                    <div class="weather-hosts__cols">
+                        <div class="weather-hosts__list">
+                            <h3 class="weather-hosts__subtitle">new hosts</h3>
+                            <ol class="weather-bars weather-bars--hosts" role="list" data-h-new></ol>
+                            <p class="weather-tile__note" data-h-new-note></p>
+                        </div>
+                        <div class="weather-hosts__list">
+                            <h3 class="weather-hosts__subtitle">growing fastest</h3>
+                            <ol class="weather-bars weather-bars--hosts" role="list" data-h-growing></ol>
+                            <p class="weather-tile__note" data-h-growing-note></p>
+                        </div>
+                    </div>
+                    <p class="weather-tile__note" data-h-since hidden></p>
+                </div>
             </section>
 
             <!-- the lens's window over time (weather-page.ts initTrends); on now, the last hour -->

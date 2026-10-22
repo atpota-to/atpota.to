@@ -1645,6 +1645,19 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   margin-top: auto;
 }
 
+.weather-hosts__trends {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.weather-hosts__subtitle {
+  margin: 0;
+  font-size: 18px;
+}
+
 @media (max-width: 760px) {
   .weather-hosts__cols {
     grid-template-columns: minmax(0, 1fr);

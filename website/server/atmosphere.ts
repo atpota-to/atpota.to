@@ -494,7 +494,7 @@ function accountsOf(x: unknown): Accounts | undefined {
   };
 }
 
-const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+export const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
 /** A station reading's `hosts`, checked, or undefined. The index is worked out here from its parts. */
 export function hostsOf(x: unknown): Hosts | undefined {
