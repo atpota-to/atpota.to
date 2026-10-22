@@ -2727,31 +2727,19 @@ html:not(.js) .home-weather {
   line-height: 1.35;
 }
 
-/* The last hour's line, as on the weather report's header (components.css draws the
-   line, .weather-spark), taller here and without the live line's fade at the left. */
-.home-weather__line {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-}
-
-.home-weather__line[hidden] {
-  display: none;
-}
-
-.home-weather__line-label {
-  font-size: 13px;
+/* What the number is over, as the weather report's header says it above its number. */
+.home-weather__period {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--home-sky-mono);
 }
 
-.home-weather__line-chart {
-  -webkit-mask-image: none;
-  mask-image: none;
-}
-
-.home-weather__line-chart,
-.home-weather__line-chart svg {
-  height: 72px;
+/* The header's line under the reading (components.css, .weather-spark), as wide as the
+   report's (weather.css, .weather-hero .weather-spark). */
+.home-weather__spark {
+  max-width: 260px;
+  margin-top: 14px;
 }
 
 .home-weather__mix {
@@ -2850,12 +2838,14 @@ html:not(.js) .home-weather {
 /* Loading (JS only): every part of the tile is already where it will be, and soft bars
    shimmer where the numbers go, so the reading lands without anything moving. The dash
    stays in the text for screen readers; it shows again if the sky can't be read. */
-.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text]) {
+.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text]),
+.home-weather [data-weather-records][data-waiting] {
   position: relative;
   color: transparent;
 }
 
-.home-weather[data-state="loading"] [data-weather-records] {
+.home-weather[data-state="loading"] [data-weather-records],
+.home-weather [data-weather-records][data-waiting] {
   min-width: 2.4ch;
 }
 
@@ -2876,13 +2866,15 @@ html:not(.js) .home-weather {
 }
 
 .home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after,
+.home-weather [data-weather-records][data-waiting]::after,
 .home-weather[data-state="loading"] .weather-ratio > span {
   background: linear-gradient(90deg, var(--home-weather-wait) 0%, var(--home-weather-wait-shine) 40%, var(--home-weather-wait) 80%);
   background-size: 300% 100%;
   animation: home-shimmer 1.4s ease-in-out infinite;
 }
 
-.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after {
+.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after,
+.home-weather [data-weather-records][data-waiting]::after {
   content: "";
   position: absolute;
   inset: 18% 0;
@@ -3867,6 +3859,7 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
 
   .home-post__skeleton span,
   .home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after,
+  .home-weather [data-weather-records][data-waiting]::after,
   .home-weather[data-state="loading"] .weather-ratio > span {
     animation: none;
   }

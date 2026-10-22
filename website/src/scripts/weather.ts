@@ -33,6 +33,7 @@
 
 import { rollText } from './roll';
 import { cloudCount, renderClouds } from './weather-sky';
+import { bigAmount, headlineOf, readHeadline, tileLens, type Headline } from './weather-headline';
 import { renderSpark, renderSparkline } from './weather-spark';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
@@ -389,16 +390,19 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
     if (el) countTo(el, value);
   };
-  set('records', recordsPerSecond(reading));
+  // a tile following the report's lens has its number, words and line from the history (renderHeadline)
+  if (tile.dataset.weatherHeadline !== 'history') {
+    set('records', recordsPerSecond(reading));
+    const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
+    if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
+    const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+    if (spark) renderSpark(spark, reading);
+  }
   set('posts', reading.perSecond.posts);
   set('likes', reading.perSecond.likes);
   set('reposts', reading.perSecond.reposts);
   set('follows', reading.perSecond.follows);
-  const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
-  if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
   spinRays(tile, recordsPerSecond(reading));
-  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
-  if (spark) renderSpark(spark, reading);
   const sky = tile.querySelector<HTMLElement>('[data-weather-sky]');
   if (sky && reading.diversity) renderClouds(sky, cloudCount(reading.diversity.index));
   // its room is kept while the tile loads; a reading from before the diversity index has none
@@ -430,31 +434,31 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
   tile.dataset.state = 'ready';
 }
 
-/** The weather report's header line for the last hour: new records a second, a minute at a time. */
-export const HOUR_LINE_ENDPOINT = '/api/weather-history?range=hour';
-/** The history's minutes come in whole, so once a minute is plenty. */
-export const HOUR_LINE_MS = 60_000;
-
-/** The last hour's minutes as new records a second (null for a minute nobody heard), or null if it can't be read. */
-export async function readHourLine(fetchImpl: typeof fetch = fetch): Promise<Array<number | null> | null> {
-  try {
-    const res = await fetchImpl(HOUR_LINE_ENDPOINT, { headers: { accept: 'application/json' } });
-    if (!res.ok) return null;
-    const body: unknown = await res.json();
-    if (!obj(body) || !Array.isArray(body.points)) return null;
-    return body.points.map((p) => (obj(p) && num(p.creates) && num(p.seconds) && p.seconds > 0 ? p.creates / p.seconds : null));
-  } catch {
-    return null;
+/**
+ * The home tile's reading as the weather report's header has it (weather-headline.ts):
+ * over the lens's window, by accounts or records, with the header's line under it. The
+ * live reading keeps the sun, the clouds and the indexes.
+ */
+export function renderHeadline(tile: HTMLElement, h: Headline): void {
+  const text = (name: string, value: string) => {
+    const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
+    if (el) el.textContent = value;
+  };
+  text('period', h.period);
+  const records = tile.querySelector<HTMLElement>('[data-weather-records]');
+  if (records) {
+    countTo(records, h.value, bigAmount);
+    records.removeAttribute('data-waiting');
   }
-}
-
-/** Draws the last hour's line on the home tile, or hides it with fewer than two minutes to draw. */
-export function renderHourLine(tile: HTMLElement, values: Array<number | null> | null): void {
-  const line = tile.querySelector<HTMLElement>('[data-weather-line]');
-  const chart = tile.querySelector<HTMLElement>('[data-weather-line-chart]');
-  if (!line || !chart) return;
-  line.hidden = !values || values.filter((v) => v !== null).length < 2;
-  if (values && !line.hidden) renderSparkline(chart, values);
+  text('unit', h.unit);
+  text('unit-words', h.unitWords);
+  text('cond', h.cond);
+  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+  if (spark) {
+    delete spark.dataset.end;
+    spark.hidden = h.line.filter((v) => v !== null).length < 2;
+    if (!spark.hidden) renderSparkline(spark, h.line, undefined, h.projected);
+  }
 }
 
 export function renderWeatherError(tile: HTMLElement): void {
@@ -465,6 +469,10 @@ export function renderWeatherError(tile: HTMLElement): void {
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'error';
 }
+
+/** How often the home tile reads the lens's history: a minute's steps over the hour, longer ones less often. */
+export const HEADLINE_HOUR_MS = 60_000;
+export const HEADLINE_MS = 5 * 60_000;
 
 export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch = fetch): void {
   const tile = root.querySelector<HTMLElement>('[data-weather-tile]');
@@ -479,9 +487,16 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
   let checkedAt = -Infinity;
   let checking = false;
   let timer: number | undefined;
-  // the hour's line, after the reading so the reading comes first
-  const hasLine = !!tile.querySelector('[data-weather-line]');
-  let lineAt = -Infinity;
+  // The home tile says what the report's header would, over the lens's window (weather-headline.ts);
+  // on now, or when the history can't be read, it's the live reading's.
+  const lens = tile.querySelector('[data-weather-period]') ? tileLens() : null;
+  let last: Reading | null = stored;
+  let headlineAt = -Infinity;
+  const headlineEvery = lens?.window === 'hour' ? HEADLINE_HOUR_MS : HEADLINE_MS;
+  if (lens) {
+    tile.dataset.weatherHeadline = 'history';
+    tile.querySelector('[data-weather-records]')?.setAttribute('data-waiting', '');
+  }
   const due = () => onScreen && document.visibilityState !== 'hidden';
   const check = async () => {
     if (checking) return;
@@ -490,11 +505,26 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
     checkedAt = Date.now();
     const reading = await readAtmosphere(fetchImpl);
     checking = false;
+    if (reading) last = reading;
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
-    if (hasLine && Date.now() - lineAt >= HOUR_LINE_MS) {
-      lineAt = Date.now();
-      void readHourLine(fetchImpl).then((values) => renderHourLine(tile, values));
+    // the history after the reading, so the reading comes first
+    if (lens && tile.dataset.weatherHeadline === 'history' && Date.now() - headlineAt >= headlineEvery) {
+      headlineAt = Date.now();
+      void readHeadline(lens.window, fetchImpl).then((h) => {
+        if (h) return renderHeadline(tile, headlineOf(h, lens));
+        if (tile.querySelector('[data-weather-records][data-waiting]') === null) return;
+        // never had one: back to the live reading
+        delete tile.dataset.weatherHeadline;
+        tile.querySelector('[data-weather-records]')?.removeAttribute('data-waiting');
+        const period = tile.querySelector<HTMLElement>('[data-weather-period]');
+        if (period) period.textContent = 'right now';
+        const unit = tile.querySelector<HTMLElement>('[data-weather-unit]');
+        if (unit) unit.textContent = 'rec/sec';
+        const words = tile.querySelector<HTMLElement>('[data-weather-unit-words]');
+        if (words) words.textContent = 'new records a second';
+        if (last) renderReading(tile, last);
+      });
     }
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
     timer = window.setTimeout(() => {

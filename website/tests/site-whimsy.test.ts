@@ -37,9 +37,7 @@ import {
   fetchReading,
   formatIndex,
   initWeather,
-  HOUR_LINE_ENDPOINT,
-  readHourLine,
-  renderHourLine,
+  renderHeadline,
   diversityText,
   ratioText,
   READING_EVENT,
@@ -50,6 +48,8 @@ import {
   storedReading,
 } from '../src/scripts/weather.js';
 import { cloudCount } from '../src/scripts/weather-sky.js';
+import { headlineOf, readHeadline, tileLens } from '../src/scripts/weather-headline.js';
+import { LENS_KEY } from '../src/scripts/weather-lens.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const INDEX = read('../index.html');
@@ -258,19 +258,30 @@ describe('atmospheric conditions', () => {
     expect(diversityText({ share: 80, spread: 3 })).toBe("most accounts active just now wrote outside bluesky, spread across about 3 apps' worth");
   });
 
-  it("draws the last hour's line once it has two minutes", async () => {
+  it("says what the weather report's header says, over its lens's window", async () => {
+    const points = [{ creates: 6000, seconds: 60 }, { creates: 0, seconds: 0 }, { creates: 9000, seconds: 60 }];
+    const accounts = { total: { active: 52_000 }, points: [{ t: '2026-10-22T20:00:00Z', seconds: 60, active: 3000 }, { t: '2026-10-22T20:01:00Z', seconds: 60, active: 3200 }] };
+    const h = (await readHeadline('hour', (async () => Response.json({ range: 'hour', points, total: { seconds: 120, creates: 15_000 }, accounts })) as typeof fetch))!;
+    expect(h.records).toEqual([100, null, 150]);
+    const byAccounts = headlineOf(h, { window: 'hour', measure: 'accounts', unit: 'second' }, Date.parse('2026-10-22T21:00:00Z'));
+    expect([byAccounts.period, byAccounts.value, byAccounts.unit, byAccounts.cond]).toEqual(['the last hour', 52_000, 'accounts', 'different accounts wrote something in the last hour']);
+    expect(byAccounts.line).toEqual([3000, 3200]);
+    const byRecords = headlineOf(h, { window: 'hour', measure: 'records', unit: 'minute' });
+    expect([byRecords.value, byRecords.unit, byRecords.line]).toEqual([7500, 'rec/min', [100, null, 150]]);
+    expect(headlineOf(h, { window: 'hour', measure: 'records', unit: 'total' }).value).toBe(15_000);
+    expect(await readHeadline('day', (async () => Response.json({ range: 'hour', points, total: { seconds: 1, creates: 1 } })) as typeof fetch)).toBeNull();
+
     document.body.innerHTML = tileHtml();
     const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
-    const line = tile.querySelector<HTMLElement>('[data-weather-line]')!;
-    const points = [{ creates: 6000, seconds: 60 }, { creates: 0, seconds: 0 }, { creates: 9000, seconds: 60 }];
-    const values = await readHourLine((async () => Response.json({ range: 'hour', points })) as typeof fetch);
-    expect(values).toEqual([100, null, 150]);
-    renderHourLine(tile, values);
-    expect(line.hidden).toBe(false);
-    expect(tile.querySelector('[data-weather-line-chart] path')).not.toBeNull();
-    expect(await readHourLine((async () => Response.json({ error: 'unavailable' }, { status: 503 })) as typeof fetch)).toBeNull();
-    renderHourLine(tile, [100]);
-    expect(line.hidden).toBe(true);
+    renderHeadline(tile, byAccounts);
+    expect(tile.querySelector('[data-weather-unit]')!.textContent).toBe('accounts');
+    expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe('different accounts wrote something in the last hour');
+    expect(tile.querySelector<HTMLElement>('[data-weather-spark]')!.hidden).toBe(false);
+    // the report's lens, as this browser keeps it; on now, the live reading
+    localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'day', measure: 'records', unit: 'hour' }));
+    expect(tileLens()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
+    localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'now' }));
+    expect(tileLens()).toBeNull();
   });
 
   it('shows the reading and the weather', () => {
@@ -299,15 +310,19 @@ describe('atmospheric conditions', () => {
         observe() {}
       },
     );
-    const fetchImpl = vi.fn(async (url: string) => (url === HOUR_LINE_ENDPOINT ? Response.json({ range: 'hour', points: [] }) : Response.json({ ...READING, source: 'station' })));
-    // the reading's requests, leaving out the hour's line
-    const readings = () => fetchImpl.mock.calls.filter(([url]) => url !== HOUR_LINE_ENDPOINT).length;
+    const HISTORY = { range: 'hour', points: [{ creates: 6000, seconds: 60 }, { creates: 9000, seconds: 60 }], total: { seconds: 120, creates: 15_000 } };
+    const fetchImpl = vi.fn(async (url: string) => (url.startsWith('/api/weather-history') ? Response.json(HISTORY) : Response.json({ ...READING, source: 'station' })));
+    // the reading's requests, leaving out the history
+    const readings = () => fetchImpl.mock.calls.filter(([url]) => !url.startsWith('/api/weather-history')).length;
     initWeather(document, fetchImpl as unknown as typeof fetch);
     const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;
     await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
     expect(readings()).toBe(1);
     expect(document.querySelector<HTMLElement>('[data-scene]')!.dataset.weatherBound).toBeUndefined();
-    expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe(CONDITION_TEXT.gusty);
+    // the report's lens by default: the last hour, by accounts, or records when the history has no accounts
+    expect(fetchImpl).toHaveBeenCalledWith('/api/weather-history?range=hour', expect.anything());
+    await vi.waitFor(() => expect(tile.querySelector('[data-weather-cond]')!.textContent).toBe('on average over the last hour'));
+    expect(tile.querySelector('[data-weather-records]')!.textContent).toBe('125');
     // scrolled to straight away, the reading is still fresh: no second request
     seen[0]!([{ isIntersecting: true }]);
     expect(readings()).toBe(1);
@@ -322,6 +337,8 @@ describe('atmospheric conditions', () => {
     expect(storedReading()!.condition).toBe('calm');
     expect(storedReading(Date.now() + STORE_MS + 1)).toBeNull();
     document.body.innerHTML = tileHtml();
+    // on now, the tile is the live reading's
+    localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'now' }));
     let answer!: (r: Response) => void;
     initWeather(document, (() => new Promise<Response>((r) => (answer = r))) as typeof fetch);
     const tile = document.querySelector<HTMLElement>('[data-weather-tile]')!;

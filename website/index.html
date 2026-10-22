@@ -223,16 +223,16 @@
           <h2 class="eyebrow home-weather__title" id="home-weather-title">atmospheric conditions</h2>
           <div class="home-weather__now">
             <!-- @svg weather-sun.svg class="home-weather__sun weather-sun" -->
+            <!-- the weather report header's reading, over the window its lens keeps in this browser
+                 (src/scripts/weather-headline.ts): active accounts over the last hour by default -->
             <div class="home-weather__reading">
-              <p class="home-weather__big"><span data-weather-records>&ndash;</span> <span class="home-weather__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
+              <p class="home-weather__period" data-weather-period>the last hour</p>
+              <p class="home-weather__big"><span data-weather-records>&ndash;</span> <span class="home-weather__unit" aria-hidden="true" data-weather-unit>accounts</span><span class="visually-hidden" data-weather-unit-words>active accounts in the last hour</span></p>
               <p class="home-weather__cond" data-weather-cond>checking the sky…</p>
+              <!-- the header's line under the reading (src/scripts/weather-spark.ts) -->
+              <div class="weather-spark home-weather__spark" data-weather-spark aria-hidden="true"></div>
             </div>
           </div>
-          <!-- new records a second over the last hour, the weather report's header line (src/scripts/weather.ts renderHourLine) -->
-          <figure class="home-weather__line" data-weather-line>
-            <figcaption class="home-weather__line-label">the last hour</figcaption>
-            <div class="weather-spark home-weather__line-chart" data-weather-line-chart aria-hidden="true"></div>
-          </figure>
           <!-- the diversity index: how much of the atmosphere isn't bluesky (its room kept while the tile loads) -->
           <div class="home-weather__mix" data-weather-mix>
             <p class="home-weather__mix-head"><span class="home-weather__mix-label">diversity index</span> <strong class="home-weather__index" data-weather-index>&ndash;</strong> <span class="home-weather__level" data-weather-level></span></p>

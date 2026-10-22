@@ -73,6 +73,9 @@ import {
 } from './weather-lens';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { projectLast, renderChart, type ChartPoint } from './weather-chart';
+import { accountsExponent, accountsLine, bigAmount } from './weather-headline';
+
+export { accountsExponent, bigAmount };
 import { explain, type PoeExplanation } from '../poe/say';
 import { airNow, clearedUp, initHero, RAINBOW_COOLDOWN_MS, renderAir, showRainbow } from './weather-hero';
 import { cloudCount, renderClouds } from './weather-sky';
@@ -352,28 +355,6 @@ export function skyOfHistory(h: History, now: number = Date.now()): Sky {
   };
 }
 
-/**
- * How active accounts grow with time, from the history itself: everyone over the whole
- * range against the average bucket, as D(n buckets) = D(1) × n^k. People come back, so k
- * is under 1 (about 0.6 by the hour over a day); projectLast uses it to guess a bucket
- * still filling up, where a straight scale-up guessed well over the buckets before.
- */
-export function accountsExponent(a: HistoryAccounts): number {
-  const full = a.points.slice(0, -1).filter((p) => p.seconds > 0 && p.active > 0);
-  if (full.length < 2) return 1;
-  const mean = full.reduce((sum, p) => sum + p.active, 0) / full.length;
-  const k = Math.log(a.total.active / mean) / Math.log(a.points.length);
-  return Number.isFinite(k) ? Math.min(1, Math.max(0.3, k)) : 1;
-}
-
-/** The header's line of active accounts, its newest bucket an estimate while it fills up (projectLast), so it doesn't dip. */
-function accountsLine(a: HistoryAccounts | null, range: Range, now: number): { accounts: Array<number | null> | null; accountsProjected?: boolean } {
-  if (!a) return { accounts: null };
-  const last = a.points[a.points.length - 1];
-  const points = projectLast(a.points.map((p) => ({ t: Date.parse(p.t), v: p.active })), now, BUCKET_MS[BUCKET_OF[range]], { heardMs: (last?.seconds ?? 0) * 1000, exponent: accountsExponent(a) });
-  return { accounts: points.map((p) => p.v), accountsProjected: points[points.length - 1]?.soFar !== undefined };
-}
-
 /** A rate a second as the lens shows it: per its unit, or for "total" the count over `seconds`. */
 export function amountIn(perSecond: number, unit: Unit, seconds: number): number {
   return unit === 'total' ? perSecond * seconds : perUnit(perSecond, unit);
@@ -388,12 +369,6 @@ function tag(tile: Element | null, counts: Measure, lens: LensState): void {
   if (!el) return;
   el.hidden = counts === lens.measure;
   el.textContent = `by ${counts}`;
-}
-
-/** The header's number, short enough for a phone: 21,345, then 222k, 1.23m. */
-export function bigAmount(v: number): string {
-  if (v < 100_000) return formatAmount(v);
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumSignificantDigits: 3 }).format(v).toLowerCase();
 }
 
 /** The header's reading: how busy it is (or how many accounts), what that is per, and the line under it. */
