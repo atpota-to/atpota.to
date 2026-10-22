@@ -4,7 +4,8 @@
  *
  *   /overlay?streamer=dame.is
  *
- * and everything else comes from the streamer's to.atpota.poe.overlay record. Each of these
+ * and everything else comes from the streamer's to.atpota.poe.overlay record ("self", their
+ * main layout; &layout=<id> picks another they saved). Each of these
  * overrides one setting, for this browser source only:
  *
  *   w=card:tl:100,apps:tr:80   the weather widgets: kind, slot (tl tc tr bl bc br) and size
@@ -20,13 +21,15 @@
  * Older addresses still work: show=poe,weather,strip and side=left.
  */
 
-import { actorOf, clampScale, cleanWidgets, DEFAULT_CONFIG, MAX_IGNORED, SLOTS, WIDGET_HOME, type ConfigOverrides, type OverlayConfig, type Slot, type Widget } from './config';
+import { actorOf, clampScale, cleanWidgets, DEFAULT_CONFIG, isLayoutId, MAX_IGNORED, OVERLAY_RKEY, SLOTS, WIDGET_HOME, type ConfigOverrides, type OverlayConfig, type Slot, type Widget } from './config';
 
 export { actorOf } from './config';
 
 export interface OverlayParams {
   /** A handle or a DID, unchecked beyond its shape: resolved later (index.ts). */
   streamer: string | null;
+  /** Which of the streamer's layouts (config.ts): "self" unless &layout= names another. */
+  layout: string;
   demo: boolean;
   overrides: ConfigOverrides;
 }
@@ -111,7 +114,8 @@ export function readParams(search: string): OverlayParams {
   const theme = q.get('theme')?.toLowerCase();
   if (theme === 'dark' || theme === 'light') o.theme = theme;
 
-  return { streamer: actorOf(q.get('streamer') ?? ''), demo: q.has('demo') && !off(q.get('demo')), overrides: o };
+  const layout = q.get('layout')?.toLowerCase();
+  return { streamer: actorOf(q.get('streamer') ?? ''), layout: isLayoutId(layout) ? layout : OVERLAY_RKEY, demo: q.has('demo') && !off(q.get('demo')), overrides: o };
 }
 
 /** A whole config as an address, leaving out what's at its default (the setup page's preview). */

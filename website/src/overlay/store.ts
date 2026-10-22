@@ -1,6 +1,6 @@
 /**
- * The streamer's overlay settings in their own repo: to.atpota.poe.overlay at "self"
- * (config.ts), and each screen's at to.atpota.poe.scene/<screen id> (scenes.ts). The overlay
+ * The streamer's overlay settings in their own repo: to.atpota.poe.overlay, a record per
+ * layout ("self" the main one, config.ts), and each screen's at to.atpota.poe.scene/<screen id> (scenes.ts). The overlay
  * reads them without credentials (repos are public), from the PDS the streamer's DID
  * document names; the setup page writes them with the signed-in session. Reading never
  * throws for a record that isn't there: that's a streamer with the defaults.
@@ -8,7 +8,7 @@
 
 import type { Session } from '../blog/auth';
 import { deleteRecord, putRecord } from '../blog/repo';
-import { fromRecord, OVERLAY_NSID, OVERLAY_RKEY, toRecord, type OverlayConfig } from './config';
+import { fromRecord, isLayoutId, layoutNameOf, MAX_LAYOUTS, OVERLAY_NSID, OVERLAY_RKEY, toRecord, type OverlayConfig } from './config';
 import { fromSceneRecord, isSceneKind, isScreenId, MAX_SCREENS, SCENE_NSID, toSceneRecord, type Scene, type SceneKind } from './scenes';
 
 export const PLC = 'https://plc.directory';
@@ -101,9 +101,9 @@ export interface SavedScene {
   createdAt: string;
 }
 
-/** Anyone's saved settings, read publicly: null when they have none, undefined when it couldn't be read. */
-export async function readPublicConfig(did: string, fetchImpl: typeof fetch = fetch): Promise<Saved | null | undefined> {
-  return asConfig(await readPublic(did, OVERLAY_NSID, OVERLAY_RKEY, fetchImpl));
+/** Anyone's saved layout ("self" unless named), read publicly: null when they have none, undefined when it couldn't be read. */
+export async function readPublicConfig(did: string, fetchImpl: typeof fetch = fetch, layout: string = OVERLAY_RKEY): Promise<Saved | null | undefined> {
+  return asConfig(await readPublic(did, OVERLAY_NSID, layout, fetchImpl));
 }
 
 /** The signed-in streamer's own saved settings, from their PDS. */
@@ -157,7 +157,37 @@ export async function deleteScene(session: Session, id: string): Promise<void> {
   await deleteRecord(session, `at://${session.did}/${SCENE_NSID}/${id}`);
 }
 
-/** Saves the settings to the signed-in streamer's repo (throws a RepoError when refused). */
-export async function saveConfig(session: Session, config: OverlayConfig, createdAt: string, now = new Date()): Promise<void> {
-  await putRecord(session, OVERLAY_NSID, OVERLAY_RKEY, toRecord(config, createdAt, now));
+export interface SavedLayout extends Saved {
+  id: string;
+  name: string;
+}
+
+/** All of the signed-in streamer's saved layouts, the main one first, then oldest first: undefined when they couldn't be read. */
+export async function listOwnLayouts(session: Session, fetchImpl: typeof fetch = fetch): Promise<SavedLayout[] | undefined> {
+  try {
+    const q = new URLSearchParams({ repo: session.did, collection: OVERLAY_NSID, limit: String(MAX_LAYOUTS * 2) });
+    const res = await json(fetchImpl, `${session.pds}/xrpc/com.atproto.repo.listRecords?${q}`);
+    if (res.status !== 200 || !obj(res.body) || !Array.isArray(res.body.records)) return undefined;
+    const out: SavedLayout[] = [];
+    for (const r of res.body.records) {
+      if (!obj(r) || typeof r.uri !== 'string') continue;
+      const id = r.uri.slice(r.uri.lastIndexOf('/') + 1);
+      const saved = isLayoutId(id) ? valueFrom(200, r) : undefined;
+      if (saved) out.push({ id, name: layoutNameOf(saved.value, id), config: fromRecord(saved.value), createdAt: saved.createdAt });
+    }
+    const main = (l: SavedLayout) => (l.id === OVERLAY_RKEY ? 0 : 1);
+    return out.sort((a, b) => main(a) - main(b) || a.createdAt.localeCompare(b.createdAt)).slice(0, MAX_LAYOUTS);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Saves a layout to the signed-in streamer's repo, at its id (throws a RepoError when refused). */
+export async function saveConfig(session: Session, config: OverlayConfig, createdAt: string, now = new Date(), id: string = OVERLAY_RKEY, name?: string): Promise<void> {
+  await putRecord(session, OVERLAY_NSID, id, toRecord(config, createdAt, now, name));
+}
+
+/** Removes a layout from the signed-in streamer's repo (throws a RepoError when refused). */
+export async function deleteLayout(session: Session, id: string): Promise<void> {
+  await deleteRecord(session, `at://${session.did}/${OVERLAY_NSID}/${id}`);
 }

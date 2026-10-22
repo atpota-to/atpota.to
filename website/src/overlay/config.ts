@@ -3,9 +3,11 @@
  * big, which bottom corner Poe sits in and how big, and what Poe reacts to. The same shape
  * three ways:
  *
- *   the record   to.atpota.poe.overlay at "self" in the streamer's repo
+ *   the record   to.atpota.poe.overlay in the streamer's repo
  *                (lexicons/to/atpota/poe/overlay.json), saved by /overlay/setup and read
- *                by the overlay, which follows it live (store.ts)
+ *                by the overlay, which follows it live (store.ts). A streamer can keep
+ *                several, each a layout with a name: "self" is the main one, which
+ *                /overlay?streamer= shows; &layout=<id> picks another
  *   the URL      settings in /overlay's address (params.ts) override the record, field by
  *                field; the setup page's preview passes the whole draft that way
  *   defaults     DEFAULT_CONFIG, for a streamer with no record and no settings in the URL
@@ -15,13 +17,51 @@
  */
 
 export const OVERLAY_NSID = 'to.atpota.poe.overlay';
+/** The main layout's record key, and its id in the studio. */
 export const OVERLAY_RKEY = 'self';
+export const MAIN_LAYOUT_NAME = 'main layout';
+export const LAYOUT_NAME_MAX = 40;
+export const MAX_LAYOUTS = 24;
+/** A layout's id: its record key and its name in the URL ("self", "coding"). */
+const LAYOUT_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
+
+export function isLayoutId(v: unknown): v is string {
+  return typeof v === 'string' && LAYOUT_ID_RE.test(v);
+}
+
+/** A new layout's id from its name ("Just Chatting" is "just-chatting"), not one of `taken` nor the main one's. */
+export function newLayoutId(name: string, taken: Iterable<string>): string {
+  const used = new Set([...taken, OVERLAY_RKEY]);
+  const slug =
+    name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || 'layout';
+  if (!used.has(slug)) return slug;
+  for (let n = 2; ; n++) if (!used.has(`${slug}-${n}`)) return `${slug}-${n}`;
+}
+
+/** A layout's name from its record: one line, at most LAYOUT_NAME_MAX characters. */
+export function layoutNameOf(value: unknown, id: string): string {
+  const raw = obj(value) && typeof value.name === 'string' ? value.name : '';
+  const name = [...raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()].slice(0, LAYOUT_NAME_MAX).join('');
+  return name || (id === OVERLAY_RKEY ? MAIN_LAYOUT_NAME : id);
+}
 
 export const WIDGET_KINDS = ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse', 'moon', 'mark', 'loader'] as const;
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
 export const SLOTS = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
 export type Slot = (typeof SLOTS)[number];
 export type Side = 'left' | 'right';
+
+/** The setup page's groups of widgets: atpotato's weather, and Anisota's (anisota.ts). */
+export const WIDGET_GROUPS: Record<'weather' | 'anisota', readonly WidgetKind[]> = {
+  weather: ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse'],
+  anisota: ['moon', 'mark', 'loader'],
+};
 
 /** What each widget is, for the setup page. */
 export const WIDGET_NAMES: Record<WidgetKind, string> = {
@@ -168,9 +208,10 @@ export function fromRecord(value: unknown): OverlayConfig {
 }
 
 /** The record to save, keeping when it was first made. */
-export function toRecord(c: OverlayConfig, createdAt: string, now: Date): Record<string, unknown> {
+export function toRecord(c: OverlayConfig, createdAt: string, now: Date, name?: string): Record<string, unknown> {
   return {
     $type: OVERLAY_NSID,
+    ...(name ? { name: layoutNameOf({ name }, '') } : {}),
     poe: { ...c.poe, scale: clampScale(c.poe.scale) },
     widgets: cleanWidgets(c.widgets),
     chat: c.chat,

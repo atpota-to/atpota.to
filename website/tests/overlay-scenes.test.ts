@@ -21,7 +21,7 @@ import {
   withSceneOverrides,
   type Scene,
 } from '../src/overlay/scenes.js';
-import { fillSceneForm, holeLines, localInput, mountScenes, SCENE_SAVE_DELAY_MS, sceneFrom } from '../src/overlay/setup-scenes.js';
+import { fillSceneForm, holeLines, localInput, sceneFrom } from '../src/overlay/setup-scenes.js';
 import { DEFAULT_CONFIG } from '../src/overlay/config.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
@@ -198,80 +198,6 @@ describe('the scenes on the setup page', () => {
   it("says where the screen share's windows are", () => {
     expect(holeLines({ ...SCENE_DEFAULTS.screenshare })).toEqual(['screen capture: x 40, y 40, 1440 × 810', 'camera: x 1520, y 40, 360 × 360']);
     expect(holeLines({ ...SCENE_DEFAULTS.screenshare, camera: { side: 'none', shape: 'rounded' } })).toHaveLength(1);
-  });
-
-  const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
-  const listing = (records: { rkey: string; value: Record<string, unknown> }[]) =>
-    vi.fn(async (url: string) =>
-      url.includes('listRecords') && url.includes(`collection=${SCENE_NSID}`)
-        ? new Response(JSON.stringify({ records: records.map((r) => ({ uri: `at://${STREAMER}/${SCENE_NSID}/${r.rkey}`, cid: 'x', value: r.value })) }))
-        : new Response('{}', { status: 500 }),
-    ) as unknown as typeof fetch;
-  const titleField = () => document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="title"]')!;
-  const tabs = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>('[data-ovs-scene-tabs] [data-scene]')].map((t) => `${t.dataset.scene}:${t.textContent}`);
-
-  it('lists the starters and the streamer\'s own screens, and saves changes to the repo', async () => {
-    const root = page();
-    const fetchImpl = listing([
-      { rkey: 'brb', value: { title: 'snack break', createdAt: '2026-10-01T00:00:00.000Z' } },
-      { rkey: 'coding-brb', value: { kind: 'brb', name: 'coding brb', title: 'debugging', ground: 'grass', createdAt: '2026-10-02T00:00:00.000Z' } },
-      { rkey: 'Not An Id', value: { createdAt: '2026-10-02T00:00:00.000Z' } },
-    ]);
-    const save = vi.fn(async () => undefined);
-    const scenes = mountScenes(root, session as never, 'dame.is', () => DEFAULT_CONFIG, vi.fn(), { fetchImpl, save });
-    await scenes.ready;
-    expect(tabs(root)).toEqual(['starting:starting soon', 'brb:be right back', 'ending:the end', 'screenshare:screen share', 'loading:anisota loading', 'coding-brb:coding brb']);
-    expect(titleField().value).toBe('starting soon');
-    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is&scene=starting`);
-    expect(root.querySelector<HTMLElement>('[data-ovs-scene-remove]')!.hidden).toBe(true);
-    root.querySelector<HTMLButtonElement>('[data-scene="brb"]')!.click();
-    expect(titleField().value).toBe('snack break');
-    root.querySelector<HTMLButtonElement>('[data-scene="coding-brb"]')!.click();
-    expect(titleField().value).toBe('debugging');
-    expect(document.querySelector<HTMLSelectElement>('[data-ovs-scene-form] [name="ground"]')!.value).toBe('grass');
-    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is&scene=coding-brb`);
-    expect(root.querySelector<HTMLElement>('[data-ovs-scene-remove]')!.textContent).toBe('remove this screen');
-
-    vi.useFakeTimers();
-    titleField().value = 'back in five';
-    titleField().dispatchEvent(new Event('input', { bubbles: true }));
-    const name = document.querySelector<HTMLInputElement>('[data-ovs-scene-form] [name="name"]')!;
-    name.value = 'code break';
-    name.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(tabs(root)).toContain('coding-brb:code break');
-    await vi.advanceTimersByTimeAsync(SCENE_SAVE_DELAY_MS);
-    expect(save).toHaveBeenCalledTimes(1);
-    const [, id, scene, createdAt] = save.mock.calls[0] as unknown as [unknown, string, Scene, string];
-    expect(id).toBe('coding-brb');
-    expect(scene).toMatchObject({ kind: 'brb', name: 'code break', title: 'back in five', ground: 'grass' });
-    expect(createdAt).toBe('2026-10-02T00:00:00.000Z');
-  });
-
-  it('adds a named screen of any kind at its own id, and removes it', async () => {
-    const root = page();
-    const save = vi.fn(async () => undefined);
-    const remove = vi.fn(async () => undefined);
-    const scenes = mountScenes(root, session as never, 'dame.is', () => DEFAULT_CONFIG, vi.fn(), { fetchImpl: listing([]), save, remove, confirm: () => true });
-    await scenes.ready;
-    const add = root.querySelector<HTMLFormElement>('[data-ovs-new-form]')!;
-    (add.elements.namedItem('name') as HTMLInputElement).value = 'Coding Share!';
-    (add.elements.namedItem('kind') as HTMLSelectElement).value = 'screenshare';
-    add.dispatchEvent(new Event('submit', { cancelable: true }));
-    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    const [, id, scene] = save.mock.calls[0] as unknown as [unknown, string, Scene];
-    expect(id).toBe('coding-share');
-    expect(scene).toMatchObject({ kind: 'screenshare', name: 'Coding Share!' });
-    expect(tabs(root).at(-1)).toBe('coding-share:Coding Share!');
-    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-scene-url]')!.value).toContain('&scene=coding-share');
-    // the same name again gets an id of its own
-    (add.elements.namedItem('name') as HTMLInputElement).value = 'coding share';
-    add.dispatchEvent(new Event('submit', { cancelable: true }));
-    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
-    expect((save.mock.calls[1] as unknown as [unknown, string])[1]).toBe('coding-share-2');
-
-    root.querySelector<HTMLButtonElement>('[data-ovs-scene-remove]')!.click();
-    await vi.waitFor(() => expect(remove).toHaveBeenCalledWith(session, 'coding-share-2'));
-    await vi.waitFor(() => expect(tabs(root)).toHaveLength(6));
   });
 
   it('makes ids from names that fit a record key and the URL', () => {

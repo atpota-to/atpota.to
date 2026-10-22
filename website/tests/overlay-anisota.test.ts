@@ -119,7 +119,7 @@ describe("Anisota's loading screen", () => {
     const s = { ...SCENE_DEFAULTS.loading, title: 'nearly' };
     fillSceneForm(form, s);
     expect(sceneFrom(form, s)).toEqual(s);
-    const label = (name: string) => form.querySelector(`[name="${name}"]`)!.closest<HTMLElement>('label')!;
+    const label = (name: string) => form.querySelector(`[name="${name}"]`)!.closest<HTMLElement>('[data-ovs-for]')!;
     expect(label('background').hidden).toBe(true);
     expect(label('ground').hidden).toBe(true);
     expect(form.querySelector<HTMLElement>('[data-ovs-for="loading"]')!.hidden).toBe(false);

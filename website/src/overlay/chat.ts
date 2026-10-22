@@ -42,7 +42,7 @@ export type StreamEvent =
   | { kind: 'live'; rkey: string; title: string | null }
   | { kind: 'ended'; rkey: string }
   /** The streamer saved new overlay settings (unchecked: config.ts fromRecord checks them). */
-  | { kind: 'config'; value: unknown }
+  | { kind: 'config'; rkey: string; value: unknown }
   /** The streamer saved a scene (unchecked: scenes.ts fromSceneRecord checks it). */
   | { kind: 'scene'; rkey: string; value: unknown };
 
@@ -61,7 +61,7 @@ export function eventFor(message: unknown, streamer: string): StreamEvent | null
   if (!obj(commit) || !obj(commit.record)) return null;
   const record = commit.record;
   if (commit.collection === OVERLAY) {
-    return message.did === streamer && commit.rkey === 'self' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'config', value: record } : null;
+    return message.did === streamer && typeof commit.rkey === 'string' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'config', rkey: commit.rkey, value: record } : null;
   }
   if (commit.collection === SCENE) {
     return message.did === streamer && typeof commit.rkey === 'string' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'scene', rkey: commit.rkey, value: record } : null;
