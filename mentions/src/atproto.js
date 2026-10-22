@@ -546,3 +546,9 @@ export const getDmMessages = (convoId, cursor) => chatRequest('chat.bsky.convo.g
 export const sendDmMessage = (convoId, messageId, text) => chatRequest('chat.bsky.convo.sendMessage', {
   body: { convoId, message: { text, replyTo: { messageId } } },
 });
+export const addDmReaction = (convoId, messageId, value) => chatRequest('chat.bsky.convo.addReaction', {
+  body: { convoId, messageId, value },
+});
+export const removeDmReaction = (convoId, messageId, value) => chatRequest('chat.bsky.convo.removeReaction', {
+  body: { convoId, messageId, value },
+});

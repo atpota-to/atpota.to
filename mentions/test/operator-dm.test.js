@@ -66,6 +66,63 @@ test('mock inbox dispatches only to private DM agent route, with no public repo 
   assert.equal(db.prepare('SELECT status FROM operator_dm WHERE message_id = ?').get(target.id).status, 'dispatched');
 });
 
+test('a DM gets 👀 when Poe picks it up, and loses it once the reply is sent', async () => {
+  const target = message();
+  const reactions = [];
+  const api = {
+    listDmConvos: async () => ({ convos: [convo] }),
+    getDmMessages: async () => ({ messages: [target] }),
+    addDmReaction: async (...args) => { reactions.push(['add', ...args]); },
+    removeDmReaction: async (...args) => { reactions.push(['remove', ...args]); },
+    sendDmMessage: async () => {
+      assert.deepEqual(reactions.at(-1)[0], 'add', 'still 👀 while the reply is on its way');
+      return { id: 'reply-1' };
+    },
+  };
+  await pollOperatorDms({ api, fetcher: async () => ({ ok: true }) });
+  assert.deepEqual(reactions, [['add', convo.id, target.id, '👀']]);
+  assert.equal(db.prepare('SELECT seen_reaction FROM operator_dm WHERE message_id = ?').get(target.id).seen_reaction, '👀');
+
+  assert.equal(receiveDraft({ key: `k-${target.id}`, dmId: target.id, operatorDid: admin, text: 'here you go' }), 'accepted');
+  await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(target.id), api);
+  assert.deepEqual(reactions.at(-1), ['remove', convo.id, target.id, '👀']);
+  const row = db.prepare('SELECT status, seen_reaction FROM operator_dm WHERE message_id = ?').get(target.id);
+  assert.deepEqual({ ...row }, { status: 'sent', seen_reaction: null });
+});
+
+test('a failed reaction never holds up the DM or its reply', async () => {
+  const target = message();
+  const bodies = [];
+  const api = {
+    listDmConvos: async () => ({ convos: [convo] }),
+    getDmMessages: async () => ({ messages: [target] }),
+    addDmReaction: async () => { throw new Error('chat.bsky.convo.addReaction failed: 400 ReactionNotAllowed'); },
+    removeDmReaction: async () => { throw new Error('should not be called without a reaction'); },
+    sendDmMessage: async () => ({ id: 'reply-2' }),
+  };
+  await pollOperatorDms({ api, fetcher: async (_u, o) => { bodies.push(JSON.parse(o.body)); return { ok: true }; } });
+  assert.ok(bodies.some((b) => b.dmId === target.id), 'dispatched anyway');
+  receiveDraft({ key: `k-${target.id}`, dmId: target.id, operatorDid: admin, text: 'still here' });
+  await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(target.id), api);
+  assert.equal(db.prepare('SELECT status FROM operator_dm WHERE message_id = ?').get(target.id).status, 'sent');
+});
+
+test('a message request gets no reaction before its convo is accepted', async () => {
+  const target = message();
+  const reactions = [];
+  await pollOperatorDms({
+    api: {
+      listDmConvos: async () => ({ convos: [] }),
+      listDmRequests: async () => ({ requests: [{ ...convo, id: 'request-convo' }] }),
+      getDmMessages: async () => ({ messages: [target] }),
+      addDmReaction: async (...args) => { reactions.push(args); },
+    },
+    fetcher: async () => ({ ok: true }),
+  });
+  assert.equal(db.prepare('SELECT status FROM operator_dm WHERE message_id = ?').get(target.id).status, 'dispatched');
+  assert.deepEqual(reactions, []);
+});
+
 test('kill switch prevents private sends too', async () => {
   const target = message();
   acceptMessage(convo, target, baseline());
