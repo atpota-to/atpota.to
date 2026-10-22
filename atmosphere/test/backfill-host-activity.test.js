@@ -155,3 +155,17 @@ test('backfillActivity: today is refused while the archive hasn\'t reached it', 
     /doesn't reach today yet/,
   );
 });
+
+test('countDays: leaves out a short dense stretch', async () => {
+  const handed = [];
+  const skip = [[Date.parse('2026-10-20T16:27:00Z') * 1000, Date.parse('2026-10-20T16:31:00Z') * 1000, 7571]];
+  const read = await countDays({
+    days: ['2026-10-20'],
+    directory: directory(),
+    skip,
+    events: stream([commit('did:plc:euro1', '2026-10-20T10:00:00Z'), commit('did:plc:black', '2026-10-20T16:29:00Z')]),
+    onDay: async (d) => handed.push(d.rows().map((r) => [r.hostname, r.dids])),
+  });
+  assert.deepEqual(handed, [[[ALL_INDEPENDENT, 1], ['eurosky.social', 1]]]);
+  assert.equal(read.skipped, 1);
+});

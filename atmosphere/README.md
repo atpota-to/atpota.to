@@ -483,7 +483,11 @@ which covers the morning before the station started counting; the station merges
 in Supabase before each of its writes, so the two add up. With today in the range, the
 run ends by writing today once more after the station's next census (11 minutes), in case
 the two writes crossed. Each day is merged with whatever rows it already has, so a
-stopped run can be started again as it was, and a day run twice comes out the same. It goes by where accounts live now: an
+stopped run can be started again as it was, and a day run twice comes out the same. A
+short dense stretch in the archive (on 2026-10-22, segment #7571: 3½ minutes at 12,800
+events a second, a re-crawl or a flushed backlog) is left out rather than counted, since
+crawled records would make accounts look active that weren't; the run says so. A long
+one, like the crawl the archive began with, still refuses the range. It goes by where accounts live now: an
 account that moved between hosts in the window counts for the one it's on now, and one
 that has since left independent hosts isn't counted. That's a few hundred accounts
 against tens of thousands active (`atmosphere_plc_day` has the moves).
