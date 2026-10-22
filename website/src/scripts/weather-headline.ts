@@ -48,6 +48,17 @@ export function accountsLine(a: ActivePoints | null, range: HistoryRange, now: n
   return { accounts: points.map((p) => p.v), accountsProjected: points[points.length - 1]?.soFar !== undefined };
 }
 
+/**
+ * The words under the header's number over a window: the period above it and the unit
+ * beside it already say what it counts, so only a rate's "on average" and, while the
+ * station hasn't heard the whole window, how much it has (`heard`, "38 minutes heard so
+ * far") are left. Empty when there's nothing to add.
+ */
+export function condWords(rate: boolean, heard = ''): string {
+  if (rate) return heard ? `on average, ${heard}` : 'on average';
+  return heard;
+}
+
 /** What the tile needs of a history answer. */
 export interface HeadlineHistory {
   range: HistoryRange;
@@ -92,7 +103,7 @@ export interface Headline {
   unit: string;
   /** the number's unit in words, for screen readers */
   unitWords: string;
-  /** the line under the reading, as the report's header says it */
+  /** the words under the number, as the report's header has them (condWords); empty for none */
   cond: string;
   line: Array<number | null>;
   projected: boolean;
@@ -108,7 +119,7 @@ export function headlineOf(h: HeadlineHistory, lens: LensState, now = Date.now()
       value: h.accounts.total.active,
       unit: 'accounts',
       unitWords: `active accounts in ${words}`,
-      cond: `different accounts wrote something in ${words}`,
+      cond: '',
       line: line.accounts ?? [],
       projected: !!line.accountsProjected,
     };
@@ -120,7 +131,7 @@ export function headlineOf(h: HeadlineHistory, lens: LensState, now = Date.now()
     value: total ? h.creates : perUnit(perSecond, lens.unit === 'total' ? 'second' : lens.unit),
     unit: total ? 'records' : `rec/${UNIT_INFO[lens.unit].short}`,
     unitWords: total ? `new records in ${words}` : `new records ${UNIT_INFO[lens.unit].words}`,
-    cond: total ? `new records in ${words}` : `on average over ${words}`,
+    cond: condWords(!total),
     line: h.records,
     projected: false,
   };

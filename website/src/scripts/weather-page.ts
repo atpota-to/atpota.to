@@ -73,7 +73,7 @@ import {
 } from './weather-lens';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { projectLast, renderChart, type ChartPoint } from './weather-chart';
-import { accountsExponent, accountsLine, bigAmount } from './weather-headline';
+import { accountsExponent, accountsLine, bigAmount, condWords } from './weather-headline';
 
 export { accountsExponent, bigAmount };
 import { explain, type PoeExplanation } from '../poe/say';
@@ -351,7 +351,7 @@ export function skyOfHistory(h: History, now: number = Date.now()): Sky {
         : [],
     earlier: info.earlier,
     line: { records: h.points.map((p) => ratesOf(p).records), ...accountsLine(a, h.range, now) },
-    coverage: secs > 0 && secs < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(secs)} of readings so far)` : '',
+    coverage: secs > 0 && secs < (info.spanMs / 1000) * 0.9 ? `${coverageWords(secs)} heard so far` : '',
   };
 }
 
@@ -397,9 +397,11 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
     }
   }
   setText(report, '[data-r-unit-words]', byAcct ? `active accounts in ${words}` : lens.unit === 'total' ? `new records in ${words}` : recordsPer(lens.unit));
-  const cond = byAcct ? `different accounts wrote something in ${words}` : lens.unit === 'total' ? `new records in ${words}` : `on average over ${words}`;
-  if (sky.reading) setText(report, '[data-r-cond]', CONDITION_TEXT[sky.reading.condition]);
-  else setText(report, '[data-r-cond]', `${cond}${sky.coverage}`);
+  // the period and the unit already say what the number is: only a rate's "on average", and how much was heard, need words
+  const cond = sky.reading ? CONDITION_TEXT[sky.reading.condition] : condWords(!byAcct && lens.unit !== 'total', sky.coverage);
+  setText(report, '[data-r-cond]', cond);
+  const condEl = $(report, '[data-r-cond]');
+  if (condEl) condEl.hidden = !cond;
   const spark = $(report, '[data-r-spark]');
   if (!spark) return;
   spark.removeAttribute('data-waiting');
@@ -577,7 +579,7 @@ export function hostsShare(h: Hosts): string {
   const total = h.accounts.bluesky + h.accounts.independent;
   if (h.accounts.independent <= 0) return `all ${formatCount(total)} accounts live on bluesky's hosts.`;
   const hosts = Math.max(1, Math.round(h.diversity.spread));
-  return `${formatIndex(h.diversity.share)}% of all ${compactCount(total)} accounts, active or not, live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
+  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `across about ${hosts} hosts`}.`;
 }
 
 /** How long ago the station counted them: "counted just now", "counted 7 minutes ago". */
@@ -693,7 +695,7 @@ export function diversityParts(share: number, spread: number, active?: number): 
   const who = active ? `of ${formatCount(active)} active accounts` : 'of the accounts heard just now';
   if (share <= 0) return `none ${who} wrote outside bluesky.`;
   const apps = Math.max(1, Math.round(spread));
-  return `${formatIndex(share)}% ${who} wrote outside bluesky, ${apps === 1 ? 'all in about one app' : `across about ${apps} apps`}.`;
+  return `${formatIndex(share)}% ${who} wrote outside bluesky, ${apps === 1 ? 'all in one app' : `across about ${apps} apps`}.`;
 }
 
 /**
@@ -1204,6 +1206,7 @@ export function initTrends(section: HTMLElement, feed: HistoryFeed, lens?: Lens)
 export function renderReportError(report: HTMLElement): void {
   if (report.dataset.state === 'ready') return;
   setText(report, '[data-r-cond]', ERROR_TEXT);
+  $(report, '[data-r-cond]')?.removeAttribute('hidden');
   setText(report, '[data-r-status]', ERROR_TEXT);
   report.dataset.state = 'error';
 }
@@ -1283,6 +1286,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     } else if (!quietly || windowShown?.range !== w) {
       report.dataset.lensState = 'error';
       setText(report, '[data-r-cond]', `${WINDOW_INFO[w].words} is hard to read right now. try again in a bit.`);
+      $(report, '[data-r-cond]')?.removeAttribute('hidden');
     }
   };
   const minute = $(report, '[data-s-tile]');

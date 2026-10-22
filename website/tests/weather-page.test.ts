@@ -138,7 +138,7 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-h-writing]')).toBe('700');
     expect(text('[data-h-writing-words]')).toBe('hosts that wrote in the last 30 minutes');
     expect(text('[data-h-age]')).toBe('counted 7 minutes ago');
-    expect(text('[data-h-share]')).toBe("1.5% of all 24.1m accounts, active or not, live on independent hosts, spread across about 25 hosts' worth.");
+    expect(text('[data-h-share]')).toBe('1.5% of 24.1m accounts live on independent hosts, across about 25 hosts.');
     expect([...report.querySelectorAll('[data-h-top] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'eurosky.social']);
     renderHosts(report, { ...hosts, writing: null });
     expect(report.querySelector<HTMLElement>('[data-h-writing-wrap]')!.hidden).toBe(true);
@@ -400,7 +400,7 @@ describe('records or accounts', () => {
 
   it('words what an index is made of', () => {
     expect(diversityParts(0, 0, 100)).toBe('none of 100 active accounts wrote outside bluesky.');
-    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote outside bluesky, all in about one app.');
+    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote outside bluesky, all in one app.');
   });
 
   it('ranks the apps elsewhere by accounts, or by records when the reading has no accounts', () => {
@@ -842,7 +842,7 @@ describe('in the lens', () => {
     expect(text('[data-r-records]')).toBe('–');
     renderWindow(report, DAY, lens({ window: 'day' }));
     expect(text('[data-r-records]')).toBe('440');
-    expect(text('[data-r-cond]')).toBe('on average over the last 24 hours');
+    expect(text('[data-r-cond]')).toBe('on average');
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(false);
     expect(text('[data-r-index]')).toBe('4.2');
     expect(text('[data-r-level]')).toBe('moderate');
@@ -858,12 +858,12 @@ describe('in the lens', () => {
 
     renderWindow(report, DAY, lens({ window: 'day', unit: 'total' }));
     expect(text('[data-r-records]')).toBe('38m');
-    expect(text('[data-r-cond]')).toBe('new records in the last 24 hours');
+    expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')[0]).toEqual(['tangled.sh', '86,400']);
 
     renderWindow(report, DAY, lens({ window: 'day', measure: 'accounts' }));
     expect(text('[data-r-records]')).toBe('2m');
-    expect(text('[data-r-cond]')).toBe('different accounts wrote something in the last 24 hours');
+    expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
     expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
   });
@@ -871,12 +871,12 @@ describe('in the lens', () => {
   it('says how much of a window the station has heard, and when there are no account counts for it', () => {
     const young: History = { ...DAY, total: { ...DAY.total, seconds: 7200, creates: 3_168_000 }, accounts: undefined };
     renderWindow(report, young, lens({ window: 'day' }));
-    expect(text('[data-r-cond]')).toBe('on average over the last 24 hours (from 2 hours of readings so far)');
+    expect(text('[data-r-cond]')).toBe('on average, 2 hours heard so far');
     expect(text('[data-r-index]')).toBe('–');
     expect(text('[data-r-level-text]')).toBe('no account counts for the last 24 hours yet.');
     // accounts asked for, none to give: records, and the tiles say so
     renderWindow(report, young, lens({ window: 'day', measure: 'accounts' }));
-    expect(text('[data-r-cond]')).toMatch(/^on average over/);
+    expect(text('[data-r-cond]')).toMatch(/^on average/);
     expect(report.querySelector('.weather-mix [data-tag]')!.textContent).toBe('by records');
   });
 
