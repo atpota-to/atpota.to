@@ -31,7 +31,7 @@ export function documentValue(rkey, extra = {}) {
   };
 }
 
-export const publicationRecord = (url = 'https://poe.leaflet.pub') => ({
+export const publicationRecord = (url = 'https://atpota.to/blog') => ({
   uri: PUBLICATION, cid: 'bafypublication',
   value: { $type: 'site.standard.publication', url, name: "poe's atmosphere dispatch" },
 });

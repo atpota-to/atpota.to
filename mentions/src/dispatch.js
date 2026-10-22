@@ -222,8 +222,8 @@ export function pageUrls(rkey) {
  * The announcement post. The link to the issue is its only facet: featured
  * people are not pinged, and nothing else in the text becomes clickable.
  */
-export function buildAnnouncement({ text, pageUrl, cardUrl = pageUrl, associatedRefs = null, alsoLinks = [], title, description, thumb = null }) {
-  const linkable = new Set([pageUrl, cardUrl, ...alsoLinks]);
+export function buildAnnouncement({ text, pageUrl, associatedRefs = null, alsoLinks = [], title, description, thumb = null }) {
+  const linkable = new Set([pageUrl, ...alsoLinks]);
   const facets = detectLinks(text)
     .filter((l) => linkable.has(l.uri.replace(/\/+$/, '')))
     .map((l) => ({
@@ -238,7 +238,7 @@ export function buildAnnouncement({ text, pageUrl, cardUrl = pageUrl, associated
     embed: {
       $type: 'app.bsky.embed.external',
       external: {
-        uri: cardUrl, title, description,
+        uri: pageUrl, title, description,
         ...(thumb ? { thumb } : {}),
         ...(associatedRefs ? { associatedRefs } : {}),
       },
@@ -254,28 +254,40 @@ function joinPath(base, path) {
   return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }
 
+/** A URL reduced the way the AppView compares them: host lowercased, no trailing slash, query or fragment. */
+function canonicalUrl(url) {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}${u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Where the card links, and the records that make Bluesky draw it as a
- * standard.site card (publication name, icon, byline, reading time). The
- * AppView enriches a card only when its uri is the publication's url joined to
- * the document's path and both records are pinned in associatedRefs, so the
- * card links the publication's own page (poe.leaflet.pub), not pageUrl. Falls
- * back to a plain card on pageUrl when the publication can't be read; never
+ * The associatedRefs that make Bluesky draw the card on pageUrl as a
+ * standard.site card (publication name, icon, byline, reading time), or null
+ * with the reason. The AppView enriches a card only when its uri is the
+ * publication's url joined to the document's path and both records are pinned,
+ * so the refs go on only when the publication's url backs pageUrl. Never
  * throws, because a plain card is still an announcement.
  */
-export async function cardTarget(doc, pageUrl, deps) {
+export async function cardRefs(doc, pageUrl, deps) {
   let publication;
   try {
     publication = await deps.getPublication();
   } catch (err) {
-    return { cardUrl: pageUrl, associatedRefs: null, note: `no rich card: ${err.message}` };
+    return { associatedRefs: null, note: err.message };
   }
   const url = publication?.value?.url;
-  if (typeof url !== 'string' || !/^https:\/\//.test(url) || typeof publication.cid !== 'string') {
-    return { cardUrl: pageUrl, associatedRefs: null, note: 'no rich card: the publication has no url' };
+  if (typeof url !== 'string' || typeof publication.cid !== 'string') {
+    return { associatedRefs: null, note: 'the publication has no url' };
+  }
+  const backed = canonicalUrl(joinPath(url, String(doc.value.path ?? '')));
+  if (!backed || backed !== canonicalUrl(pageUrl)) {
+    return { associatedRefs: null, note: `the publication's url is ${url}, so bluesky won't enrich a card on ${pageUrl}` };
   }
   return {
-    cardUrl: joinPath(url, String(doc.value.path ?? '')),
     associatedRefs: [
       { $type: 'com.atproto.repo.strongRef', uri: doc.uri, cid: doc.cid },
       { $type: 'com.atproto.repo.strongRef', uri: config.dispatch.publicationUri, cid: publication.cid },
@@ -530,12 +542,12 @@ async function postOnce(documentUri, text, page, pageUrl, alsoLinks, doc, deps) 
       return { uri: earlier.uri, cid: earlier.cid, thumbNote: null, cardNote: null };
     }
   }
-  const card = await cardTarget(doc, pageUrl, deps);
   db.prepare('UPDATE dispatch_document SET post_text = ?, page_url = ?, updated_at = ? WHERE document_uri = ?')
-    .run(text, card.cardUrl, nowIso(), documentUri);
+    .run(text, pageUrl, nowIso(), documentUri);
+  const card = await cardRefs(doc, pageUrl, deps);
   const { thumb, note } = await cardThumb(page.html, pageUrl, deps);
   const record = buildAnnouncement({
-    text, pageUrl, alsoLinks, cardUrl: card.cardUrl, associatedRefs: card.associatedRefs,
+    text, pageUrl, alsoLinks, associatedRefs: card.associatedRefs,
     title: String(doc.value.title ?? ''),
     description: String(doc.value.description ?? ''),
     thumb,
@@ -604,7 +616,7 @@ export async function announce({ rkey, text = null }, deps = defaultDeps) {
     `announced ⸜(｡˃ ᵕ ˂ )⸝ ${postUrl(post.uri)}`,
     note,
     ...(post.thumbNote ? [`the card has no image: ${post.thumbNote}.`] : []),
-    ...(post.cardNote ? [`the card is a plain link card (${post.cardNote}).`] : []),
+    ...(post.cardNote ? [`the card is a plain link card: ${post.cardNote}.`] : []),
   ].join('\n\n');
 }
 
@@ -781,15 +793,13 @@ export async function handleAnnounceProposal(body, deps = defaultDeps) {
   const problem = proposalTextProblem(text, rkey);
   if (problem) return { status: 200, body: { accepted: false, reason: problem, issue } };
 
-  // What the operator is told the card links, so it is the link that posts.
-  const { cardUrl } = await cardTarget(doc, issue.url, deps);
   db.exec('BEGIN IMMEDIATE');
   try {
     // One live proposal at a time: this one replaces every earlier one.
     db.prepare(`UPDATE dispatch_proposal SET status = 'superseded', decided_at = ?
       WHERE status IN ('proposed', 'attached')`).run(nowIso());
     db.prepare(`INSERT INTO dispatch_proposal (dm_message_id, operator_did, document_rkey, title, page_url, text, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(body.dmId, body.operatorDid, rkey, issue.title, cardUrl, text, nowIso());
+      VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(body.dmId, body.operatorDid, rkey, issue.title, issue.url, text, nowIso());
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
