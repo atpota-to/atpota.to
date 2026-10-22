@@ -1,6 +1,7 @@
 /**
  * The time as an atproto TID, ticking: the clock Anisota shows under its feed when nobody's
- * signed in (its TIDClock, @atproto/common-web's TID.nextStr), drawn the atpotato way.
+ * signed in (its TIDClock, @atproto/common-web's TID.nextStr), drawn the atpotato way: in
+ * atpotato's own face, not Anisota's mono, each character in a cell of its own so it holds still.
  *
  * A TID is 13 characters of base32-sortable: 11 for the microseconds since 1970 and 2 for
  * a clock id (0-1023) that tells two clocks apart. Every record key Bluesky makes is one,

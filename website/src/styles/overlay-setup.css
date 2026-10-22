@@ -692,8 +692,8 @@ html.ovs-full-open {
 }
 
 .ovs-sketch__tid {
-  font-family: var(--font-mono);
   font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--sun);
 }
