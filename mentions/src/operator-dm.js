@@ -7,7 +7,7 @@ import { parseNapCommand } from './nap-time.js';
 import { applyNapCommand } from './nap.js';
 import { expandLinks } from './richtext.js';
 import {
-  isAnnounceText, parseAnnounceCommand, recordCommand, runCommand,
+  parseAnnounceCommand, recordCommand, runCommand,
   attachProposal, parseConfirmation, liveProposalFor, decideProposal,
 } from './dispatch.js';
 import {
@@ -43,6 +43,28 @@ db.exec(`
 `);
 try { db.exec('ALTER TABLE operator_dm ADD COLUMN request_status TEXT'); }
 catch { /* already added */ }
+try { db.exec('ALTER TABLE operator_dm ADD COLUMN shared_text TEXT'); }
+catch { /* already added */ }
+
+/**
+ * A line for Poe naming the post (or other record) the operator attached to a
+ * DM. The app sends an attached post as the message's embed, not its text, so
+ * without this Poe sees "this post" and nothing else. Links only: Poe looks
+ * the post up itself. Null when nothing is attached.
+ */
+export function describeShared(embed) {
+  const record = embed?.record;
+  const uri = typeof record?.uri === 'string' ? record.uri : null;
+  if (!uri || !uri.startsWith('at://')) return null;
+  const post = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/?#]+)$/.exec(uri);
+  if (!post) return `(attached to this message: ${uri})`;
+  if (!String(record.$type ?? '').endsWith('#viewRecord')) {
+    return `(attached to this message: a post that can't be seen, ${uri})`;
+  }
+  const who = typeof record.author?.handle === 'string' && record.author.handle !== 'handle.invalid'
+    ? record.author.handle : post[1];
+  return `(attached to this message: the post https://bsky.app/profile/${who}/post/${post[2]}, ${uri})`;
+}
 
 export function baseline() {
   // First enablement deliberately ignores old inbox messages, even across restarts.
@@ -51,7 +73,8 @@ export function baseline() {
 }
 
 export function acceptMessage(convo, message, cutoff) {
-  if (!convo || !message || typeof message.text !== 'string' || !message.text.trim() ||
+  if (!convo || !message || typeof message.text !== 'string' ||
+      (!message.text.trim() && !describeShared(message.embed)) ||
       typeof message.id !== 'string' || !message.id || !Number.isFinite(Date.parse(message.sentAt)) ||
       Date.parse(message.sentAt) <= Date.parse(cutoff) || !isAdmin(message.sender?.did) ||
       !Array.isArray(convo.members) || convo.members.length !== 2 ||
@@ -155,7 +178,8 @@ async function dispatchDm(row, fetcher = fetch) {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-atpotato-secret': config.sharedSecret },
     body: JSON.stringify({
-      dmId: row.message_id, operatorDid: row.operator_did, text: row.text,
+      dmId: row.message_id, operatorDid: row.operator_did,
+      text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
       guidance: /^(?:remember|style):\s*\S/i.test(row.text),
     }),
     signal: ac,
@@ -186,12 +210,10 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
           if (typeof message.sentAt === 'string' && Date.parse(message.sentAt) <= Date.parse(cutoff)) older = true;
           if (!older && acceptMessage(source === 'requests' ? { ...convo, status: 'request' } : convo, message, cutoff)) {
             // Keep the text locally only until the agent accepts dispatch.
-            // An announce command keeps its links whole: the app shortens a
-            // link's text and leaves the full URL only in the facet.
-            const text = config.dispatch.enabled && isAnnounceText(message.text)
-              ? expandLinks(message.text, message.facets) : message.text;
-            db.prepare('UPDATE operator_dm SET draft_text = ? WHERE message_id = ?')
-              .run(text, message.id);
+            // Links are kept whole: the app shortens a link's text and leaves
+            // the full URL only in the facet.
+            db.prepare('UPDATE operator_dm SET draft_text = ?, shared_text = ? WHERE message_id = ?')
+              .run(expandLinks(message.text, message.facets), describeShared(message.embed), message.id);
           }
         }
         msgCursor = messages.cursor;
@@ -220,7 +242,7 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
         ? parseAnnounceCommand(row.text) : null;
       if (dispatchCommand) {
         recordCommand(row.message_id, row.operator_did, dispatchCommand);
-        db.prepare(`UPDATE operator_dm SET status = 'command', draft_text = NULL, updated_at = ?
+        db.prepare(`UPDATE operator_dm SET status = 'command', draft_text = NULL, shared_text = NULL, updated_at = ?
           WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
         startCommand(row.message_id, api, dispatchDeps);
         continue;
@@ -232,11 +254,11 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
         if (answer === 'yes') {
           recordCommand(row.message_id, row.operator_did,
             { kind: 'announce', rkey: proposal.document_rkey, text: proposal.text });
-          db.prepare(`UPDATE operator_dm SET status = 'command', draft_text = NULL, updated_at = ?
+          db.prepare(`UPDATE operator_dm SET status = 'command', draft_text = NULL, shared_text = NULL, updated_at = ?
             WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
           startCommand(row.message_id, api, dispatchDeps);
         } else {
-          db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
+          db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
             WHERE message_id = ? AND status = 'queued'`).run("ok, i won't post it.", nowIso(), row.message_id);
           await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         }
@@ -253,7 +275,7 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
         const reply = postAnswer === 'yes'
           ? (await publishPostProposal(postProposal.id, postDeps)) ?? "that post already went out, or was dropped."
           : "ok, i won't post it.";
-        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
+        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
           WHERE message_id = ? AND status = 'publishing'`).run(reply, nowIso(), row.message_id);
         await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         continue;
@@ -265,13 +287,13 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
           import('./reconcile.js').then(({ requestNapCatchup }) => requestNapCatchup())
             .catch((err) => logger.error('wake catch-up failed to start', { error: err.message }));
         }
-        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
+        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
           WHERE message_id = ? AND status = 'queued'`).run(result.message, nowIso(), row.message_id);
         await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         continue;
       }
       await dispatchDm(row, fetcher);
-      db.prepare('UPDATE operator_dm SET draft_text = NULL WHERE message_id = ? AND status = ?')
+      db.prepare('UPDATE operator_dm SET draft_text = NULL, shared_text = NULL WHERE message_id = ? AND status = ?')
         .run(row.message_id, 'dispatched');
     } catch (err) {
       logger.error('operator DM dispatch failed', { messageId: row.message_id, error: err.message });
