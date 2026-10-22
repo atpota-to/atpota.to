@@ -1133,7 +1133,7 @@ body[data-side="left"] .ov-bubble {
   position: absolute;
   left: -8%;
   right: -8%;
-  bottom: -10px;
+  bottom: -70px;
   height: 240px;
   border-radius: 50% 50% 0 0 / 100% 100% 0 0;
   background:
@@ -1207,7 +1207,7 @@ body[data-side="left"] .ov-bubble {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 26%;
+  height: 150px;
   background: var(--soil);
   border-top: 10px solid var(--soil-line);
 }
@@ -1215,16 +1215,16 @@ body[data-side="left"] .ov-bubble {
 .ovsc__sprout {
   position: absolute;
   bottom: 100%;
-  width: 90px;
+  width: 72px;
   height: auto;
   margin-bottom: -18px;
 }
 
 .ovsc__sprout:nth-child(1) { left: 8%; }
-.ovsc__sprout:nth-child(2) { left: 26%; width: 70px; }
+.ovsc__sprout:nth-child(2) { left: 26%; width: 56px; }
 .ovsc__sprout:nth-child(3) { left: 47%; }
-.ovsc__sprout:nth-child(4) { left: 68%; width: 76px; }
-.ovsc__sprout:nth-child(5) { left: 86%; width: 64px; }
+.ovsc__sprout:nth-child(4) { left: 68%; width: 60px; }
+.ovsc__sprout:nth-child(5) { left: 86%; width: 52px; }
 
 .ovsc__rays {
   position: absolute;
@@ -1251,10 +1251,23 @@ body[data-side="left"] .ov-bubble {
 
 /* ---------- the panel: starting, brb, ending ---------- */
 
+/* How far up the ground reaches, its tufts and sprouts included: the panel sits centred in
+   the sky above it, so a tall panel (a countdown, links, the TID clock) never covers it. */
+.ovsc {
+  --ovsc-ground-h: 60px;
+}
+
+.ovsc[data-ground="meadow"] { --ovsc-ground-h: 240px; }
+.ovsc[data-ground="grass"] { --ovsc-ground-h: 160px; }
+.ovsc[data-ground="soil"] { --ovsc-ground-h: 230px; }
+
 .ovsc__panel {
   position: absolute;
   left: 50%;
-  top: 46%;
+  top: 40px;
+  bottom: var(--ovsc-ground-h);
+  height: fit-content;
+  margin: auto 0;
   display: grid;
   justify-items: center;
   gap: 18px;
@@ -1266,7 +1279,7 @@ body[data-side="left"] .ov-bubble {
   color: var(--text);
   text-align: center;
   box-shadow: 0 30px 80px rgba(35, 26, 15, 0.28);
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
 }
 
 .ovsc__wordmark {
