@@ -112,27 +112,6 @@ export const HISTORY_ENDPOINT = '/api/weather-history';
 /** Where the scale ends: "extreme" starts at 11 and gets two more points of room. */
 export const SCALE_MAX = 13;
 
-/** Plain names for Bluesky's collections; anything else shows its NSID. */
-export const BLUESKY_NAMES: Record<string, string> = {
-  'app.bsky.feed.like': 'likes',
-  'app.bsky.feed.post': 'posts',
-  'app.bsky.feed.repost': 'reposts',
-  'app.bsky.graph.follow': 'follows',
-  'app.bsky.graph.block': 'blocks',
-  'app.bsky.feed.threadgate': 'who-can-reply settings',
-  'app.bsky.feed.postgate': 'quote settings',
-  'app.bsky.graph.listitem': 'people added to lists',
-  'app.bsky.graph.list': 'new lists',
-  'app.bsky.graph.listblock': 'lists blocked',
-  'app.bsky.graph.starterpack': 'starter packs',
-  'app.bsky.graph.verification': 'verifications',
-  'app.bsky.feed.generator': 'new feeds',
-  'app.bsky.actor.profile': 'new profiles',
-  'app.bsky.actor.status': 'live statuses',
-  'app.bsky.notification.declaration': 'notification settings',
-  'chat.bsky.actor.declaration': 'chat settings',
-};
-
 export type { Measure };
 
 function formatShare(part: number, whole: number): string {
@@ -581,32 +560,12 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   setText(report, '[data-r-apps-note]', shown ? `${what}.${arrows}` : '');
 }
 
-/** Bluesky's busiest kinds of record: always records (the station doesn't count accounts by collection). */
-function renderBluesky(report: HTMLElement, sky: Sky, lens: LensState): void {
-  const tile = $(report, '.weather-bsky');
-  tag(tile, 'records', lens);
-  const list = $(report, '[data-r-bsky-list]');
-  if (list && (sky.bluesky.length || sky.window !== 'now')) {
-    renderBars(
-      list,
-      topBars(sky.bluesky.map((b) => ({ label: BLUESKY_NAMES[b.nsid] ?? b.nsid, sub: b.nsid, perSecond: b.perSecond, count: b.count, value: formatAmount(lens.unit === 'total' ? b.count : perUnit(b.perSecond, lens.unit)) }))),
-      sky.window === 'now' ? sky.seconds : undefined,
-    );
-  }
-  setText(
-    report,
-    '[data-r-bsky-note]',
-    sky.window === 'now' ? `bluesky's busiest kinds of record, ${perWords(lens.unit)}.` : `posts, likes, reposts and follows over ${WINDOW_INFO[sky.window].words}, ${perWords(lens.unit)}.`,
-  );
-}
-
 /** Every tile that follows the lens, from one sky. */
 export function renderSky(report: HTMLElement, sky: Sky, lens: LensState = LENS_DEFAULT): void {
   renderHeadline(report, sky, lens);
   renderDiversity(report, sky, lens);
   renderMix(report, sky, lens);
   renderElsewhere(report, sky, lens);
-  renderBluesky(report, sky, lens);
 }
 
 /**

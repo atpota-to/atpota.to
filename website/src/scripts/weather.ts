@@ -379,9 +379,9 @@ export function recordsPerSecond(r: Reading): number {
   return r.records?.perSecond ?? r.perSecond.posts;
 }
 
-/** The home tile's line on where the atmosphere lives: "1,889 pds hosts, 1,799 independent · hosting diversity 7.5". */
+/** The home tile's line on where the atmosphere lives: "1.5% of accounts live off bluesky, on 1,799 independent hosts". */
 export function hostsLine(h: Hosts): string {
-  return `${h.active.toLocaleString('en-US')} pds hosts, ${h.independent.toLocaleString('en-US')} independent · hosting diversity ${formatIndex(h.diversity.index)}`;
+  return `${formatIndex(h.diversity.share)}% of accounts live off bluesky, on ${h.independent.toLocaleString('en-US')} independent hosts`;
 }
 
 export function renderReading(tile: HTMLElement, reading: Reading): void {
@@ -414,7 +414,17 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
   const hosts = tile.querySelector<HTMLElement>('[data-weather-hosts]');
   if (hosts) {
     hosts.hidden = !reading.hosts;
-    if (reading.hosts) hosts.textContent = hostsLine(reading.hosts);
+    if (reading.hosts) {
+      const h = reading.hosts;
+      const index = tile.querySelector<HTMLElement>('[data-weather-hosting-index]');
+      if (index) countTo(index, h.diversity.index, formatIndex);
+      const level = tile.querySelector<HTMLElement>('[data-weather-hosting-level]');
+      if (level) level.textContent = hostingLevelOf(h.diversity.index);
+      const marker = tile.querySelector<HTMLElement>('[data-weather-hosting-marker]');
+      if (marker) marker.style.left = `${hostingPosition(h.diversity.index) * 100}%`;
+      const text = tile.querySelector<HTMLElement>('[data-weather-hosts-text]');
+      if (text) text.textContent = hostsLine(h);
+    }
   }
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'ready';

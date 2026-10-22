@@ -696,18 +696,15 @@ export function renderHeatmap(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
 
   setText(tile, '[data-a-heat-min]', s.heard ? wholeRate(s.min, unit) : '–');
   setText(tile, '[data-a-heat-max]', s.heard ? `${wholeRate(s.max, unit)} ${recordsPer(unit)}` : '–');
-  if (s.weeks >= HEAT_READY_WEEKS && s.busiest && s.quietest) {
+  // the busiest and quietest hours, once there are enough weeks to name them
+  const ready = s.weeks >= HEAT_READY_WEEKS && s.busiest && s.quietest;
+  const lede = tile.querySelector<HTMLElement>('[data-a-heat-lede]');
+  if (lede) lede.hidden = !ready;
+  if (ready) {
     setText(
       tile,
       '[data-a-heat-lede]',
-      `busiest on ${WEEKDAYS[s.busiest.dow - 1]}s around ${hourWords(s.busiest.hour)}, quietest on ${WEEKDAYS[s.quietest.dow - 1]}s around ${hourWords(s.quietest.hour)}.`,
-    );
-  } else {
-    const daysIn = Math.floor((h.seconds * 1000) / DAY);
-    setText(
-      tile,
-      '[data-a-heat-lede]',
-      `filling in: ${s.heard} of the week's 168 hours heard so far. the pattern settles after about ${HEAT_READY_WEEKS} weeks of listening${daysIn >= 1 ? ` (${daysIn} day${daysIn === 1 ? '' : 's'} in)` : ''}.`,
+      `busiest on ${WEEKDAYS[s.busiest!.dow - 1]}s around ${hourWords(s.busiest!.hour)}, quietest on ${WEEKDAYS[s.quietest!.dow - 1]}s around ${hourWords(s.quietest!.hour)}.`,
     );
   }
   setText(tile, '[data-a-heat-aside]', s.weeks >= 1 ? `${Math.floor(s.weeks)} week${Math.floor(s.weeks) === 1 ? '' : 's'} of readings` : `${roughly(h.seconds * 1000)} of readings`);

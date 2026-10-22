@@ -239,7 +239,9 @@ describe('atmospheric conditions', () => {
       hosts: { measuredAt: '2026-10-22T14:52:36Z', listed: 6442, active: 1889, bluesky: 90, independent: 1799, writing: null, accounts: { bluesky: 1, independent: 1 }, diversity: { index: 7.48, share: 1.51, spread: 24.57 }, top: [] },
     });
     expect(line.hidden).toBe(false);
-    expect(line.textContent).toBe('1,889 pds hosts, 1,799 independent · hosting diversity 7.5');
+    expect(tile.querySelector('[data-weather-hosting-index]')!.textContent).toBe('7.5');
+    expect(tile.querySelector('[data-weather-hosting-level]')!.textContent).toBe('early days');
+    expect(tile.querySelector('[data-weather-hosts-text]')!.textContent).toBe('1.5% of accounts live off bluesky, on 1,799 independent hosts');
   });
 
   it('words the index and the split', () => {

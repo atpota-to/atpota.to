@@ -19,7 +19,6 @@ import {
   bindExplainers,
   diversityParts,
   EXPLAINERS,
-  BLUESKY_NAMES,
   compactCount,
   coverageWords,
   createHistoryFeed,
@@ -152,15 +151,13 @@ describe('the atmosphere weather report', () => {
     expect(hostsShare(none)).toBe("all 10 accounts live on bluesky's hosts.");
   });
 
-  it('draws the apps and bluesky collections as bars, longest for the busiest', () => {
+  it('draws the apps as bars, longest for the busiest', () => {
     renderReport(report, READING, lens());
     const apps = [...report.querySelectorAll('[data-r-apps] li')];
     expect(apps.map((li) => li.querySelector('.weather-bars__label')!.textContent)).toEqual(['tangled.sh', 'whtwnd.com']);
     expect(apps[0]!.querySelector('.weather-bars__sub')!.textContent).toBe('sh.tangled.repo, sh.tangled.feed.star');
     expect(apps.map((li) => li.querySelector<HTMLElement>('.weather-bars__fill')!.style.width)).toEqual(['100%', '25%']);
     expect(apps[0]!.getAttribute('title')).toBe('20 in 5 seconds');
-    const bsky = [...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent);
-    expect(bsky).toEqual([BLUESKY_NAMES['app.bsky.feed.like'], 'app.bsky.feed.newthing']);
     expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(true);
   });
 
@@ -608,7 +605,6 @@ describe('the lists', () => {
     }, lens());
     expect(report.querySelectorAll('[data-r-apps] li')).toHaveLength(5);
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 5');
-    expect([...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent)).toEqual([BLUESKY_NAMES['app.bsky.feed.like']]);
   });
 
   it("says when other apps only wrote a trickle, rather than that nobody did", () => {
@@ -831,8 +827,6 @@ describe('in the lens', () => {
     expect([tag.hidden, tag.textContent]).toEqual([false, 'by accounts']);
     renderReport(report, LIVE, lens({ measure: 'accounts' }));
     expect(tag.hidden).toBe(true);
-    // bluesky's collections are always records
-    expect(report.querySelector<HTMLElement>('.weather-bsky [data-tag]')!.hidden).toBe(false);
   });
 
   it('a window: the whole of it, from its history', () => {
@@ -861,8 +855,6 @@ describe('in the lens', () => {
     expect(report.querySelector('[data-r-apps] .weather-bars__change')!.getAttribute('data-trend')).toBe('up');
     expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the day before.');
     expect(text('[data-r-apps-count]')).toBe('top 2');
-    expect(bars('[data-r-bsky-list]')[0]).toEqual(['likes', '231']);
-    expect(text('[data-r-bsky-note]')).toBe('posts, likes, reposts and follows over the last 24 hours, a second.');
 
     renderWindow(report, DAY, lens({ window: 'day', unit: 'total' }));
     expect(text('[data-r-records]')).toBe('38m');

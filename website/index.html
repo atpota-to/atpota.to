@@ -244,10 +244,16 @@
             </div>
             <p class="home-weather__mix-text" data-weather-mix-text></p>
           </div>
-          <!-- where the atmosphere lives: the station's census of pds hosts (src/scripts/weather.ts renderReading) -->
-          <p class="home-weather__hosts" data-weather-hosts hidden></p>
+          <!-- where the atmosphere lives: hosting diversity on its own scale, from the station's census of pds hosts (src/scripts/weather.ts renderReading) -->
+          <div class="home-weather__mix" data-weather-hosts hidden>
+            <p class="home-weather__mix-head"><span class="home-weather__mix-label">hosting diversity</span> <strong class="home-weather__index" data-weather-hosting-index>&ndash;</strong> <span class="home-weather__level" data-weather-hosting-level></span></p>
+            <div class="home-weather__scale" aria-hidden="true">
+              <div class="home-weather__scale-bands"><span></span><span></span><span></span><span></span><span></span><i class="home-weather__scale-marker" data-weather-hosting-marker></i></div>
+              <div class="home-weather__scale-ends"><span>early days</span><span>flourishing</span></div>
+            </div>
+            <p class="home-weather__mix-text" data-weather-hosts-text></p>
+          </div>
           <div class="home-weather__foot">
-            <p class="home-weather__note">per second, over the last minute of the whole firehose, every app. posts, likes, reposts and follows are bluesky&#39;s.</p>
             <span class="btn btn--primary btn--sm home-weather__go">full weather report</span>
           </div>
         </a>

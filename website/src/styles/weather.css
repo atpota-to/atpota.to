@@ -1643,7 +1643,8 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 }
 
 .weather-hosts__main,
-.weather-hosts__list {
+.weather-hosts__list,
+.weather-winds__to {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1832,39 +1833,22 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-variant-numeric: tabular-nums;
 }
 
-/* The wind's direction in words, big enough to read as the tile's headline. */
-.weather-winds__compass {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.25;
-  text-wrap: balance;
-}
-
 /* A pds tile's last note sits at the bottom when its row is taller than it. */
 .weather-pds > .weather-tile__note:last-child {
   margin-top: auto;
 }
 
-/* Air quality, demoted to a chip in the new arrivals tile: its level, its share, Poe's button. */
-.weather-pds__chip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-self: flex-start;
-  padding: 6px 8px 6px 14px;
-  border-radius: 999px;
-  background: var(--bg);
-  font-size: 14px;
+/* Air quality: its own little section at the foot of the new arrivals numbers, under a rule. */
+.weather-smog {
+  display: grid;
+  gap: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
-.weather-pds__chip-words {
-  flex: 1 1 12em;
-  color: var(--muted);
-}
-
-.weather-pds__chip .weather-info {
-  margin: -6px 0;
+.weather-smog__title {
+  font-size: 16px;
+  font-weight: 400;
 }
 
 /* The hosts' headline over the range: the share off bluesky and which way it went. */
@@ -2006,6 +1990,10 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 /* ---------- trends (weather-page.ts initTrends, weather-chart.ts) ---------- */
 
 .weather-trends {
+  grid-column: 1 / -1;
+}
+
+.weather-apps {
   grid-column: 1 / -1;
 }
 
@@ -2239,10 +2227,6 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   border-radius: 4px;
   background: var(--weather-else);
   transition: width 0.8s var(--ease-out);
-}
-
-.weather-bars--bsky .weather-bars__fill {
-  background: var(--weather-bsky);
 }
 
 .weather-bars__sub {

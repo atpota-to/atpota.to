@@ -2804,11 +2804,49 @@ html:not(.js) .home-weather {
   font-size: 14px;
 }
 
-.home-weather__hosts {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
+/* Hosting diversity on its own logarithmic scale (weather.ts HOSTING_SCALE, the bands as
+   wide as on the weather report): how far the network has spread off bluesky's servers. */
+.home-weather__scale {
+  display: grid;
+  gap: 4px;
+}
+
+.home-weather__scale-bands {
+  position: relative;
+  display: grid;
+  grid-template-columns: 386fr 138fr 173fr 156fr 147fr;
+  gap: 2px;
+  height: 10px;
+}
+
+.home-weather__scale-bands > span {
+  border-radius: 3px;
+  background: var(--weather-else);
+}
+
+.home-weather__scale-bands > span:nth-child(1) { opacity: 0.25; }
+.home-weather__scale-bands > span:nth-child(2) { opacity: 0.45; }
+.home-weather__scale-bands > span:nth-child(3) { opacity: 0.65; }
+.home-weather__scale-bands > span:nth-child(4) { opacity: 0.85; }
+
+.home-weather__scale-marker {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 6px;
+  height: 18px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: var(--home-sky-text);
+  box-shadow: 0 0 0 2px var(--sky);
+  transition: left var(--dur-spring) var(--ease-out);
+}
+
+.home-weather__scale-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--home-sky-mono);
 }
 
 .home-weather__foot {
@@ -2818,12 +2856,6 @@ html:not(.js) .home-weather {
   justify-content: space-between;
   gap: 10px 16px;
   margin-top: auto;
-}
-
-.home-weather__note {
-  flex: 1 1 220px;
-  font-size: 13px;
-  color: var(--home-sky-mono);
 }
 
 /* Loading (JS only): every part of the tile is already where it will be, and soft bars
