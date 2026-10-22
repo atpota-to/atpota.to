@@ -6,7 +6,7 @@
  * SCENE_SAVE_DELAY_MS after the last one, the same way a layout is.
  *
  * The screens are the ones everyone starts with (starting, brb, ending, screenshare,
- * loading: their defaults until changed) and then any the streamer has added, read from
+ * loading, clock: their defaults until changed) and then any the streamer has added, read from
  * their repo in one listRecords (screensFrom).
  */
 
@@ -206,7 +206,7 @@ export function mountScreenEditor(root: HTMLElement, opts: ScreenEditorOptions):
     removeButton.hidden = isSceneKind(e.id) && !e.saved;
     win.clearTimeout(previewTimer);
     previewTimer = win.setTimeout(() => {
-      const main = toSearch({ ...opts.draft(), volume: 0 }, { demo: true });
+      const main = toSearch({ ...opts.draft(), volume: 0 }, { demo: true, who: opts.streamer || null });
       const src = `/overlay${main || '?'}${main ? '&' : ''}${sceneSearch(s, e.id)}`;
       if (src !== shown) frame.src = shown = src;
     }, PREVIEW_DELAY_MS);

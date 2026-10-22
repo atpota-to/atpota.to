@@ -23,7 +23,13 @@
  *             camera's side
  *   anisota   Anisota's moon, mark and loader as widgets, and its loading screen as a
  *             scene (anisota.ts), for streamers who use it
- *   demo      example lines every DEMO_MS, and visitors more often, to see where things land
+ *   tid       the time as an atproto TID, ticking, as a widget and a waiting screen (tid.ts)
+ *   records   the streamer's flushes, status and vitals, and teal.fm music (records.ts),
+ *             read from their repo while on screen and again when Jetstream says they
+ *             changed; ?who= reads someone's without a streamer (the setup preview)
+ *   chat      the stream.place chat on screen, when the streamer turns it on (onscreen.ts)
+ *   demo      example lines every DEMO_MS, and visitors more often, to see where things land;
+ *             example chat, and example records when there's nobody to read
  */
 
 import { fetchForecast, FORECAST_REFRESH_MS, type Forecast } from '../scripts/weather-forecast';
@@ -34,6 +40,9 @@ import { fetchReading, LIVE_REFRESH_MS, recordsPerSecond, REFRESH_MS, type Readi
 import { createNames, listen, NOBODY, resolveActor, type StreamEvent, type Who } from './chat';
 import { DEFAULT_CONFIG, fromRecord, withOverrides, type OverlayConfig } from './config';
 import { mountAnisota } from './anisota';
+import { mountOnscreenChat } from './onscreen';
+import { mountRecords } from './records';
+import { mountTid } from './tid';
 import { createLayout } from './layout';
 import {
   alertLine,
@@ -80,6 +89,10 @@ async function start(): Promise<void> {
   // the weather suns turn into tonight's moon in the dark theme, as everywhere on the site
   paintMoons();
   mountAnisota(document);
+  mountTid(document);
+  const records = mountRecords(document);
+  const chatEl = document.querySelector<HTMLElement>('[data-ov-widget="chat"]');
+  const onscreen = chatEl ? mountOnscreenChat(chatEl) : null;
   const visitors = createVisitors({ corner, react: (face, ms) => poe.react(face, ms), side: 'right', scale: 1, demo: params.demo });
   const gate = createGate();
 
@@ -110,7 +123,9 @@ async function start(): Promise<void> {
     saved = next;
     config = onScene(next);
     sceneView.show(scene);
-    widgets.showing(layout.apply(config));
+    const shown = layout.apply(config);
+    widgets.showing(shown);
+    records.showing(shown);
     poe.setNap(config.nap * 60_000);
     if (config.volume !== volume) poe.setSounds(createSounds((volume = config.volume)));
     if (config.poe.side === 'left') void leftFaces().then((faces) => config.poe.side === 'left' && poe.setFaces(faces));
@@ -120,6 +135,7 @@ async function start(): Promise<void> {
     visitors.setEnabled(config.poe.show && config.visitors);
     void Promise.all(config.ignore.map((a) => resolveActor(a))).then((dids) => {
       skip = new Set(dids.filter((d): d is string => d !== null));
+      onscreen?.setSkip(skip);
     });
   };
 
@@ -133,6 +149,14 @@ async function start(): Promise<void> {
     if (id && ownScene) scene = withSceneOverrides(ownScene.scene, sceneParams.overrides);
   }
   apply(saved);
+
+  // ---------- whose records ----------
+  const whoDid = streamerDid ?? (params.who ? await resolveActor(params.who) : null);
+  const whoName = params.streamer && !params.streamer.startsWith('did:') ? params.streamer : params.who && !params.who.startsWith('did:') ? params.who : null;
+  records.setWho(whoDid, whoName, params.demo);
+  if (whoDid && !whoName) void createNames()(whoDid).then((w) => w.handle && records.setWho(whoDid, w.handle.slice(1), params.demo));
+  // the preview has no stream to listen to, so its chat is examples
+  if (params.demo && !streamerDid) onscreen?.demo(true);
 
   // ---------- the weather ----------
   let latest: Reading | null = null;
@@ -179,7 +203,14 @@ async function start(): Promise<void> {
   const names = createNames();
   const regulars = createRegulars(streamer);
   const said = new Set<string>();
+  onscreen?.watchBlocks(streamer);
   const onEvent = async (e: StreamEvent) => {
+    if (e.kind === 'record') return records.changed(e.collection);
+    if (e.kind === 'unchat' || e.kind === 'hide') return onscreen?.remove(e.did, e.rkey, e.kind === 'hide');
+    if (e.kind === 'chat' && onscreen && config.widgets.some((w) => w.kind === 'chat') && !skip.has(e.did)) {
+      const m = e;
+      void names(e.did).then((who) => onscreen.add(m, who));
+    }
     if (e.kind === 'config') return e.rkey !== params.layout ? undefined : apply(withOverrides(fromRecord(e.value), params.overrides));
     if (e.kind === 'scene') {
       if (!sceneParams.id || e.rkey !== sceneParams.id) return;

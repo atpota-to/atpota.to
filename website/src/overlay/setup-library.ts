@@ -25,18 +25,25 @@ export const WIDGET_SHORT: Record<WidgetKind, string> = {
   moon: 'moon',
   mark: 'mark',
   loader: 'loader',
+  tid: 'tid clock',
+  flushes: 'flushes',
+  status: 'status',
+  music: 'music',
+  chat: 'chat',
 };
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "poe bottom right · 2 weather widgets · anisota's moon", or what's missing. */
+/** "poe bottom right · 2 weather widgets · anisota's moon · music, chat", or what's missing. */
 export function layoutSummary(c: OverlayConfig): string {
   const parts = [c.poe.show ? `poe bottom ${c.poe.side}` : 'no poe'];
   const weather = c.widgets.filter((w) => WIDGET_GROUPS.weather.includes(w.kind)).length;
   const anisota = c.widgets.filter((w) => WIDGET_GROUPS.anisota.includes(w.kind)).map((w) => WIDGET_SHORT[w.kind]);
   if (weather) parts.push(count(weather, 'weather widget'));
   if (anisota.length) parts.push(`anisota's ${anisota.join(' and ')}`);
-  if (!weather && !anisota.length) parts.push('no widgets');
+  const rest = c.widgets.filter((w) => !WIDGET_GROUPS.weather.includes(w.kind) && !WIDGET_GROUPS.anisota.includes(w.kind)).map((w) => WIDGET_SHORT[w.kind]);
+  if (rest.length) parts.push(rest.join(', '));
+  if (!c.widgets.length) parts.push('no widgets');
   return parts.join(' · ');
 }
 
@@ -72,6 +79,7 @@ export function screenSketch(doc: Document, s: Scene): HTMLElement {
     if (s.camera.side !== 'none') box.append(el(doc, 'span', { class: `ovs-sketch__cam ovs-sketch__cam--${s.camera.side}` }));
   } else {
     box.append(el(doc, 'span', { class: 'ovs-sketch__title' }, s.title || (s.kind === 'loading' ? 'anisota' : SCENE_NAMES[s.kind])));
+    if (s.kind === 'clock') box.append(el(doc, 'span', { class: 'ovs-sketch__tid' }, '3m2tidclock22'));
   }
   return box;
 }

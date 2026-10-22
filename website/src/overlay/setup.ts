@@ -14,8 +14,9 @@
  *   (no hash)        the library (setup-library.ts): a card for each layout and screen,
  *                    read from the repo in one listRecords each, with edit, copy URL, open
  *                    and (for a layout) duplicate; "+ new layout" and "+ new screen"
- *   #layout/<id>     a layout's form (its name, Poe, what Poe reacts to, the weather and
- *                    Anisota's widgets, look and sound), saved to to.atpota.poe.overlay/<id>
+ *   #layout/<id>     a layout's form (its name, Poe, what Poe reacts to, the weather,
+ *                    Anisota's widgets, the TID clock, the streamer's flushes, status and
+ *                    music, the chat on screen, look and sound), saved to to.atpota.poe.overlay/<id>
  *                    SAVE_DELAY_MS after the last change; a preview of the overlay with
  *                    ?demo over a pretend stream; the URL to paste into OBS
  *   #screen/<id>     a screen's form (setup-scenes.ts), the same way
@@ -26,7 +27,8 @@
  * A sign-in from before the overlay permission existed can't save (403): the page asks
  * the streamer to sign in again. The preview is the real overlay in an iframe at
  * 1920x1080, scaled down to fit, with the draft in its URL so it shows changes before
- * they're saved; on a phone that's tiny, so it also opens full screen.
+ * they're saved (and ?who= the streamer, so the record widgets show theirs, while the chat
+ * shows examples); on a phone that's tiny, so it also opens full screen.
  *
  * DOM is built with createElement and textContent only.
  */
@@ -34,7 +36,7 @@
 import { SESSION_EVENT, sharedAuth, type Auth, type Session, type SessionEventDetail } from '../blog/auth';
 import { loadMe } from '../blog/signin';
 import { troubleFrom } from '../scripts/pet-sync';
-import { actorOf, copyConfig, DEFAULT_CONFIG, LAYOUT_NAME_MAX, layoutNameOf, MAIN_LAYOUT_NAME, MAX_LAYOUTS, newLayoutId, OVERLAY_RKEY, SLOTS, WIDGET_GROUPS, WIDGET_HINTS, WIDGET_HOME, WIDGET_KINDS, WIDGET_NAMES, type OverlayConfig, type Slot, type WidgetKind } from './config';
+import { actorOf, copyConfig, DEFAULT_CONFIG, styleFor, WIDGET_STYLES, LAYOUT_NAME_MAX, layoutNameOf, MAIN_LAYOUT_NAME, MAX_LAYOUTS, newLayoutId, OVERLAY_RKEY, SLOTS, WIDGET_GROUPS, WIDGET_HINTS, WIDGET_HOME, WIDGET_KINDS, WIDGET_NAMES, type OverlayConfig, type Slot, type WidgetKind } from './config';
 import { toSearch } from './params';
 import { card, layoutSketch, layoutSummary, screenSketch, screenSummary } from './setup-library';
 import { MAX_SCREENS, mountScreenEditor, SCENE_COPY, screensFrom, screenUrl, type ScreenEntry } from './setup-scenes';
@@ -85,7 +87,7 @@ function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, attrs:
   return node;
 }
 
-/** One row per widget in `kinds` (the host's group, data-ovs-widgets): on or off, where, how big. */
+/** One row per widget in `kinds` (the host's group, data-ovs-widgets): on or off, where, how it looks, how big. */
 export function buildWidgetRows(host: HTMLElement, kinds: readonly WidgetKind[] = WIDGET_GROUPS[host.dataset.ovsWidgets as keyof typeof WIDGET_GROUPS] ?? WIDGET_KINDS): void {
   const doc = host.ownerDocument;
   host.replaceChildren(
@@ -101,9 +103,16 @@ export function buildWidgetRows(host: HTMLElement, kinds: readonly WidgetKind[] 
       const slots = kind === 'strip' ? (['top-center', 'bottom-center'] as const) : SLOTS;
       for (const slot of slots) select.append(el(doc, 'option', { value: slot }, kind === 'strip' ? (slot === 'top-center' ? 'along the top' : 'along the bottom') : SLOT_NAMES[slot]));
       where.append(select);
+      const styles = WIDGET_STYLES[kind];
+      const look = styles ? el(doc, 'label', { class: 'ovs-field ovs-field--row ovs-widget__style' }, 'style') : null;
+      if (look && styles) {
+        const pick = el(doc, 'select', { name: `style-${kind}` });
+        for (const [id, name] of Object.entries(styles)) pick.append(el(doc, 'option', { value: id }, name));
+        look.append(pick);
+      }
       const size = el(doc, 'label', { class: 'ovs-field ovs-field--row ovs-widget__size' }, 'size');
       size.append(el(doc, 'input', { type: 'range', name: `scale-${kind}`, min: '50', max: '200', step: '10', value: '100' }), el(doc, 'output', { name: `scaleOut-${kind}` }, '100%'));
-      row.append(check, where, size);
+      row.append(check, where, ...(look ? [look] : []), size);
       return row;
     }),
   );
@@ -117,11 +126,10 @@ export function configFrom(form: HTMLFormElement): OverlayConfig {
     const n = Number(text(name));
     return text(name) !== '' && Number.isFinite(n) ? n : fallback;
   };
-  const widgets = WIDGET_KINDS.filter((kind) => data.has(`w-${kind}`)).map((kind) => ({
-    kind,
-    slot: (text(`slot-${kind}`) || WIDGET_HOME[kind]) as Slot,
-    scale: number(`scale-${kind}`, 100),
-  }));
+  const widgets = WIDGET_KINDS.filter((kind) => data.has(`w-${kind}`)).map((kind) => {
+    const style = styleFor(kind, text(`style-${kind}`));
+    return { kind, slot: (text(`slot-${kind}`) || WIDGET_HOME[kind]) as Slot, scale: number(`scale-${kind}`, 100), ...(style ? { style } : {}) };
+  });
   return {
     poe: { show: data.has('poe'), side: text('side') === 'left' ? 'left' : 'right', scale: number('poeScale', 100) },
     widgets,
@@ -153,6 +161,8 @@ export function fillForm(form: HTMLFormElement, c: OverlayConfig): void {
     input(`w-${kind}`)!.checked = Boolean(w);
     (form.elements.namedItem(`slot-${kind}`) as HTMLSelectElement).value = w?.slot ?? WIDGET_HOME[kind];
     input(`scale-${kind}`)!.value = String(w?.scale ?? 100);
+    const pick = form.elements.namedItem(`style-${kind}`) as HTMLSelectElement | null;
+    if (pick) pick.value = styleFor(kind, w?.style) ?? '';
   }
 }
 
@@ -399,7 +409,7 @@ export async function init(opts: SetupOptions = {}): Promise<void> {
   const showPreview = (c: OverlayConfig) => {
     win.clearTimeout(previewTimer);
     previewTimer = win.setTimeout(() => {
-      const src = `/overlay${toSearch({ ...c, volume: 0 }, { demo: true })}`;
+      const src = `/overlay${toSearch({ ...c, volume: 0 }, { demo: true, who: streamer || null })}`;
       if (src !== shown) frame.src = shown = src;
     }, PREVIEW_DELAY_MS);
   };

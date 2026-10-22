@@ -6,6 +6,8 @@
  *               slot on Poe's side sits above Poe. The strip runs along the top or the
  *               bottom edge, short of Poe when it's on the same edge.
  *   sizes       each widget's scale (CSS zoom, so a bigger one pushes the next one along)
+ *   styles      a widget's style as data-style (config.ts WIDGET_STYLES); the chat's side
+ *               strip takes its slot's whole edge, short of Poe on its side
  *   Poe         the bottom-left or bottom-right corner (body[data-side]), its size as
  *               --ov-poe-width
  *
@@ -47,6 +49,8 @@ export function createLayout(doc: Document = document): Layout {
         slot.append(el);
         el.hidden = false;
         el.style.setProperty('zoom', String(w.scale / 100));
+        if (w.style) el.dataset.style = w.style;
+        else delete el.dataset.style;
       }
       for (const [kind, el] of widgets) if (!shown.has(kind)) el.hidden = true;
       for (const slot of slots.values()) slot.hidden = ![...slot.children].some((c) => !(c as HTMLElement).hidden);

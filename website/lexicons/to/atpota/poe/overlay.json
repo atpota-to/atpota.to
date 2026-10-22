@@ -14,8 +14,8 @@
           "poe": { "type": "ref", "ref": "#poe" },
           "widgets": {
             "type": "array",
-            "maxLength": 12,
-            "description": "The weather widgets on screen, each kind at most once.",
+            "maxLength": 16,
+            "description": "The widgets on screen, each kind at most once.",
             "items": { "type": "ref", "ref": "#widget" }
           },
           "chat": { "type": "boolean", "description": "Poe says hello to chatters and answers chat commands." },
@@ -49,13 +49,23 @@
       "type": "object",
       "required": ["kind", "slot", "scale"],
       "properties": {
-        "kind": { "type": "string", "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse", "moon", "mark", "loader"] },
+        "kind": {
+          "type": "string",
+          "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse", "moon", "mark", "loader", "tid", "flushes", "status", "music", "chat"],
+          "description": "The atmosphere's weather (card to pulse), Anisota's moon, mark and loader, the time as a TID, the streamer's flushes (im.flushing.right.now), status and vitals (is.dame.now, is.dame.state) and teal.fm music, or their stream.place chat."
+        },
         "slot": {
           "type": "string",
           "knownValues": ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"],
           "description": "Where on screen. Widgets in the same slot stack."
         },
-        "scale": { "type": "integer", "minimum": 50, "maximum": 200, "description": "Percent of its usual size." }
+        "scale": { "type": "integer", "minimum": 50, "maximum": 200, "description": "Percent of its usual size." },
+        "style": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": ["ticking", "decoded", "mini", "count", "stats", "latest", "both", "status", "vitals", "now", "history", "corner", "side", "pop"],
+          "description": "How the widget looks, for the kinds with more than one way: tid (ticking, decoded, mini), flushes (count, stats, latest), status (both, status, vitals), music (now, history, stats, mini), chat (corner, side, pop). Absent or unknown is the kind's first."
+        }
       }
     }
   }

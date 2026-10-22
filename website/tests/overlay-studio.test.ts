@@ -123,7 +123,7 @@ describe('the studio', () => {
     expect(q('[data-ovs-library]').hidden).toBe(false);
     expect(q('[data-ovs-editor]').hidden).toBe(true);
     expect(names('[data-ovs-layout-list]')).toEqual(['main layout', 'gaming']);
-    expect(names('[data-ovs-screen-list]')).toEqual(['starting soon', 'be right back', 'the end', 'screen share', 'anisota loading', 'coding brb']);
+    expect(names('[data-ovs-screen-list]')).toEqual(['starting soon', 'be right back', 'the end', 'screen share', 'anisota loading', 'TID clock', 'coding brb']);
     expect(q('[data-ovs-layout-list] [data-id="self"] .ovs-card__badge').textContent).toBe('main');
     expect(q<HTMLAnchorElement>('[data-ovs-layout-list] [data-id="gaming"] a').href).toBe(`${location.origin}/overlay?streamer=dame.is&layout=gaming`);
 

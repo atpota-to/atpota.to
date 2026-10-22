@@ -97,7 +97,7 @@
                     <div class="ovs-shelf__head">
                         <div>
                             <h2 class="ovs-shelf__title" id="ovs-screens-title">screens</h2>
-                            <p class="ovs-shelf__lede">full screens for the moments in between: starting soon, be right back, the end, a screen share frame, anisota's loading screen. add each as a browser source in its own OBS scene. poe and its chat come along.</p>
+                            <p class="ovs-shelf__lede">full screens for the moments in between: starting soon, be right back, the end, a screen share frame, anisota's loading screen, a TID clock to wait with. add each as a browser source in its own OBS scene. poe and its chat come along.</p>
                         </div>
                         <details class="ovs-new" data-ovs-new>
                             <summary class="btn btn--primary btn--sm">+ new screen</summary>
@@ -112,6 +112,7 @@
                                         <option value="ending">end screen</option>
                                         <option value="screenshare">screen share frame</option>
                                         <option value="loading">anisota loading screen</option>
+                                        <option value="clock">TID clock waiting screen</option>
                                     </select>
                                 </label>
                                 <button type="submit" class="btn btn--primary btn--sm">add it</button>
@@ -199,6 +200,30 @@
                         </details>
 
                         <details class="ovs-group">
+                            <summary>the TID clock <span class="ovs-group__count" data-ovs-count="clock"></span></summary>
+                            <div class="ovs-group__body">
+                                <p class="ovs-hint">the time right now as an atproto record key, ticking. there's a waiting screen with it too: add a TID clock screen.</p>
+                                <div class="ovs-widgets" data-ovs-widgets="clock"></div>
+                            </div>
+                        </details>
+
+                        <details class="ovs-group">
+                            <summary>your records <span class="ovs-group__count" data-ovs-count="records"></span></summary>
+                            <div class="ovs-group__body">
+                                <p class="ovs-hint">read from your repo and kept up to date: your flushes on flushes.app, your is.dame.now status and is.dame.state vitals, and what you scrobble to teal.fm.</p>
+                                <div class="ovs-widgets" data-ovs-widgets="records"></div>
+                            </div>
+                        </details>
+
+                        <details class="ovs-group">
+                            <summary>chat on screen <span class="ovs-group__count" data-ovs-count="chat"></span></summary>
+                            <div class="ovs-group__body">
+                                <p class="ovs-hint">your stream.place chat, as it comes in. what stream.place hides stays hidden: deleted and hidden messages, people you block, and anyone poe ignores. the preview shows examples.</p>
+                                <div class="ovs-widgets" data-ovs-widgets="chat"></div>
+                            </div>
+                        </details>
+
+                        <details class="ovs-group">
                             <summary>look and sound</summary>
                             <div class="ovs-group__body">
                                 <div class="ovs-set--row">
@@ -255,6 +280,7 @@
                                 <label class="ovs-field">a line under it <em>what the stream is about</em>
                                     <input type="text" name="subtitle" maxlength="200" autocomplete="off">
                                 </label>
+                                <p class="ovs-hint" data-ovs-for="clock">the time ticking as an atproto TID, what it means to the microsecond, and your title and line over it.</p>
                                 <p class="ovs-hint" data-ovs-for="loading">anisota's mark on black, its moon running through its phases. leave the title empty and it says anisota's own loading lines in turn.</p>
                                 <label class="ovs-field" data-ovs-for="ending">where to find you <em>up to four, one per line</em>
                                     <textarea name="links" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>

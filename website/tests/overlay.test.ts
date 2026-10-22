@@ -2,11 +2,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHAT, FOLLOW, HANDLE_MAX, LIVESTREAM, OVERLAY, SCENE, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
+import { CHAT, FOLLOW, GATE, HANDLE_MAX, LIVESTREAM, OVERLAY, SCENE, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
 import { appsLine, createGate, endedLine, followLine, forecastLine, helloLine, liveLine, petLine, weatherLine } from '../src/overlay/lines.js';
 import { readParams, readWidgets, toSearch, writeWidgets } from '../src/overlay/params.js';
 import { DEFAULT_CONFIG, fromRecord, OVERLAY_NSID, SLOTS, toRecord, WIDGET_HOME, WIDGET_KINDS, withOverrides, type OverlayConfig } from '../src/overlay/config.js';
 import { createLayout } from '../src/overlay/layout.js';
+import { RECORD_COLLECTIONS } from '../src/overlay/records.js';
 import { AT_CENTER_X, mirrorSvg, VIEW_WIDTH } from '../src/overlay/mirror.js';
 import { didDocumentUrl, pdsOf, readPublicConfig } from '../src/overlay/store.js';
 import { createVisitors, pathFor, place, VISITOR_KINDS, visitorsFor } from '../src/overlay/visitors.js';
@@ -27,7 +28,7 @@ const who = (handle: string | null, avatar: string | null = null) => ({ handle, 
 describe('overlay config and its address', () => {
   it('has no overrides without settings, so the record or the defaults rule', () => {
     const p = readParams('');
-    expect(p).toEqual({ streamer: null, layout: 'self', demo: false, overrides: {} });
+    expect(p).toEqual({ streamer: null, layout: 'self', demo: false, who: null, overrides: {} });
     expect(withOverrides(DEFAULT_CONFIG, p.overrides)).toEqual(DEFAULT_CONFIG);
   });
 
@@ -207,8 +208,8 @@ describe('the stream', () => {
   });
 
   it("keeps chat in the streamer's chat and follows of the streamer", () => {
-    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', command: null });
-    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: '!pet' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', command: 'pet' });
+    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', rkey: '3m4abc', text: 'hi', command: null });
+    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: '!pet' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', rkey: '3m4abc', text: '!pet', command: 'pet' });
     expect(eventFor(commit('did:plc:a', FOLLOW, { subject: STREAMER }), STREAMER)).toEqual({ kind: 'follow', did: 'did:plc:a' });
   });
 
@@ -216,10 +217,21 @@ describe('the stream', () => {
     expect(eventFor(commit('did:plc:a', CHAT, { streamer: 'did:plc:other', text: 'hi' }), STREAMER)).toBeNull();
     expect(eventFor(commit('did:plc:a', FOLLOW, { subject: 'did:plc:other' }), STREAMER)).toBeNull();
     expect(eventFor(commit(STREAMER, FOLLOW, { subject: STREAMER }), STREAMER)).toBeNull();
-    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }, 'delete'), STREAMER)).toBeNull();
+    expect(eventFor(commit('did:plc:a', FOLLOW, { subject: STREAMER }, 'delete'), STREAMER)).toBeNull();
     expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER }), STREAMER)).toBeNull();
     expect(eventFor({ kind: 'identity', did: 'did:plc:a' }, STREAMER)).toBeNull();
     expect(eventFor('nope', STREAMER)).toBeNull();
+  });
+
+  it('hears chat taken back, messages the streamer hides, and changes to their own records', () => {
+    expect(eventFor({ kind: 'commit', did: 'did:plc:a', commit: { operation: 'delete', collection: CHAT, rkey: 'm1' } }, STREAMER)).toEqual({ kind: 'unchat', did: 'did:plc:a', rkey: 'm1' });
+    expect(eventFor(commit(STREAMER, GATE, { hiddenMessage: 'at://did:plc:a/place.stream.chat.message/m1' }), STREAMER)).toEqual({ kind: 'hide', did: 'did:plc:a', rkey: 'm1' });
+    // only the streamer hides messages in their chat
+    expect(eventFor(commit('did:plc:other', GATE, { hiddenMessage: 'at://did:plc:a/place.stream.chat.message/m1' }), STREAMER)).toBeNull();
+    expect(eventFor(commit(STREAMER, GATE, { hiddenMessage: 'at://did:plc:a/app.bsky.feed.post/m1' }), STREAMER)).toBeNull();
+    expect(eventFor(commit(STREAMER, 'im.flushing.right.now', { text: 'x', emoji: 'y' }), STREAMER)).toEqual({ kind: 'record', collection: 'im.flushing.right.now' });
+    expect(eventFor({ kind: 'commit', did: STREAMER, commit: { operation: 'delete', collection: 'fm.teal.feed.play', rkey: 'p' } }, STREAMER)).toEqual({ kind: 'record', collection: 'fm.teal.feed.play' });
+    expect(eventFor(commit('did:plc:other', 'im.flushing.right.now', { text: 'x', emoji: 'y' }), STREAMER)).toBeNull();
   });
 
   it("hears the streamer's stream start and end, and nobody else's", () => {
@@ -232,9 +244,9 @@ describe('the stream', () => {
 
   it('asks Jetstream for chat, streams and overlay settings, and follows only when wanted', () => {
     const both = new URL(jetstreamUrl('wss://j.example/subscribe', true, 42));
-    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, FOLLOW]);
+    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, GATE, ...RECORD_COLLECTIONS, FOLLOW]);
     expect(both.searchParams.get('cursor')).toBe('42');
-    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE]);
+    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, GATE, ...RECORD_COLLECTIONS]);
   });
 
   it("hears the streamer's own saved settings, and nobody else's", () => {
@@ -267,7 +279,7 @@ describe('the stream', () => {
     const l = listen(STREAMER, true, (e) => events.push(e), FakeSocket as unknown as new (url: string) => WebSocket);
     sockets[0]!.onmessage?.({ data: JSON.stringify({ ...commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }), time_us: 99 }) });
     sockets[0]!.onmessage?.({ data: 'not json' });
-    expect(events).toEqual([{ kind: 'chat', did: 'did:plc:a', command: null }]);
+    expect(events).toEqual([{ kind: 'chat', did: 'did:plc:a', rkey: '3m4abc', text: 'hi', command: null }]);
     sockets[0]!.close();
     vi.advanceTimersByTime(2000);
     expect(sockets).toHaveLength(2);

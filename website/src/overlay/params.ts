@@ -8,20 +8,25 @@
  * main layout; &layout=<id> picks another they saved). Each of these
  * overrides one setting, for this browser source only:
  *
- *   w=card:tl:100,apps:tr:80   the weather widgets: kind, slot (tl tc tr bl bc br) and size
- *                              in percent; w=none for none. Kinds: card, strip, badge,
- *                              apps, forecast, pulse, and Anisota's moon, mark
- *                              and loader (anisota.ts)
+ *   w=card:tl:100,apps:tr:80   the widgets: kind, slot (tl tc tr bl bc br), size in
+ *                              percent, and for some a style (chat:tr:100:side); w=none
+ *                              for none. Kinds: card, strip, badge, apps, forecast, pulse,
+ *                              Anisota's moon, mark and loader (anisota.ts), tid
+ *                              (tid.ts), flushes, status and music (records.ts), and
+ *                              chat (onscreen.ts); config.ts WIDGET_STYLES has the styles
  *   poe=left:120               Poe's bottom corner and size; poe=off hides it
  *   chat=off follows=off alerts=off visitors=off
  *   ignore=a.bsky.social,did:plc:...
  *   sound=off   volume=0-100   nap=10 | nap=off   theme=dark
- *   demo                       Poe runs through example lines, for placing things
+ *   demo                       Poe runs through example lines, and the chat and record
+ *                              widgets show examples, for placing things
+ *   who=dame.is                whose records the flushes, status and music widgets show
+ *                              when there's no streamer (the setup page's preview)
  *
  * Older addresses still work: show=poe,weather,strip and side=left.
  */
 
-import { actorOf, clampScale, cleanWidgets, DEFAULT_CONFIG, isLayoutId, MAX_IGNORED, OVERLAY_RKEY, SLOTS, WIDGET_HOME, type ConfigOverrides, type OverlayConfig, type Slot, type Widget } from './config';
+import { actorOf, clampScale, cleanWidgets, DEFAULT_CONFIG, styleFor, isLayoutId, MAX_IGNORED, OVERLAY_RKEY, SLOTS, WIDGET_HOME, type ConfigOverrides, type OverlayConfig, type Slot, type Widget } from './config';
 
 export { actorOf } from './config';
 
@@ -31,6 +36,8 @@ export interface OverlayParams {
   /** Which of the streamer's layouts (config.ts): "self" unless &layout= names another. */
   layout: string;
   demo: boolean;
+  /** Whose records the record widgets read without a streamer (a handle or DID, unchecked beyond its shape). */
+  who: string | null;
   overrides: ConfigOverrides;
 }
 
@@ -53,12 +60,12 @@ export function readWidgets(raw: string): Widget[] {
     raw
       .split(',')
       .map((part) => part.trim().toLowerCase().split(':'))
-      .map(([kind, slot, scale]) => ({ kind, slot: SLOT_CODES[slot ?? ''] ?? (SLOTS as readonly string[]).find((s) => s === slot), scale: scale ? Number(scale) : 100 })),
+      .map(([kind, slot, scale, style]) => ({ kind, slot: SLOT_CODES[slot ?? ''] ?? (SLOTS as readonly string[]).find((s) => s === slot), scale: scale ? Number(scale) : 100, style })),
   );
 }
 
 export function writeWidgets(widgets: Widget[]): string {
-  return widgets.length ? widgets.map((w) => `${w.kind}:${CODE_OF[w.slot]}:${w.scale}`).join(',') : 'none';
+  return widgets.length ? widgets.map((w) => `${w.kind}:${CODE_OF[w.slot]}:${w.scale}${w.style && w.style !== styleFor(w.kind, null) ? `:${w.style}` : ''}`).join(',') : 'none';
 }
 
 export function readParams(search: string): OverlayParams {
@@ -115,11 +122,17 @@ export function readParams(search: string): OverlayParams {
   if (theme === 'dark' || theme === 'light') o.theme = theme;
 
   const layout = q.get('layout')?.toLowerCase();
-  return { streamer: actorOf(q.get('streamer') ?? ''), layout: isLayoutId(layout) ? layout : OVERLAY_RKEY, demo: q.has('demo') && !off(q.get('demo')), overrides: o };
+  return {
+    streamer: actorOf(q.get('streamer') ?? ''),
+    layout: isLayoutId(layout) ? layout : OVERLAY_RKEY,
+    demo: q.has('demo') && !off(q.get('demo')),
+    who: actorOf(q.get('who') ?? ''),
+    overrides: o,
+  };
 }
 
 /** A whole config as an address, leaving out what's at its default (the setup page's preview). */
-export function toSearch(c: OverlayConfig, extra: { streamer?: string | null; demo?: boolean } = {}): string {
+export function toSearch(c: OverlayConfig, extra: { streamer?: string | null; demo?: boolean; who?: string | null } = {}): string {
   const d = DEFAULT_CONFIG;
   const q = new URLSearchParams();
   if (extra.streamer) q.set('streamer', extra.streamer);
@@ -134,6 +147,7 @@ export function toSearch(c: OverlayConfig, extra: { streamer?: string | null; de
   if (c.nap <= 0) q.set('nap', 'off');
   else if (c.nap !== d.nap) q.set('nap', String(c.nap));
   if (c.theme !== d.theme) q.set('theme', c.theme);
+  if (extra.who) q.set('who', extra.who);
   if (extra.demo) q.set('demo', '');
   const s = q.toString().replace(/demo=(&|$)/, 'demo$1').replace(/%2C/g, ',').replace(/%3A/g, ':');
   return s ? `?${s}` : '';

@@ -1566,3 +1566,599 @@ html[data-theme="dark"] .ov-anisota {
     animation: none;
   }
 }
+
+/* ---------- the TID clock (src/overlay/tid.ts) ---------- */
+
+.ov-tid {
+  width: auto;
+  min-width: 380px;
+}
+
+.ov-tid__tid {
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.ov-tid__c {
+  display: inline-block;
+  width: 1ch;
+  text-align: center;
+  transition: color 0.6s var(--ease-out), text-shadow 0.6s var(--ease-out);
+}
+
+/* the clock id: the same all along, so it sits back */
+.ov-tid__c--clock {
+  color: var(--muted);
+}
+
+/* a character that just changed glows the sun's colour, then cools */
+.ov-tid__c.is-new {
+  color: var(--leaf);
+  text-shadow: 0 0 14px var(--sun);
+  transition: none;
+}
+
+html[data-theme="dark"] .ov-tid__c.is-new {
+  color: var(--sun);
+}
+
+.ov-tid__parts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin: 0;
+}
+
+.ov-tid__parts div {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--inset);
+}
+
+.ov-tid__parts dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ov-tid__parts dd {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 19px;
+}
+
+.ov-tid__time {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ticking: the TID and the day it is */
+.ov-tid:not([data-style="decoded"]) .ov-tid__parts,
+.ov-tid:not([data-style="decoded"]) .ov-tid__time {
+  display: none;
+}
+
+/* a little pill: just the TID */
+.ov-tid[data-style="mini"] {
+  min-width: 0;
+  padding: 10px 24px;
+  border-radius: var(--radius-pill);
+}
+
+.ov-tid[data-style="mini"] .ov-panel__title,
+.ov-tid[data-style="mini"] .ov-tid__date {
+  display: none;
+}
+
+.ov-tid[data-style="mini"] .ov-tid__tid {
+  font-size: 30px;
+}
+
+/* ---------- the streamer's records (src/overlay/records.ts) ---------- */
+
+.ov-rec__big {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-rec__unit {
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
+.ov-rec__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ov-rec__stats div {
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--inset);
+}
+
+.ov-rec__stats div.is-wide {
+  grid-column: 1 / -1;
+}
+
+.ov-rec__stats dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ov-rec__stats dd {
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the empty and error lines only show in their state; the rest sits quiet while loading */
+.ov-rec__empty,
+.ov-rec__error {
+  display: none;
+}
+
+.ov-rec[data-state="empty"] .ov-rec__empty,
+.ov-rec[data-state="error"] .ov-rec__error {
+  display: block;
+}
+
+.ov-rec[data-state="loading"] [data-ov-fl-total],
+.ov-rec[data-state="loading"] dd {
+  opacity: 0.5;
+}
+
+/* flushes: the count, the stats, or the latest flush */
+.ov-flushes:not([data-style="count"]) .ov-flushes__count,
+.ov-flushes:not([data-style="count"]) .ov-flushes__line,
+.ov-flushes:not([data-style="stats"]) .ov-flushes__stats,
+.ov-flushes:not([data-style="latest"]) .ov-flushes__latest {
+  display: none;
+}
+
+.ov-flushes__latest {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ov-flushes__emoji {
+  flex: none;
+  font-size: 54px;
+  line-height: 1;
+}
+
+.ov-flushes__text {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* status and vitals */
+.ov-status__line {
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.ov-status__who {
+  color: var(--leaf);
+}
+
+html[data-theme="dark"] .ov-status__who {
+  color: var(--sun);
+}
+
+.ov-status__vitals {
+  display: grid;
+  gap: 8px;
+}
+
+.ov-status[data-style="status"] .ov-status__vitals,
+.ov-status[data-style="vitals"] .ov-status__now {
+  display: none;
+}
+
+/* music: now playing, the last few, the stats, or one line */
+.ov-music__now {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.ov-music__cover {
+  width: 96px;
+  height: 96px;
+  border-radius: 16px;
+  background: var(--inset);
+  overflow: hidden;
+}
+
+.ov-music__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ov-music__words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ov-music__track,
+.ov-music__artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-music__track {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ov-music__artist {
+  font-size: 17px;
+  color: var(--text-soft);
+}
+
+.ov-music__bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.ov-music__bar span {
+  display: block;
+  height: 100%;
+  width: calc(var(--share, 0) * 100%);
+  background: var(--leaf);
+  transition: width 1s linear;
+}
+
+.ov-music[data-live="yes"]:not([data-style="history"], [data-style="stats"]) .ov-panel__title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--blush);
+  vertical-align: 1px;
+  animation: ov-live 1.6s ease-in-out infinite;
+}
+
+@keyframes ov-live {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.ov-music__history {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ov-music__history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 10px;
+}
+
+.ov-music__h-track,
+.ov-music__h-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-music__h-track {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.ov-music__h-artist {
+  grid-row: 2;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.ov-music__h-ago {
+  grid-row: 1 / 3;
+  align-self: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ov-music__mini {
+  display: none;
+  max-width: 640px;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-music__note {
+  color: var(--leaf);
+}
+
+.ov-music:not([data-style="history"]) .ov-music__history,
+.ov-music:not([data-style="stats"]) .ov-music__stats,
+.ov-music[data-style="history"] .ov-music__now,
+.ov-music[data-style="stats"] .ov-music__now {
+  display: none;
+}
+
+.ov-music[data-style="mini"] {
+  width: auto;
+  padding: 10px 24px;
+  border-radius: var(--radius-pill);
+}
+
+.ov-music[data-style="mini"] > :not(.ov-music__mini, .ov-rec__empty, .ov-rec__error) {
+  display: none;
+}
+
+.ov-music[data-style="mini"][data-state="ready"] .ov-music__mini {
+  display: block;
+}
+
+/* ---------- the chat on screen (src/overlay/onscreen.ts) ---------- */
+
+.ov-chat {
+  display: grid;
+  gap: 10px;
+  width: 400px;
+  padding: 16px 18px;
+  border-radius: var(--radius-tile);
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.ov-chat__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ov-chat__list {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.ov-chat__msg {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  animation: ov-turn 0.5s var(--ease-out);
+}
+
+.ov-chat__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--flesh-tint);
+}
+
+.ov-chat__words {
+  font-size: 17px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.ov-chat__who {
+  color: var(--leaf);
+}
+
+.ov-chat__msg[data-hue="1"] .ov-chat__who { color: var(--weather-bsky); }
+.ov-chat__msg[data-hue="2"] .ov-chat__who { color: var(--brown); }
+.ov-chat__msg[data-hue="3"] .ov-chat__who { color: var(--blush); }
+.ov-chat__msg[data-hue="4"] .ov-chat__who { color: var(--drop-deep); }
+.ov-chat__msg[data-hue="5"] .ov-chat__who { color: var(--skin); }
+
+/* the dark theme's leaf is light already; the rest swap to colours that read on brown */
+html[data-theme="dark"] .ov-chat__msg[data-hue="1"] .ov-chat__who { color: var(--drop); }
+html[data-theme="dark"] .ov-chat__msg[data-hue="2"] .ov-chat__who { color: var(--sun); }
+html[data-theme="dark"] .ov-chat__msg[data-hue="4"] .ov-chat__who { color: var(--text-soft); }
+html[data-theme="dark"] .ov-chat__msg[data-hue="5"] .ov-chat__who { color: var(--flesh); }
+
+.ov-chat__empty {
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+/* corner: the last few */
+.ov-chat[data-style="corner"] .ov-chat__msg:nth-last-child(n + 7) {
+  display: none;
+}
+
+/* side: the whole edge, the newest at the bottom, the oldest scrolled off the top */
+.ov-slot:has(> .ov-chat[data-style="side"]:not([hidden])) {
+  bottom: 32px;
+  align-items: stretch;
+}
+
+body[data-poe="on"][data-side="right"] .ov-slot--top-right:has(> .ov-chat[data-style="side"]:not([hidden])),
+body[data-poe="on"][data-side="left"] .ov-slot--top-left:has(> .ov-chat[data-style="side"]:not([hidden])) {
+  bottom: calc(var(--ov-poe-width) * 0.68 + 170px);
+}
+
+.ov-chat[data-style="side"] {
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  width: 380px;
+}
+
+/* pop: no box, each message a bubble of its own that fades away */
+.ov-chat[data-style="pop"] {
+  width: 420px;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.ov-chat[data-style="pop"] .ov-chat__title,
+.ov-chat[data-style="pop"] .ov-chat__empty {
+  display: none;
+}
+
+.ov-chat[data-style="pop"] .ov-chat__msg {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  box-shadow: var(--ov-bubble-shadow);
+  animation: ov-pop 0.5s var(--ease-spring);
+}
+
+.ov-chat[data-style="pop"] .ov-chat__msg.is-old {
+  animation: ov-pop-out 0.8s var(--ease-out) forwards;
+}
+
+.ov-chat[data-style="pop"] .ov-chat__msg.is-gone,
+.ov-chat[data-style="pop"] .ov-chat__msg:nth-last-child(n + 5) {
+  display: none;
+}
+
+@keyframes ov-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+}
+
+@keyframes ov-pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* ---------- the TID clock's waiting screen ---------- */
+
+.ovsc__tid {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ovsc__tid-big {
+  display: flex;
+  padding: 12px 44px;
+  border-radius: var(--radius-pill);
+  background: var(--soil);
+  color: var(--on-soil);
+  font-family: var(--font-mono);
+  font-size: 92px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+}
+
+.ovsc__tid-big .ov-tid__c--clock {
+  color: var(--on-soil-soft);
+}
+
+.ovsc__tid-big .ov-tid__c.is-new {
+  color: var(--sun);
+}
+
+.ovsc__tid-parts {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.ovsc__tid-clock {
+  margin-left: 0.6ch;
+  padding-left: 0.6ch;
+  border-left: 2px solid var(--line-strong);
+}
+
+.ovsc__tid-time {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ovsc__tid-wait {
+  font-size: 22px;
+  color: var(--text-soft);
+}
+
+.ovsc__tid-wait span {
+  animation: ov-wait 1.4s infinite;
+}
+
+.ovsc__tid-wait span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ovsc__tid-wait span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ov-wait {
+  0%,
+  60%,
+  100% {
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-chat__msg,
+  .ov-chat[data-style="pop"] .ov-chat__msg,
+  .ovsc__tid-wait span,
+  .ov-music[data-live="yes"]:not([data-style="history"], [data-style="stats"]) .ov-panel__title::before {
+    animation: none;
+  }
+
+  .ov-chat[data-style="pop"] .ov-chat__msg.is-old {
+    display: none;
+  }
+}

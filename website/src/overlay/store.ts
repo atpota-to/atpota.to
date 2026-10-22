@@ -59,7 +59,7 @@ const recordQuery = (did: string, collection: string, rkey: string) => new URLSe
 
 /** The PDS a DID's document names, or null. */
 const pdsCache = new Map<string, Promise<string | null>>();
-function pdsFor(did: string, fetchImpl: typeof fetch): Promise<string | null> {
+export function pdsFor(did: string, fetchImpl: typeof fetch): Promise<string | null> {
   let pds = pdsCache.get(did);
   if (!pds) {
     const docUrl = didDocumentUrl(did);
@@ -81,6 +81,49 @@ async function readPublic(did: string, collection: string, rkey: string, fetchIm
     pdsCache.delete(did);
     return undefined;
   }
+}
+
+export interface PublicRecord {
+  uri: string;
+  rkey: string;
+  value: Record<string, unknown>;
+}
+
+/**
+ * Anyone's records in a collection, newest first, read publicly from their PDS: up to
+ * `max`, a page of at most 100 at a time, stopping early when `enough` says so. Undefined
+ * when they couldn't be read (a collection nobody has written is an empty list).
+ */
+export async function listPublic(did: string, collection: string, max: number, fetchImpl: typeof fetch = fetch, enough?: (got: PublicRecord[]) => boolean): Promise<PublicRecord[] | undefined> {
+  try {
+    const pds = await pdsFor(did, fetchImpl);
+    if (!pds) return undefined;
+    const out: PublicRecord[] = [];
+    let cursor: string | undefined;
+    while (out.length < max) {
+      const q = new URLSearchParams({ repo: did, collection, limit: String(Math.min(100, max - out.length)) });
+      if (cursor) q.set('cursor', cursor);
+      const res = await json(fetchImpl, `${pds}/xrpc/com.atproto.repo.listRecords?${q}`);
+      if (res.status !== 200 || !obj(res.body) || !Array.isArray(res.body.records)) return out.length ? out : undefined;
+      for (const r of res.body.records) {
+        if (!obj(r) || typeof r.uri !== 'string' || !obj(r.value)) continue;
+        out.push({ uri: r.uri, rkey: r.uri.slice(r.uri.lastIndexOf('/') + 1), value: r.value });
+      }
+      const nextCursor = typeof res.body.cursor === 'string' ? res.body.cursor : undefined;
+      // a PDS that hands back the same cursor would go round forever
+      if (!nextCursor || nextCursor === cursor || res.body.records.length === 0 || enough?.(out)) break;
+      cursor = nextCursor;
+    }
+    return out.slice(0, max);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Anyone's record at a key, read publicly: its value, null for none, undefined when it couldn't be read. */
+export async function getPublic(did: string, collection: string, rkey: string, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown> | null | undefined> {
+  const r = await readPublic(did, collection, rkey, fetchImpl);
+  return r ? (r.value as Record<string, unknown>) : r;
 }
 
 /** The signed-in streamer's own record, from their PDS. */

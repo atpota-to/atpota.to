@@ -14,9 +14,11 @@
  *   loading      Anisota's loading screen: its brand mark on black, the moon running
  *                through its phases (anisota.ts), and the title under it, or Anisota's
  *                own loading lines in turn when there's no title. No backdrop or ground
+ *   clock        a waiting screen: the time ticking as an atproto TID (tid.ts), what it
+ *                means to the microsecond, and the title and subtitle over it
  *
  * The screens a streamer starts with have their kind as their id ("starting", "brb",
- * "ending", "screenshare", "loading"), so ?scene=brb works before anything is saved. Every screen has
+ * "ending", "screenshare", "loading", "clock"), so ?scene=brb works before anything is saved. Every screen has
  * a backdrop (the sky) and a ground under it: the home page's meadow, the about page's
  * grass, soil with sprouts, or none.
  *
@@ -27,7 +29,7 @@
  */
 
 export const SCENE_NSID = 'to.atpota.poe.scene';
-export const SCENE_KINDS = ['starting', 'brb', 'ending', 'screenshare', 'loading'] as const;
+export const SCENE_KINDS = ['starting', 'brb', 'ending', 'screenshare', 'loading', 'clock'] as const;
 export type SceneKind = (typeof SCENE_KINDS)[number];
 export const BACKGROUNDS = ['day', 'night', 'garden', 'butter'] as const;
 export type Background = (typeof BACKGROUNDS)[number];
@@ -61,6 +63,7 @@ export const SCENE_NAMES: Record<SceneKind, string> = {
   ending: 'the end',
   screenshare: 'screen share',
   loading: 'anisota loading',
+  clock: 'TID clock',
 };
 
 export const NAME_MAX = 40;
@@ -77,6 +80,7 @@ export const SCENE_DEFAULTS: Record<SceneKind, Scene> = {
   ending: { ...base, kind: 'ending', name: SCENE_NAMES.ending, title: 'thanks for watching', subtitle: 'see you next time (◕‿◕)', background: 'night' },
   screenshare: { ...base, kind: 'screenshare', name: SCENE_NAMES.screenshare, title: '', subtitle: '', background: 'day' },
   loading: { ...base, kind: 'loading', name: SCENE_NAMES.loading, title: '', subtitle: '', background: 'night', ground: 'none', showPoe: false },
+  clock: { ...base, kind: 'clock', name: SCENE_NAMES.clock, title: 'starting soon', subtitle: 'counting the microseconds, one record key at a time', background: 'night', ground: 'soil' },
 };
 
 export function isSceneKind(v: unknown): v is SceneKind {

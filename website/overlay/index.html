@@ -59,6 +59,13 @@
             <h1 class="ovsc__title" id="ovsc-title" data-ovsc-title></h1>
             <p class="ovsc__sub" data-ovsc-sub></p>
             <p class="ovsc__count" data-ovsc-count hidden></p>
+            <!-- the TID clock's waiting screen (src/overlay/tid.ts ticks it) -->
+            <div class="ovsc__tid" data-ovsc-tid hidden>
+                <p class="ovsc__tid-big" data-ov-tid></p>
+                <p class="ovsc__tid-parts"><span class="ovsc__tid-stamp" data-ov-tid-stamp></span><span class="ovsc__tid-clock" data-ov-tid-clock></span></p>
+                <p class="ovsc__tid-time"><span data-ov-tid-time></span> · <span data-ov-tid-date></span></p>
+                <p class="ovsc__tid-wait" aria-hidden="true">waiting<span>.</span><span>.</span><span>.</span></p>
+            </div>
             <ul class="ovsc__links" data-ovsc-links hidden></ul>
         </section>
 
@@ -176,6 +183,91 @@
     </section>
     <section class="ov-anisota ov-anisota--mark" data-ov-widget="loader" aria-label="anisota" hidden>
         <div class="ov-anisota__mark-box" data-ov-anisota="loader"></div>
+    </section>
+
+    <!-- the TID clock (src/overlay/tid.ts); its styles (data-style) show the parts they want -->
+    <section class="ov-panel ov-tid" data-ov-widget="tid" aria-label="the time as an atproto TID" hidden>
+        <h2 class="ov-panel__title">the time, as a TID</h2>
+        <p class="ov-tid__tid" data-ov-tid></p>
+        <dl class="ov-tid__parts">
+            <div><dt>the time, in microseconds</dt><dd data-ov-tid-stamp></dd></div>
+            <div><dt>clock</dt><dd data-ov-tid-clock></dd></div>
+        </dl>
+        <p class="ov-tid__time"><span data-ov-tid-time></span></p>
+        <p class="ov-panel__note ov-tid__date" data-ov-tid-date></p>
+    </section>
+
+    <!-- the streamer's records (src/overlay/records.ts): each holds every part its styles need -->
+    <section class="ov-panel ov-rec ov-flushes" data-ov-widget="flushes" data-state="loading" aria-labelledby="ov-fl-title" hidden>
+        <h2 class="ov-panel__title" id="ov-fl-title">flushes</h2>
+        <p class="ov-rec__big ov-flushes__count"><span data-ov-fl-total>&ndash;</span> <span class="ov-rec__unit" data-ov-fl-unit>flushes</span></p>
+        <p class="ov-panel__note ov-flushes__line" data-ov-fl-line></p>
+        <dl class="ov-rec__stats ov-flushes__stats">
+            <div><dt>all time</dt><dd data-ov-fl-total>&ndash;</dd></div>
+            <div><dt>today</dt><dd data-ov-fl-today>&ndash;</dd></div>
+            <div><dt>this week</dt><dd data-ov-fl-week>&ndash;</dd></div>
+            <div><dt>streak</dt><dd data-ov-fl-streak>&ndash;</dd></div>
+            <div><dt>favourite</dt><dd data-ov-fl-top>&ndash;</dd></div>
+        </dl>
+        <div class="ov-flushes__latest" data-ov-fl-latest hidden>
+            <span class="ov-flushes__emoji" data-ov-fl-emoji></span>
+            <div>
+                <p class="ov-flushes__text" data-ov-fl-text></p>
+                <p class="ov-panel__note" data-ov-fl-ago></p>
+            </div>
+        </div>
+        <p class="ov-panel__note ov-rec__empty">no flushes yet. flushes.app</p>
+        <p class="ov-panel__note ov-rec__error">couldn't reach the flushes just now</p>
+    </section>
+
+    <section class="ov-panel ov-rec ov-status" data-ov-widget="status" data-state="loading" aria-labelledby="ov-st-title" hidden>
+        <h2 class="ov-panel__title" id="ov-st-title">right now</h2>
+        <div class="ov-status__now" data-ov-st-now hidden>
+            <p class="ov-status__line"><strong class="ov-status__who" data-ov-st-who></strong> <span data-ov-st-text></span></p>
+            <p class="ov-panel__note" data-ov-st-ago></p>
+        </div>
+        <div class="ov-status__vitals" data-ov-st-vitals hidden>
+            <dl class="ov-rec__stats">
+                <div data-ov-vital="heart"><dt>heart</dt><dd></dd></div>
+                <div data-ov-vital="doing"><dt>doing</dt><dd></dd></div>
+                <div data-ov-vital="battery"><dt>battery</dt><dd></dd></div>
+                <div data-ov-vital="sound"><dt>noise</dt><dd></dd></div>
+                <div data-ov-vital="calories"><dt>burned</dt><dd></dd></div>
+            </dl>
+            <p class="ov-panel__note" data-ov-st-vitals-ago></p>
+        </div>
+        <p class="ov-panel__note ov-rec__empty">no status yet</p>
+        <p class="ov-panel__note ov-rec__error">couldn't reach the status just now</p>
+    </section>
+
+    <section class="ov-panel ov-rec ov-music" data-ov-widget="music" data-state="loading" data-live="no" aria-labelledby="ov-mu-title" hidden>
+        <h2 class="ov-panel__title" id="ov-mu-title" data-ov-mu-title>now playing</h2>
+        <div class="ov-music__now" data-ov-mu-now hidden>
+            <div class="ov-music__cover"><img class="ov-music__art" data-ov-mu-art alt="" referrerpolicy="no-referrer" hidden></div>
+            <div class="ov-music__words">
+                <p class="ov-music__track" data-ov-mu-track></p>
+                <p class="ov-music__artist" data-ov-mu-artist></p>
+                <p class="ov-panel__note" data-ov-mu-when></p>
+            </div>
+            <div class="ov-music__bar" hidden><span data-ov-mu-progress></span></div>
+        </div>
+        <p class="ov-music__mini"><span class="ov-music__note" aria-hidden="true">&#9834;</span> <span data-ov-mu-mini></span></p>
+        <ol class="ov-music__history" data-ov-mu-history></ol>
+        <dl class="ov-rec__stats ov-music__stats">
+            <div><dt>plays today</dt><dd data-ov-mu-today>&ndash;</dd></div>
+            <div><dt>this week</dt><dd data-ov-mu-week>&ndash;</dd></div>
+            <div class="is-wide"><dt>top artist this week</dt><dd data-ov-mu-artist-top>&ndash;</dd></div>
+            <div class="is-wide"><dt>on repeat</dt><dd data-ov-mu-track-top>&ndash;</dd></div>
+        </dl>
+        <p class="ov-panel__note ov-rec__empty">nothing scrobbled to teal.fm yet</p>
+        <p class="ov-panel__note ov-rec__error">couldn't reach teal.fm just now</p>
+    </section>
+
+    <!-- the stream chat on screen (src/overlay/onscreen.ts): someone else's words, through textContent only -->
+    <section class="ov-chat" data-ov-widget="chat" data-state="empty" aria-label="stream chat" hidden>
+        <h2 class="ov-chat__title">chat</h2>
+        <ol class="ov-chat__list" data-ov-chat-list aria-live="polite"></ol>
+        <p class="ov-chat__empty" data-ov-chat-empty>chat's quiet. say hi (◕‿◕)</p>
     </section>
 
     <!-- Poe (src/overlay/poe.ts fills it in; visitors.ts adds its visitors) -->
