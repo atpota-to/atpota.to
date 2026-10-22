@@ -70,7 +70,7 @@ import {
   type Window,
 } from './weather-lens';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
-import { renderChart, type ChartPoint } from './weather-chart';
+import { projectLast, renderChart, type ChartPoint } from './weather-chart';
 import { explain, type PoeExplanation } from '../poe/say';
 import { airNow, clearedUp, initHero, RAINBOW_COOLDOWN_MS, renderAir, showRainbow } from './weather-hero';
 import { cloudCount, renderClouds } from './weather-sky';
@@ -293,8 +293,8 @@ export interface Sky {
   earlier: string | null;
   /** The live reading itself, for now. */
   reading?: Reading;
-  /** A window's line for the header, oldest first: records a second and active accounts in each bucket. */
-  line?: { records: Array<number | null>; accounts: Array<number | null> | null };
+  /** A window's line for the header, oldest first: records a second and active accounts in each bucket, the last of those an estimate while its bucket fills up (accountsProjected). */
+  line?: { records: Array<number | null>; accounts: Array<number | null> | null; accountsProjected?: boolean };
   /** " (from 3 hours of readings so far)" while the station hasn't heard most of the window. */
   coverage: string;
 }
@@ -335,7 +335,7 @@ const HISTORY_BLUESKY = [
 ] as const;
 
 /** A history as a sky: the whole window, as rates over the seconds the station heard of it. */
-export function skyOfHistory(h: History): Sky {
+export function skyOfHistory(h: History, now: number = Date.now()): Sky {
   const info = RANGE_INFO[h.range];
   const t = h.total;
   const secs = t.seconds;
@@ -363,12 +363,31 @@ export function skyOfHistory(h: History): Sky {
           }).sort((x, y) => y.count - x.count)
         : [],
     earlier: info.earlier,
-    line: {
-      records: h.points.map((p) => ratesOf(p).records),
-      accounts: a ? a.points.map((p) => p.active) : null,
-    },
+    line: { records: h.points.map((p) => ratesOf(p).records), ...accountsLine(a, h.range, now) },
     coverage: secs > 0 && secs < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(secs)} of readings so far)` : '',
   };
+}
+
+/**
+ * How active accounts grow with time, from the history itself: everyone over the whole
+ * range against the average bucket, as D(n buckets) = D(1) × n^k. People come back, so k
+ * is under 1 (about 0.6 by the hour over a day); projectLast uses it to guess a bucket
+ * still filling up, where a straight scale-up guessed well over the buckets before.
+ */
+export function accountsExponent(a: HistoryAccounts): number {
+  const full = a.points.slice(0, -1).filter((p) => p.seconds > 0 && p.active > 0);
+  if (full.length < 2) return 1;
+  const mean = full.reduce((sum, p) => sum + p.active, 0) / full.length;
+  const k = Math.log(a.total.active / mean) / Math.log(a.points.length);
+  return Number.isFinite(k) ? Math.min(1, Math.max(0.3, k)) : 1;
+}
+
+/** The header's line of active accounts, its newest bucket an estimate while it fills up (projectLast), so it doesn't dip. */
+function accountsLine(a: HistoryAccounts | null, range: Range, now: number): { accounts: Array<number | null> | null; accountsProjected?: boolean } {
+  if (!a) return { accounts: null };
+  const last = a.points[a.points.length - 1];
+  const points = projectLast(a.points.map((p) => ({ t: Date.parse(p.t), v: p.active })), now, BUCKET_MS[BUCKET_OF[range]], { heardMs: (last?.seconds ?? 0) * 1000, exponent: accountsExponent(a) });
+  return { accounts: points.map((p) => p.v), accountsProjected: points[points.length - 1]?.soFar !== undefined };
 }
 
 /** A rate a second as the lens shows it: per its unit, or for "total" the count over `seconds`. */
@@ -434,7 +453,7 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
   const values = (byAcct ? sky.line?.accounts : sky.line?.records) ?? [];
   delete spark.dataset.end;
   spark.hidden = values.filter((v) => v !== null).length < 2;
-  if (!spark.hidden) renderSparkline(spark, values);
+  if (!spark.hidden) renderSparkline(spark, values, undefined, byAcct && sky.line?.accountsProjected);
 }
 
 /** The last chips the "last hour" tile drew, for the header's (initSpan's onChanges). */
@@ -654,8 +673,8 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
 }
 
 /** A window's tiles, from its history. */
-export function renderWindow(report: HTMLElement, h: History, lens: LensState): void {
-  renderSky(report, skyOfHistory(h), lens);
+export function renderWindow(report: HTMLElement, h: History, lens: LensState, now: number = Date.now()): void {
+  renderSky(report, skyOfHistory(h, now), lens);
 }
 
 /** What a diversity index is made of, in a line: its share of accounts, and how spread out they are (Poe has the rest, EXPLAINERS). */
@@ -1012,7 +1031,10 @@ function renderRecordTrends(section: HTMLElement, h: History, now: number, forma
   const indexes = (h.accounts?.points ?? []).map((p) => ({ t: Date.parse(p.t), v: p.index ?? null }));
   const records = $(section, '[data-t-chart="records"]');
   const index = $(section, '[data-t-chart="index"]');
-  if (records) renderChart(records, [...lead(h, rows[0]?.t, now, info.stepMs), ...rows], { label: title, color: 'var(--weather-bsky)', format: formatAmount, formatTick: (v) => (v >= 10_000 ? compactCount(v) : formatRate(v)), formatTime, stepMs: info.stepMs });
+  // each step's own count dips while the newest step fills up, so that one is an estimate; a rate doesn't
+  const recordPoints = [...lead(h, rows[0]?.t, now, info.stepMs), ...rows];
+  const heardMs = (h.points[h.points.length - 1]?.seconds ?? 0) * 1000;
+  if (records) renderChart(records, each ? projectLast(recordPoints, now, info.stepMs, { heardMs }) : recordPoints, { label: title, color: 'var(--weather-bsky)', format: formatAmount, formatTick: (v) => (v >= 10_000 ? compactCount(v) : formatRate(v)), formatTime, stepMs: info.stepMs });
   if (index) renderChart(index, [...lead(h, indexes[0]?.t, now, step), ...indexes], { label: 'diversity index', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
 }
 
@@ -1025,15 +1047,15 @@ function renderAccountTrends(section: HTMLElement, h: History, now: number, form
   setChartTitle(section, 'records', `active accounts ${each}`);
   setChartTitle(section, 'index', 'share of accounts writing elsewhere');
   const rows = (a?.points ?? []).map((p) => ({ ...p, t: Date.parse(p.t), share: p.active > 0 ? (p.elsewhere / p.active) * 100 : null }));
-  // the newest bucket is still filling up
-  const last = rows[rows.length - 1]?.t;
-  const when = (t: number) => (t === last && now - t < step ? `${formatTime(t)} (so far)` : formatTime(t));
-  const pts = (v: (r: (typeof rows)[number]) => number | null): ChartPoint[] => [...lead(h, rows[0]?.t, now, step), ...rows.map((r) => ({ t: r.t, v: v(r) }))];
+  // the newest bucket is still filling up: an estimate for its accounts, its share as it is so far
+  const heardMs = (rows[rows.length - 1]?.seconds ?? 0) * 1000;
+  const pts = (v: (r: (typeof rows)[number]) => number | null, scale: boolean): ChartPoint[] =>
+    projectLast([...lead(h, rows[0]?.t, now, step), ...rows.map((r) => ({ t: r.t, v: v(r) }))], now, step, { scale, heardMs, exponent: a ? accountsExponent(a) : 1 });
   const active = $(section, '[data-t-chart="records"]');
   const share = $(section, '[data-t-chart="index"]');
   const percent = (v: number) => `${formatIndex(v)}%`;
-  if (active) renderChart(active, pts((r) => r.active), { label: `active accounts ${each}`, color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, formatTipTime: when, stepMs: step });
-  if (share) renderChart(share, pts((r) => r.share), { label: 'share of accounts writing elsewhere', color: 'var(--weather-else)', format: percent, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime, formatTipTime: when, stepMs: step });
+  if (active) renderChart(active, pts((r) => r.active, true), { label: `active accounts ${each}`, color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
+  if (share) renderChart(share, pts((r) => r.share, false), { label: 'share of accounts writing elsewhere', color: 'var(--weather-else)', format: percent, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime, stepMs: step });
 }
 
 /** The third chart: apps outside Bluesky heard each minute, hour, day or month. */
@@ -1049,10 +1071,8 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
   const points: ChartPoint[] = o.points.map((p) => ({ t: Date.parse(p.t), v: p.apps }));
   const start = now - RANGE_INFO[h.range].spanMs;
   if ((points[0]?.t ?? now) - start > step) points.unshift({ t: start, v: null });
-  // The newest bucket is still filling up, so the tooltip says so.
-  const last = o.points.length ? Date.parse(o.points[o.points.length - 1]!.t) : NaN;
-  const time = (t: number) => (t === last && now - t < step ? `${formatTime(t)} (so far)` : formatTime(t));
-  renderChart(host, points, { label: `apps heard each ${BUCKET_WORDS[o.bucket]}`, color: 'var(--weather-else)', format: (v) => String(Math.round(v)), formatTime, formatTipTime: time, stepMs: step });
+  // The newest bucket is still filling up; most apps turn up early in one, so it's not scaled, only marked so far.
+  renderChart(host, projectLast(points, now, step, { scale: false }), { label: `apps heard each ${BUCKET_WORDS[o.bucket]}`, color: 'var(--weather-else)', format: (v) => String(Math.round(v)), formatTime, stepMs: step });
 }
 
 /** Histories by range, shared by the trends and the window's tiles: one request each, however many ask. */

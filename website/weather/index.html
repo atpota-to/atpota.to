@@ -65,6 +65,8 @@
                         <!-- @svg weather-sun.svg class="weather-sun" aria-hidden="true" focusable="false" -->
                     </button>
                     <div class="weather-hero__reading">
+                        <!-- what the number is over, for anyone landing here; a tap opens the lens's controls (weather-dock.ts) -->
+                        <button type="button" class="weather-hero__period" data-r-period data-lens-open aria-controls="weather-dock-panel">the last hour</button>
                         <p class="weather-hero__big"><span data-r-records data-waiting>&ndash;</span><span class="visually-hidden" data-r-unit-words>new records a second</span></p>
                         <div class="weather-hero__sub">
                             <!-- the number is in the lens's unit (weather-lens.ts); a tap on "rec/sec" moves it on to a minute, an hour, a day and totals -->

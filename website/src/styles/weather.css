@@ -490,6 +490,32 @@ html[data-theme="dark"] .weather-hero {
   font-variant-numeric: tabular-nums;
 }
 
+/* What the number is over, above it: "the last 24 hours". A tap opens the lens's controls. */
+.weather-hero__period {
+  display: block;
+  margin: 0 0 8px -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--weather-sky-mono);
+  text-decoration: underline 2px dashed color-mix(in srgb, var(--weather-sky-mono) 45%, transparent);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.weather-hero__period:hover {
+  text-decoration-color: currentColor;
+}
+
+.weather-hero__period:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* "rec/sec  ↑ 4%": the unit first, then the chip */
 .weather-hero__sub {
   display: flex;
@@ -1745,6 +1771,17 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   fill: var(--chart-color);
   stroke: var(--paper);
   stroke-width: 2;
+}
+
+/* A step still filling up (weather-chart.ts projectLast): dashed out to its estimate. */
+.weather-chart__line--projected {
+  stroke-dasharray: 4 5;
+  opacity: 0.8;
+}
+
+.weather-chart__dot--projected {
+  fill: var(--paper);
+  stroke: var(--chart-color);
 }
 
 .weather-chart__cross {
