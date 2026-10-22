@@ -915,6 +915,9 @@ html[data-theme="dark"] {
     border-radius: 28px;
     background: var(--card);
     box-shadow: var(--shadow-pop);
+    /* pointer-events as well as visibility: iOS Safari was letting taps through to the
+       closed sheet's links (tapping Poe on the home page opened /weather). */
+    pointer-events: none;
     visibility: hidden;
     opacity: 0;
     transform: translateY(-8px);
@@ -925,6 +928,7 @@ html[data-theme="dark"] {
   }
 
   html.js .site-header.is-menu-open .site-menu {
+    pointer-events: auto;
     visibility: visible;
     opacity: 1;
     transform: none;
