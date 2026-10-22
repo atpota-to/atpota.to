@@ -40,4 +40,4 @@ The script is `website/scripts/poe-profile.ts`. It needs a Chromium for Playwrig
 
 Only the avatar and banner change; the name, bio and pinned post stay as they are. If someone changes the avatar or banner by hand, the profile is left alone for the rest of that day.
 
-`PROFILE_LOOK=dry-run` (the default) works each look out and logs it without writing anything. Read the log with `npm run profile-look` on the droplet, then set `PROFILE_LOOK=on` to go live. The kill switch stops every write.
+It's on by default. `npm run profile-look` on the droplet shows today's slots and every change made. `PROFILE_LOOK=dry-run` in the droplet's `.env` works each look out and logs it without writing anything, and `PROFILE_LOOK=off` stops it. The kill switch stops every write.

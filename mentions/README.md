@@ -823,12 +823,13 @@ it by hand, and the profile is left alone for the rest of that day. A failed wri
 waits 30 minutes before the same look is tried again. The kill switch stops every
 write; a nap doesn't, since a nap is what gives Poe the sleepy face.
 
-It starts as `PROFILE_LOOK=dry-run` (the default): each look is worked out and
-logged, and nothing is written. `npm run profile-look` shows today's slots, the
-look each was given, and every change worked out. To go live, add
-`PROFILE_LOOK=on` to `/root/atpotato-mentions/.env` and
-`systemctl restart atpotato-mentions` (stage 4 only). `PROFILE_LOOK=off` stops it.
-The first write replaces whatever avatar and banner the profile has.
+It is on by default (`PROFILE_LOOK=on`, stage 4 only), so it starts with the
+deploy; the first write replaces whatever avatar and banner the profile has.
+`npm run profile-look` shows today's slots, the look each was given, and every
+change made. To stop it, add `PROFILE_LOOK=off` to `/root/atpotato-mentions/.env`
+and `systemctl restart atpotato-mentions`; `PROFILE_LOOK=dry-run` keeps working
+each look out and logging it without writing anything. The kill switch stops it
+at once, without a restart.
 
 ## nginx
 

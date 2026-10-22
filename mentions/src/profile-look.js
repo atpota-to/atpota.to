@@ -22,8 +22,8 @@
 // against the record as read, so an edit made in between is never written over.
 // When the avatar or banner isn't the one this last set, someone changed it by
 // hand, and the profile is left alone for the rest of that day (New York's).
-// The kill switch stops every write. PROFILE_LOOK=dry-run (the default) works out
-// each change and logs it without writing anything.
+// The kill switch stops every write. PROFILE_LOOK=dry-run works out each change
+// and logs it without writing anything; on is the default.
 
 import { createHash } from 'node:crypto';
 import { config, killSwitchEngaged } from './config.js';
