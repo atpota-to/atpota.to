@@ -4,10 +4,10 @@
  * the overlay with that screen, its URL, and for a screen share where its windows are, so
  * the screen capture and camera can go exactly under them in OBS.
  *
- * The tabs are the four screens everyone starts with (starting, brb, ending, screenshare:
- * their defaults until changed) and then any the streamer has added, read from their repo
+ * The tabs are the screens everyone starts with (starting, brb, ending, screenshare,
+ * loading: their defaults until changed) and then any the streamer has added, read from their repo
  * in one listRecords. "+ new screen" adds one of any kind with a name, at an id made from
- * that name; a screen they added can be removed, and one of the four reset to its defaults.
+ * that name; a screen they added can be removed, and one of the starters reset to its defaults.
  * Each is saved to to.atpota.poe.scene/<id> SCENE_SAVE_DELAY_MS after the last change, the
  * same way the overlay's settings are (setup.ts).
  */
@@ -106,7 +106,7 @@ export function fillSceneForm(form: HTMLFormElement, s: Scene): void {
   field('links').value = s.links.join('\n');
   radio('camSide', s.camera.side);
   radio('camShape', s.camera.shape);
-  for (const el of form.ownerDocument.querySelectorAll<HTMLElement>('[data-ovs-scenes] [data-ovs-for]')) el.hidden = el.dataset.ovsFor !== s.kind;
+  for (const el of form.ownerDocument.querySelectorAll<HTMLElement>('[data-ovs-scenes] [data-ovs-for]')) el.hidden = !(el.dataset.ovsFor ?? '').split(' ').includes(s.kind);
 }
 
 /** "screen capture: x 40, y 40, 1440 × 810", and the camera's, for the screen share. */
@@ -133,11 +133,11 @@ interface Entry {
   saved: boolean;
 }
 
-/** The four screens everyone has, as defaults. */
+/** The screens everyone has, as defaults. */
 const starters = (): Entry[] =>
   SCENE_KINDS.map((kind) => ({ id: kind, scene: copyScene(SCENE_DEFAULTS[kind]), createdAt: new Date().toISOString(), note: SCENE_COPY.fresh, saved: false }));
 
-/** The tabs in order: the four starters (saved or not), then the rest oldest first. */
+/** The tabs in order: the starters (saved or not), then the rest oldest first. */
 export function screensFrom(saved: SavedScreen[]): Entry[] {
   const byId = new Map(saved.map((s) => [s.id, s]));
   const out = starters().map((e) => {

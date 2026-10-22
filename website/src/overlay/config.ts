@@ -17,7 +17,7 @@
 export const OVERLAY_NSID = 'to.atpota.poe.overlay';
 export const OVERLAY_RKEY = 'self';
 
-export const WIDGET_KINDS = ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse'] as const;
+export const WIDGET_KINDS = ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse', 'moon', 'mark', 'loader'] as const;
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
 export const SLOTS = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
 export type Slot = (typeof SLOTS)[number];
@@ -31,6 +31,9 @@ export const WIDGET_NAMES: Record<WidgetKind, string> = {
   apps: 'busiest apps',
   forecast: 'the forecast',
   pulse: 'the pulse',
+  moon: "anisota's moon",
+  mark: 'the anisota mark',
+  loader: 'the anisota loader',
 };
 export const WIDGET_HINTS: Record<WidgetKind, string> = {
   card: 'records a second, the sky, bluesky numbers and the diversity index',
@@ -39,6 +42,9 @@ export const WIDGET_HINTS: Record<WidgetKind, string> = {
   apps: 'the five busiest apps outside bluesky, with bars',
   forecast: 'the next six hours of the atmosphere',
   pulse: 'the last minute of the firehose as a big line',
+  moon: "tonight's moon as anisota draws it, with its phase",
+  mark: "anisota's brand mark, its moon at tonight's phase",
+  loader: "anisota's brand mark, its moon running through its phases",
 };
 /** Where a new widget goes first. */
 export const WIDGET_HOME: Record<WidgetKind, Slot> = {
@@ -48,6 +54,9 @@ export const WIDGET_HOME: Record<WidgetKind, Slot> = {
   apps: 'top-right',
   forecast: 'top-left',
   pulse: 'top-center',
+  moon: 'top-right',
+  mark: 'bottom-left',
+  loader: 'bottom-left',
 };
 
 export const MIN_SCALE = 50;

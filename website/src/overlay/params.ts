@@ -9,7 +9,8 @@
  *
  *   w=card:tl:100,apps:tr:80   the weather widgets: kind, slot (tl tc tr bl bc br) and size
  *                              in percent; w=none for none. Kinds: card, strip, badge,
- *                              apps, forecast, pulse
+ *                              apps, forecast, pulse, and Anisota's moon, mark
+ *                              and loader (anisota.ts)
  *   poe=left:120               Poe's bottom corner and size; poe=off hides it
  *   chat=off follows=off alerts=off visitors=off
  *   ignore=a.bsky.social,did:plc:...

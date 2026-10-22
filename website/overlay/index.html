@@ -11,6 +11,8 @@
     <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
     <link rel="preconnect" href="https://use.typekit.net" crossorigin>
     <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+    <!-- Crimson Pro, Anisota's face, for its widgets and loading screen -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/CrimsonPro-VariableFont_wght.woff2" crossorigin>
 
     <link rel="stylesheet" href="/src/styles/tokens.css">
     <link rel="stylesheet" href="/src/styles/components.css">
@@ -67,6 +69,12 @@
                 <p class="ovsc__bar-sub" data-ovsc-bar-sub></p>
             </div>
         </div>
+        <!-- the loading screen: Anisota's mark (src/overlay/anisota.ts) on black -->
+        <section class="ovsc__splash" data-ovsc-splash aria-live="polite" hidden>
+            <div class="ovsc__splash-mark" data-ov-anisota="loader"></div>
+            <p class="ovsc__splash-line" data-ovsc-splash-line></p>
+            <p class="ovsc__splash-sub" data-ovsc-splash-sub hidden></p>
+        </section>
         <section class="ov-badge ovsc__weather" data-ovsc-weather data-state="loading" aria-label="atmospheric conditions" hidden>
             <!-- @svg weather-sun.svg class="ov-badge__sun weather-sun" -->
             <p class="ov-badge__big"><span data-weather-records>&ndash;</span> <span class="ov-badge__unit">rec/sec</span></p>
@@ -152,6 +160,22 @@
         <p class="ov-pulse__big"><span data-ov-pulse-rate>&ndash;</span> <span class="ov-pulse__unit">rec/sec</span></p>
         <div class="weather-spark ov-pulse__line" data-ov-pulse-line aria-hidden="true" hidden></div>
         <p class="ov-panel__note" data-ov-pulse-note>new records a second</p>
+    </section>
+
+    <!-- Anisota's moon, mark and loader (src/overlay/anisota.ts draws them, from this symbol) -->
+    <!-- @svg anisota-mark.svg class="ov-symbols" -->
+    <section class="ov-anisota ov-anisota--moon" data-ov-widget="moon" aria-label="tonight's moon" hidden>
+        <div class="ov-anisota__moon-box" data-ov-anisota="moon"></div>
+        <div class="ov-anisota__words">
+            <p class="ov-anisota__phase" data-ov-moon-name></p>
+            <p class="ov-anisota__lit" data-ov-moon-lit></p>
+        </div>
+    </section>
+    <section class="ov-anisota ov-anisota--mark" data-ov-widget="mark" aria-label="anisota, with tonight's moon" hidden>
+        <div class="ov-anisota__mark-box" data-ov-anisota="mark"></div>
+    </section>
+    <section class="ov-anisota ov-anisota--mark" data-ov-widget="loader" aria-label="anisota" hidden>
+        <div class="ov-anisota__mark-box" data-ov-anisota="loader"></div>
     </section>
 
     <!-- Poe (src/overlay/poe.ts fills it in; visitors.ts adds its visitors) -->

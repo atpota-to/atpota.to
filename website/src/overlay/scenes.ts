@@ -11,9 +11,12 @@
  *   screenshare  an atpotato frame with a big window for a screen capture and a small one
  *                for a camera (frameHoles: where to put them in OBS), the stream's title
  *                along the bottom, and the weather beside the camera
+ *   loading      Anisota's loading screen: its brand mark on black, the moon running
+ *                through its phases (anisota.ts), and the title under it, or Anisota's
+ *                own loading lines in turn when there's no title. No backdrop or ground
  *
- * The four screens a streamer starts with have their kind as their id ("starting", "brb",
- * "ending", "screenshare"), so ?scene=brb works before anything is saved. Every screen has
+ * The screens a streamer starts with have their kind as their id ("starting", "brb",
+ * "ending", "screenshare", "loading"), so ?scene=brb works before anything is saved. Every screen has
  * a backdrop (the sky) and a ground under it: the home page's meadow, the about page's
  * grass, soil with sprouts, or none.
  *
@@ -24,7 +27,7 @@
  */
 
 export const SCENE_NSID = 'to.atpota.poe.scene';
-export const SCENE_KINDS = ['starting', 'brb', 'ending', 'screenshare'] as const;
+export const SCENE_KINDS = ['starting', 'brb', 'ending', 'screenshare', 'loading'] as const;
 export type SceneKind = (typeof SCENE_KINDS)[number];
 export const BACKGROUNDS = ['day', 'night', 'garden', 'butter'] as const;
 export type Background = (typeof BACKGROUNDS)[number];
@@ -57,6 +60,7 @@ export const SCENE_NAMES: Record<SceneKind, string> = {
   brb: 'be right back',
   ending: 'the end',
   screenshare: 'screen share',
+  loading: 'anisota loading',
 };
 
 export const NAME_MAX = 40;
@@ -72,6 +76,7 @@ export const SCENE_DEFAULTS: Record<SceneKind, Scene> = {
   brb: { ...base, kind: 'brb', name: SCENE_NAMES.brb, title: 'be right back', subtitle: "poe's keeping your seat warm", background: 'butter' },
   ending: { ...base, kind: 'ending', name: SCENE_NAMES.ending, title: 'thanks for watching', subtitle: 'see you next time (◕‿◕)', background: 'night' },
   screenshare: { ...base, kind: 'screenshare', name: SCENE_NAMES.screenshare, title: '', subtitle: '', background: 'day' },
+  loading: { ...base, kind: 'loading', name: SCENE_NAMES.loading, title: '', subtitle: '', background: 'night', ground: 'none', showPoe: false },
 };
 
 export function isSceneKind(v: unknown): v is SceneKind {
