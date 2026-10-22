@@ -480,8 +480,15 @@ html[data-theme="dark"] .weather-hero {
   min-width: 0;
 }
 
-/* The number on its own line; what it counts and its chip under it, and the forecast under
-   those is words, so it reads lighter. */
+/* The number, with what it counts and its chip beside it (under it when there's no room);
+   the forecast under those is words, so it reads lighter. */
+.weather-hero__figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
 .weather-hero__big {
   font-size: 64px;
   font-weight: 700;
@@ -522,7 +529,6 @@ html[data-theme="dark"] .weather-hero {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 10px;
-  margin-top: 10px;
 }
 
 .weather-hero__change {
