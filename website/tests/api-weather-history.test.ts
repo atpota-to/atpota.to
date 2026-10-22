@@ -36,7 +36,7 @@ const HOSTS = {
   since: '2026-10-22',
   points: [
     { t: '2026-10-20T16:50:00+00:00', listed: 6442, active: 1887, bluesky: 90, independent: 1797, writing: 702, accountsBluesky: 23767508, accountsIndependent: '363866', share: '1.51', spread: 24.54 },
-    { t: '2026-10-20T16:40:00+00:00', listed: 6442, active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54 },
+    { t: '2026-10-20T16:40:00+00:00', listed: 6442, active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, estimated: true },
     { t: 'nope', active: 1 },
   ],
   newHosts: 2,
@@ -126,7 +126,7 @@ describe('weather history', () => {
       since: '2026-10-22',
       points: [
         { t: '2026-10-20T16:50:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: 702, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48 },
-        { t: '2026-10-20T16:40:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48 },
+        { t: '2026-10-20T16:40:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48, estimated: true },
       ],
       newHosts: 2,
       new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }],

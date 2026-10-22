@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { axisRange } from '../src/scripts/weather-chart.js';
+import { axisRange, renderChart, segments } from '../src/scripts/weather-chart.js';
 import { estimatedWords, hostStory, initHostPanel, toOneHost, type OneHost } from '../src/scripts/weather-host-panel.js';
 import { renderBars } from '../src/scripts/weather-page.js';
 
@@ -31,6 +31,34 @@ describe('the chart axis', () => {
     expect(lo).toBeGreaterThan(0);
     expect(axisRange([5, 5], false)[0]).toBeLessThanOrEqual(5);
     expect(axisRange([], false)).toEqual([0, 1]);
+  });
+});
+
+describe('estimated points on a chart', () => {
+  const H = 3600_000;
+  // the backfill's last day (one estimate at 23:59:59), then the station's hourly censuses from 15 hours later
+  const points = [
+    { t: 0, v: 1.49, estimated: true },
+    { t: 24 * H, v: 1.5, estimated: true },
+    { t: 39 * H, v: 1.51 },
+    { t: 40 * H, v: 1.51 },
+    { t: 41 * H, v: 1.52 },
+  ];
+
+  it('reaches across the gap between estimates and the first census, but not between two censuses', () => {
+    expect(segments(points, H)).toHaveLength(1);
+    expect(segments([{ t: 0, v: 1 }, { t: 15 * H, v: 2 }], H)).toHaveLength(2);
+    // a day and a half is as far as it reaches
+    expect(segments([{ t: 0, v: 1, estimated: true }, { t: 40 * H, v: 2 }], H)).toHaveLength(2);
+  });
+
+  it('dashes the estimated stretch and draws the measured one solid', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    renderChart(host, points, { label: 'share', color: 'red', format: String, formatTime: String, stepMs: H, fromZero: false });
+    expect(host.querySelectorAll('.weather-chart__line--projected')).toHaveLength(1);
+    expect(host.querySelectorAll('.weather-chart__line:not(.weather-chart__line--projected)')).toHaveLength(1);
+    expect(host.querySelectorAll('.weather-chart__area')).toHaveLength(1);
   });
 });
 

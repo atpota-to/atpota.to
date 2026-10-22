@@ -23,7 +23,15 @@ export interface ChartPoint {
   v: number | null;
   /** A step still filling up: what's in so far, with `v` the estimate for the whole step (projectLast). */
   soFar?: number;
+  /**
+   * Estimated rather than measured (the hosts' backfill: one a day, from before the station
+   * kept count). The line reaches across the gap from one to the next point, dashed.
+   */
+  estimated?: boolean;
 }
+
+/** How far the line reaches across a gap that starts or ends at an estimated point: a day and a half. */
+export const ESTIMATED_REACH_MS = 36 * 3600_000;
 
 export interface ChartOptions {
   /** What the line is, for the accessible name ("new records a second"). */
@@ -140,7 +148,9 @@ export function segments(points: ChartPoint[], stepMs: number): ChartPoint[][] {
   let run: ChartPoint[] = [];
   let last: number | null = null;
   for (const p of points) {
-    if (p.v === null || (last !== null && p.t - last > stepMs * 1.5)) {
+    const prev = run[run.length - 1];
+    const reach = p.estimated || prev?.estimated ? Math.max(stepMs * 1.5, ESTIMATED_REACH_MS) : stepMs * 1.5;
+    if (p.v === null || (last !== null && p.t - last > reach)) {
       if (run.length) runs.push(run);
       run = [];
     }
@@ -230,11 +240,20 @@ function draw(host: HTMLElement): void {
     if (!run.length) continue;
     const line = smoothPath(run.map((p) => [x(p.t), y(p.v!)] as const));
     if (run.length === 1) {
-      svg.append(el('circle', { class: 'weather-chart__dot', cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
+      svg.append(el('circle', { class: `weather-chart__dot${run[0]!.estimated ? ' weather-chart__dot--projected' : ''}`, cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
       continue;
     }
-    const area = `${line}L${x(run[run.length - 1]!.t).toFixed(1)},${y(yMin)}L${x(run[0]!.t).toFixed(1)},${y(yMin)}Z`;
-    svg.append(el('path', { class: 'weather-chart__area', d: area }), el('path', { class: 'weather-chart__line', d: line }));
+    // estimates come first (the backfill, before the station kept count): straight and dashed up to the first measured point, smooth after
+    const measured = run.findIndex((p) => !p.estimated);
+    const guessed = measured === 0 ? [] : measured < 0 ? run : run.slice(0, measured + 1);
+    const live = measured < 0 ? [] : run.slice(measured);
+    const straight = guessed.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v!).toFixed(1)}`).join('');
+    const smooth = live.length > 1 ? smoothPath(live.map((p) => [x(p.t), y(p.v!)] as const)) : '';
+    const outline = guessed.length ? straight + smooth.replace(/^M[^LC]*/, '') : line;
+    const area = `${outline}L${x(run[run.length - 1]!.t).toFixed(1)},${y(yMin)}L${x(run[0]!.t).toFixed(1)},${y(yMin)}Z`;
+    svg.append(el('path', { class: 'weather-chart__area', d: area }));
+    if (guessed.length) svg.append(el('path', { class: 'weather-chart__line weather-chart__line--projected', d: straight }));
+    if (smooth) svg.append(el('path', { class: 'weather-chart__line', d: smooth }));
   }
 
   const cross = el('line', { class: 'weather-chart__cross', x1: 0, x2: 0, y1: PAD.top, y2: PAD.top + innerH, visibility: 'hidden' });
@@ -265,7 +284,7 @@ function draw(host: HTMLElement): void {
     cross.setAttribute('x1', String(px));
     cross.setAttribute('x2', String(px));
     cross.setAttribute('visibility', 'visible');
-    const words = p.soFar !== undefined ? soFarWords(p, opts.format) : { value: p.v === null ? 'no reading' : opts.format(p.v), pace: '' };
+    const words = p.soFar !== undefined ? soFarWords(p, opts.format) : { value: p.v === null ? 'no reading' : p.estimated ? `≈ ${opts.format(p.v)}` : opts.format(p.v), pace: p.estimated ? 'estimated, from before i kept count' : '' };
     const value = words.value;
     if (p.v === null) mark.setAttribute('visibility', 'hidden');
     else {

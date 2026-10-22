@@ -39,6 +39,8 @@ export interface HostPoint {
   share: number;
   spread: number;
   index: number;
+  /** One a day from the backfill (atmosphere/src/backfill-hosts.js), not the station's census. */
+  estimated?: boolean;
 }
 
 export interface HostHistory {
@@ -120,7 +122,7 @@ export function toHostPoint(x: unknown): HostPoint | null {
   if (!t || !c || !isRecord(x)) return null;
   const writing = x.writing === null || x.writing === undefined ? null : num(x.writing);
   const share = Math.min(c.share, 100);
-  return { t, ...c, share, writing: writing !== null && Number.isFinite(writing) && writing >= 0 ? writing : null, index: diversityIndex(share, c.spread) };
+  return { t, ...c, share, writing: writing !== null && Number.isFinite(writing) && writing >= 0 ? writing : null, index: diversityIndex(share, c.spread), ...(x.estimated === true ? { estimated: true } : {}) };
 }
 
 const countOrNull = (x: unknown): number | null => {

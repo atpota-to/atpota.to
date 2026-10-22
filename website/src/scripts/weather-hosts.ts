@@ -37,6 +37,8 @@ export interface HostPoint {
   share: number;
   spread: number;
   index: number;
+  /** One a day from the backfill, from before the station kept count. */
+  estimated?: boolean;
 }
 
 export interface HostHistory {
@@ -225,7 +227,7 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   // nothing kept yet at the start of the range: a gap, not a line from nowhere
   const start = now - WINDOW_INFO[range].seconds * 1000;
   const lead: ChartPoint[] = rows.length && rows[0]!.t - start > step ? [{ t: start, v: null }] : [];
-  const pts = (v: (r: (typeof rows)[number]) => number): ChartPoint[] => [...lead, ...rows.map((r) => ({ t: r.t, v: v(r) }))];
+  const pts = (v: (r: (typeof rows)[number]) => number): ChartPoint[] => [...lead, ...rows.map((r) => ({ t: r.t, v: v(r), ...(r.estimated ? { estimated: true } : {}) }))];
   const active = $(part, '[data-h-chart="active"]');
   const index = $(part, '[data-h-chart="index"]');
   setText(part, '[data-h-headline]', shareHeadline(h, range));
@@ -258,8 +260,13 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   if (since) {
     // a range that reaches back before the station kept hosts says so
     const from = h.since ? Date.parse(`${h.since}T00:00:00Z`) : NaN;
-    since.hidden = !(from > start);
-    if (from > start) since.textContent = `i started keeping track of hosts on ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(from)).toLowerCase()}, so new hosts count from the day after.`;
+    const guessed = h.points.filter((p) => p.estimated);
+    const words: string[] = [];
+    if (from > start) words.push(`i started keeping track of hosts on ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(from)).toLowerCase()}, so new hosts count from the day after.`);
+    // the backfill's days: one estimate each, joined to the station's first census by a dashed line
+    if (guessed.length) words.push('the dashed part of each line is estimated from the plc directory, one point a day, from before i counted hosts myself.');
+    since.hidden = words.length === 0;
+    since.textContent = words.join(' ');
   }
 }
 
