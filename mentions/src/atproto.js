@@ -543,8 +543,9 @@ export const acceptDmConvo = (convoId) => chatRequest('chat.bsky.convo.acceptCon
 export const getDmMessages = (convoId, cursor) => chatRequest('chat.bsky.convo.getMessages', {
   params: { convoId, cursor, limit: 100 },
 });
+/** A messageId makes it a reply to that message; null sends it plain. */
 export const sendDmMessage = (convoId, messageId, text) => chatRequest('chat.bsky.convo.sendMessage', {
-  body: { convoId, message: { text, replyTo: { messageId } } },
+  body: { convoId, message: { text, ...(messageId ? { replyTo: { messageId } } : {}) } },
 });
 export const addDmReaction = (convoId, messageId, value) => chatRequest('chat.bsky.convo.addReaction', {
   body: { convoId, messageId, value },

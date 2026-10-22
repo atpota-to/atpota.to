@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { config } from '../src/config.js';
 import { db } from '../src/db.js';
-import { baseline, acceptMessage, receiveDraft, deliverDm, pollOperatorDms, describeShared } from '../src/operator-dm.js';
+import {
+  baseline, acceptMessage, receiveDraft, deliverDm, pollOperatorDms, describeShared, splitDmText,
+  DM_MAX_GRAPHEMES, DM_MAX_PARTS,
+} from '../src/operator-dm.js';
+import { graphemeLength, byteLength } from '../src/richtext.js';
 
 const admin = 'did:plc:operator123';
 config.adminDids = [admin];
@@ -233,4 +237,74 @@ test('only verified operator requests are read and accepted before a private rep
       return { id: 'private-sent' };
     },
   });
+});
+
+// --- long replies -----------------------------------------------------------
+
+const fitsADm = (part) => graphemeLength(part) <= DM_MAX_GRAPHEMES && byteLength(part) <= 10000;
+
+test('a short reply is one DM, unchanged', () => {
+  assert.deepEqual(splitDmText('hi! all good here (◕‿◕)'), ['hi! all good here (◕‿◕)']);
+});
+
+test('a long reply splits at paragraph breaks, keeping each paragraph whole', () => {
+  const para = (n) => `paragraph ${n}: ${'the atmosphere was busy today. '.repeat(10).trim()}`;
+  const text = Array.from({ length: 8 }, (_, i) => para(i + 1)).join('\n\n');
+  const parts = splitDmText(text);
+  assert.ok(parts.length > 1 && parts.length <= DM_MAX_PARTS);
+  assert.ok(parts.every(fitsADm));
+  assert.equal(parts.join('\n\n'), text, 'nothing lost, nothing reordered');
+  for (const part of parts) assert.ok(part.startsWith('paragraph '), 'no paragraph is cut in two');
+});
+
+test('one huge paragraph splits at sentences, then words, then graphemes, never past the limits', () => {
+  const sentences = 'Sentence with words in it. '.repeat(120).trim();
+  const bySentence = splitDmText(sentences);
+  assert.ok(bySentence.length > 1 && bySentence.every(fitsADm));
+  assert.ok(bySentence.every((p) => p.endsWith('.')), 'cut at sentence ends');
+  const oneWord = '🥔'.repeat(2500);
+  const byGrapheme = splitDmText(oneWord);
+  assert.ok(byGrapheme.every(fitsADm));
+  assert.equal(byGrapheme.join(''), oneWord);
+});
+
+test(`past ${DM_MAX_PARTS} DMs the reply is cut, and says so with an ellipsis`, () => {
+  const text = Array.from({ length: 40 }, (_, i) => `${i} ${'word '.repeat(150).trim()}`).join('\n\n');
+  const parts = splitDmText(text);
+  assert.equal(parts.length, DM_MAX_PARTS);
+  assert.ok(parts.every(fitsADm));
+  assert.ok(parts.at(-1).endsWith('…'));
+});
+
+test('a long reply goes out as several DMs: the first answers the message, the rest follow', async () => {
+  const target = message();
+  acceptMessage(convo, target, baseline());
+  db.prepare("UPDATE operator_dm SET status = 'dispatched' WHERE message_id = ?").run(target.id);
+  const text = Array.from({ length: 3 }, (_, i) => `part ${i}: ${'lots to say about the weather. '.repeat(20).trim()}`).join('\n\n');
+  assert.equal(receiveDraft({ key: `long-${target.id}`, dmId: target.id, operatorDid: admin, text }), 'accepted');
+  const sent = [];
+  await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(target.id), {
+    sendDmMessage: async (convoId, replyTo, part) => { sent.push({ replyTo, part }); return { id: `reply-${sent.length}` }; },
+  });
+  assert.ok(sent.length > 1);
+  assert.equal(sent[0].replyTo, target.id);
+  assert.ok(sent.slice(1).every((s) => s.replyTo === null));
+  assert.equal(sent.map((s) => s.part).join('\n\n'), text);
+  const row = db.prepare('SELECT status, reply_id, parts_sent FROM operator_dm WHERE message_id = ?').get(target.id);
+  assert.deepEqual({ ...row }, { status: 'sent', reply_id: 'reply-1', parts_sent: sent.length });
+});
+
+test('a part that fails mid-reply stops there and is left for review, never resent', async () => {
+  const target = message();
+  acceptMessage(convo, target, baseline());
+  db.prepare("UPDATE operator_dm SET status = 'dispatched' WHERE message_id = ?").run(target.id);
+  const text = Array.from({ length: 5 }, (_, i) => `part ${i}: ${'more words here. '.repeat(40).trim()}`).join('\n\n');
+  receiveDraft({ key: `fail-${target.id}`, dmId: target.id, operatorDid: admin, text });
+  let calls = 0;
+  const api = { sendDmMessage: async () => { if (++calls === 2) throw new Error('socket hang up'); return { id: `r${calls}` }; } };
+  await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(target.id), api);
+  await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(target.id), api);
+  assert.equal(calls, 2, 'no retry of an uncertain send');
+  const row = db.prepare('SELECT status, parts_sent FROM operator_dm WHERE message_id = ?').get(target.id);
+  assert.deepEqual({ ...row }, { status: 'sending', parts_sent: 1 });
 });

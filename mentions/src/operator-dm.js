@@ -5,7 +5,7 @@ import { logger } from './logger.js';
 import * as chat from './atproto.js';
 import { parseNapCommand } from './nap-time.js';
 import { applyNapCommand } from './nap.js';
-import { expandLinks } from './richtext.js';
+import { byteLength, expandLinks, graphemeLength } from './richtext.js';
 import {
   parseAnnounceCommand, recordCommand, runCommand,
   attachProposal, parseConfirmation, liveProposalFor, decideProposal,
@@ -68,6 +68,62 @@ export function describeShared(embed) {
 
 try { db.exec('ALTER TABLE operator_dm ADD COLUMN seen_reaction TEXT'); }
 catch { /* already added */ }
+try { db.exec('ALTER TABLE operator_dm ADD COLUMN parts_sent INTEGER NOT NULL DEFAULT 0'); }
+catch { /* already added */ }
+
+// chat.bsky.convo.defs#messageInput: text is at most 1000 graphemes and 10000
+// bytes. A longer reply goes out as several messages, at most DM_MAX_PARTS.
+export const DM_MAX_GRAPHEMES = 1000;
+const DM_MAX_BYTES = 10000;
+export const DM_MAX_PARTS = 4;
+
+const dmGraphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
+const fitsDm = (text) => graphemeLength(text) <= DM_MAX_GRAPHEMES && byteLength(text) <= DM_MAX_BYTES;
+
+/** Pieces of `text` that each fit a DM: whole units joined by `glue` where they fit, else split finer. */
+function packDm(units, glue, finer) {
+  const out = [];
+  let current = '';
+  for (const unit of units) {
+    const joined = current ? `${current}${glue}${unit}` : unit;
+    if (fitsDm(joined)) { current = joined; continue; }
+    if (current) out.push(current);
+    if (fitsDm(unit)) { current = unit; continue; }
+    const pieces = finer(unit);
+    current = pieces.pop() ?? '';
+    out.push(...pieces);
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+function hardSplit(text) {
+  const out = [];
+  let current = '';
+  for (const { segment } of dmGraphemes.segment(text)) {
+    if (!fitsDm(current + segment)) { out.push(current); current = ''; }
+    current += segment;
+  }
+  return current ? [...out, current] : out;
+}
+
+/**
+ * A reply cut into DMs: at paragraph breaks where it can, then at sentence
+ * ends, then between words, and mid-word only for a word longer than a DM.
+ * At most DM_MAX_PARTS; past that the last part ends with an ellipsis.
+ */
+export function splitDmText(text) {
+  const words = (s) => packDm(s.split(/(?<=\S)\s+(?=\S)/u), ' ', hardSplit);
+  const sentences = (s) => packDm(s.split(/(?<=[.!?…)])\s+/u), ' ', words);
+  const parts = packDm(text.trim().split(/\n\s*\n/u), '\n\n', (p) => packDm(p.split('\n'), '\n', sentences))
+    .map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= DM_MAX_PARTS) return parts;
+  const kept = parts.slice(0, DM_MAX_PARTS);
+  let last = kept[DM_MAX_PARTS - 1];
+  while (!fitsDm(`${last}…`)) last = [...dmGraphemes.segment(last)].slice(0, -1).map((s) => s.segment).join('');
+  kept[DM_MAX_PARTS - 1] = `${last.trimEnd()}…`;
+  return kept;
+}
 
 // Put on a DM as soon as it is picked up and taken off once the reply is sent,
 // so the operator can tell "seen, working on it" from "not seen yet".
@@ -130,10 +186,8 @@ export function receiveDraft(body) {
   const row = db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(body.dmId);
   if (!row || row.operator_did !== body.operatorDid || !isAdmin(row.operator_did) ||
       row.status !== 'dispatched') return 'ignored';
-  let text = body.text.trim() || 'oopsie, my words got lost on the way here (╥﹏╥) please try me again?';
-  text = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text)]
-    .slice(0, 999).map((part) => part.segment).join('');
-  while (Buffer.byteLength(text) > 10000) text = text.slice(0, -1);
+  // Kept whole: deliverDm splits it into as many DMs as it needs.
+  const text = body.text.trim() || 'oopsie, my words got lost on the way here (╥﹏╥) please try me again?';
   const accepted = db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_key = ?, draft_text = ?, updated_at = ?
     WHERE message_id = ? AND status = 'dispatched'`).run(body.key, text, nowIso(), body.dmId).changes > 0;
   if (accepted) {
@@ -155,16 +209,23 @@ export async function deliverDm(row, api = chat) {
   // idempotency key. Leave `sending` for manual review rather than duplicate.
   if (!db.prepare(`UPDATE operator_dm SET status = 'sending', updated_at = ?
     WHERE message_id = ? AND status = 'drafted'`).run(nowIso(), row.message_id).changes) return;
+  const parts = splitDmText(row.draft_text ?? '');
+  let sent = row.parts_sent ?? 0;
   try {
-    if (row.request_status === 'request') await api.acceptDmConvo(row.convo_id);
-    const reply = await api.sendDmMessage(row.convo_id, row.message_id, row.draft_text);
-    db.prepare(`UPDATE operator_dm SET status = 'sent', reply_id = ?, updated_at = ?
-      WHERE message_id = ?`).run(reply.id, nowIso(), row.message_id);
-    logger.info('operator DM delivered', { messageId: row.message_id });
+    if (row.request_status === 'request' && sent === 0) await api.acceptDmConvo(row.convo_id);
+    // The first part answers the operator's message; the rest follow it.
+    for (; sent < parts.length; sent++) {
+      const reply = await api.sendDmMessage(row.convo_id, sent === 0 ? row.message_id : null, parts[sent]);
+      db.prepare(`UPDATE operator_dm SET parts_sent = ?, reply_id = COALESCE(reply_id, ?), updated_at = ?
+        WHERE message_id = ?`).run(sent + 1, reply.id, nowIso(), row.message_id);
+    }
+    db.prepare(`UPDATE operator_dm SET status = 'sent', updated_at = ? WHERE message_id = ?`)
+      .run(nowIso(), row.message_id);
+    logger.info('operator DM delivered', { messageId: row.message_id, parts: parts.length });
     await clearSeen(api, db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id));
   } catch (err) {
     logger.error('operator DM send uncertain; manual review required', {
-      messageId: row.message_id, error: err.message,
+      messageId: row.message_id, error: err.message, part: sent + 1, parts: parts.length,
     });
   }
 }
