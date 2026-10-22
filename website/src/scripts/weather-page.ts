@@ -95,6 +95,7 @@ import {
   spinRays,
   storedReading,
   type DiversityLevel,
+  type Hosts,
   type Reading,
 } from './weather';
 
@@ -593,6 +594,7 @@ export function renderReport(report: HTMLElement, r: Reading, lens: LensState = 
   const air = $(report, '[data-weather-air]');
   if (air) renderAir(air, airNow(r.condition));
   if (lens.window === 'now') renderSky(report, skyOfReading(r), lens);
+  renderHosts(report, r.hosts);
 
   // the last minute, unless the lens has moved its tile on to a longer window (weather-span.ts)
   const minute = $(report, '[data-s-tile]');
@@ -600,6 +602,50 @@ export function renderReport(report: HTMLElement, r: Reading, lens: LensState = 
 
   if (report.dataset.state !== 'ready') setText(report, '[data-r-status]', `${CONDITION_TEXT[r.condition]}. diversity index ${r.diversity ? `${formatIndex(r.diversity.index)}, ${r.diversity.level}` : 'unknown'}.`);
   report.dataset.state = 'ready';
+}
+
+/** "1,797 independent, 90 bluesky's own": the active hosts, split. */
+export function hostsSplit(h: Hosts): string {
+  return `${formatCount(h.independent)} independent, ${formatCount(h.bluesky)} run by bluesky, of ${formatCount(h.listed)} the relay knows.`;
+}
+
+/** What the hosting diversity is made of, in a line: the share of accounts on independent hosts, and how spread out they are. */
+export function hostsShare(h: Hosts): string {
+  const total = h.accounts.bluesky + h.accounts.independent;
+  if (h.accounts.independent <= 0) return `all ${formatCount(total)} accounts live on bluesky's hosts.`;
+  const hosts = Math.max(1, Math.round(h.diversity.spread));
+  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
+}
+
+/** How long ago the station counted them: "counted just now", "counted 7 minutes ago". */
+export function hostsAge(measuredAt: string, now = Date.now()): string {
+  const minutes = Math.max(0, Math.round((now - Date.parse(measuredAt)) / 60_000));
+  return minutes < 1 ? 'counted just now' : `counted ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * Where accounts live: the PDS hosts on the network, from the station's census of the
+ * relay's list (every 10 minutes). It's a census, not a window, so it stays the latest
+ * whatever the lens says, and the tile stays hidden until a reading carries one.
+ */
+export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Date.now()): void {
+  const tile = $(report, '[data-r-hosts]');
+  if (!tile || !h) return;
+  tile.hidden = false;
+  count(tile, '[data-h-active]', h.active, formatCount);
+  roll(tile, '[data-h-split]', hostsSplit(h));
+  setText(tile, '[data-h-age]', hostsAge(h.measuredAt, now));
+  count(tile, '[data-h-index]', h.diversity.index, formatIndex);
+  const writing = $(tile, '[data-h-writing-wrap]');
+  if (writing) writing.hidden = h.writing === null;
+  if (h.writing) {
+    count(tile, '[data-h-writing]', h.writing.bluesky + h.writing.independent, formatCount);
+    setText(tile, '[data-h-writing-words]', h.writing.minutes >= 60 ? 'wrote in the last hour' : `wrote in the last ${h.writing.minutes} minutes`);
+  }
+  renderShare($(tile, '[data-h-bar-bsky]'), $(tile, '[data-h-bar-else]'), h.diversity.share);
+  roll(tile, '[data-h-share]', hostsShare(h));
+  const list = $(tile, '[data-h-top]');
+  if (list) renderBars(list, h.top.slice(0, LIST_TOP).map((x) => ({ label: x.hostname, perSecond: x.accounts, count: x.accounts, value: compactCount(x.accounts) })), undefined);
 }
 
 /** A window's tiles, from its history. */
@@ -634,6 +680,19 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       'so a crowd spread over lots of apps scores higher than the same crowd piled into one.',
       '',
       "it reads like the uv index: 0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme. a usual minute sits around 2 right now, so it's mostly bluesky out there. for now (◕‿◕)",
+    ].join('\n'),
+  },
+  hosts: {
+    question: 'what are pds hosts?',
+    answer: [
+      "a pds (personal data server) is where an account's records actually live. bluesky runs about ninety of them, and anyone else can run one too: a community, a company, or one person with a little server in a cupboard.",
+      '',
+      "every ten minutes i read the relay's list of every host it knows about:",
+      '- active hosts are the ones the relay is happily listening to right now',
+      "- wrote lately means a host sent the relay anything since i last looked, within the hour",
+      "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place",
+      '',
+      "it goes by where accounts live, not who's writing this minute, so it's its own number and moves slowly. a bigger number means more of the network lives somewhere other than bluesky (◕‿◕)",
     ].join('\n'),
   },
   readouts: {

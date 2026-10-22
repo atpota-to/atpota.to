@@ -1,6 +1,7 @@
 // config.js
 // Everything comes from the environment (the unit's EnvironmentFile, .env).
 
+import { DEFAULT_RELAY } from './hosts.js';
 import { DEFAULT_URLS } from './jetstream.js';
 
 function opt(env, name, fallback) {
@@ -31,6 +32,8 @@ export function loadConfig(env = process.env) {
     secret,
     // Without both, the station still answers /v1/now and writes nothing.
     supabase: supabaseUrl && supabaseKey ? { url: supabaseUrl, key: supabaseKey } : null,
+    // whose list of PDS hosts to count (hosts.js)
+    relayUrl: opt(env, 'RELAY_URL', DEFAULT_RELAY),
     stateFile: opt(env, 'STATE_FILE', 'state.json'),
     maxReplaySeconds: num(env, 'MAX_REPLAY_SECONDS', 1800),
     logLevel: opt(env, 'LOG_LEVEL', 'info'),

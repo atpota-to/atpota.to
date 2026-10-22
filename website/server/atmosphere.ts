@@ -25,6 +25,12 @@
  * It does count them exactly, while it listens, for its diversity index (nothing is
  * kept), which therefore reads a little low: a few seconds hear fewer apps than a minute.
  *
+ * The station's reading also carries its last census of PDS hosts (`hosts`, from the
+ * relay's list of them; see atmosphere/src/hosts.js): how many are active, Bluesky's and
+ * independent, how many wrote lately, the accounts each side holds, and the hosting
+ * diversity (share × √spread, like the diversity index, but by accounts hosted). The
+ * sample has none.
+ *
  * If neither can be read, the answer is 503 and the tile says so.
  */
 
@@ -128,6 +134,28 @@ export interface Accounts {
   apps: AccountApp[];
 }
 
+export interface Hosts {
+  /** When the station last counted them (it does every 10 minutes). */
+  measuredAt: string;
+  /** Hosts the relay lists, in any state. */
+  listed: number;
+  /** Hosts the relay calls active: Bluesky's own (*.host.bsky.network) and everyone else's. */
+  active: number;
+  bluesky: number;
+  independent: number;
+  /** Active hosts that relayed anything in the last `minutes`, or null until the station has counted twice. */
+  writing: { bluesky: number; independent: number; minutes: number } | null;
+  /** Accounts on active hosts. */
+  accounts: { bluesky: number; independent: number };
+  /** share: percent of accounts on independent hosts; spread: how many hosts they're spread across, as an effective number; index: share × √spread. */
+  diversity: { index: number; share: number; spread: number };
+  /** The independent hosts with the most accounts. */
+  top: Array<{ hostname: string; accounts: number }>;
+}
+
+/** How many hosts the reading names. */
+export const TOP_HOSTS = 10;
+
 /**
  * Who wrote in a stretch of the firehose, which is what the diversity index is worked out
  * from. NOBODY is a stretch with no accounts in it.
@@ -175,6 +203,8 @@ export interface Reading {
   source: 'station' | 'sample';
   /** Who wrote, from the station only. */
   accounts?: Accounts;
+  /** The PDS hosts on the network, from the station only. */
+  hosts?: Hosts;
   /** The station's window. */
   window?: { from: string; to: string };
   /** The station's window second by second, oldest first; null for a second it missed. */
@@ -464,6 +494,30 @@ function accountsOf(x: unknown): Accounts | undefined {
   };
 }
 
+const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/** A station reading's `hosts`, checked, or undefined. The index is worked out here from its parts. */
+export function hostsOf(x: unknown): Hosts | undefined {
+  const n = counts(x, ['listed', 'active', 'bluesky', 'independent'] as const);
+  const measuredAt = isRecord(x) ? isoOrNull(x.measuredAt) : null;
+  const accounts = isRecord(x) ? counts(x.accounts, ['bluesky', 'independent'] as const) : null;
+  const parts = isRecord(x) ? counts(x.diversity, ['share', 'spread'] as const) : null;
+  if (!n || !measuredAt || !accounts || !parts || !isRecord(x) || !Array.isArray(x.top)) return undefined;
+  const writing = counts(x.writing, ['bluesky', 'independent', 'minutes'] as const);
+  const share = Math.min(parts.share, 100);
+  return {
+    measuredAt,
+    ...n,
+    writing: writing && writing.minutes > 0 ? writing : null,
+    accounts,
+    diversity: { index: diversityIndex(share, parts.spread), share, spread: parts.spread },
+    top: x.top
+      .filter((h): h is Record<string, unknown> => isRecord(h) && typeof h.hostname === 'string' && HOSTNAME_RE.test(h.hostname) && isCount(h.accounts))
+      .slice(0, TOP_HOSTS)
+      .map((h) => ({ hostname: h.hostname as string, accounts: h.accounts as number })),
+  };
+}
+
 /**
  * A station answer as a Reading, or null if any required part is off. Rebuilt from known
  * fields only, names re-checked (they are someone else's text), condition, diversity
@@ -511,6 +565,8 @@ export function fromStation(body: unknown): Reading | null {
     source: 'station',
   };
   if (accounts) reading.accounts = accounts;
+  const hosts = hostsOf(body.hosts);
+  if (hosts) reading.hosts = hosts;
   const w = isRecord(body.window) ? { from: isoOrNull(body.window.from), to: isoOrNull(body.window.to) } : null;
   if (w?.from && w.to) reading.window = { from: w.from, to: w.to };
   if (Array.isArray(body.series)) {

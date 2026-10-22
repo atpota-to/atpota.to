@@ -173,6 +173,42 @@
                 <p class="weather-tile__note" data-r-bsky-note>bluesky&#39;s busiest kinds of record, a second.</p>
             </section>
 
+            <!-- the PDS hosts on the network, from the station's census of the relay's list (weather-page.ts renderHosts); always the latest census, whatever the lens says -->
+            <section class="tile weather-tile weather-hosts" aria-labelledby="weather-hosts-title" data-r-hosts hidden>
+                <div class="weather-tile__head">
+                    <div class="weather-tile__titled">
+                        <h2 class="weather-tile__title" id="weather-hosts-title">where accounts live</h2>
+                        <button type="button" class="weather-info" data-poe-explain="hosts" aria-haspopup="dialog" aria-label="what are pds hosts? ask poe" title="what's this?">
+                            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
+                        </button>
+                    </div>
+                    <p class="weather-tile__aside" data-h-age></p>
+                </div>
+                <div class="weather-hosts__cols">
+                    <div class="weather-hosts__main">
+                        <div class="weather-hosts__now">
+                            <p class="weather-hosts__count" data-h-active>&ndash;</p>
+                            <div>
+                                <p class="weather-hosts__words">active pds hosts</p>
+                                <p class="weather-hosts__blurb" data-h-split></p>
+                            </div>
+                        </div>
+                        <dl class="weather-hosts__stats">
+                            <div><dt>hosting diversity</dt><dd data-h-index>&ndash;</dd></div>
+                            <div data-h-writing-wrap hidden><dt data-h-writing-words>wrote in the last hour</dt><dd data-h-writing>&ndash;</dd></div>
+                        </dl>
+                        <div class="weather-ratio weather-mix__bar" aria-hidden="true">
+                            <span class="weather-ratio__bsky" data-h-bar-bsky></span><span class="weather-ratio__else" data-h-bar-else></span>
+                        </div>
+                        <p class="weather-hosts__share" data-h-share></p>
+                    </div>
+                    <div class="weather-hosts__list">
+                        <ol class="weather-bars weather-bars--hosts" role="list" data-h-top></ol>
+                        <p class="weather-tile__note">the independent hosts with the most accounts. bluesky&#39;s own hosts count as one place, the way bluesky counts as one app.</p>
+                    </div>
+                </div>
+            </section>
+
             <!-- the lens's window over time (weather-page.ts initTrends); on now, the last hour -->
             <section class="tile weather-tile weather-trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading">
                 <div class="weather-tile__head">

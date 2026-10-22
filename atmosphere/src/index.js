@@ -4,6 +4,7 @@
 // See README.md, and atmosphere/SPEC.md in atpota-to/atpota.to for the brief.
 
 import { loadConfig } from './config.js';
+import { createHostWatch } from './hosts.js';
 import { createJetstream, REWIND_US } from './jetstream.js';
 import { createLogger } from './logger.js';
 import { createServer, health } from './server.js';
@@ -39,10 +40,14 @@ if (config.supabase) {
   log.warn('minute writer off: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not both set');
 }
 
-const server = createServer({ station, secret: config.secret });
+// the PDS hosts on the network, from the relay's list of them (hosts.js)
+const hostWatch = createHostWatch({ log, relay: config.relayUrl });
+
+const server = createServer({ station, secret: config.secret, hosts: hostWatch.census });
 server.listen(config.port, config.host, () => log.info('listening', { host: config.host, port: config.port }));
 
 jetstream.start();
+hostWatch.start();
 
 const timers = [
   setInterval(() => writer?.tick().catch((err) => log.error('writer tick failed', { err })), 1000),
@@ -75,6 +80,7 @@ function shutdown(signal) {
   log.info('stopping', { signal });
   timers.forEach(clearInterval);
   jetstream.stop();
+  hostWatch.stop();
   server.close();
   // Nothing to flush: unwritten minutes are replayed from Jetstream on the next start.
   setTimeout(() => process.exit(0), 200).unref();

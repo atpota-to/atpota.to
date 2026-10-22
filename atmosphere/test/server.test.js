@@ -85,3 +85,16 @@ test('only GET and HEAD, only its two paths', async () => {
     await s.close();
   }
 });
+
+test('/v1/now carries the last census of hosts, when there is one', async () => {
+  const nowSec = T0 + 2;
+  const hosts = { summary: (ms) => ({ measuredAt: new Date(ms).toISOString(), active: 3 }) };
+  const server = createServer({ station: live(T0 - 100, T0 + 1.9, nowSec), secret: SECRET, hosts, now: () => nowSec * 1000 });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/v1/now`, { headers: { [SECRET_HEADER]: SECRET } })).json();
+    assert.equal(body.hosts.active, 3);
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});
