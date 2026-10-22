@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { config } from '../src/config.js';
 import { db } from '../src/db.js';
-import { baseline, acceptMessage, receiveDraft, deliverDm, pollOperatorDms } from '../src/operator-dm.js';
+import { baseline, acceptMessage, receiveDraft, deliverDm, pollOperatorDms, describeShared } from '../src/operator-dm.js';
 
 const admin = 'did:plc:operator123';
 config.adminDids = [admin];
@@ -64,6 +64,66 @@ test('mock inbox dispatches only to private DM agent route, with no public repo 
   assert.match(endpoint, /\/operator\/dm$/);
   assert.deepEqual([body.dmId, body.operatorDid, body.guidance], [target.id, admin, false]);
   assert.equal(db.prepare('SELECT status FROM operator_dm WHERE message_id = ?').get(target.id).status, 'dispatched');
+});
+
+const ARCHIVE_POST = 'at://did:plc:archiveorg123/app.bsky.feed.post/3myg7pie6p224';
+const attachedPost = (extra = {}) => ({
+  $type: 'app.bsky.embed.record#view',
+  record: {
+    $type: 'app.bsky.embed.record#viewRecord', uri: ARCHIVE_POST, cid: 'bafypost',
+    author: { did: 'did:plc:archiveorg123', handle: 'archive.org' },
+    value: { $type: 'app.bsky.feed.post', text: 'Heroes. Thank you all.' }, ...extra,
+  },
+});
+
+async function dispatchAll(messages) {
+  const bodies = [];
+  await pollOperatorDms({
+    api: { listDmConvos: async () => ({ convos: [convo] }), getDmMessages: async () => ({ messages }) },
+    fetcher: async (_url, options) => { bodies.push(JSON.parse(options.body)); return { ok: true }; },
+  });
+  return bodies;
+}
+
+test('a post attached to a DM reaches Poe as links under the text, and is not kept after', async () => {
+  const target = { ...message(), text: "what's the reactions to this post like?", embed: attachedPost() };
+  const body = (await dispatchAll([target])).find((b) => b.dmId === target.id);
+  assert.equal(body.text, "what's the reactions to this post like?\n\n(attached to this message: the post " +
+    `https://bsky.app/profile/archive.org/post/3myg7pie6p224, ${ARCHIVE_POST})`);
+  const row = db.prepare('SELECT status, draft_text, shared_text FROM operator_dm WHERE message_id = ?').get(target.id);
+  assert.deepEqual({ ...row }, { status: 'dispatched', draft_text: null, shared_text: null });
+});
+
+test('a post attached with no text is still a message; with neither, nothing is', async () => {
+  const bare = { ...message(), text: '', embed: attachedPost() };
+  const empty = { ...message(), text: '  ' };
+  const bodies = await dispatchAll([bare, empty]);
+  assert.match(bodies.find((b) => b.dmId === bare.id).text, /^\(attached to this message: the post https:\/\/bsky\.app\/profile\/archive\.org\//);
+  assert.equal(bodies.some((b) => b.dmId === empty.id), false);
+});
+
+test('a link the app shortened reaches Poe whole', async () => {
+  const url = 'https://bsky.app/profile/archive.org/post/3myg7pie6p224';
+  const shown = 'bsky.app/profile/archi...';
+  const text = `what about ${shown}?`;
+  const start = Buffer.byteLength('what about ');
+  const target = { ...message(), text, facets: [{
+    index: { byteStart: start, byteEnd: start + Buffer.byteLength(shown) },
+    features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }],
+  }] };
+  const body = (await dispatchAll([target])).find((b) => b.dmId === target.id);
+  assert.equal(body.text, `what about ${url}?`);
+});
+
+test('describeShared names hidden posts and other records by at-uri, and ignores the rest', () => {
+  assert.equal(describeShared(undefined), null);
+  assert.equal(describeShared({ $type: 'app.bsky.embed.record#view', record: { uri: 'https://example.com' } }), null);
+  assert.equal(describeShared(attachedPost({ $type: 'app.bsky.embed.record#viewNotFound' })),
+    `(attached to this message: a post that can't be seen, ${ARCHIVE_POST})`);
+  assert.match(describeShared(attachedPost({ author: { did: 'did:plc:archiveorg123', handle: 'handle.invalid' } })),
+    /https:\/\/bsky\.app\/profile\/did:plc:archiveorg123\/post\/3myg7pie6p224/);
+  const feed = 'at://did:plc:x/app.bsky.feed.generator/cool';
+  assert.equal(describeShared(attachedPost({ uri: feed })), `(attached to this message: ${feed})`);
 });
 
 test('kill switch prevents private sends too', async () => {
