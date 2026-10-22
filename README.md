@@ -118,6 +118,20 @@ via OBS* to hear Poe, and leave *shutdown source when not visible* off.
   `!forecast`, `!apps`, `!pet` and `!poe`. In dame.is's chat, `!pet` also counts on the
   garden's pets leaderboard, one an hour (`garden/`). It only ever says handles, never
   what people wrote.
+- **The TID clock**, from Anisota: the time right now as an atproto record key, ticking,
+  the characters that just changed glowing. Ticking, decoded (its time part and clock id,
+  and the time it means to the microsecond), or a little pill.
+- **Your records**, read from your repo and refreshed when Jetstream says they changed:
+  your **flushes** on [flushes.app](https://flushes.app) (the count, the stats with your
+  streak and favourite emoji, or the latest flush), your **status** and **vitals** as
+  [dame.is](https://dame.is) shows them (`is.dame.now`, `is.dame.state`), and your
+  **music** from [teal.fm](https://teal.fm) (now playing with the cover and a progress bar,
+  the last few plays, this week's stats, or one line).
+- **Chat on screen**: your stream.place chat as it comes in, as a little corner box, a
+  strip down a side (short of Poe), or messages that pop up and fade. It's the one place
+  other people's words reach the stream, through `textContent` only, and what stream.place
+  hides stays hidden: deleted messages, ones you hide (`place.stream.chat.gate`), people
+  you block, and anyone on Poe's ignore list.
 
 **Scenes** are full screens for the moments in between, each with its own URL and its
 own record (`to.atpota.poe.scene`, at the screen's id,
@@ -126,7 +140,7 @@ set up in the screens section of `/overlay/setup` and followed live like the res
 each as a browser source in its own OBS scene, and switch between them there:
 `/overlay?streamer=dame.is&scene=starting`. Everyone starts with one of each kind (its id
 is its kind); **+ new screen** adds as many more as you like, of any kind, with a name
-("coding brb" is `&scene=coding-brb`). Added screens can be removed, and the starting four
+("coding brb" is `&scene=coding-brb`). Added screens can be removed, and the starting ones
 reset to their defaults.
 
 | kind | what's on it |
@@ -134,6 +148,8 @@ reset to their defaults.
 | `starting` | "starting soon", a line under it, and a countdown: a timer from when the scene comes on (tick *refresh browser when scene becomes active*), or to a time. When it runs out Poe cheers |
 | `brb` | "be right back" |
 | `ending` | "thanks for watching", and up to four places to find you |
+| `loading` | Anisota's loading screen: its mark on black, the moon running through its phases |
+| `clock` | a waiting screen with the TID clock ticking big, what it means to the microsecond, and your title over it |
 | `screenshare` | an atpotato frame with a big 16:9 window for a screen capture and a camera window beside it (rounded, circle or wide; right, left or none), the title along the bottom and the weather in the column, Poe on the camera's side. The setup page gives each window's exact spot to put the OBS sources under it |
 
 Each has a title and a line under it, a backdrop (day: sky, clouds and the sun; night:
@@ -147,7 +163,8 @@ page's preview passes its whole draft this way):
 
 | param | does |
 | --- | --- |
-| `w=card:tl:100,apps:tr:80` | the widgets: kind, slot (`tl tc tr bl bc br`) and size in percent; `w=none` for none |
+| `w=card:tl:100,apps:tr:80` | the widgets: kind, slot (`tl tc tr bl bc br`), size in percent, and for the TID clock, flushes, status, music and chat a style (`chat:tr:100:side`); `w=none` for none |
+| `who=dame.is` | whose flushes, status and music to show without a streamer (the setup page's preview) |
 | `poe=left:120`, `poe=off` | Poe's corner and size, or no Poe |
 | `chat=off`, `follows=off`, `alerts=off`, `visitors=off` | turn off hellos and commands, follower thanks, weather alerts or visitors |
 | `ignore=<handles or DIDs>` | people Poe never greets, thanks or answers (bots), comma separated |

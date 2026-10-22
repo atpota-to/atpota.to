@@ -235,7 +235,7 @@
   }
 }
 
-/* one row per weather widget: on or off, where, how big */
+/* one row per widget: on or off, where, how it looks, how big */
 .ovs-widgets {
   display: grid;
   gap: 8px;
@@ -263,6 +263,7 @@
 }
 
 .ovs-widget.is-off .ovs-widget__where,
+.ovs-widget.is-off .ovs-widget__style,
 .ovs-widget.is-off .ovs-widget__size {
   opacity: 0.45;
 }
@@ -683,6 +684,18 @@ html.ovs-full-open {
   background: transparent;
   color: #FFFFFF;
   font-weight: 400;
+}
+
+.ovs-sketch--screen[data-kind="clock"] {
+  align-content: center;
+  gap: 6px;
+}
+
+.ovs-sketch__tid {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sun);
 }
 
 .ovs-sketch__window,

@@ -13,6 +13,8 @@
  *               streamer's links
  *   frame       the backdrop with frameHoles cut out (clip-path), a soft rim round each
  *               window, the title along the bottom, and the weather in the column
+ *   clock       the panel with the TID clock (tid.ts ticks it) in place of a countdown, and
+ *               a "waiting" line with dots that keep on going
  *   splash      Anisota's loading screen in place of the backdrop and panel: its mark
  *               (anisota.ts draws it), the title under it, or with no title one of
  *               SPLASH_LINES every SPLASH_LINE_MS
@@ -61,6 +63,7 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
   const splash = q('[data-ovsc-splash]');
   const splashLine = q('[data-ovsc-splash-line]');
   const splashSub = q('[data-ovsc-splash-sub]');
+  const tid = root.querySelector<HTMLElement>('[data-ovsc-tid]');
   const doc = root.ownerDocument;
 
   let timer: number | undefined;
@@ -114,6 +117,7 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
       }
       if (clouds) renderClouds(clouds, scene.background === 'day' ? 6 : scene.background === 'garden' ? 3 : 0, win);
 
+      if (tid) tid.hidden = scene.kind !== 'clock';
       const framed = scene.kind === 'screenshare';
       panel.hidden = framed || splashing;
       bar.hidden = !framed;

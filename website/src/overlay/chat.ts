@@ -12,9 +12,18 @@
  * Jetstream only filters by collection, so the follows come for the whole network (tens a
  * second, a few KB) and are picked out here. With follows off it asks for chat alone.
  *
- * Chat text is other people's words and never reaches the screen: Poe only reacts to it
- * (a greeting, a command) and names people by their handle, through textContent.
+ * And for the chat on screen (onscreen.ts): the chat messages' words and record keys, chat
+ * messages deleted anywhere (someone taking theirs back), and the streamer's
+ * place.stream.chat.gate records, which hide a message in their chat. And for the record
+ * widgets (records.ts), any change to the streamer's own flushes, status, vitals or
+ * teal.fm plays.
+ *
+ * Chat text is other people's words: Poe only reacts to it (a greeting, a command) and
+ * names people by their handle. It reaches the screen only in the chat widget, when the
+ * streamer turns it on, and only ever through textContent.
  */
+
+import { RECORD_COLLECTIONS } from './records';
 
 export const CHAT = 'place.stream.chat.message';
 export const FOLLOW = 'app.bsky.graph.follow';
@@ -23,6 +32,8 @@ export const LIVESTREAM = 'place.stream.livestream';
 export const OVERLAY = 'to.atpota.poe.overlay';
 /** The streamer's scenes (scenes.ts), each at its name. */
 export const SCENE = 'to.atpota.poe.scene';
+/** The streamer hiding a message in their chat. */
+export const GATE = 'place.stream.chat.gate';
 
 /** Bluesky's us-east hosts share one address, so the fallback is in us-west (as server/atmosphere.ts). */
 export const JETSTREAMS = ['wss://jetstream2.us-east.bsky.network/subscribe', 'wss://jetstream1.us-west.bsky.network/subscribe'] as const;
@@ -36,7 +47,14 @@ const REWIND_MAX_US = 5 * 60 * 1_000_000;
 export type Command = 'weather' | 'forecast' | 'apps' | 'pet' | 'poe';
 
 export type StreamEvent =
-  | { kind: 'chat'; did: string; command: Command | null }
+  /** A chat message: its words are someone else's, unchecked beyond being a string. */
+  | { kind: 'chat'; did: string; rkey: string; text: string; command: Command | null }
+  /** A chat message deleted by whoever wrote it (for anyone's chat: matched by did and rkey). */
+  | { kind: 'unchat'; did: string; rkey: string }
+  /** The streamer hid a message in their chat. */
+  | { kind: 'hide'; did: string; rkey: string }
+  /** One of the streamer's own records that a record widget shows changed. */
+  | { kind: 'record'; collection: string }
   | { kind: 'follow'; did: string }
   /** The streamer's stream: `rkey` tells one stream from the next; the title is theirs. */
   | { kind: 'live'; rkey: string; title: string | null }
@@ -58,8 +76,19 @@ export function commandOf(text: string): Command | null {
 export function eventFor(message: unknown, streamer: string): StreamEvent | null {
   if (!obj(message) || message.kind !== 'commit' || typeof message.did !== 'string') return null;
   const commit = message.commit;
-  if (!obj(commit) || !obj(commit.record)) return null;
+  if (!obj(commit) || typeof commit.collection !== 'string') return null;
+  const own = message.did === streamer && (RECORD_COLLECTIONS as readonly string[]).includes(commit.collection);
+  if (commit.operation === 'delete') {
+    if (commit.collection === CHAT && typeof commit.rkey === 'string') return { kind: 'unchat', did: message.did, rkey: commit.rkey };
+    return own ? { kind: 'record', collection: commit.collection } : null;
+  }
+  if (!obj(commit.record)) return null;
   const record = commit.record;
+  if (own) return { kind: 'record', collection: commit.collection };
+  if (commit.collection === GATE) {
+    const hidden = message.did === streamer && commit.operation === 'create' && typeof record.hiddenMessage === 'string' ? /^at:\/\/(did:[a-z]+:[a-zA-Z0-9._:%-]+)\/place\.stream\.chat\.message\/([a-zA-Z0-9._~:-]{1,512})$/.exec(record.hiddenMessage) : null;
+    return hidden ? { kind: 'hide', did: hidden[1]!, rkey: hidden[2]! } : null;
+  }
   if (commit.collection === OVERLAY) {
     return message.did === streamer && typeof commit.rkey === 'string' && (commit.operation === 'create' || commit.operation === 'update') ? { kind: 'config', rkey: commit.rkey, value: record } : null;
   }
@@ -72,8 +101,8 @@ export function eventFor(message: unknown, streamer: string): StreamEvent | null
     return null;
   }
   if (commit.operation !== 'create') return null;
-  if (commit.collection === CHAT && record.streamer === streamer && typeof record.text === 'string') {
-    return { kind: 'chat', did: message.did, command: commandOf(record.text) };
+  if (commit.collection === CHAT && record.streamer === streamer && typeof record.text === 'string' && typeof commit.rkey === 'string') {
+    return { kind: 'chat', did: message.did, rkey: commit.rkey, text: record.text, command: commandOf(record.text) };
   }
   if (commit.collection === FOLLOW && record.subject === streamer && message.did !== streamer) {
     return { kind: 'follow', did: message.did };
@@ -87,6 +116,8 @@ export function jetstreamUrl(host: string, follows: boolean, cursor?: number): s
   url.searchParams.append('wantedCollections', LIVESTREAM);
   url.searchParams.append('wantedCollections', OVERLAY);
   url.searchParams.append('wantedCollections', SCENE);
+  url.searchParams.append('wantedCollections', GATE);
+  for (const c of RECORD_COLLECTIONS) url.searchParams.append('wantedCollections', c);
   if (follows) url.searchParams.append('wantedCollections', FOLLOW);
   if (cursor !== undefined) url.searchParams.set('cursor', String(cursor));
   return url.toString();
