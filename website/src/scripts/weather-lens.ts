@@ -188,6 +188,8 @@ export function createLens(search = typeof location === 'undefined' ? '' : locat
   };
 }
 
+const UNIT_HINT = 'accounts are counted once over the whole window, so they have no rate';
+
 /**
  * The lens's controls ([data-lens-window], [data-lens-measure] buttons and the [data-lens-unit]
  * select), and anything on the page that cycles the unit with a tap ([data-lens-cycle-unit]),
@@ -206,8 +208,8 @@ export function bindLens(root: HTMLElement, lens: Lens): void {
     for (const b of measures) b.setAttribute('aria-pressed', String(b.dataset.lensMeasure === s.measure));
     for (const unit of units) {
       unit.value = s.unit;
-      // accounts are counted once over the whole window, so they have no rate
       unit.disabled = s.measure === 'accounts';
+      unit.title = unit.disabled ? UNIT_HINT : '';
     }
   };
   for (const b of windows) b.addEventListener('click', () => WINDOWS.includes(b.dataset.lensWindow as Window) && lens.set({ window: b.dataset.lensWindow as Window }));

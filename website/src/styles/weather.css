@@ -2126,10 +2126,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   cursor: pointer;
 }
 
-/* counting accounts, it has nothing to say; its room is kept, so the panel (growing upward
-   from the strip) doesn't move the buttons above out from under the finger */
+/* counting accounts, it has nothing to say: faint, but still there, so the panel (growing
+   upward from the strip) doesn't move the buttons above out from under the finger */
 .weather-lens__select:disabled {
-  visibility: hidden;
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* The header's unit ("rec/sec"): a tap moves it on, like °C and °F. */
