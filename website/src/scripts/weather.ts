@@ -108,6 +108,20 @@ export interface Reading {
     index: number;
     apps: Array<{ domain: string; accounts: number; collections: string[] }>;
   };
+  /** The PDS hosts on the network, from the station's census of the relay's list (server/atmosphere.ts Hosts). */
+  hosts?: Hosts;
+}
+
+export interface Hosts {
+  measuredAt: string;
+  listed: number;
+  active: number;
+  bluesky: number;
+  independent: number;
+  writing: { bluesky: number; independent: number; minutes: number } | null;
+  accounts: { bluesky: number; independent: number };
+  diversity: { index: number; share: number; spread: number };
+  top: Array<{ hostname: string; accounts: number }>;
 }
 
 const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
@@ -143,6 +157,14 @@ function clean(r: Reading): Reading {
   const a = r.accounts;
   if (nums(a, ['active', 'bluesky', 'elsewhere', 'index']) && Array.isArray(a?.apps)) {
     out.accounts = { ...a, apps: a.apps.filter((x) => nums(x, ['accounts']) && name(x.domain) && Array.isArray(x.collections)).map((x) => ({ ...x, collections: x.collections.filter(name).slice(0, 3) })) };
+  }
+  const h = r.hosts;
+  if (h && nums(h, ['listed', 'active', 'bluesky', 'independent']) && typeof h.measuredAt === 'string' && Number.isFinite(Date.parse(h.measuredAt)) && nums(h.accounts, ['bluesky', 'independent']) && nums(h.diversity, ['index', 'share', 'spread']) && Array.isArray(h.top)) {
+    out.hosts = {
+      ...h,
+      writing: nums(h.writing, ['bluesky', 'independent', 'minutes']) ? h.writing : null,
+      top: h.top.filter((x) => nums(x, ['accounts']) && name(x.hostname)).slice(0, 10),
+    };
   }
   return out;
 }

@@ -1573,6 +1573,84 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   color: var(--text-soft);
 }
 
+/* ---------- where accounts live: the PDS hosts (weather-page.ts renderHosts) ---------- */
+
+.weather-hosts {
+  grid-column: 1 / -1;
+}
+
+.weather-hosts__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+}
+
+.weather-hosts__main,
+.weather-hosts__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.weather-hosts__now {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.weather-hosts__count {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-hosts__words {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.weather-hosts__blurb,
+.weather-hosts__share {
+  color: var(--text-soft);
+}
+
+.weather-hosts__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.weather-hosts__stats div {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.weather-hosts__stats dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.weather-hosts__stats dd {
+  margin: 2px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-hosts__list .weather-tile__note {
+  margin-top: auto;
+}
+
+@media (max-width: 760px) {
+  .weather-hosts__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---------- trends (weather-page.ts initTrends, weather-chart.ts) ---------- */
 
 .weather-trends {

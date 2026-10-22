@@ -377,6 +377,41 @@ describe('reading the weather station', () => {
     expect(fromStation({ ...STATION, accounts: { ...accounts, apps: null } })!.accounts).toBeUndefined();
   });
 
+  it('passes the station\'s census of hosts through, checked, working the index out itself', () => {
+    const hosts = {
+      measuredAt: '2026-10-22T13:20:00.000Z',
+      listed: 6442,
+      active: 1887,
+      bluesky: 90,
+      independent: 1797,
+      writing: { bluesky: 90, independent: 640, minutes: 60 },
+      accounts: { bluesky: 23767508, independent: 363866 },
+      diversity: { index: 99, share: 1.51, spread: 24.54 },
+      top: [
+        { hostname: 'blacksky.app', accounts: 42366 },
+        { hostname: '<b>x</b>.com', accounts: 9 },
+        { hostname: 'localhost', accounts: 9 },
+        { hostname: 'eurosky.social', accounts: -1 },
+      ],
+      extra: 'ignored',
+    };
+    expect(fromStation({ ...STATION, hosts })!.hosts).toEqual({
+      measuredAt: '2026-10-22T13:20:00.000Z',
+      listed: 6442,
+      active: 1887,
+      bluesky: 90,
+      independent: 1797,
+      writing: { bluesky: 90, independent: 640, minutes: 60 },
+      accounts: { bluesky: 23767508, independent: 363866 },
+      diversity: { index: 7.48, share: 1.51, spread: 24.54 },
+      top: [{ hostname: 'blacksky.app', accounts: 42366 }],
+    });
+    expect(fromStation({ ...STATION, hosts: { ...hosts, writing: null } })!.hosts!.writing).toBeNull();
+    expect(fromStation(STATION)!.hosts).toBeUndefined();
+    expect(fromStation({ ...STATION, hosts: { ...hosts, active: 'lots' } })!.hosts).toBeUndefined();
+    expect(fromStation({ ...STATION, hosts: { ...hosts, top: null } })!.hosts).toBeUndefined();
+  });
+
   it('works the index out from an older station\'s accounts, which sends no share or spread', () => {
     const accounts = { active: 21000, bluesky: 20800, elsewhere: 210, index: 1, apps: [30, 30, 30, 30].map((n, i) => ({ domain: `app${i}.test`, accounts: n, collections: [] })) };
     const older = { ...STATION, diversity: { index: 0.6, level: 'low', apps: 12, collections: 40 } };

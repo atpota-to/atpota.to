@@ -1,5 +1,5 @@
 // server.js
-// GET /v1/now   the last 60 seconds (needs x-atpotato-weather-secret)
+// GET /v1/now   the last 60 seconds, and the last census of PDS hosts (needs x-atpotato-weather-secret)
 // GET /healthz  open, for uptime checks: 200 when connected and current, 503 otherwise
 //
 // Listens on localhost; nginx terminates TLS in front of it. Vercel caches /v1/now for a
@@ -28,7 +28,7 @@ export function health(station, nowMs) {
   return { ok, connected, lagSeconds, covered60 };
 }
 
-export function createServer({ station, secret, now = () => Date.now() }) {
+export function createServer({ station, secret, hosts = null, now = () => Date.now() }) {
   if (!secret) throw new Error('createServer needs a secret');
   return http.createServer((req, res) => {
     const head = req.method === 'HEAD';
@@ -53,6 +53,8 @@ export function createServer({ station, secret, now = () => Date.now() }) {
     if (!authorized(req.headers[SECRET_HEADER], secret)) return send(401, { error: 'unauthorized' });
     const reading = station.reading(now());
     if (!reading) return send(503, { error: 'unavailable' });
+    const census = hosts?.summary(now());
+    if (census) reading.hosts = census;
     return send(200, reading);
   });
 }

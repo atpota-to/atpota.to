@@ -25,6 +25,9 @@ import {
   formatRate,
   levelOf,
   ratesOf,
+  renderHosts,
+  hostsAge,
+  hostsShare,
   renderReport,
   renderReportError,
   renderTrends,
@@ -101,6 +104,44 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-r-event="deletes"]')).toBe('810'); // 13.5 a second, counted over the minute
     expect(text('[data-r-collections]')).toBe('40');
     expect(report.querySelector<HTMLElement>('[data-r-marker]')!.style.left).toMatch(/^13\.8/);
+  });
+
+  it('keeps where accounts live hidden until a reading carries the hosts, then fills it', () => {
+    const tile = report.querySelector<HTMLElement>('[data-r-hosts]')!;
+    renderReport(report, READING, lens());
+    expect(tile.hidden).toBe(true);
+    const hosts = {
+      measuredAt: '2026-10-20T16:11:00.000Z',
+      listed: 6442,
+      active: 1887,
+      bluesky: 90,
+      independent: 1797,
+      writing: { bluesky: 90, independent: 610, minutes: 30 },
+      accounts: { bluesky: 23767508, independent: 363866 },
+      diversity: { index: 7.48, share: 1.51, spread: 24.54 },
+      top: [
+        { hostname: 'blacksky.app', accounts: 42366 },
+        { hostname: 'eurosky.social', accounts: 38029 },
+      ],
+    };
+    renderHosts(report, hosts, Date.parse('2026-10-20T16:18:00.000Z'));
+    expect(tile.hidden).toBe(false);
+    expect(text('[data-h-active]')).toBe('1,887');
+    expect(text('[data-h-index]')).toBe('7.5');
+    expect(text('[data-h-writing]')).toBe('700');
+    expect(text('[data-h-writing-words]')).toBe('wrote in the last 30 minutes');
+    expect(text('[data-h-age]')).toBe('counted 7 minutes ago');
+    expect(text('[data-h-share]')).toBe("1.5% of 24.1m accounts live on independent hosts, spread across about 25 hosts' worth.");
+    expect([...report.querySelectorAll('[data-h-top] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'eurosky.social']);
+    renderHosts(report, { ...hosts, writing: null });
+    expect(report.querySelector<HTMLElement>('[data-h-writing-wrap]')!.hidden).toBe(true);
+  });
+
+  it('says where accounts live in words', () => {
+    expect(hostsAge('2026-10-20T16:18:00.000Z', Date.parse('2026-10-20T16:18:20.000Z'))).toBe('counted just now');
+    expect(hostsAge('2026-10-20T16:17:00.000Z', Date.parse('2026-10-20T16:18:00.000Z'))).toBe('counted 1 minute ago');
+    const none = { measuredAt: '', listed: 1, active: 1, bluesky: 1, independent: 0, writing: null, accounts: { bluesky: 10, independent: 0 }, diversity: { index: 0, share: 0, spread: 0 }, top: [] };
+    expect(hostsShare(none)).toBe("all 10 accounts live on bluesky's hosts.");
   });
 
   it('draws the apps and bluesky collections as bars, longest for the busiest', () => {

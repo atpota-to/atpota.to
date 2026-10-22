@@ -23,7 +23,7 @@ Public, through nginx on `hook.atpota.to`:
 
 | URL | Auth | Answer |
 |---|---|---|
-| `GET https://hook.atpota.to/weather/v1/now` | header `x-atpotato-weather-secret: $WEATHER_SECRET` | `200` the website's `Reading` plus `accounts`, `window` and `series` (one entry per second; `null` means missing); `503 {"error":"unavailable"}` under 30 covered seconds; `401` without the right secret |
+| `GET https://hook.atpota.to/weather/v1/now` | header `x-atpotato-weather-secret: $WEATHER_SECRET` | `200` the website's `Reading` plus `accounts`, `window`, `series` (one entry per second; `null` means missing) and `hosts` (below); `503 {"error":"unavailable"}` under 30 covered seconds; `401` without the right secret |
 | `GET https://hook.atpota.to/weather/healthz` | none | `{"ok","connected","lagSeconds","covered60"}`: `200` when connected, lag is under 10 s and at least 30 of the last 60 s are covered; otherwise `503` |
 
 The process listens on `127.0.0.1:8790` and serves `/v1/now` and `/healthz`.
@@ -112,6 +112,36 @@ thousand records a minute is a thousand records and one account.
   and counts the stored sketches itself (`website/server/hll.ts`,
   `weather-accounts.ts`). Postgres can't do it: on this project, merging takes about
   70 ms a sketch in PL/pgSQL.
+
+## PDS hosts
+
+Jetstream doesn't say which PDS a commit came from, so the hosts aren't counted from the
+firehose. Instead, every 10 minutes the station pages through the relay's own list of
+them (`com.atproto.sync.listHosts` on `relay1.us-east.bsky.network`, the relay jetstream2
+reads; `RELAY_URL` to change it): about 6,400 hosts in 7 pages, in about 2 s. It keeps the
+last whole list; a page that fails fails that poll, and the last list stays. A list over
+2 hours old isn't served. Nothing is written to Supabase.
+
+`/v1/now` carries it as `hosts` (`src/hosts.js` `summarizeHosts`):
+
+- `listed`: every host the relay knows, in any state; `active`: the ones it calls active,
+  split into `bluesky` (`*.host.bsky.network`, Bluesky's ~90 "mushrooms") and
+  `independent`. On 2026-10-22: 6,442 listed, 1,887 active, 90 Bluesky's.
+- `writing`: active hosts whose `seq` (the last event the relay took from them) moved in
+  the last hour, as `{ bluesky, independent, minutes }`. It's null until the station has
+  polled twice, and `minutes` is under 60 for the first hour after a restart.
+- `accounts`: the accounts on active hosts, by the relay's `accountCount` (accounts it
+  hosts, not accounts active): 23.8 million on Bluesky's, 364k elsewhere.
+- `diversity`: the **hosting diversity**, worked out like the diversity index but by where
+  accounts live: `share` is the percent of accounts on independent hosts, `spread` is
+  how many independent hosts they're spread across as an effective number (`spreadOf`),
+  and `index = share × √spread`. Bluesky's hosts count as one place, the way `app.bsky.*`
+  counts as one app. On 2026-10-22: 1.51% × √24.5 = 7.48. It is its own number on its
+  own scale, not folded into the diversity index: that one is who's *writing* this
+  minute, this is where accounts *live*, and mixing them would break the index's history
+  and Poe's copy of its levels. `atproto.brid.gy` (Bridgy Fed's bridged accounts) is the
+  biggest independent host and counts like any other.
+- `top`: the 10 independent hosts with the most accounts.
 
 ## Minute rows
 
@@ -324,12 +354,13 @@ and `JETSTREAM_SDK_DIR` another SDK folder.
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | the atpota.to project. Without both, the writer is off and `/v1/now` still works |
 | `JETSTREAM_URLS` | comma-separated; defaults to the two above |
 | `MAX_REPLAY_SECONDS` | how far back a cursor may reach (1800) |
+| `RELAY_URL` | whose list of PDS hosts to count (`https://relay1.us-east.bsky.network`) |
 | `STATE_FILE`, `LOG_LEVEL` | `state.json`, `info` |
 
 ## Running it
 
 ```bash
-npm test                                         # node:test, 80 tests, about a second, no network
+npm test                                         # node:test, 112 tests, about a second, no network
 /root/atpota-live/deploy.sh atmosphere           # what a merge to main runs (via GitHub Actions)
 systemctl status atpotato-weather
 journalctl -u atpotato-weather -f -o cat         # one JSON line per event; "stats" every minute
@@ -372,6 +403,7 @@ src/rollup.js      accounts by hour, day and month: merged in memory, written ev
 src/supabase.js    PostgREST upserts and paged reads
 src/replay.js      recount and rewrite minutes from Jetstream's history (repairs, gaps)
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
+src/hosts.js       the PDS hosts, from the relay's list every 10 minutes
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line
