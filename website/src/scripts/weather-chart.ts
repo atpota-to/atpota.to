@@ -45,6 +45,8 @@ export interface ChartOptions {
 const SVG = 'http://www.w3.org/2000/svg';
 const HEIGHT = 180;
 const PAD = { top: 12, right: 10, bottom: 24, left: 46 };
+/** Narrower than this, a chart labels only the start and end of its time axis. */
+const NARROW = 320;
 
 /** A round number at or above `max` (1, 2, 2.5 or 5 times a power of ten). */
 export function niceMax(max: number): number {
@@ -207,8 +209,8 @@ function draw(host: HTMLElement): void {
     label.textContent = (opts.formatTick ?? opts.format)(v);
     svg.append(label);
   }
-  // time labels: the start, the middle and the end of the axis
-  const times = t1 === t0 ? [t0] : [t0, (t0 + t1) / 2, t1];
+  // time labels: the start, the middle and the end of the axis (no middle on a narrow chart, where they'd collide)
+  const times = t1 === t0 ? [t0] : width < NARROW ? [t0, t1] : [t0, (t0 + t1) / 2, t1];
   times.forEach((t, i) => {
     const anchor = times.length === 1 ? 'middle' : i === 0 ? 'start' : i === times.length - 1 ? 'end' : 'middle';
     const label = el('text', { class: 'weather-chart__tick', x: x(t), y: HEIGHT - 6, 'text-anchor': anchor });

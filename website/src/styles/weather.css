@@ -1843,9 +1843,46 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   text-wrap: balance;
 }
 
-/* The census sits beside the sizes tile: the domain zoo above the roll call. */
-.weather-census .weather-hosts__cols {
-  grid-template-columns: minmax(0, 1fr);
+/* A note that isn't a pds tile's last stays with what it notes; only the last one sinks. */
+.weather-pds > .weather-tile__note:not(:last-child) {
+  margin-top: 0;
+}
+
+/* Host sizes and the census each take a whole row, their bars in two columns on wide
+   screens, so neither tile stretches to match a taller neighbour. */
+.weather-sizes,
+.weather-census {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 720px) {
+  .weather-bars--sizes,
+  .weather-bars--tlds {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 28px;
+  }
+
+  /* the domain zoo's two columns of bars beside the roll call's one */
+  .weather-census .weather-hosts__cols {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 719px) {
+  .weather-census .weather-hosts__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The hosts' four charts: one row of four on wide screens, two by two in between. */
+.weather-hosts__trends .weather-trends__charts {
+  grid-template-columns: repeat(auto-fit, minmax(max(220px, calc((100% - 48px) / 4)), 1fr));
+}
+
+@media (min-width: 560px) and (max-width: 1099px) {
+  .weather-hosts__trends .weather-trends__charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* A host in a list opens its own history (weather-host-panel.ts). */
@@ -1910,8 +1947,17 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 }
 
 @media (max-width: 640px) {
+  /* three small numbers stay in a row on a phone, just tighter */
   .weather-pds__stats--three {
-    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .weather-pds__stats--three div {
+    padding: 8px 10px;
+  }
+
+  .weather-pds__stats--three dd {
+    font-size: 18px;
   }
 
   .weather-pds__big {

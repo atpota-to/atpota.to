@@ -230,7 +230,7 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   const index = $(part, '[data-h-chart="index"]');
   setText(part, '[data-h-headline]', shareHeadline(h, range));
   const share = $(part, '[data-h-chart="share"]');
-  if (share) renderChart(share, pts((r) => r.share), { label: 'accounts on independent hosts, as a share of all', color: 'var(--weather-else)', format: pct, formatTick: (v) => `${Number(v.toFixed(3))}%`, formatTime, stepMs: step, fromZero: false });
+  if (share) renderChart(share, pts((r) => r.share), { label: 'share of accounts off bluesky', color: 'var(--weather-else)', format: pct, formatTick: (v) => `${Number(v.toFixed(3))}%`, formatTime, stepMs: step, fromZero: false });
   if (active) renderChart(active, pts((r) => r.active), { label: 'active pds hosts', color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
   if (index) renderChart(index, pts((r) => r.index), { label: 'hosting diversity', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
 
