@@ -917,10 +917,13 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       markWatered(local, f.uri, now());
       f.thirsty = false;
       f.lastTended = new Date(now()).toISOString();
+      // Filling the card again takes the tapped button away: move focus to the card first, and
+      // keep the page where it was, since Safari scrolls it when a focused button goes.
+      const y = win.scrollY;
+      card?.focus({ preventScroll: true });
       render();
       fillCard();
-      // Filling it again took the focused button away: keep focus in the card, where it was.
-      card?.focus({ preventScroll: true });
+      if (win.scrollY !== y) win.scrollTo(0, y);
       cardSay(COPY.watered(isMine(f) ? COPY.yours(nameOf(f)) : COPY.theirs(f.handle, nameOf(f))));
       burst(plots?.querySelector(`[data-plot="${f.plot}"]`) ?? button, 'drops', win);
     } catch (error) {
