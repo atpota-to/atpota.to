@@ -116,7 +116,7 @@ export const WIDGET_HINTS: Record<WidgetKind, string> = {
   moon: "tonight's moon as anisota draws it, with its phase",
   mark: "anisota's brand mark, its moon at tonight's phase",
   loader: "anisota's brand mark, its moon running through its phases",
-  tid: "the time right now as an atproto record key, ticking: anisota's clock in atpotato's letters",
+  tid: "the time right now as an atproto record key, ticking: anisota's clock in atpotato's mono",
   flushes: 'how many times you have flushed on flushes.app, your streak, your latest',
   status: 'your latest is.dame.now status and is.dame.state vitals, as on dame.is',
   music: 'what you are scrobbling to teal.fm: now playing, the last few, your stats',

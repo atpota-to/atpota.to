@@ -1576,16 +1576,18 @@ html[data-theme="dark"] .ov-anisota {
 
 .ov-tid__tid {
   display: flex;
-  font-size: 50px;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 46px;
+  font-weight: 600;
   line-height: 1.1;
+  letter-spacing: 0.04em;
   white-space: nowrap;
-  /* atpotato's face isn't monospaced: a box wider than any TID, so the card doesn't breathe as it ticks */
-  min-width: 8.6em;
 }
 
 .ov-tid__c {
   display: inline-block;
+  width: 1ch;
+  text-align: center;
   transition: color 0.6s var(--ease-out), text-shadow 0.6s var(--ease-out);
 }
 
@@ -1625,8 +1627,8 @@ html[data-theme="dark"] .ov-tid__c.is-new {
 
 .ov-tid__parts dd {
   margin: 2px 0 0;
-  font-size: 20px;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 19px;
 }
 
 .ov-tid__time {
@@ -2087,11 +2089,9 @@ body[data-poe="on"][data-side="left"] .ov-slot--top-left:has(> .ov-chat[data-sty
   border-radius: var(--radius-pill);
   background: var(--soil);
   color: var(--on-soil);
-  font-size: 100px;
-  font-weight: 700;
-  /* wider than any TID, and the characters start from the left, so the pill holds still as it ticks */
-  width: 10.2em;
-  justify-content: flex-start;
+  font-family: var(--font-mono);
+  font-size: 92px;
+  font-weight: 600;
   line-height: 1.1;
   letter-spacing: 0.04em;
 }
@@ -2105,7 +2105,8 @@ body[data-poe="on"][data-side="left"] .ov-slot--top-left:has(> .ov-chat[data-sty
 }
 
 .ovsc__tid-parts {
-  font-size: 24px;
+  font-family: var(--font-mono);
+  font-size: 22px;
   color: var(--muted);
 }
 
