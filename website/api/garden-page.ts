@@ -1,7 +1,7 @@
 // Vercel Function (Node.js runtime, Web handlers): someone's garden page, with its title,
 // description and Open Graph tags made theirs (server/garden-page.ts). vercel.json rewrites
-// /garden/<actor> and /garden/<actor>/flowers here.
-//   GET / HEAD ?actor=<handle or DID>[&level=flowers]  -> text/html
+// /garden/<actor>, /garden/<actor>/flowers and /garden/<actor>/tending here.
+//   GET / HEAD ?actor=<handle or DID>[&level=flowers|tending]  -> text/html
 //   anything else -> 405
 // Local imports end in ".js": Vercel runs the compiled files as native ESM.
 
