@@ -1069,6 +1069,29 @@ describe('the flower patch', () => {
     expect(document.querySelector<HTMLButtonElement>('[data-garden-water]')!.disabled).toBe(true);
   });
 
+  it('a jump as the card refills after watering is put back at once, not scrolled back smoothly', async () => {
+    await rig({ signedIn: true }).run();
+    plot(20).click();
+    // Safari jumps the page as the card is redrawn.
+    let y = 400;
+    vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => y);
+    const card = document.querySelector<HTMLElement>('[data-garden-card]')!;
+    const fill = card.replaceChildren.bind(card);
+    vi.spyOn(card, 'replaceChildren').mockImplementation((...nodes) => {
+      fill(...nodes);
+      y = 700;
+    });
+    const back: Array<[number, string]> = [];
+    vi.spyOn(window, 'scrollTo').mockImplementation(((_x: number, to: number) => {
+      back.push([to, document.documentElement.style.scrollBehavior]);
+      y = to;
+    }) as typeof window.scrollTo);
+    card.querySelector<HTMLButtonElement>('[data-garden-water]')!.click();
+    await flush();
+    expect(back).toEqual([[400, 'auto']]);
+    expect(document.documentElement.style.scrollBehavior).toBe('');
+  });
+
   it('signed out: watering asks to sign in, then waters once back', async () => {
     const r = rig();
     await r.run();
