@@ -68,12 +68,15 @@
                     <div class="weather-hero__reading">
                         <!-- what the number is over, for anyone landing here; a tap opens the lens's controls (weather-dock.ts) -->
                         <button type="button" class="weather-hero__period" data-r-period data-lens-open aria-controls="weather-dock-panel">the last hour</button>
-                        <p class="weather-hero__big"><span data-r-records data-waiting>&ndash;</span><span class="visually-hidden" data-r-unit-words>new records a second</span></p>
-                        <div class="weather-hero__sub">
-                            <!-- the number is in the lens's unit (weather-lens.ts); a tap on "rec/sec" moves it on to a minute, an hour, a day and totals -->
-                            <button type="button" class="weather-hero__unit" data-r-unit data-lens-cycle-unit aria-label="a second. change to a minute">rec/sec</button>
-                            <!-- against the span before, as the "last hour" tile has it (weather-page.ts renderHeadlineChange) -->
-                            <p class="weather-change weather-hero__change" data-r-headline-change data-waiting></p>
+                        <!-- the number with what it counts and its chip beside it, wrapping under it when there's no room -->
+                        <div class="weather-hero__figure">
+                            <p class="weather-hero__big"><span data-r-records data-waiting>&ndash;</span><span class="visually-hidden" data-r-unit-words>new records a second</span></p>
+                            <div class="weather-hero__sub">
+                                <!-- the number is in the lens's unit (weather-lens.ts); a tap on "rec/sec" moves it on to a minute, an hour, a day and totals -->
+                                <button type="button" class="weather-hero__unit" data-r-unit data-lens-cycle-unit aria-label="a second. change to a minute">rec/sec</button>
+                                <!-- against the span before, as the "last hour" tile has it (weather-page.ts renderHeadlineChange) -->
+                                <p class="weather-change weather-hero__change" data-r-headline-change data-waiting></p>
+                            </div>
                         </div>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
                         <!-- new records a second over the station's 60 seconds, when it's live, or the window's line; the number above says it in words -->
@@ -175,15 +178,6 @@
                 <p class="weather-apps__empty" data-r-apps-empty hidden>nobody but bluesky was writing just then. other apps come and go, so check back in a minute.</p>
                 <ol class="weather-bars weather-bars--changes" role="list" data-r-apps></ol>
                 <p class="weather-tile__note" data-r-apps-note></p>
-            </section>
-
-            <section class="tile weather-tile weather-bsky" aria-labelledby="weather-bsky-title" data-lensed>
-                <div class="weather-tile__titled">
-                    <h2 class="weather-tile__title" id="weather-bsky-title">bluesky</h2>
-                    <span class="weather-tag" data-tag hidden></span>
-                </div>
-                <ol class="weather-bars weather-bars--bsky" role="list" data-r-bsky-list></ol>
-                <p class="weather-tile__note" data-r-bsky-note>bluesky&#39;s busiest kinds of record, a second.</p>
             </section>
 
             <!-- the lens's window over time (weather-page.ts initTrends); on now, the last hour -->
@@ -355,7 +349,7 @@
                  and the PLC directory's log of identities (src/scripts/weather-hosts.ts renderIdentities). They keep their own times. -->
             <div class="weather-group" id="where-the-atmosphere-lives" data-section="hosts" data-section-label="where it lives" data-section-lens="window">
                 <h2 class="weather-group__title">where the atmosphere lives</h2>
-                <p class="weather-group__note">the servers that hold everyone&#39;s accounts (pds hosts), read from the relay every 10 minutes, and who&#39;s signing up and moving house, from the plc directory. these keep their own times.</p>
+                <p class="weather-group__note">the servers that hold everyone&#39;s accounts (pds hosts), and who&#39;s signing up and moving house.</p>
             </div>
 
             <!-- the PDS hosts on the network, from the station's census of the relay's list (weather-page.ts renderHosts); always the latest census, whatever the lens says -->
@@ -396,7 +390,6 @@
                     <div class="weather-hosts__list">
                         <h3 class="weather-hosts__subtitle">the biggest independent hosts, by accounts they hold</h3>
                         <ol class="weather-bars weather-bars--hosts" role="list" data-h-top data-host-list></ol>
-                        <p class="weather-tile__note">every account a host holds, active or not: the relay&#39;s count, so quiet and deactivated accounts count too. tap a host to see how it&#39;s grown. bluesky&#39;s own hosts count as one place, the way bluesky counts as one app.</p>
                     </div>
                 </div>
                 <!-- the hosts over the lens's window, from the station's censuses (src/scripts/weather-hosts.ts); "now" and the last hour show the last 24 hours -->
@@ -473,19 +466,21 @@
                     <span class="weather-ratio__bsky" data-p-bar-bsky></span><span class="weather-ratio__else" data-p-bar-else></span>
                 </div>
                 <dl class="weather-pds__stats">
-                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>on bluesky&#39;s hosts</dt><dd data-p-bsky>&ndash;</dd></div>
-                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>on independent hosts</dt><dd data-p-indep>&ndash;</dd></div>
+                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>bluesky</dt><dd data-p-bsky>&ndash;</dd></div>
+                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>independent</dt><dd data-p-indep>&ndash;</dd></div>
                 </dl>
                 <p class="weather-pds__line" data-p-own></p>
                 <p class="weather-pds__line" data-p-odds hidden></p>
-                <div class="weather-pds__chip" data-p-smog hidden>
-                    <span>air quality: <strong data-p-smog-level>&ndash;</strong></span>
-                    <span class="weather-pds__chip-words" data-p-smog-words></span>
-                    <button type="button" class="weather-info" data-poe-explain="smog" aria-haspopup="dialog" aria-label="what's the air quality? ask poe" title="what's this?">
+                <!-- air quality: the day's sign-ups to hosts no relay carries (weather-hosts.ts smogOf) -->
+                <div class="weather-smog" data-p-smog hidden>
+                    <div class="weather-tile__titled">
+                        <h3 class="weather-smog__title">air quality: <strong data-p-smog-level>&ndash;</strong></h3>
+                        <button type="button" class="weather-info" data-poe-explain="smog" aria-haspopup="dialog" aria-label="what's the air quality? ask poe" title="what's this?">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                     </button>
+                    </div>
+                    <p class="weather-pds__line" data-p-smog-words></p>
                 </div>
-                <p class="weather-tile__note" data-p-smog-line></p>
                 <figure class="weather-chart-card" data-p-arrivals-card hidden>
                     <figcaption class="weather-chart-card__title">new accounts starting outside bluesky each day, as a share</figcaption>
                     <div class="weather-chart" data-p-chart="arrivals"></div>
@@ -503,7 +498,6 @@
                     </div>
                     <p class="weather-tile__aside" data-p-day></p>
                 </div>
-                <p class="weather-winds__compass" data-p-compass>&ndash;</p>
                 <dl class="weather-pds__stats weather-pds__stats--three">
                     <div><dt>out of bluesky</dt><dd data-p-out>&ndash;</dd></div>
                     <div><dt>back in</dt><dd data-p-in>&ndash;</dd></div>
@@ -520,7 +514,6 @@
                     <figcaption class="weather-chart-card__title">accounts moving out of bluesky each day</figcaption>
                     <div class="weather-chart" data-p-chart="winds"></div>
                 </figure>
-                <p class="weather-tile__note">moving house means pointing your account at a different pds, keeping your handle, posts and followers. it&#39;s one of the nicest things about the atmosphere.</p>
             </section>
 
             <!-- the independent hosts by size, from the live census (weather-page.ts renderHosts) -->

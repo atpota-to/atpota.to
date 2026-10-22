@@ -325,11 +325,8 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   if (since) {
     // a range that reaches back before the station kept hosts says so
     const from = h.since ? Date.parse(`${h.since}T00:00:00Z`) : NaN;
-    const guessed = h.points.filter((p) => p.estimated);
     const words: string[] = [];
     if (from > start) words.push(`i started keeping track of hosts on ${new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(from)).toLowerCase()}, so new hosts count from the day after.`);
-    // the backfill's days: one estimate each, joined to the station's first census by a dashed line
-    if (guessed.length) words.push('the dashed part of each line is estimated from the plc directory, one point a day, from before i counted hosts myself.');
     since.hidden = words.length === 0;
     since.textContent = words.join(' ');
   }
@@ -388,23 +385,16 @@ export function smogOf(d: IdentityDay): { share: number; level: string } {
   return { share, level: SMOG_LEVELS.find(([, from]) => share >= from)?.[0] ?? 'clear' };
 }
 
-/** Which way the migration wind blows: out of Bluesky's hosts, back in, or calm. */
-export function compassOf(out: number, back: number): string {
-  if (out === 0 && back === 0) return 'still air: nobody moved between bluesky and an independent host';
-  if (out === back) return `calm: ${formatCount(out)} each way`;
-  return out > back ? `blowing out of bluesky, ${formatCount(out)} to ${formatCount(back)}` : `blowing back to bluesky, ${formatCount(back)} to ${formatCount(out)}`;
-}
-
 const plural = (v: number, one: string, many = `${one}s`) => `${formatCount(v)} ${v === 1 ? one : many}`;
 
-/** "lately, 1 in 4 new accounts starts outside bluesky": over the last week's listed sign-ups. */
+/** "over the last 7 days: 1 in 4 started outside bluesky", from the last week's listed sign-ups. */
 export function oddsWords(days: IdentityDay[]): string {
   const week = days.slice(-7);
   const indep = week.reduce((t, d) => t + d.createdIndependent, 0);
   const listed = week.reduce((t, d) => t + d.createdBluesky + d.createdIndependent, 0);
   if (indep === 0 || listed === 0) return '';
-  const span = week.length === 1 ? 'today' : `over the last ${week.length} days`;
-  return `${span}, 1 in ${formatCount(Math.max(1, Math.round(listed / indep)))} new accounts started outside bluesky.`;
+  if (week.length === 1) return '';
+  return `over the last ${week.length} days: 1 in ${formatCount(Math.max(1, Math.round(listed / indep)))} started outside bluesky.`;
 }
 
 /** Where the last week's movers went, busiest first, adding up each day's top destinations. */
@@ -418,8 +408,8 @@ export function destinationsOf(days: IdentityDay[]): Array<{ hostname: string; a
 }
 
 /**
- * The identity tiles from the PLC directory's days (new arrivals with its air quality
- * chip, migration winds); each stays hidden without a day to show. `drawBars` draws the
+ * The identity tiles from the PLC directory's days (new arrivals with its air quality,
+ * migration winds); each stays hidden without a day to show. `drawBars` draws the
  * movers' destinations.
  */
 export function renderIdentities(report: ParentNode, days: IdentityDay[], now = Date.now(), drawBars?: (list: HTMLElement, bars: Bar[]) => void): void {
@@ -439,7 +429,7 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
     report,
     '[data-p-own]',
     listed > 0
-      ? `${formatIndex((d.createdIndependent / listed) * 100)}% signed up somewhere other than bluesky, and ${plural(d.createdCustomHandle, 'new account')} started out with a handle on their own domain.`
+      ? `${formatIndex((d.createdIndependent / listed) * 100)}% started outside bluesky, and ${formatCount(d.createdCustomHandle)} with a handle on their own domain.`
       : 'nobody has signed up yet.',
   );
   const card = $(report, '[data-p-arrivals-card]');
@@ -458,7 +448,6 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   }
 
   // migration winds
-  setText(report, '[data-p-compass]', compassOf(d.movedOut, d.movedIn));
   setText(report, '[data-p-out]', formatCount(d.movedOut));
   setText(report, '[data-p-in]', formatCount(d.movedIn));
   setText(report, '[data-p-between]', formatCount(d.movedBetween));
@@ -477,20 +466,11 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   if (dest) dest.hidden = went.length === 0 || !drawBars;
   const destList = $(report, '[data-p-dest]');
   if (destList && drawBars && went.length) drawBars(destList, went.map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover') })));
-  setText(report, '[data-p-dest-note]', week.length > 1 ? `accounts that moved to an independent host over the last ${week.length} days, from bluesky or another independent host. tap one to see how it's grown.` : `accounts that moved to an independent host today. tap one to see how it's grown.`);
+  setText(report, '[data-p-dest-note]', week.length > 1 ? `over the last ${week.length} days. tap one to see how it's grown.` : `today. tap one to see how it's grown.`);
 
   // air quality
   const smog = smogOf(d);
   setText(report, '[data-p-smog-level]', smog.level);
-  setText(report, '[data-p-smog-words]', `${formatIndex(smog.share)}% of all sign-ups went to hosts no relay carries`);
-  setText(
-    report,
-    '[data-p-smog-line]',
-    d.createdUnlisted === 0
-      ? 'every new account went somewhere the relay listens. clear skies.'
-      : listed > 0
-        ? `for every account that signed up where the relay listens, ${formatCount(Math.round(d.createdUnlisted / listed))} signed up somewhere it doesn't: test servers, typos, and bulk sign-ups nobody relays (${compactCount(d.createdUnlisted)} in all).`
-        : `${compactCount(d.createdUnlisted)} sign-ups on hosts nobody relays, and none anywhere else.`,
-  );
+  setText(report, '[data-p-smog-words]', d.createdUnlisted === 0 ? 'every sign-up went somewhere the relay listens.' : `${formatIndex(smog.share)}% of sign-ups went to hosts no relay carries.`);
   setText(report, '[data-p-deleted]', `${plural(d.deleted, 'account')} deleted ${d.deleted === 1 ? 'itself' : 'themselves'}.`);
 }

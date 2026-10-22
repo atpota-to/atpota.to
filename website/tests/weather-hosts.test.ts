@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, compassOf, destinationsOf, hostBars, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, destinationsOf, hostBars, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -164,13 +164,12 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(text('[data-p-day]')).toBe('today so far (utc)');
     expect(text('[data-p-signups]')).toBe('14,329');
     expect(text('[data-p-indep]')).toBe('4,383');
-    expect(text('[data-p-own]')).toBe('31% signed up somewhere other than bluesky, and 122 new accounts started out with a handle on their own domain.');
+    expect(text('[data-p-own]')).toBe('31% started outside bluesky, and 122 with a handle on their own domain.');
     expect(report.querySelector('[data-p-chart="arrivals"] svg')).not.toBeNull();
-    expect(text('[data-p-compass]')).toBe('blowing out of bluesky, 19 to 0');
     expect(report.querySelector('[data-p-chart="winds"] svg')).not.toBeNull();
     expect(text('[data-p-week]')).toBe('over the last 2 days: 49 accounts moved out, 2 moved back.');
     expect(text('[data-p-smog-level]')).toBe('thick smog');
-    expect(text('[data-p-smog-line]')).toMatch(/^for every account that signed up where the relay listens, 11 signed up somewhere it doesn't/);
+    expect(text('[data-p-smog-words]')).toMatch(/^9\d(\.\d)?% of sign-ups went to hosts no relay carries\.$/);
     expect(text('[data-p-deleted]')).toBe('1 account deleted itself.');
   });
 
@@ -186,10 +185,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(report.querySelector<HTMLElement>('[data-p-arrivals-card]')!.hidden).toBe(true);
   });
 
-  it('reads the wind and the air in words', () => {
-    expect(compassOf(0, 0)).toMatch(/^still air/);
-    expect(compassOf(3, 3)).toBe('calm: 3 each way');
-    expect(compassOf(1, 4)).toBe('blowing back to bluesky, 4 to 1');
+  it('reads the air in words', () => {
     expect(smogOf(idDay('d', { createdUnlisted: 0 })).level).toBe('clear');
     expect(smogOf(idDay('d', { createdUnlisted: 2000 })).level).toBe('hazy');
     expect(smogOf(idDay('d', { createdBluesky: 0, createdIndependent: 0, createdUnlisted: 0 })).share).toBe(0);
@@ -197,7 +193,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
   });
 
   it('says how many new accounts start outside bluesky, and where movers went', () => {
-    expect(oddsWords([idDay('2026-10-28', { createdBluesky: 900, createdIndependent: 100 }), idDay('2026-10-29', { createdBluesky: 1100, createdIndependent: 100 })])).toBe('over the last 2 days, 1 in 11 new accounts started outside bluesky.');
+    expect(oddsWords([idDay('2026-10-28', { createdBluesky: 900, createdIndependent: 100 }), idDay('2026-10-29', { createdBluesky: 1100, createdIndependent: 100 })])).toBe('over the last 2 days: 1 in 11 started outside bluesky.');
     expect(oddsWords([idDay('2026-10-29', { createdIndependent: 0 })])).toBe('');
     const went = destinationsOf([
       idDay('2026-10-28', { destinations: [{ hostname: 'eurosky.social', accounts: 3 }, { hostname: 'blacksky.app', accounts: 2 }] }),
@@ -219,7 +215,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(report.querySelector<HTMLElement>('[data-p-dest-wrap]')!.hidden).toBe(true);
   });
 
-  it('puts air quality in a chip on the new arrivals tile', () => {
+  it('puts air quality on the new arrivals tile', () => {
     renderIdentities(report, [idDay('2026-10-29')], NOW);
     const chip = report.querySelector<HTMLElement>('[data-p-smog]')!;
     expect(chip.closest('[data-p-arrivals]')).not.toBeNull();

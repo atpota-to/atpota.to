@@ -253,7 +253,7 @@ describe('when the sky is busiest', () => {
 
   it('waits a few weeks before naming the busiest hour', () => {
     renderHeatmap(root.querySelector('[data-a-heat]')!, { ...ALMANAC, heatmap: { ...ALMANAC.heatmap!, seconds: 2 * 86_400 } }, NOW, TZ);
-    expect(text('[data-a-heat-lede]')).toBe("filling in: 2 of the week's 168 hours heard so far. the pattern settles after about 3 weeks of listening (2 days in).");
+    expect(root.querySelector<HTMLElement>('[data-a-heat-lede]')!.hidden).toBe(true);
   });
 
   it('steps rates between the quietest and busiest hours', () => {

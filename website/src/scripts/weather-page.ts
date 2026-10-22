@@ -73,6 +73,9 @@ import {
 } from './weather-lens';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { projectLast, renderChart, type ChartPoint } from './weather-chart';
+import { accountsExponent, accountsLine, bigAmount, condWords } from './weather-headline';
+
+export { accountsExponent, bigAmount };
 import { explain, type PoeExplanation } from '../poe/say';
 import { airNow, clearedUp, initHero, RAINBOW_COOLDOWN_MS, renderAir, showRainbow } from './weather-hero';
 import { cloudCount, renderClouds } from './weather-sky';
@@ -111,27 +114,6 @@ export const HISTORY_ENDPOINT = '/api/weather-history';
 
 /** Where the scale ends: "extreme" starts at 11 and gets two more points of room. */
 export const SCALE_MAX = 13;
-
-/** Plain names for Bluesky's collections; anything else shows its NSID. */
-export const BLUESKY_NAMES: Record<string, string> = {
-  'app.bsky.feed.like': 'likes',
-  'app.bsky.feed.post': 'posts',
-  'app.bsky.feed.repost': 'reposts',
-  'app.bsky.graph.follow': 'follows',
-  'app.bsky.graph.block': 'blocks',
-  'app.bsky.feed.threadgate': 'who-can-reply settings',
-  'app.bsky.feed.postgate': 'quote settings',
-  'app.bsky.graph.listitem': 'people added to lists',
-  'app.bsky.graph.list': 'new lists',
-  'app.bsky.graph.listblock': 'lists blocked',
-  'app.bsky.graph.starterpack': 'starter packs',
-  'app.bsky.graph.verification': 'verifications',
-  'app.bsky.feed.generator': 'new feeds',
-  'app.bsky.actor.profile': 'new profiles',
-  'app.bsky.actor.status': 'live statuses',
-  'app.bsky.notification.declaration': 'notification settings',
-  'chat.bsky.actor.declaration': 'chat settings',
-};
 
 export type { Measure };
 
@@ -369,30 +351,8 @@ export function skyOfHistory(h: History, now: number = Date.now()): Sky {
         : [],
     earlier: info.earlier,
     line: { records: h.points.map((p) => ratesOf(p).records), ...accountsLine(a, h.range, now) },
-    coverage: secs > 0 && secs < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(secs)} of readings so far)` : '',
+    coverage: secs > 0 && secs < (info.spanMs / 1000) * 0.9 ? `${coverageWords(secs)} heard so far` : '',
   };
-}
-
-/**
- * How active accounts grow with time, from the history itself: everyone over the whole
- * range against the average bucket, as D(n buckets) = D(1) × n^k. People come back, so k
- * is under 1 (about 0.6 by the hour over a day); projectLast uses it to guess a bucket
- * still filling up, where a straight scale-up guessed well over the buckets before.
- */
-export function accountsExponent(a: HistoryAccounts): number {
-  const full = a.points.slice(0, -1).filter((p) => p.seconds > 0 && p.active > 0);
-  if (full.length < 2) return 1;
-  const mean = full.reduce((sum, p) => sum + p.active, 0) / full.length;
-  const k = Math.log(a.total.active / mean) / Math.log(a.points.length);
-  return Number.isFinite(k) ? Math.min(1, Math.max(0.3, k)) : 1;
-}
-
-/** The header's line of active accounts, its newest bucket an estimate while it fills up (projectLast), so it doesn't dip. */
-function accountsLine(a: HistoryAccounts | null, range: Range, now: number): { accounts: Array<number | null> | null; accountsProjected?: boolean } {
-  if (!a) return { accounts: null };
-  const last = a.points[a.points.length - 1];
-  const points = projectLast(a.points.map((p) => ({ t: Date.parse(p.t), v: p.active })), now, BUCKET_MS[BUCKET_OF[range]], { heardMs: (last?.seconds ?? 0) * 1000, exponent: accountsExponent(a) });
-  return { accounts: points.map((p) => p.v), accountsProjected: points[points.length - 1]?.soFar !== undefined };
 }
 
 /** A rate a second as the lens shows it: per its unit, or for "total" the count over `seconds`. */
@@ -409,12 +369,6 @@ function tag(tile: Element | null, counts: Measure, lens: LensState): void {
   if (!el) return;
   el.hidden = counts === lens.measure;
   el.textContent = `by ${counts}`;
-}
-
-/** The header's number, short enough for a phone: 21,345, then 222k, 1.23m. */
-export function bigAmount(v: number): string {
-  if (v < 100_000) return formatAmount(v);
-  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumSignificantDigits: 3 }).format(v).toLowerCase();
 }
 
 /** The header's reading: how busy it is (or how many accounts), what that is per, and the line under it. */
@@ -443,9 +397,11 @@ function renderHeadline(report: HTMLElement, sky: Sky, lens: LensState): void {
     }
   }
   setText(report, '[data-r-unit-words]', byAcct ? `active accounts in ${words}` : lens.unit === 'total' ? `new records in ${words}` : recordsPer(lens.unit));
-  const cond = byAcct ? `different accounts wrote something in ${words}` : lens.unit === 'total' ? `new records in ${words}` : `on average over ${words}`;
-  if (sky.reading) setText(report, '[data-r-cond]', CONDITION_TEXT[sky.reading.condition]);
-  else setText(report, '[data-r-cond]', `${cond}${sky.coverage}`);
+  // the period and the unit already say what the number is: only a rate's "on average", and how much was heard, need words
+  const cond = sky.reading ? CONDITION_TEXT[sky.reading.condition] : condWords(!byAcct && lens.unit !== 'total', sky.coverage);
+  setText(report, '[data-r-cond]', cond);
+  const condEl = $(report, '[data-r-cond]');
+  if (condEl) condEl.hidden = !cond;
   const spark = $(report, '[data-r-spark]');
   if (!spark) return;
   spark.removeAttribute('data-waiting');
@@ -581,32 +537,12 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   setText(report, '[data-r-apps-note]', shown ? `${what}.${arrows}` : '');
 }
 
-/** Bluesky's busiest kinds of record: always records (the station doesn't count accounts by collection). */
-function renderBluesky(report: HTMLElement, sky: Sky, lens: LensState): void {
-  const tile = $(report, '.weather-bsky');
-  tag(tile, 'records', lens);
-  const list = $(report, '[data-r-bsky-list]');
-  if (list && (sky.bluesky.length || sky.window !== 'now')) {
-    renderBars(
-      list,
-      topBars(sky.bluesky.map((b) => ({ label: BLUESKY_NAMES[b.nsid] ?? b.nsid, sub: b.nsid, perSecond: b.perSecond, count: b.count, value: formatAmount(lens.unit === 'total' ? b.count : perUnit(b.perSecond, lens.unit)) }))),
-      sky.window === 'now' ? sky.seconds : undefined,
-    );
-  }
-  setText(
-    report,
-    '[data-r-bsky-note]',
-    sky.window === 'now' ? `bluesky's busiest kinds of record, ${perWords(lens.unit)}.` : `posts, likes, reposts and follows over ${WINDOW_INFO[sky.window].words}, ${perWords(lens.unit)}.`,
-  );
-}
-
 /** Every tile that follows the lens, from one sky. */
 export function renderSky(report: HTMLElement, sky: Sky, lens: LensState = LENS_DEFAULT): void {
   renderHeadline(report, sky, lens);
   renderDiversity(report, sky, lens);
   renderMix(report, sky, lens);
   renderElsewhere(report, sky, lens);
-  renderBluesky(report, sky, lens);
 }
 
 /**
@@ -643,7 +579,7 @@ export function hostsShare(h: Hosts): string {
   const total = h.accounts.bluesky + h.accounts.independent;
   if (h.accounts.independent <= 0) return `all ${formatCount(total)} accounts live on bluesky's hosts.`;
   const hosts = Math.max(1, Math.round(h.diversity.spread));
-  return `${formatIndex(h.diversity.share)}% of all ${compactCount(total)} accounts, active or not, live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `spread across about ${hosts} hosts' worth`}.`;
+  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `across about ${hosts} hosts`}.`;
 }
 
 /** How long ago the station counted them: "counted just now", "counted 7 minutes ago". */
@@ -759,7 +695,7 @@ export function diversityParts(share: number, spread: number, active?: number): 
   const who = active ? `of ${formatCount(active)} active accounts` : 'of the accounts heard just now';
   if (share <= 0) return `none ${who} wrote outside bluesky.`;
   const apps = Math.max(1, Math.round(spread));
-  return `${formatIndex(share)}% ${who} wrote outside bluesky, ${apps === 1 ? 'all in about one app' : `across about ${apps} apps`}.`;
+  return `${formatIndex(share)}% ${who} wrote outside bluesky, ${apps === 1 ? 'all in one app' : `across about ${apps} apps`}.`;
 }
 
 /**
@@ -1270,6 +1206,7 @@ export function initTrends(section: HTMLElement, feed: HistoryFeed, lens?: Lens)
 export function renderReportError(report: HTMLElement): void {
   if (report.dataset.state === 'ready') return;
   setText(report, '[data-r-cond]', ERROR_TEXT);
+  $(report, '[data-r-cond]')?.removeAttribute('hidden');
   setText(report, '[data-r-status]', ERROR_TEXT);
   report.dataset.state = 'error';
 }
@@ -1349,6 +1286,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     } else if (!quietly || windowShown?.range !== w) {
       report.dataset.lensState = 'error';
       setText(report, '[data-r-cond]', `${WINDOW_INFO[w].words} is hard to read right now. try again in a bit.`);
+      $(report, '[data-r-cond]')?.removeAttribute('hidden');
     }
   };
   const minute = $(report, '[data-s-tile]');

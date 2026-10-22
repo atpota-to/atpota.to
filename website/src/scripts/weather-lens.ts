@@ -144,6 +144,11 @@ function stored(): Partial<LensState> {
   }
 }
 
+/** The lens this browser keeps for the report (not the address's): what the home tile follows. */
+export function savedLens(): LensState {
+  return { ...LENS_DEFAULT, ...stored() };
+}
+
 function remember(lens: LensState): void {
   try {
     localStorage.setItem(LENS_KEY, JSON.stringify(lens));

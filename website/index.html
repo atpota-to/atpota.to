@@ -223,19 +223,16 @@
           <h2 class="eyebrow home-weather__title" id="home-weather-title">atmospheric conditions</h2>
           <div class="home-weather__now">
             <!-- @svg weather-sun.svg class="home-weather__sun weather-sun" -->
+            <!-- the weather report header's reading, over the window its lens keeps in this browser
+                 (src/scripts/weather-headline.ts): active accounts over the last hour by default -->
             <div class="home-weather__reading">
-              <p class="home-weather__big"><span data-weather-records>&ndash;</span> <span class="home-weather__unit" aria-hidden="true">rec/sec</span><span class="visually-hidden">new records a second</span></p>
+              <p class="home-weather__period" data-weather-period>the last hour</p>
+              <p class="home-weather__big"><span data-weather-records>&ndash;</span> <span class="home-weather__unit" aria-hidden="true" data-weather-unit>accounts</span><span class="visually-hidden" data-weather-unit-words>active accounts in the last hour</span></p>
               <p class="home-weather__cond" data-weather-cond>checking the sky…</p>
-              <!-- new records a second over the station's 60 seconds, when it's live (src/scripts/weather-spark.ts) -->
+              <!-- the header's line under the reading (src/scripts/weather-spark.ts) -->
               <div class="weather-spark home-weather__spark" data-weather-spark aria-hidden="true"></div>
             </div>
           </div>
-          <dl class="home-weather__row">
-            <div><dt>posts</dt><dd data-weather-posts>&ndash;</dd></div>
-            <div><dt>likes</dt><dd data-weather-likes>&ndash;</dd></div>
-            <div><dt>reposts</dt><dd data-weather-reposts>&ndash;</dd></div>
-            <div><dt>follows</dt><dd data-weather-follows>&ndash;</dd></div>
-          </dl>
           <!-- the diversity index: how much of the atmosphere isn't bluesky (its room kept while the tile loads) -->
           <div class="home-weather__mix" data-weather-mix>
             <p class="home-weather__mix-head"><span class="home-weather__mix-label">diversity index</span> <strong class="home-weather__index" data-weather-index>&ndash;</strong> <span class="home-weather__level" data-weather-level></span></p>
@@ -244,10 +241,16 @@
             </div>
             <p class="home-weather__mix-text" data-weather-mix-text></p>
           </div>
-          <!-- where the atmosphere lives: the station's census of pds hosts (src/scripts/weather.ts renderReading) -->
-          <p class="home-weather__hosts" data-weather-hosts hidden></p>
+          <!-- where the atmosphere lives: hosting diversity on its own scale, from the station's census of pds hosts (src/scripts/weather.ts renderReading) -->
+          <div class="home-weather__mix" data-weather-hosts hidden>
+            <p class="home-weather__mix-head"><span class="home-weather__mix-label">hosting diversity</span> <strong class="home-weather__index" data-weather-hosting-index>&ndash;</strong> <span class="home-weather__level" data-weather-hosting-level></span></p>
+            <div class="home-weather__scale" aria-hidden="true">
+              <div class="home-weather__scale-bands"><span></span><span></span><span></span><span></span><span></span><i class="home-weather__scale-marker" data-weather-hosting-marker></i></div>
+              <div class="home-weather__scale-ends"><span>early days</span><span>flourishing</span></div>
+            </div>
+            <p class="home-weather__mix-text" data-weather-hosts-text></p>
+          </div>
           <div class="home-weather__foot">
-            <p class="home-weather__note">per second, over the last minute of the whole firehose, every app. posts, likes, reposts and follows are bluesky&#39;s.</p>
             <span class="btn btn--primary btn--sm home-weather__go">full weather report</span>
           </div>
         </a>

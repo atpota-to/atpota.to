@@ -33,7 +33,8 @@
 
 import { rollText } from './roll';
 import { cloudCount, renderClouds } from './weather-sky';
-import { renderSpark } from './weather-spark';
+import { bigAmount, headlineOf, readHeadline, tileLens, type Headline } from './weather-headline';
+import { renderSpark, renderSparkline } from './weather-spark';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
@@ -315,13 +316,13 @@ export function ratioText(records: NonNullable<Reading['records']>): string {
   return n <= 1 ? 'most new records came from outside bluesky' : `1 in ${n.toLocaleString('en-US')} new records came from outside bluesky`;
 }
 
-/** "1 in 190 accounts active just now wrote outside bluesky, spread across about 10 apps' worth", or that nobody did. */
+/** "1 in 190 accounts active just now wrote outside bluesky, across about 10 apps", or that nobody did. */
 export function diversityText(d: { share: number; spread: number }): string {
   if (d.share <= 0) return 'nobody active just now wrote outside bluesky';
   const n = Math.round(100 / d.share);
   const apps = Math.max(1, Math.round(d.spread));
   const who = n <= 1 ? 'most accounts' : `1 in ${n.toLocaleString('en-US')} accounts`;
-  return `${who} active just now wrote outside bluesky, ${apps === 1 ? 'all in about one app' : `spread across about ${apps} apps' worth`}`;
+  return `${who} active just now wrote outside bluesky, ${apps === 1 ? 'all in one app' : `across about ${apps} apps`}`;
 }
 
 /** Sizes a two-part bar (bluesky, elsewhere) for elsewhere's share, in percent. A sliver of "elsewhere" stays visible. */
@@ -379,9 +380,9 @@ export function recordsPerSecond(r: Reading): number {
   return r.records?.perSecond ?? r.perSecond.posts;
 }
 
-/** The home tile's line on where the atmosphere lives: "1,889 pds hosts, 1,799 independent · hosting diversity 7.5". */
+/** The home tile's line on where the atmosphere lives: "1.5% of accounts live off bluesky, on 1,799 independent hosts". */
 export function hostsLine(h: Hosts): string {
-  return `${h.active.toLocaleString('en-US')} pds hosts, ${h.independent.toLocaleString('en-US')} independent · hosting diversity ${formatIndex(h.diversity.index)}`;
+  return `${formatIndex(h.diversity.share)}% of accounts live off bluesky, on ${h.independent.toLocaleString('en-US')} independent hosts`;
 }
 
 export function renderReading(tile: HTMLElement, reading: Reading): void {
@@ -389,16 +390,19 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
     if (el) countTo(el, value);
   };
-  set('records', recordsPerSecond(reading));
+  // a tile following the report's lens has its number, words and line from the history (renderHeadline)
+  if (tile.dataset.weatherHeadline !== 'history') {
+    set('records', recordsPerSecond(reading));
+    const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
+    if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
+    const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+    if (spark) renderSpark(spark, reading);
+  }
   set('posts', reading.perSecond.posts);
   set('likes', reading.perSecond.likes);
   set('reposts', reading.perSecond.reposts);
   set('follows', reading.perSecond.follows);
-  const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
-  if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
   spinRays(tile, recordsPerSecond(reading));
-  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
-  if (spark) renderSpark(spark, reading);
   const sky = tile.querySelector<HTMLElement>('[data-weather-sky]');
   if (sky && reading.diversity) renderClouds(sky, cloudCount(reading.diversity.index));
   // its room is kept while the tile loads; a reading from before the diversity index has none
@@ -414,10 +418,49 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
   const hosts = tile.querySelector<HTMLElement>('[data-weather-hosts]');
   if (hosts) {
     hosts.hidden = !reading.hosts;
-    if (reading.hosts) hosts.textContent = hostsLine(reading.hosts);
+    if (reading.hosts) {
+      const h = reading.hosts;
+      const index = tile.querySelector<HTMLElement>('[data-weather-hosting-index]');
+      if (index) countTo(index, h.diversity.index, formatIndex);
+      const level = tile.querySelector<HTMLElement>('[data-weather-hosting-level]');
+      if (level) level.textContent = hostingLevelOf(h.diversity.index);
+      const marker = tile.querySelector<HTMLElement>('[data-weather-hosting-marker]');
+      if (marker) marker.style.left = `${hostingPosition(h.diversity.index) * 100}%`;
+      const text = tile.querySelector<HTMLElement>('[data-weather-hosts-text]');
+      if (text) text.textContent = hostsLine(h);
+    }
   }
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'ready';
+}
+
+/**
+ * The home tile's reading as the weather report's header has it (weather-headline.ts):
+ * over the lens's window, by accounts or records, with the header's line under it. The
+ * live reading keeps the sun, the clouds and the indexes.
+ */
+export function renderHeadline(tile: HTMLElement, h: Headline): void {
+  const text = (name: string, value: string) => {
+    const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
+    if (el) el.textContent = value;
+  };
+  text('period', h.period);
+  const records = tile.querySelector<HTMLElement>('[data-weather-records]');
+  if (records) {
+    countTo(records, h.value, bigAmount);
+    records.removeAttribute('data-waiting');
+  }
+  text('unit', h.unit);
+  text('unit-words', h.unitWords);
+  text('cond', h.cond);
+  const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
+  if (cond) cond.hidden = !h.cond;
+  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+  if (spark) {
+    delete spark.dataset.end;
+    spark.hidden = h.line.filter((v) => v !== null).length < 2;
+    if (!spark.hidden) renderSparkline(spark, h.line, undefined, h.projected);
+  }
 }
 
 export function renderWeatherError(tile: HTMLElement): void {
@@ -428,6 +471,10 @@ export function renderWeatherError(tile: HTMLElement): void {
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'error';
 }
+
+/** How often the home tile reads the lens's history: a minute's steps over the hour, longer ones less often. */
+export const HEADLINE_HOUR_MS = 60_000;
+export const HEADLINE_MS = 5 * 60_000;
 
 export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch = fetch): void {
   const tile = root.querySelector<HTMLElement>('[data-weather-tile]');
@@ -442,6 +489,16 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
   let checkedAt = -Infinity;
   let checking = false;
   let timer: number | undefined;
+  // The home tile says what the report's header would, over the lens's window (weather-headline.ts);
+  // on now, or when the history can't be read, it's the live reading's.
+  const lens = tile.querySelector('[data-weather-period]') ? tileLens() : null;
+  let last: Reading | null = stored;
+  let headlineAt = -Infinity;
+  const headlineEvery = lens?.window === 'hour' ? HEADLINE_HOUR_MS : HEADLINE_MS;
+  if (lens) {
+    tile.dataset.weatherHeadline = 'history';
+    tile.querySelector('[data-weather-records]')?.setAttribute('data-waiting', '');
+  }
   const due = () => onScreen && document.visibilityState !== 'hidden';
   const check = async () => {
     if (checking) return;
@@ -450,8 +507,27 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
     checkedAt = Date.now();
     const reading = await readAtmosphere(fetchImpl);
     checking = false;
+    if (reading) last = reading;
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
+    // the history after the reading, so the reading comes first
+    if (lens && tile.dataset.weatherHeadline === 'history' && Date.now() - headlineAt >= headlineEvery) {
+      headlineAt = Date.now();
+      void readHeadline(lens.window, fetchImpl).then((h) => {
+        if (h) return renderHeadline(tile, headlineOf(h, lens));
+        if (tile.querySelector('[data-weather-records][data-waiting]') === null) return;
+        // never had one: back to the live reading
+        delete tile.dataset.weatherHeadline;
+        tile.querySelector('[data-weather-records]')?.removeAttribute('data-waiting');
+        const period = tile.querySelector<HTMLElement>('[data-weather-period]');
+        if (period) period.textContent = 'right now';
+        const unit = tile.querySelector<HTMLElement>('[data-weather-unit]');
+        if (unit) unit.textContent = 'rec/sec';
+        const words = tile.querySelector<HTMLElement>('[data-weather-unit-words]');
+        if (words) words.textContent = 'new records a second';
+        if (last) renderReading(tile, last);
+      });
+    }
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
     timer = window.setTimeout(() => {
       if (due()) void check();

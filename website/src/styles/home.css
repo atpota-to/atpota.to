@@ -2727,42 +2727,19 @@ html:not(.js) .home-weather {
   line-height: 1.35;
 }
 
-/* The station's last 60 seconds (components.css, .weather-spark); its room is kept while
-   the tile loads, since the station's reading is the usual one. */
-.home-weather__spark {
-  max-width: 240px;
-  margin-top: 8px;
-}
-
-.home-weather__row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-
-.home-weather__row div {
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--home-weather-cell);
-}
-
-.home-weather__row dt {
-  font-size: 13px;
+/* What the number is over, as the weather report's header says it above its number. */
+.home-weather__period {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--home-sky-mono);
 }
 
-@media (max-width: 420px) {
-  .home-weather__row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.home-weather__row dd {
-  margin: 2px 0 0;
-  font-size: 22px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+/* The header's line under the reading (components.css, .weather-spark), as wide as the
+   report's (weather.css, .weather-hero .weather-spark). */
+.home-weather__spark {
+  max-width: 260px;
+  margin-top: 14px;
 }
 
 .home-weather__mix {
@@ -2804,11 +2781,49 @@ html:not(.js) .home-weather {
   font-size: 14px;
 }
 
-.home-weather__hosts {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
+/* Hosting diversity on its own logarithmic scale (weather.ts HOSTING_SCALE, the bands as
+   wide as on the weather report): how far the network has spread off bluesky's servers. */
+.home-weather__scale {
+  display: grid;
+  gap: 4px;
+}
+
+.home-weather__scale-bands {
+  position: relative;
+  display: grid;
+  grid-template-columns: 386fr 138fr 173fr 156fr 147fr;
+  gap: 2px;
+  height: 10px;
+}
+
+.home-weather__scale-bands > span {
+  border-radius: 3px;
+  background: var(--weather-else);
+}
+
+.home-weather__scale-bands > span:nth-child(1) { opacity: 0.25; }
+.home-weather__scale-bands > span:nth-child(2) { opacity: 0.45; }
+.home-weather__scale-bands > span:nth-child(3) { opacity: 0.65; }
+.home-weather__scale-bands > span:nth-child(4) { opacity: 0.85; }
+
+.home-weather__scale-marker {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 6px;
+  height: 18px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: var(--home-sky-text);
+  box-shadow: 0 0 0 2px var(--sky);
+  transition: left var(--dur-spring) var(--ease-out);
+}
+
+.home-weather__scale-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--home-sky-mono);
 }
 
 .home-weather__foot {
@@ -2820,25 +2835,21 @@ html:not(.js) .home-weather {
   margin-top: auto;
 }
 
-.home-weather__note {
-  flex: 1 1 220px;
-  font-size: 13px;
-  color: var(--home-sky-mono);
-}
-
 /* Loading (JS only): every part of the tile is already where it will be, and soft bars
    shimmer where the numbers go, so the reading lands without anything moving. The dash
    stays in the text for screen readers; it shows again if the sky can't be read. */
-.home-weather[data-state="loading"] :is([data-weather-records], .home-weather__row dd, [data-weather-index], [data-weather-mix-text]) {
+.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text]),
+.home-weather [data-weather-records][data-waiting] {
   position: relative;
   color: transparent;
 }
 
-.home-weather[data-state="loading"] [data-weather-records] {
+.home-weather[data-state="loading"] [data-weather-records],
+.home-weather [data-weather-records][data-waiting] {
   min-width: 2.4ch;
 }
 
-.home-weather[data-state="loading"] :is(.home-weather__row dd, [data-weather-index]) {
+.home-weather[data-state="loading"] [data-weather-index] {
   width: 3ch;
 }
 
@@ -2854,14 +2865,16 @@ html:not(.js) .home-weather {
   }
 }
 
-.home-weather[data-state="loading"] :is([data-weather-records], .home-weather__row dd, [data-weather-index], [data-weather-mix-text])::after,
+.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after,
+.home-weather [data-weather-records][data-waiting]::after,
 .home-weather[data-state="loading"] .weather-ratio > span {
   background: linear-gradient(90deg, var(--home-weather-wait) 0%, var(--home-weather-wait-shine) 40%, var(--home-weather-wait) 80%);
   background-size: 300% 100%;
   animation: home-shimmer 1.4s ease-in-out infinite;
 }
 
-.home-weather[data-state="loading"] :is([data-weather-records], .home-weather__row dd, [data-weather-index], [data-weather-mix-text])::after {
+.home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after,
+.home-weather [data-weather-records][data-waiting]::after {
   content: "";
   position: absolute;
   inset: 18% 0;
@@ -3845,7 +3858,8 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
   }
 
   .home-post__skeleton span,
-  .home-weather[data-state="loading"] :is([data-weather-records], .home-weather__row dd, [data-weather-index], [data-weather-mix-text])::after,
+  .home-weather[data-state="loading"] :is([data-weather-records], [data-weather-index], [data-weather-mix-text])::after,
+  .home-weather [data-weather-records][data-waiting]::after,
   .home-weather[data-state="loading"] .weather-ratio > span {
     animation: none;
   }
