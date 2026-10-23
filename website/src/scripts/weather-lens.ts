@@ -199,9 +199,10 @@ const UNIT_HINT = 'accounts are counted once over the whole window, so they have
  * The lens's controls ([data-lens-window], [data-lens-measure] buttons and the [data-lens-unit]
  * select), and anything on the page that cycles the unit with a tap ([data-lens-cycle-unit]),
  * kept in step with the lens. The lens is also on `root` as data-window, data-measure and
- * data-unit, for the styles.
+ * data-unit, for the styles. On a page only the unit reaches (`unitAlone`: today's, whose
+ * tiles always count records), the unit is never set aside for accounts.
  */
-export function bindLens(root: HTMLElement, lens: Lens): void {
+export function bindLens(root: HTMLElement, lens: Lens, opts: { unitAlone?: boolean } = {}): void {
   const windows = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-window]')];
   const measures = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-measure]')];
   const units = [...root.querySelectorAll<HTMLSelectElement>('[data-lens-unit]')];
@@ -213,7 +214,7 @@ export function bindLens(root: HTMLElement, lens: Lens): void {
     for (const b of measures) b.setAttribute('aria-pressed', String(b.dataset.lensMeasure === s.measure));
     for (const unit of units) {
       unit.value = s.unit;
-      unit.disabled = s.measure === 'accounts';
+      unit.disabled = s.measure === 'accounts' && !opts.unitAlone;
       unit.title = unit.disabled ? UNIT_HINT : '';
     }
   };

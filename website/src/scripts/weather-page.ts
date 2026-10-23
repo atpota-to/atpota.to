@@ -42,16 +42,22 @@
  * Collection names and app domains come from other people's records, so they only reach
  * the DOM through textContent (weather.ts has already dropped any that don't look right).
  *
+ * The report is also its pages (/weather/<topic>, weather-topics.ts): the same page, showing
+ * only one part of it under that part's title. Everything here runs on each of them; the
+ * tiles a page doesn't show are filled all the same, out of sight.
+ *
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
 import { renderStation } from './weather-station';
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
-import { initLensDock } from './weather-dock';
+import { initLensDock, unitAloneOn } from './weather-dock';
 import { initHostPanel } from './weather-host-panel';
 import { initForecast } from './weather-forecast';
 import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts';
+import { bindPageLinks, bindShare } from './weather-share';
+import { topicOf } from './weather-topics';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
 import {
   bindLens,
@@ -1223,7 +1229,10 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   const lens = createLens();
   initLensDock(report, lens);
   initHostPanel(report, fetchImpl);
-  bindLens(report, lens);
+  bindLens(report, lens, { unitAlone: unitAloneOn(topicOf(report.ownerDocument)) });
+  // the report's pages (/weather/<topic>), and sharing the one that's showing
+  bindPageLinks(report, lens);
+  bindShare(report);
   const feed = createHistoryFeed(fetchImpl);
   let watch: Watch | null = null;
   const hero = $(report, '[data-weather-hero]');

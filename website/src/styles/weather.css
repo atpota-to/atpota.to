@@ -2598,6 +2598,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   content: " ·";
 }
 
+/* nothing after it when nothing up here reaches the section ("today", not "today ·") */
+.weather-dock__strip:not(:has(.weather-dock__now [data-part]:not([hidden]))) .weather-dock__section::after {
+  content: none;
+}
+
 /* A control the section on screen doesn't follow: still there (it changes the sections that do), but faint. */
 .weather-dock [data-inactive] {
   opacity: 0.45;
@@ -2807,6 +2812,215 @@ button.weather-hero__unit:disabled {
   margin: 0;
   font-size: 14px;
   color: var(--muted);
+}
+
+/* ---------- the report's pages (/weather/<topic>: weather-topics.ts) ---------- */
+
+/* A topic's page (build/weather-topics.ts puts its slug on <html>) shows only the tiles whose
+   data-topics name it, and none of the group headings or the links to its own page: its
+   header already says what it is, and where it is. */
+html[data-weather-topic="diversity"] .weather > [data-topics]:not([data-topics~="diversity"]),
+html[data-weather-topic="trends"] .weather > [data-topics]:not([data-topics~="trends"]),
+html[data-weather-topic="today"] .weather > [data-topics]:not([data-topics~="today"]),
+html[data-weather-topic="hosts"] .weather > [data-topics]:not([data-topics~="hosts"]),
+html[data-weather-topic="migration"] .weather > [data-topics]:not([data-topics~="migration"]),
+html[data-weather-topic] .weather > .weather-group,
+html[data-weather-topic] .weather-own-page {
+  display: none;
+}
+
+/* Moving house leads with the moves; the sign-ups come after them, before the notes. */
+html[data-weather-topic="migration"] .weather-arrivals {
+  order: 1;
+}
+
+html[data-weather-topic="migration"] .weather-how {
+  order: 2;
+}
+
+/* Its header is the sky with the topic's title and the sun, without the reading: someone
+   following a link to the hosts came for the hosts, so their numbers come first, right
+   under it. The reading is the whole report's, a tap on the way back away. */
+html[data-weather-topic] .weather-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+html[data-weather-topic] .weather-hero__reading {
+  display: none;
+}
+
+html[data-weather-topic] .weather-hero__sun {
+  width: 96px;
+  height: 96px;
+}
+
+.weather-hero__crumb {
+  display: none;
+}
+
+html[data-weather-topic] .weather-hero__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--weather-sky-mono);
+  text-decoration: underline 2px color-mix(in srgb, var(--weather-sky-mono) 35%, transparent);
+  text-underline-offset: 4px;
+}
+
+/* a chevron pointing back */
+html[data-weather-topic] .weather-hero__crumb::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.weather-hero__crumb:hover {
+  text-decoration-color: currentColor;
+}
+
+.weather-hero__crumb:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* The pages' nav, under the header: all of it, or one part, and a way to share what's showing. */
+.weather-topics {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.weather-topics__list {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  /* one row: on a phone it scrolls sideways (weather-share.ts brings the current one into view) */
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.weather-topics__list::-webkit-scrollbar {
+  display: none;
+}
+
+/* there's more that way (weather-share.ts bindPageLinks) */
+.weather-topics__list[data-more="start"] {
+  mask-image: linear-gradient(to right, transparent, #000 32px);
+}
+
+.weather-topics__list[data-more="end"] {
+  mask-image: linear-gradient(to left, transparent, #000 32px);
+}
+
+.weather-topics__list[data-more="start end"] {
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+
+.weather-topics__list li {
+  flex: none;
+}
+
+.weather-topics__link {
+  display: block;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .weather-topics__link:hover {
+    color: var(--text);
+  }
+}
+
+.weather-topics__link[aria-current="page"] {
+  background: var(--text);
+  color: var(--card);
+}
+
+.weather-topics__link:focus-visible,
+.weather-topics__share:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.weather-topics__share {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 6px 16px 6px 13px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.weather-topics__share svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (hover: hover) {
+  .weather-topics__share:hover {
+    border-color: var(--dash);
+  }
+}
+
+/* "on its own page", by a tile's title: a link, so no underline on an icon */
+.weather-own-page {
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  html[data-weather-topic] .weather-hero__sun {
+    width: 68px;
+    height: 68px;
+  }
+
+  /* just the icon by the pages, with its words kept for screen readers */
+  .weather-topics__share {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .weather-topics__share [data-share-words] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* ---------- loading and error ---------- */

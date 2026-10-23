@@ -1,10 +1,12 @@
 /**
  * /og/weather.png (vercel.json rewrites it to /api/og-weather): the weather report's Open
- * Graph card, drawn from the weather right now, so a link to /weather, and each of Poe's
- * weather posts, shows the sky as it was when it was shared.
+ * Graph card, drawn from the weather right now, so a link to /weather, to each of its pages
+ * (/weather/<topic>, each naming its card), and each of Poe's weather posts, shows the sky as
+ * it was when it was shared.
  *
  *   GET /og/weather.png                the default card (DEFAULT_CARD)
- *   GET /og/weather.png?card=<name>    forecast | trend | mix | today (server/og-weather-cards.ts);
+ *   GET /og/weather.png?card=<name>    forecast | trend | mix | today | hosts | migration
+ *                                      (server/og-weather-cards.ts);
  *                                      anything else is the default card, never an error
  *   ->  image/png, 1200x630, cached at the CDN for CACHE_OK
  *
