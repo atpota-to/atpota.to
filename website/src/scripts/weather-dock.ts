@@ -12,22 +12,33 @@
  * marked; the strip leads with its name; and the controls a section doesn't follow
  * (data-section-lens names the ones it does) are dimmed while it's on screen, with a line
  * saying so. Until the reader scrolls, a hint above the strip says there's more below.
+ *
+ * A topic's page (/weather/<topic>, weather-topics.ts) is one section: the strip leads with
+ * the topic, and the controls that don't reach its tiles are dimmed for the whole page.
  */
 
 import { motionOK } from './roll';
 import { WINDOW_INFO, type Lens, type LensState, type Window } from './weather-lens';
+import { topicOf, type Topic } from './weather-topics';
+
+/** A topic's page that only the lens's unit reaches (today's): its unit works whatever the measure (weather-lens.ts bindLens). */
+export const unitAloneOn = (topic: Topic | null) => !!topic && topic.lens.includes('unit') && !topic.lens.includes('measure');
 
 /** The header's period, above its number: "right now", or "the last 24 hours". */
 export const periodWords = (w: Window) => (w === 'now' ? 'right now' : WINDOW_INFO[w].words);
 
-/** The strip's parts: the window as the controls have it, the measure, and records' unit. */
-export function dockParts(controls: HTMLElement, s: LensState): Array<[LensPart, string]> {
+/**
+ * The strip's parts: the window as the controls have it, the measure, and records' unit.
+ * `unitAlone` is a page only the unit reaches (a topic's, like today's), whose tiles always
+ * count records: its unit is in the strip whatever the measure.
+ */
+export function dockParts(controls: HTMLElement, s: LensState, unitAlone = false): Array<[LensPart, string]> {
   const word = (sel: string) => controls.querySelector(sel)?.textContent?.trim() ?? '';
   const parts: Array<[LensPart, string]> = [
     ['window', word(`[data-lens-window="${s.window}"]`)],
     ['measure', word(`[data-lens-measure="${s.measure}"]`)],
   ];
-  if (s.measure === 'records') parts.push(['unit', word(`[data-lens-unit] option[value="${s.unit}"]`)]);
+  if (s.measure === 'records' || unitAlone) parts.push(['unit', word(`[data-lens-unit] option[value="${s.unit}"]`)]);
   return parts.filter(([, w]) => w);
 }
 
@@ -46,8 +57,8 @@ export function punctuate(now: HTMLElement, off: string): void {
 }
 
 /** What the strip says, in a line: "1h · accounts". */
-export function dockSummary(controls: HTMLElement, s: LensState): string {
-  return dockParts(controls, s)
+export function dockSummary(controls: HTMLElement, s: LensState, unitAlone = false): string {
+  return dockParts(controls, s, unitAlone)
     .map(([, w]) => w)
     .join(' · ');
 }
@@ -90,11 +101,12 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
   );
 
   const periods = report.querySelectorAll<HTMLElement>('[data-r-period]');
+  const unitAlone = unitAloneOn(topicOf(report.ownerDocument));
   initSections(report, dock, () => open(false));
   const show = (s: LensState) => {
     // each part its own span, so a section the part doesn't reach can leave it out (initSections)
     now.replaceChildren(
-      ...dockParts(panel, s).map(([part, w]) => {
+      ...dockParts(panel, s, unitAlone).map(([part, w]) => {
         const span = document.createElement('span');
         span.dataset.part = part;
         span.textContent = w;
@@ -130,8 +142,19 @@ export const SECTION_NOTES: Record<string, string> = {
   '': 'down here nothing up here reaches: these keep their own times and counts.',
 };
 
-/** The report's sections, top to bottom. */
-export function sectionsOf(report: ParentNode): Section[] {
+/** The same, for a topic's page, which is all one section. */
+export const PAGE_NOTES: Record<string, string> = {
+  window: 'on this page only the window reaches: these keep their own counts.',
+  unit: 'on this page only the unit reaches: these keep their own times.',
+  '': 'on this page nothing up here reaches: these keep their own times and counts.',
+};
+
+/** The report's sections, top to bottom; a topic's page is one, under its header. */
+export function sectionsOf(report: ParentNode, topic: Topic | null = topicOf((report as Node).ownerDocument ?? (report as Document))): Section[] {
+  if (topic) {
+    const el = report.querySelector<HTMLElement>('[data-section]');
+    return el ? [{ el, key: topic.slug, label: topic.label, lens: new Set(topic.lens) }] : [];
+  }
   return Array.from(report.querySelectorAll<HTMLElement>('[data-section]')).map((el) => ({
     el,
     key: el.dataset.section!,
@@ -161,18 +184,21 @@ function jump(section: Section): void {
 }
 
 export function initSections(report: HTMLElement, dock: HTMLElement, close: () => void): void {
-  const sections = sectionsOf(report);
+  const topic = topicOf(report.ownerDocument);
+  const sections = sectionsOf(report, topic);
   const nav = dock.querySelector<HTMLElement>('[data-dock-nav]');
   const label = dock.querySelector<HTMLElement>('[data-dock-section]');
   const note = dock.querySelector<HTMLElement>('[data-dock-note]');
   const hint = dock.querySelector<HTMLAnchorElement>('[data-dock-hint]');
   const panel = dock.querySelector<HTMLElement>('.weather-dock__panel');
-  if (sections.length < 2 || !nav || !panel) return;
+  // a page of one section (a topic's) has nowhere to jump to, but still says what reaches it
+  if (!nav || !panel || sections.length < (topic ? 1 : 2)) return;
+  nav.hidden = sections.length < 2;
   const win = dock.ownerDocument.defaultView ?? window;
   // each section can be landed on (for the jump's focus) without joining the tab order
   for (const s of sections) if (!s.el.hasAttribute('tabindex')) s.el.setAttribute('tabindex', '-1');
 
-  const links = sections.map((s) => {
+  const links = (sections.length < 2 ? [] : sections).map((s) => {
     const a = dock.ownerDocument.createElement('a');
     a.className = 'weather-dock__jump';
     a.href = `#${s.el.id}`;
@@ -213,7 +239,8 @@ export function initSections(report: HTMLElement, dock: HTMLElement, close: () =
       if (note) {
         const all = at.lens.size === 3;
         note.hidden = all;
-        note.textContent = all ? '' : (SECTION_NOTES[[...at.lens].sort().join(' ')] ?? SECTION_NOTES['']!);
+        const notes = topic ? PAGE_NOTES : SECTION_NOTES;
+        note.textContent = all ? '' : (notes[[...at.lens].sort().join(' ')] ?? notes['']!);
       }
     }
     if (hint) {

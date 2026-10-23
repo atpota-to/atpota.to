@@ -12,23 +12,32 @@
  *             outside Bluesky over the last 24 hours
  *   today     the almanac: the last hour against usual on the barometer, today's range with
  *             the last hour on it, and today's totals
+ *   hosts     where the atmosphere lives: the share of accounts on independent pds hosts,
+ *             the hosting diversity on its scale, and the biggest independent hosts
+ *   migration accounts moving house: out of bluesky over the last week, day by day, back in
+ *             and host to host, and where they went
  *
  * Each card is a satori element tree, built here from plain objects (no React). A card that
  * can't be drawn from what was read (its numbers didn't come) is null, and the caller draws
- * the quiet card. Words follow the page (src/scripts/weather.ts, weather-almanac.ts);
- * tests/og-weather.test.ts checks the copies against it. App names are other people's text:
- * they arrive checked against DOMAIN_RE and only ever become text, which satori draws as paths.
+ * the quiet card. Words follow the page (src/scripts/weather.ts, weather-almanac.ts,
+ * weather-hosts.ts); tests/og-weather.test.ts checks the copies against it. App names and
+ * hostnames are other people's text: they arrive checked (DOMAIN_RE, HOSTNAME_RE) and only
+ * ever become text, which satori draws as paths.
+ *
+ * Each of the report's pages (/weather/<topic>, src/scripts/weather-topics.ts) names one of
+ * these as its og:image.
  */
 
-import { conditionFor, diversityLevel, type Condition, type DiversityLevel, type Reading } from './atmosphere.js';
+import { conditionFor, diversityLevel, hostingLevel, type Condition, type DiversityLevel, type HostingLevel, type Reading } from './atmosphere.js';
 import { NEW_APPS, type NewApps, type Normal, type Today } from './weather-almanac.js';
 import type { Accounts } from './weather-accounts.js';
 import type { App as HistoryApp, Point } from './weather-history.js';
+import type { HostHistory, IdentityDay } from './weather-hosts.js';
 
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
 
-export const CARDS = ['forecast', 'trend', 'mix', 'today'] as const;
+export const CARDS = ['forecast', 'trend', 'mix', 'today', 'hosts', 'migration'] as const;
 export type CardName = (typeof CARDS)[number];
 /** The card /og/weather.png draws without ?card=. */
 export const DEFAULT_CARD: CardName = 'forecast';
@@ -44,6 +53,8 @@ export interface DayHistory {
   points: Point[];
   apps?: HistoryApp[];
   accounts?: Accounts;
+  /** The pds hosts over the day, and the plc directory's last week or so (server/weather-hosts.ts). */
+  hosts?: HostHistory | null;
 }
 
 /** /api/weather-almanac?tz=UTC, as its handler answers it. */
@@ -99,6 +110,27 @@ export const DIVERSITY_SCALE: ReadonlyArray<readonly [DiversityLevel, number]> =
 ];
 /** Where the scale's last band ends on the card. */
 const SCALE_TOP = 14;
+
+/** Where each hosting diversity level starts (weather.ts HOSTING_SCALE), and the top of its logarithmic scale. */
+export const HOSTING_SCALE: ReadonlyArray<readonly [HostingLevel, number]> = [
+  ['early days', 0],
+  ['taking root', 10],
+  ['spreading', 25],
+  ['well spread', 75],
+  ['flourishing', 200],
+];
+export const HOSTING_SCALE_MAX = 500;
+
+export const HOSTING_TEXT: Record<HostingLevel, string> = {
+  'early days': "nearly every account still lives on bluesky's own servers",
+  'taking root': 'independent hosts are finding their feet',
+  spreading: 'a real share of the network lives elsewhere, across many hosts',
+  'well spread': 'lots of accounts live off bluesky, spread wide',
+  flourishing: 'the network lives all over the place',
+};
+
+/** Where an index sits on the hosting scale, 0 to 1 (weather.ts hostingPosition). */
+export const hostingPosition = (index: number): number => Math.log1p(Math.min(Math.max(index, 0), HOSTING_SCALE_MAX)) / Math.log1p(HOSTING_SCALE_MAX);
 
 /** Where "much quieter" ... "much busier" than usual meet (weather-almanac.ts USUAL_EDGES). */
 export const USUAL_EDGES = [0.8, 0.93, 1.08, 1.25] as const;
@@ -295,11 +327,11 @@ function masthead(art: Art, label: string, color: string = C.brown, chipStyle: S
   return h({ alignItems: 'center', gap: 18 }, wordmark(art, color), chip(label, chipStyle));
 }
 
-/** The bottom line: where to look, and when the numbers are from. */
-function footer(d: CardData, color: string = C.muted): El {
+/** The bottom line: where to look (the card's own page, for the ones only a page of the report uses), and when the numbers are from. */
+function footer(d: CardData, color: string = C.muted, where = 'atpota.to/weather'): El {
   return h(
     { alignItems: 'center', gap: 12, fontSize: 22, color },
-    h({ fontWeight: 700, color: C.leaf }, 'atpota.to/weather'),
+    h({ fontWeight: 700, color: C.leaf }, where),
     h({}, '·'),
     h({}, `as of ${stamp(d.at)}`),
   );
@@ -827,6 +859,195 @@ function today(d: CardData, art: Art): El | null {
   );
 }
 
+// ---------- where the atmosphere lives ----------
+
+/** A share of accounts: "1.51%", or "12.3%" once there's room for fewer decimals. */
+export function shareText(v: number): string {
+  return `${v < 10 ? v.toFixed(2) : v.toFixed(1)}%`;
+}
+
+/** "+726", "−12", "0" (weather-hosts.ts signed). */
+export function signed(v: number): string {
+  return v > 0 ? `+${int(v)}` : v < 0 ? `−${int(-v)}` : '0';
+}
+
+export interface Living {
+  /** Percent of accounts on independent hosts. */
+  share: number;
+  index: number;
+  level: HostingLevel;
+  independent: number;
+  active: number;
+  /** The biggest independent hosts, when the station's census came. */
+  top: Array<{ hostname: string; accounts: number }>;
+  /** Accounts on independent hosts gained over the day's censuses, when there were two. */
+  gained: number | null;
+}
+
+/** Where accounts live: the station's census, else the day's last one. */
+export function livingOf(d: CardData): Living | null {
+  const points = d.day?.hosts?.points ?? [];
+  const first = points[0];
+  const last = points[points.length - 1];
+  const gained = first && last && first !== last ? last.accountsIndependent - first.accountsIndependent : null;
+  const h = d.now?.hosts;
+  if (h) return { share: h.diversity.share, index: h.diversity.index, level: hostingLevel(h.diversity.index), independent: h.independent, active: h.active, top: h.top, gained };
+  if (last) return { share: last.share, index: last.index, level: hostingLevel(last.index), independent: last.independent, active: last.active, top: [], gained };
+  return null;
+}
+
+/** The hosting scale's five bands, each as wide as its stretch of the logarithmic scale, with a marker at `index`. */
+function hostingScale(index: number, width: number): El {
+  const bands = HOSTING_SCALE.map(([name, from], i) => {
+    const to = HOSTING_SCALE[i + 1]?.[1] ?? HOSTING_SCALE_MAX;
+    return { name, w: (hostingPosition(to) - hostingPosition(from)) * width, o: [0.25, 0.45, 0.65, 0.85, 1][i]! };
+  });
+  const at = hostingPosition(index) * width;
+  return h(
+    { flexDirection: 'column', width },
+    h(
+      { position: 'relative', height: 30, gap: 4, alignItems: 'center' },
+      ...bands.map((b) => h({ width: b.w - 4, height: 18, borderRadius: 9, background: C.leaf, opacity: b.o })),
+      h({ position: 'absolute', left: Math.min(width - 10, Math.max(0, at - 5)), top: 0, width: 10, height: 30, borderRadius: 5, background: C.ink, border: `2px solid ${C.card}` }),
+    ),
+    // most bands are too narrow for their names at this size: the ends say which way is which
+    h({ justifyContent: 'space-between', marginTop: 8, fontSize: 18, color: C.muted }, h({}, bands[0]!.name), h({}, bands[bands.length - 1]!.name)),
+  );
+}
+
+/** A list of names with bars, as long as their share of the first (the mix card's apps). */
+function barList(rows: Array<{ name: string; n: number; value: string }>, width: number): El {
+  const top = Math.max(1, ...rows.map((r) => r.n));
+  return h(
+    { flexDirection: 'column', gap: 18, marginTop: 'auto' },
+    ...rows.map((r) =>
+      h(
+        { flexDirection: 'column' },
+        h(
+          { justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
+          h({ fontSize: 27, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: width - 120 }, r.name),
+          h({ fontSize: 23, color: C.soft, whiteSpace: 'nowrap' }, r.value),
+        ),
+        h(
+          { height: 14, marginTop: 6, borderRadius: 7, background: 'rgba(0, 104, 55, 0.14)' },
+          h({ width: `${Math.max(3, (r.n / top) * 100).toFixed(1)}%`, height: 14, borderRadius: 7, background: C.leaf }),
+        ),
+      ),
+    ),
+  );
+}
+
+function hostsCard(d: CardData, art: Art): El | null {
+  const l = livingOf(d);
+  if (!l) return null;
+  const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.accounts > x.prevAccounts);
+  const side = l.top.length
+    ? { title: 'the biggest independent hosts', sub: 'by the accounts they hold', rows: l.top.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts, value: int(x.accounts) })) }
+    : growing.length
+      ? { title: 'growing fastest', sub: 'accounts gained, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts - x.prevAccounts, value: signed(x.accounts - x.prevAccounts) })) }
+      : null;
+  const left = side ? 600 : 1144;
+  return page(
+    tile(
+      { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
+      masthead(art, 'where the atmosphere lives', C.brown, { background: C.bg }),
+      h({ fontSize: 30, fontWeight: 700, marginTop: 'auto' }, "accounts living off bluesky's servers"),
+      big(shareText(l.share), 128, { color: C.leaf, marginTop: 10 }),
+      h({ fontSize: 24, color: C.soft, marginTop: 14 }, `on ${int(l.independent)} independent pds hosts, of ${int(l.active)} active`),
+      l.gained !== null && l.gained !== 0 ? h({ fontSize: 22, color: C.soft, marginTop: 6 }, `${signed(l.gained)} accounts on them in the last 24 hours`) : null,
+      h({ fontSize: 24, fontWeight: 700, marginTop: 22 }, `hosting diversity ${formatIndex(l.index)} · ${l.level}`),
+      h({ marginTop: 10 }, hostingScale(l.index, left - 100)),
+      h({ marginTop: 16 }, footer(d, C.muted, 'atpota.to/weather/hosts')),
+    ),
+    side
+      ? tile(
+          { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
+          h({ fontSize: 30, fontWeight: 700, color: C.leaf }, side.title),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, side.sub),
+          barList(side.rows, 1144 - left - 16 - 80),
+        )
+      : null,
+  );
+}
+
+// ---------- migration winds ----------
+
+/** The last week of the plc directory's days (weather-hosts.ts renderIdentities: the last is usually today, so far). */
+export function weekOf(d: CardData): IdentityDay[] {
+  return (d.day?.hosts?.identities ?? []).slice(-7);
+}
+
+/** "1 in 17", from a week's listed sign-ups (weather-hosts.ts oddsWords); null without a week or anyone outside. */
+export function oddsOf(week: IdentityDay[]): string | null {
+  const indep = week.reduce((t, x) => t + x.createdIndependent, 0);
+  const listed = week.reduce((t, x) => t + x.createdBluesky + x.createdIndependent, 0);
+  if (week.length < 2 || indep === 0 || listed === 0) return null;
+  return `1 in ${int(Math.max(1, Math.round(listed / indep)))}`;
+}
+
+/** Where the week's movers went, busiest first (weather-hosts.ts destinationsOf). */
+export function destinationsOf(week: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
+  const by = new Map<string, number>();
+  for (const x of week) for (const h of x.destinations) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  return [...by]
+    .map(([hostname, accounts]) => ({ hostname, accounts }))
+    .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1))
+    .slice(0, 5);
+}
+
+/** "mon", or "today" for the day the card is drawn. */
+function weekday(day: string, at: number): string {
+  if (day === new Date(at).toISOString().slice(0, 10)) return 'today';
+  return new Date(`${day}T12:00:00Z`).toLocaleString('en-GB', { weekday: 'short', timeZone: 'UTC' }).toLowerCase();
+}
+
+function migration(d: CardData, art: Art): El | null {
+  const week = weekOf(d);
+  if (!week.length) return null;
+  const sum = (k: 'movedOut' | 'movedIn' | 'movedBetween') => week.reduce((t, x) => t + x[k], 0);
+  const span = week.length > 1 ? `the last ${week.length} days` : 'today so far';
+  const went = destinationsOf(week);
+  const odds = oddsOf(week);
+  const left = went.length ? 600 : 1144;
+  const most = Math.max(1, ...week.map((x) => x.movedOut));
+  const today = new Date(d.at).toISOString().slice(0, 10);
+  return page(
+    tile(
+      { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
+      masthead(art, 'migration winds', C.brown, { background: C.bg }),
+      h(
+        { alignItems: 'flex-end', gap: 20, marginTop: 'auto' },
+        big(int(sum('movedOut')), 132, { color: C.leaf }),
+        h({ flexDirection: 'column', paddingBottom: 10 }, h({ fontSize: 30, fontWeight: 700 }, 'moved out of bluesky'), h({ fontSize: 22, color: C.soft, marginTop: 2 }, span)),
+      ),
+      h({ fontSize: 24, color: C.soft, marginTop: 12 }, `${int(sum('movedIn'))} moved back in · ${int(sum('movedBetween'))} host to host`),
+      // each day's moves out, today's (still counting) fainter
+      week.length > 1
+        ? h(
+            { alignItems: 'flex-end', gap: 10, height: 104, marginTop: 20 },
+            ...week.map((x) =>
+              h(
+                { flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, height: 104 },
+                h({ width: '100%', height: Math.max(4, Math.round((x.movedOut / most) * 72)), borderRadius: 8, background: C.leaf, opacity: x.day === today ? 0.45 : 1 }),
+                h({ fontSize: 18, color: C.muted, marginTop: 8 }, weekday(x.day, d.at)),
+              ),
+            ),
+          )
+        : null,
+      odds ? h({ fontSize: 22, color: C.soft, marginTop: 14 }, `${odds} new accounts started outside bluesky`) : null,
+      h({ marginTop: 16 }, footer(d, C.muted, 'atpota.to/weather/migration')),
+    ),
+    went.length
+      ? tile(
+          { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
+          h({ fontSize: 30, fontWeight: 700, color: C.leaf }, 'where they moved to'),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, span),
+          barList(went.map((x) => ({ name: x.hostname, n: x.accounts, value: `${int(x.accounts)} ${x.accounts === 1 ? 'mover' : 'movers'}` })), 1144 - left - 16 - 80),
+        )
+      : null,
+  );
+}
+
 /** No numbers: what the report is, Poe dozing on its hill. */
 export function drawQuiet(d: CardData, art: Art): El {
   const sky = { w: CARD_WIDTH - 56, h: CARD_HEIGHT - 56 };
@@ -847,7 +1068,7 @@ export function drawQuiet(d: CardData, art: Art): El {
   );
 }
 
-const DRAW: Record<CardName, (d: CardData, art: Art) => El | null> = { forecast, trend, mix: mixCard, today };
+const DRAW: Record<CardName, (d: CardData, art: Art) => El | null> = { forecast, trend, mix: mixCard, today, hosts: hostsCard, migration };
 
 /** The card, or null when what it shows didn't come. */
 export function drawCard(name: CardName, d: CardData, art: Art): El | null {
