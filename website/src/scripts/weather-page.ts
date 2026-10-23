@@ -45,6 +45,7 @@
  * States live on the report as data-state="loading" | "ready" | "error".
  */
 
+import { renderStation } from './weather-station';
 import { alertsFor, createAlertDesk, newAppAlert, recordAlert, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock } from './weather-dock';
@@ -1239,6 +1240,8 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   }
   const load = async () => {
     const reading = await fetchReading(fetchImpl);
+    // the live reading's own say on how the station is doing; never a stored one's
+    renderStation(report, reading);
     if (reading) {
       shown = reading;
       renderReport(report, reading, lens.get());

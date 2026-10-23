@@ -23,8 +23,8 @@ Public, through nginx on `hook.atpota.to`:
 
 | URL | Auth | Answer |
 |---|---|---|
-| `GET https://hook.atpota.to/weather/v1/now` | header `x-atpotato-weather-secret: $WEATHER_SECRET` | `200` the website's `Reading` plus `accounts`, `window`, `series` (one entry per second; `null` means missing) and `hosts` (below); `503 {"error":"unavailable"}` under 30 covered seconds; `401` without the right secret |
-| `GET https://hook.atpota.to/weather/healthz` | none | `{"ok","connected","lagSeconds","covered60"}`: `200` when connected, lag is under 10 s and at least 30 of the last 60 s are covered; otherwise `503` |
+| `GET https://hook.atpota.to/weather/v1/now` | header `x-atpotato-weather-secret: $WEATHER_SECRET` | `200` the website's `Reading` plus `accounts`, `window`, `series` (one entry per second; `null` means missing), `hosts` (below) and `health` (`ok`, `lagSeconds`, `covered60`, and the repair's `missing`, `lost`, `repairing`: the page's station line); `503 {"error":"unavailable"}` under 30 covered seconds; `401` without the right secret |
+| `GET https://hook.atpota.to/weather/healthz` | none | `{"ok","connected","lagSeconds","covered60","repair"}`: `200` when connected, lag is under 10 s and at least 30 of the last 60 s are covered; otherwise `503`. `repair` is `{"missing","lost","repairing"}` (below) |
 
 The process listens on `127.0.0.1:8790` and serves `/v1/now` and `/healthz`.
 nginx maps the two `/weather/...` paths onto those and 404s everything else.
@@ -492,6 +492,13 @@ account that moved between hosts in the window counts for the one it's on now, a
 that has since left independent hosts isn't counted. That's a few hundred accounts
 against tens of thousands active (`atmosphere_plc_day` has the moves).
 
+It steps aside for the live station: every 30 s it asks the station's `/healthz`
+(`STATION_HEALTH_URL`, default `http://127.0.0.1:8790/healthz`), and when the station has
+fallen behind it stops reading, which closes its download, waits until the station has
+been healthy for 2 minutes, and picks up a segment before where it stopped. Where no
+station answers (a laptop) it just reads. To stop it, Ctrl-C; never `kill -STOP` (above,
+"When the whole machine's network is slow").
+
 ## Config
 
 `/root/atpotato-weather/.env` on the droplet, mode 600. Start from
@@ -538,7 +545,34 @@ written (or are written partly covered), and it logs them:
 journalctl -u atpotato-weather -o cat | grep 'skipping to the live tail'   # gapFrom, gapTo
 ```
 
-Fill them with `src/replay.js` (above) while they're inside Jetstream's lookback.
+The station fills them in itself (below), or fill them with `src/replay.js` (above)
+while they're inside Jetstream's lookback.
+
+**Filling in what it missed.** `src/repair.js`: every 10 minutes, once the station has
+been healthy for 5, it looks for minutes in the last 30 hours with no row or a short
+one, and replays the oldest run of them, two hours at most at a time, with `replay.js`
+as a child process in a systemd scope of its own (outside the unit's MemoryMax and
+CPUQuota, niced, 320 MB at most). If the station falls behind meanwhile, it stops the
+replay with SIGTERM and tries again in 30 minutes; a minute that comes back short twice
+is past Jetstream's lookback and is left alone. `healthz` and the reading say how many
+minutes are still `missing`, how many are `lost`, and what it's `repairing`; so does the
+weather page, in the line under its title. In the log:
+
+```bash
+journalctl -u atpotato-weather -o cat | grep -E 'repair(ing|ed) missed minutes|repair (stopped|failed)'
+```
+
+**When the whole machine's network is slow.** On 2026-10-22, from 20:21 UTC, every
+connection on the droplet crawled (16 KB/s to Cloudflare) while ping stayed perfect: the
+backfill below had been paused with `kill -STOP`, its download held 4 MB nothing would
+read, and the kernel's TCP memory (`grep TCP /proc/net/sockstat`, `mem` against the
+third number of `/proc/sys/net/ipv4/tcp_mem`, in pages) was over its limit, which
+squeezes every socket. Killing it fixed it at once. Never pause a downloading process
+with `-STOP`; stop it and run it again. The droplet now has more room for it:
+
+```bash
+echo 'net.ipv4.tcp_mem = 65536 98304 131072' > /etc/sysctl.d/90-tcp-mem.conf && sysctl --system
+```
 
 ## Files
 
@@ -560,6 +594,7 @@ src/plc-watch.js   today's identity changes from that log, live, into atmosphere
 src/host-activity.js  who's active on each independent host, a sketch a day, into atmosphere_host_active_day
 src/backfill-host-activity.js  the same, for days before the station counted, from the archive
 src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log
+src/repair.js      fills in the minutes the station missed, from Jetstream's lookback, once it's healthy
 src/server.js      /v1/now and /healthz
 src/state.js       last minute written; where to resume after a restart
 src/index.js       wiring, timers, stats line

@@ -435,6 +435,69 @@ html[data-theme="dark"] .weather-hero {
   font-size: 17px;
 }
 
+/* How the station is doing (weather-station.ts): a dot and a few words; a tap says more. */
+.weather-station {
+  --station-dot: var(--weather-else);
+  margin-top: 12px;
+  max-width: 46ch;
+  font-size: 14px;
+  color: var(--weather-sky-text);
+}
+
+.weather-station[data-level="mending"] { --station-dot: var(--weather-bsky); }
+.weather-station[data-level="behind"] { --station-dot: #C98A16; }
+.weather-station[data-level="sample"],
+.weather-station[data-level="down"] { --station-dot: #C2453D; }
+
+html[data-theme="dark"] .weather-station[data-level="behind"] { --station-dot: #E0A93A; }
+html[data-theme="dark"] .weather-station[data-level="sample"],
+html[data-theme="dark"] .weather-station[data-level="down"] { --station-dot: #EE8A7E; }
+
+.weather-station__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 10px;
+  border-radius: var(--radius-pill);
+  color: var(--weather-sky-text);
+  background: color-mix(in srgb, var(--weather-sky-text) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weather-sky-text) 22%, transparent);
+  cursor: pointer;
+  list-style: none;
+}
+
+.weather-station__summary::-webkit-details-marker { display: none; }
+
+.weather-station__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--station-dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--station-dot) 22%, transparent);
+}
+
+/* a live station breathes; one in trouble holds still, so it reads as a warning */
+@media (prefers-reduced-motion: no-preference) {
+  .weather-station[data-level="ok"] .weather-station__dot,
+  .weather-station[data-level="mending"] .weather-station__dot {
+    animation: weather-station-breathe 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes weather-station-breathe {
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--station-dot) 8%, transparent); }
+}
+
+.weather-station__detail {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--weather-sky-text);
+  background: color-mix(in srgb, var(--weather-sky-text) 9%, transparent);
+  line-height: 1.45;
+}
+
 .weather-hero__now {
   display: flex;
   align-items: center;

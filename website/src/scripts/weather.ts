@@ -142,6 +142,17 @@ export interface Reading {
   };
   /** The PDS hosts on the network, from the station's census of the relay's list (server/atmosphere.ts Hosts). */
   hosts?: Hosts;
+  /** How the station is doing (server/atmosphere.ts StationHealth). */
+  health?: StationHealth;
+}
+
+export interface StationHealth {
+  ok: boolean;
+  lagSeconds: number | null;
+  covered60: number;
+  missing?: number | null;
+  lost?: number;
+  repairing?: { from: string; to: string } | null;
 }
 
 export interface Hosts {
@@ -196,6 +207,14 @@ function clean(r: Reading): Reading {
   const a = r.accounts;
   if (nums(a, ['active', 'bluesky', 'elsewhere', 'index']) && Array.isArray(a?.apps)) {
     out.accounts = { ...a, apps: a.apps.filter((x) => nums(x, ['accounts']) && name(x.domain) && Array.isArray(x.collections)).map((x) => ({ ...x, collections: x.collections.filter(name).slice(0, 3) })) };
+  }
+  const sh = r.health;
+  if (obj(sh) && typeof sh.ok === 'boolean' && num(sh.covered60)) {
+    out.health = { ok: sh.ok, lagSeconds: num(sh.lagSeconds) ? sh.lagSeconds : null, covered60: Math.min(60, sh.covered60) };
+    if (num(sh.missing)) out.health.missing = sh.missing;
+    if (num(sh.lost)) out.health.lost = sh.lost;
+    const rep = sh.repairing;
+    if (obj(rep) && typeof rep.from === 'string' && typeof rep.to === 'string' && Number.isFinite(Date.parse(rep.from)) && Number.isFinite(Date.parse(rep.to))) out.health.repairing = { from: rep.from, to: rep.to };
   }
   const h = r.hosts;
   if (h && nums(h, ['listed', 'active', 'bluesky', 'independent']) && typeof h.measuredAt === 'string' && Number.isFinite(Date.parse(h.measuredAt)) && nums(h.accounts, ['bluesky', 'independent']) && nums(h.diversity, ['index', 'share', 'spread']) && Array.isArray(h.top)) {

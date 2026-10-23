@@ -59,6 +59,11 @@
                 <div class="weather-hero__words">
                     <h1 class="weather-hero__title" id="weather-title">the atmosphere weather report</h1>
                     <p class="weather-hero__lede">how the whole network is doing right now: how busy bluesky is, how much of the sky belongs to other apps, and who they are.</p>
+                    <!-- how the station is doing: live and whole, filling in minutes it missed, behind, or not answering (src/scripts/weather-station.ts) -->
+                    <details class="weather-station" data-station data-level="down" hidden>
+                        <summary class="weather-station__summary"><span class="weather-station__dot" aria-hidden="true"></span><span data-station-label>checking the station</span></summary>
+                        <p class="weather-station__detail" data-station-detail></p>
+                    </details>
                 </div>
                 <div class="weather-hero__now">
                     <!-- a toy: spin it (weather-hero.ts bindSun); the rays turn with the reading -->

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backfillActivity, countDays, directoryFor, parseArgs } from '../src/backfill-host-activity.js';
+import { backfillActivity, CHECK_EVERY_MS, countDays, directoryFor, parseArgs, RESUME_AFTER_MS, stationBehind } from '../src/backfill-host-activity.js';
 import { ActivityDay, ALL_INDEPENDENT, HostDirectory } from '../src/host-activity.js';
 import { registerOf } from '../src/hll.js';
 
@@ -168,4 +168,58 @@ test('countDays: leaves out a short dense stretch', async () => {
   });
   assert.deepEqual(handed, [[[ALL_INDEPENDENT, 1], ['eurosky.social', 1]]]);
   assert.equal(read.skipped, 1);
+});
+
+test('stationBehind: a reason when the station says it is behind, nothing when it keeps up or isn\'t there', async () => {
+  assert.equal(await stationBehind(async () => Response.json({ ok: true }), 'http://x/healthz'), null);
+  assert.equal(await stationBehind(async () => Response.json({ ok: false, connected: true, lagSeconds: 42, covered60: 18 }, { status: 503 }), 'http://x/healthz'), 'lag 42 s, 18 of 60 s heard');
+  assert.equal(await stationBehind(async () => Response.json({ ok: false, connected: false }, { status: 503 }), 'http://x/healthz'), 'disconnected');
+  assert.equal(await stationBehind(async () => { throw new Error('ECONNREFUSED'); }, 'http://x/healthz'), null);
+});
+
+test('backfillActivity: steps aside while the station is behind, closing its download, then picks up a segment back', async () => {
+  const day = Date.parse('2026-10-20T00:00:00Z') * 1000;
+  const H = 3600e6;
+  // three segments of the 20th, then one past it
+  const segments = [0, 1, 2, 3].map((i) => ({ name: `s${i}`, index: i, sizeBytes: 1e9, eventCount: 1000, minSeq: i * 100 + 1, maxSeq: i * 100 + 100, minWitnessedAt: day + (i === 0 ? -H : i * 8 * H), maxWitnessedAt: day + (i === 3 ? 26 * H : (i + 1) * 8 * H) }));
+  const events = [
+    [1, commit('did:plc:euro1', '2026-10-20T01:00:00Z')],
+    [101, commit('did:plc:euro2', '2026-10-20T09:00:00Z')],
+    [201, commit('did:plc:black', '2026-10-20T17:00:00Z')],
+    [301, commit('did:plc:euro1', '2026-10-21T00:05:00Z')],
+  ];
+  const asked = [];
+  let closed = 0;
+  class Jetstream {
+    snapshot({ afterSeq }) {
+      asked.push(afterSeq);
+      return (async function* () {
+        try {
+          for (const [seq, e] of events) if (seq > afterSeq) yield e;
+        } finally {
+          closed++;
+        }
+      })();
+    }
+  }
+  // the clock moves a check's worth on every look; the station is behind at the second check, then fine
+  let t = NOW;
+  const now = () => (t += CHECK_EVERY_MS / 2);
+  let checks = 0;
+  const behind = async () => (++checks === 2 ? 'lag 42 s, 18 of 60 s heard' : null);
+  const said = [];
+  const slept = [];
+  const upserts = [];
+  const rest = { getAll: async () => [], upsert: async (table, conflict, rows) => upserts.push(rows) };
+  const out = await backfillActivity({
+    args: parseArgs(['--from', '2026-10-20', '--to', '2026-10-20'], NOW), host: 'https://js.example', apiKey: 'k', rest, Jetstream, directory: directory(),
+    fetch: async () => Response.json({ segments }), log: (m) => said.push(m), warn: () => {}, now, sleep: async (ms) => slept.push(ms), behind,
+  });
+  assert.match(said.join('\n'), /fallen behind \(lag 42 s/);
+  assert.match(said.join('\n'), /picking up again at segment #1/);
+  assert.deepEqual(asked, [0, 100], "read again from the segment before where it stopped");
+  assert.equal(closed, 2, 'the first download was closed when it stepped aside');
+  assert.ok(slept.reduce((a, b) => a + b, 0) >= RESUME_AFTER_MS);
+  assert.equal(upserts.length, 1, 'the day is written once');
+  assert.deepEqual(out.written, [{ day: '2026-10-20', independent: 3, hosts: 2 }]);
 });
