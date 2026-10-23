@@ -190,13 +190,16 @@ test('backfillActivity: steps aside while the station is behind, closing its dow
   ];
   const asked = [];
   let closed = 0;
+  const aborted = [];
   class Jetstream {
-    snapshot({ afterSeq }) {
+    snapshot({ afterSeq, signal }) {
       asked.push(afterSeq);
       return (async function* () {
         try {
           for (const [seq, e] of events) if (seq > afterSeq) yield e;
         } finally {
+          // as the SDK does: closed early without an abort, it finishes its downloads first
+          aborted.push(signal.aborted);
           closed++;
         }
       })();
@@ -219,6 +222,7 @@ test('backfillActivity: steps aside while the station is behind, closing its dow
   assert.match(said.join('\n'), /picking up again at segment #1/);
   assert.deepEqual(asked, [0, 100], "read again from the segment before where it stopped");
   assert.equal(closed, 2, 'the first download was closed when it stepped aside');
+  assert.deepEqual(aborted, [true, false], 'the snapshot it stepped aside from was aborted, so its downloads were dropped');
   assert.ok(slept.reduce((a, b) => a + b, 0) >= RESUME_AFTER_MS);
   assert.equal(upserts.length, 1, 'the day is written once');
   assert.deepEqual(out.written, [{ day: '2026-10-20', independent: 3, hosts: 2 }]);
