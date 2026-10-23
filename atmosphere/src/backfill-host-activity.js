@@ -115,11 +115,12 @@ export function newCount() {
  * Counts archive events (the SDK's, in seq order) into a day's sketches for each of
  * `days`, handing each to `onDay(day)` once the stream is SETTLE_S past its end (and
  * waiting for it), the last one when the events run out. Resolves with what it read.
- * With `pauseIf`, asks it every CHECK_EVERY_MS; when it gives a reason, stops reading
- * (closing `events`) and resolves with `paused` set to it. Pass the same `count` to pick
- * up again: days already handed over aren't counted again.
+ * With `pauseIf`, asks it every CHECK_EVERY_MS; when it gives a reason, calls `abort`
+ * (which has to cut the downloads off), stops reading and resolves with `paused` set to
+ * it. Pass the same `count` to pick up again: days already handed over aren't counted
+ * again.
  */
-export async function countDays({ events, days, directory, onDay, skip = [], count = newCount(), pauseIf = null, clock = Date.now }) {
+export async function countDays({ events, days, directory, onDay, skip = [], count = newCount(), pauseIf = null, abort = () => {}, clock = Date.now }) {
   const wanted = new Set(days);
   const { open, handed, read } = count;
   read.paused = null;
@@ -136,6 +137,8 @@ export async function countDays({ events, days, directory, onDay, skip = [], cou
       const why = await pauseIf();
       if (why) {
         read.paused = why;
+        // before leaving the loop: closing `events` alone waits for its downloads to finish
+        abort();
         return read;
       }
     }
@@ -241,14 +244,20 @@ export async function backfillActivity({ args, host, apiKey, rest, Jetstream, di
   let afterSeq = plan.afterSeq;
   let read;
   for (;;) {
+    // Stepping aside has to abort the snapshot: the SDK closes a snapshot left early by
+    // finishing every download in flight first (the segment it's on and the next), and
+    // waiting out any 429 on them, which on 2026-10-23 kept it downloading while the
+    // station starved. Aborted, it drops them.
+    const stop = new AbortController();
     read = await countDays({
-      events: js.snapshot({ raw: true, afterSeq, beforeSeq: plan.beforeSeq, onError: (err) => warn(`archive: ${err.message}`) }),
+      events: js.snapshot({ raw: true, afterSeq, beforeSeq: plan.beforeSeq, signal: stop.signal, onError: (err) => warn(`archive: ${err.message}`) }),
       days: args.days,
       directory,
       onDay,
       skip: plan.skip,
       count,
       pauseIf: behind,
+      abort: () => stop.abort(),
       clock: now,
     });
     if (!read.paused) break;
