@@ -32,6 +32,15 @@
 // station's next census (TODAY_AGAIN_MS later), in case the station read today's rows just
 // before the backfill wrote and wrote just after. The archive is about 3.5 GB a day to
 // download (it counts against the key's allowance), a day takes a few minutes to read.
+//
+// It steps aside for the live station. Every CHECK_EVERY_MS it asks the station's
+// /healthz (STATION_HEALTH_URL, default the droplet's own); when the station has fallen
+// behind it stops reading, which closes its download, waits until the station has been
+// healthy for RESUME_AFTER_MS, and picks up a segment before where it stopped (counting
+// an account twice changes nothing). Where no station answers (a laptop) it just reads.
+// Stop it with Ctrl-C, never `kill -STOP`: a stopped process holds its download open, and
+// on 2026-10-22 one did, filled the machine's network buffers and starved every
+// connection on it, the station's too, for four hours.
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +58,28 @@ export const MAX_DAYS = 31;
 export const SETTLE_S = 120;
 /** Today is written again after this long: past the station's next census, every 10 minutes. */
 export const TODAY_AGAIN_MS = 11 * 60_000;
+/** How often it asks whether the station is keeping up. */
+export const CHECK_EVERY_MS = 30_000;
+/** After stepping aside, the station has to have been healthy this long before it reads again. */
+export const RESUME_AFTER_MS = 2 * 60_000;
+export const STATION_HEALTH_URL = 'http://127.0.0.1:8790/healthz';
+
+/**
+ * Whether the live station has fallen behind: a reason ("lag 42 s, 18 of 60 s heard"),
+ * or null when it's keeping up or there's no station to ask.
+ */
+export async function stationBehind(fetchImpl = globalThis.fetch, url = STATION_HEALTH_URL) {
+  let res;
+  try {
+    res = await fetchImpl(url, { signal: AbortSignal.timeout(5000) });
+  } catch {
+    return null;
+  }
+  if (res.ok) return null;
+  const h = await res.json().catch(() => ({}));
+  if (h.connected === false) return 'disconnected';
+  return `lag ${h.lagSeconds ?? '?'} s, ${h.covered60 ?? '?'} of 60 s heard`;
+}
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_S = 86_400;
@@ -75,17 +106,39 @@ export function parseArgs(argv, nowMs = Date.now()) {
   return { ...out, days };
 }
 
+/** What a count has so far, kept across a pause. */
+export function newCount() {
+  return { open: new Map(), handed: new Set(), read: { events: 0, commits: 0, counted: 0, skipped: 0, firstMs: null, lastMs: null, paused: null } };
+}
+
 /**
  * Counts archive events (the SDK's, in seq order) into a day's sketches for each of
  * `days`, handing each to `onDay(day)` once the stream is SETTLE_S past its end (and
  * waiting for it), the last one when the events run out. Resolves with what it read.
+ * With `pauseIf`, asks it every CHECK_EVERY_MS; when it gives a reason, stops reading
+ * (closing `events`) and resolves with `paused` set to it. Pass the same `count` to pick
+ * up again: days already handed over aren't counted again.
  */
-export async function countDays({ events, days, directory, onDay, skip = [] }) {
+export async function countDays({ events, days, directory, onDay, skip = [], count = newCount(), pauseIf = null, clock = Date.now }) {
   const wanted = new Set(days);
-  const open = new Map();
-  const read = { events: 0, commits: 0, counted: 0, skipped: 0, firstMs: null, lastMs: null };
+  const { open, handed, read } = count;
+  read.paused = null;
   const lastEnd = (startOf(days.at(-1)) + DAY_S + SETTLE_S) * 1000;
+  let checkAt = clock() + CHECK_EVERY_MS;
+  const hand = async (day, d) => {
+    open.delete(day);
+    handed.add(day);
+    await onDay(d);
+  };
   for await (const evt of events) {
+    if (pauseIf && clock() >= checkAt) {
+      checkAt = clock() + CHECK_EVERY_MS;
+      const why = await pauseIf();
+      if (why) {
+        read.paused = why;
+        return read;
+      }
+    }
     read.events++;
     const m = messageOf(evt);
     const ms = m.time_us / 1000;
@@ -94,10 +147,7 @@ export async function countDays({ events, days, directory, onDay, skip = [] }) {
     read.lastMs = Math.max(read.lastMs ?? ms, ms);
     // days well behind the stream are done
     for (const [day, d] of open) {
-      if (read.lastMs >= (startOf(day) + DAY_S + SETTLE_S) * 1000) {
-        open.delete(day);
-        await onDay(d);
-      }
+      if (read.lastMs >= (startOf(day) + DAY_S + SETTLE_S) * 1000) await hand(day, d);
     }
     if (read.lastMs >= lastEnd) break;
     if (m.kind !== 'commit' || typeof m.did !== 'string') continue;
@@ -108,7 +158,7 @@ export async function countDays({ events, days, directory, onDay, skip = [] }) {
     }
     read.commits++;
     const day = dayOf(ms);
-    if (!wanted.has(day)) continue;
+    if (!wanted.has(day) || handed.has(day)) continue;
     const host = directory.hostOf(m.did);
     if (!host) continue;
     let d = open.get(day);
@@ -116,7 +166,7 @@ export async function countDays({ events, days, directory, onDay, skip = [] }) {
     d.add(host, registerOf(m.did));
     read.counted++;
   }
-  for (const d of open.values()) await onDay(d);
+  for (const [day, d] of [...open]) await hand(day, d);
   return read;
 }
 
@@ -138,7 +188,16 @@ export async function directoryFor({ file, fetchImpl = (u, i) => fetch(u, i), re
   return d;
 }
 
-export async function backfillActivity({ args, host, apiKey, rest, Jetstream, directory, fetch = globalThis.fetch, log = console.log, warn = console.warn, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+/** Sleeps until `behind()` has said nothing for RESUME_AFTER_MS. */
+async function untilCaughtUp(behind, sleep) {
+  let good = 0;
+  while (good < RESUME_AFTER_MS) {
+    await sleep(CHECK_EVERY_MS);
+    good = (await behind()) ? 0 : good + CHECK_EVERY_MS;
+  }
+}
+
+export async function backfillActivity({ args, host, apiKey, rest, Jetstream, directory, fetch = globalThis.fetch, log = console.log, warn = console.warn, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), behind = null }) {
   const fromSec = startOf(args.days[0]);
   const segments = await listSegments({ host, key: apiKey, fetch });
   // today goes as far as the archive does: its last sealed segment, less the time the last minute needs to settle
@@ -178,13 +237,30 @@ export async function backfillActivity({ args, host, apiKey, rest, Jetstream, di
       },
     },
   });
-  const read = await countDays({
-    events: js.snapshot({ raw: true, afterSeq: plan.afterSeq, beforeSeq: plan.beforeSeq, onError: (err) => warn(`archive: ${err.message}`) }),
-    days: args.days,
-    directory,
-    onDay,
-    skip: plan.skip,
-  });
+  const count = newCount();
+  let afterSeq = plan.afterSeq;
+  let read;
+  for (;;) {
+    read = await countDays({
+      events: js.snapshot({ raw: true, afterSeq, beforeSeq: plan.beforeSeq, onError: (err) => warn(`archive: ${err.message}`) }),
+      days: args.days,
+      directory,
+      onDay,
+      skip: plan.skip,
+      count,
+      pauseIf: behind,
+      clock: now,
+    });
+    if (!read.paused) break;
+    // a segment before the one it stopped in: what's read twice counts once
+    const at = (read.lastMs ?? 0) * 1000;
+    const i = segments.findLastIndex((x) => x.minWitnessedAt <= at);
+    const from = segments[Math.max(0, i - 1)];
+    afterSeq = Math.max(plan.afterSeq, from.minSeq - 1);
+    log(`the live station has fallen behind (${read.paused}): stopped downloading until it has caught up`);
+    await untilCaughtUp(behind, sleep);
+    log(`the station has caught up: picking up again at segment #${from.index}`);
+  }
   log(`read ${read.events.toLocaleString('en-US')} events (${read.commits.toLocaleString('en-US')} commits, ${read.counted.toLocaleString('en-US')} by accounts on independent hosts${read.skipped ? `, ${read.skipped.toLocaleString('en-US')} left out in dense stretches` : ''}) in ${Math.round((Date.now() - started) / 60_000)} min`);
   const missing = args.days.filter((day) => !written.some((w) => w.day === day));
   if (missing.length) throw new Error(`the archive ran out before ${missing.join(', ')}`);
@@ -210,7 +286,8 @@ async function main(argv) {
   const directory = await directoryFor({ file: args.directory, relay: process.env.RELAY_URL?.trim() || DEFAULT_RELAY });
   const { Jetstream } = await loadSdk(process.env.JETSTREAM_SDK_DIR?.trim() || SDK_DIR);
   const rest = args.dryRun ? null : supabaseRest({ url, key });
-  await backfillActivity({ args, host: args.host ?? DEFAULT_HOST, apiKey, rest, Jetstream, directory });
+  const healthUrl = process.env.STATION_HEALTH_URL?.trim() || STATION_HEALTH_URL;
+  await backfillActivity({ args, host: args.host ?? DEFAULT_HOST, apiKey, rest, Jetstream, directory, behind: () => stationBehind(globalThis.fetch, healthUrl) });
 }
 
 /** Run as a command (not imported by a test). Real paths: the droplet runs it through a symlink. */

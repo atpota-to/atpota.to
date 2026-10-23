@@ -240,10 +240,41 @@ export interface Reading {
   accounts?: Accounts;
   /** The PDS hosts on the network, from the station only. */
   hosts?: Hosts;
+  /** How the station is doing, from the station only (atmosphere/src/server.js stationHealth). */
+  health?: StationHealth;
   /** The station's window. */
   window?: { from: string; to: string };
   /** The station's window second by second, oldest first; null for a second it missed. */
   series?: Array<SeriesPoint | null>;
+}
+
+export interface StationHealth {
+  /** Connected, current and hearing most of the last minute. */
+  ok: boolean;
+  /** How far behind the stream it is, seconds; null before the first event. */
+  lagSeconds: number | null;
+  /** The seconds of the last 60 it heard. */
+  covered60: number;
+  /** Minutes of the last 30 hours it missed and can still hear again (atmosphere/src/repair.js); null before its first look. */
+  missing?: number | null;
+  /** Minutes it missed that Jetstream no longer has. */
+  lost?: number;
+  /** The minutes it's hearing again now. */
+  repairing?: { from: string; to: string } | null;
+}
+
+/** The station's health as it sent it, checked, or null. */
+export function healthOf(x: unknown): StationHealth | null {
+  if (!isRecord(x) || typeof x.ok !== 'boolean' || !isCount(x.covered60)) return null;
+  const h: StationHealth = { ok: x.ok, lagSeconds: isCount(x.lagSeconds) ? x.lagSeconds : null, covered60: Math.min(60, x.covered60) };
+  if (isCount(x.missing) || x.missing === null) h.missing = x.missing;
+  if (isCount(x.lost)) h.lost = x.lost;
+  if (isRecord(x.repairing)) {
+    const from = isoOrNull(x.repairing.from);
+    const to = isoOrNull(x.repairing.to);
+    h.repairing = from && to ? { from, to } : null;
+  } else if (x.repairing === null) h.repairing = null;
+  return h;
 }
 
 export interface SeriesPoint {
@@ -619,6 +650,8 @@ export function fromStation(body: unknown): Reading | null {
   if (accounts) reading.accounts = accounts;
   const hosts = hostsOf(body.hosts);
   if (hosts) reading.hosts = hosts;
+  const health = healthOf(body.health);
+  if (health) reading.health = health;
   const w = isRecord(body.window) ? { from: isoOrNull(body.window.from), to: isoOrNull(body.window.to) } : null;
   if (w?.from && w.to) reading.window = { from: w.from, to: w.to };
   if (Array.isArray(body.series)) {

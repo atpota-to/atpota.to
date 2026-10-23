@@ -8,6 +8,7 @@ import { createHostActivity } from './host-activity.js';
 import { createHostWatch, createHostWriter } from './hosts.js';
 import { createJetstream, REWIND_US } from './jetstream.js';
 import { createPlcWatch } from './plc-watch.js';
+import { createRepair, REPAIR_EVERY_MS, replayChild } from './repair.js';
 import { createLogger } from './logger.js';
 import { createServer, health } from './server.js';
 import { loadState, resumePoint, saveState } from './state.js';
@@ -65,7 +66,18 @@ const hostWatch = createHostWatch({
     : null,
 });
 
-const server = createServer({ station, secret: config.secret, hosts: hostWatch.census });
+// the minutes it missed, heard again from Jetstream's lookback once it's healthy (repair.js)
+const repair = writer
+  ? createRepair({
+      healthy: () => health(station, Date.now()).ok,
+      writtenBefore: () => writer.next,
+      covered: (fromIso, toIso) => rest.getAll(`atmosphere_minute?select=minute,seconds_covered&minute=gte.${encodeURIComponent(fromIso)}&minute=lt.${encodeURIComponent(toIso)}&order=minute`),
+      replay: ({ fromSec, toSec, signal }) => replayChild({ fromSec, toSec, signal, log, host: jetstream.state.host ?? config.jetstreamUrls[0] }),
+      log,
+    })
+  : null;
+
+const server = createServer({ station, secret: config.secret, hosts: hostWatch.census, repair: repair?.status });
 server.listen(config.port, config.host, () => log.info('listening', { host: config.host, port: config.port }));
 
 jetstream.start();
@@ -74,6 +86,8 @@ hostWatch.start();
 const timers = [
   setInterval(() => writer?.tick().catch((err) => log.error('writer tick failed', { err })), 1000),
   setInterval(() => station.prune(), 10_000),
+  setInterval(() => repair?.tick(), 5000),
+  setInterval(() => repair?.scan(), REPAIR_EVERY_MS),
   setInterval(() => {
     const c = station.counts;
     const h = health(station, Date.now());
@@ -92,6 +106,7 @@ const timers = [
       maxMovedMs: c.maxMovedMs,
       buckets: station.buckets.size,
       pending: writer?.pending ?? null,
+      missing: repair?.status.missing ?? null,
       rssMB: Math.round(process.memoryUsage().rss / 1048576),
     });
     for (const k of Object.keys(c)) c[k] = 0;

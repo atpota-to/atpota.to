@@ -7,8 +7,8 @@ import { Station } from '../src/station.js';
 const T0 = 1_792_512_000;
 const SECRET = 'x'.repeat(40);
 
-async function serve(station, nowSec) {
-  const server = createServer({ station, secret: SECRET, now: () => nowSec * 1000 });
+async function serve(station, nowSec, repair = null) {
+  const server = createServer({ station, secret: SECRET, repair, now: () => nowSec * 1000 });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   return { base, close: () => new Promise((r) => server.close(r)) };
@@ -96,5 +96,18 @@ test('/v1/now carries the last census of hosts, when there is one', async () => 
     assert.equal(body.hosts.active, 3);
   } finally {
     await new Promise((r) => server.close(r));
+  }
+});
+
+test('the reading says how the station is doing, and /healthz how the repair is going', async () => {
+  const repair = { missing: 212, lost: 3, repairing: { from: '2026-10-20T13:00:00.000Z', to: '2026-10-20T15:00:00.000Z' } };
+  const s = await serve(live(T0 - 100, T0 + 1.9, T0 + 2), T0 + 2, repair);
+  try {
+    const body = await (await fetch(`${s.base}/v1/now`, { headers: { [SECRET_HEADER]: SECRET } })).json();
+    assert.deepEqual(body.health, { ok: true, lagSeconds: 0.1, covered60: 60, ...repair });
+    const h = await (await fetch(`${s.base}/healthz`)).json();
+    assert.deepEqual(h.repair, repair);
+  } finally {
+    await s.close();
   }
 });
