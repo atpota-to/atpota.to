@@ -599,14 +599,16 @@ leaves a row in `sending`, inspect the DM conversation before manually retrying;
 a timeout might mean the chat service accepted the message. `dispatched` with no
 callback also needs manual review. The kill switch and `STAGE` gate outgoing DMs.
 
-## Weekly dispatch: `announce` (phase 0)
+## Weekly dispatch: `announce`
 
 Issues of "poe's atmosphere dispatch" are `site.standard.document` records in
 **atpota.to's** repo, in the Leaflet publication
 `at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n`.
-They are published by hand (`npm run publish:dispatch` in the website repo).
-Posting the announcement from Poe is the one step an operator cannot do by
-hand, so an operator DMs Poe:
+Poe drafts them and publishes them on the operator's yes (see
+[Weekly dispatch: Poe writes it](#weekly-dispatch-poe-writes-it-dispatch_drafts)),
+or they are published in Leaflet by hand. Posting the announcement for one
+published by hand is the step an operator can't do themselves, so an operator
+DMs Poe:
 
 ```
 announce https://poe.leaflet.pub/<rkey>
@@ -653,8 +655,14 @@ the next DM poll (its `operator_dm` row waits in status `command`). Sending the
 same command again is always safe: it resumes, never reposts. The kill switch,
 a nap and `STAGE` below 4 all stop it before the page check.
 
-Needs `DISPATCH_ENABLED=true` (off: `announce` DMs go to the agent as before)
-but not `DISPATCH_PUBLISH_ENABLED`, which is for the later review flow.
+Needs `DISPATCH_ENABLED=true` (off: `announce` DMs go to the agent as before).
+
+Linking waits until the issue has been up for `DISPATCH_LEAFLET_SETTLE_MS`
+(5 minutes) after its `publishedAt`. Leaflet emails subscribers from a job that
+runs about a minute after the last change it sees to a new document (a 60 s
+debounce, at most 3 minutes), and only if that change is the create: putting
+`bskyPostRef` on the document inside that window would make the job see an
+update, and send nothing. The post itself goes out at once.
 
 ### Asking in plain words: Poe proposes, the operator confirms
 
@@ -715,6 +723,87 @@ The operator's yes is the approval, so these posts are not held to the weather
 posts' caps. A weather one is then recorded in `weather_post` (kind `operator`), so
 the automatic weather posts keep their 2-hour gap from it. The kill switch, a nap
 and `STAGE` below 4 stop it. Needs `OPERATOR_DM_ENABLED=true`, nothing more.
+
+## Weekly dispatch: Poe writes it (`DISPATCH_DRAFTS`)
+
+Poe researches and drafts each issue itself, the operator reviews and edits it
+in DMs, and it is published on their yes (`src/dispatch-drafts.js`, with the
+markdown turned into the record by `src/dispatch-markdown.js`).
+
+```
+droplet tick ──► POST <AGENT_URL>/dispatch/draft ──► Poe researches the week
+                                                     └─ save_dispatch_draft ──► /callback (versions)
+Poe's last word ──► /callback ──► DM to the operator: title, preview link, Poe's note
+operator: "cut the tokimeki bit" ──► Poe (in the DM) ──► save_dispatch_draft (edits)
+operator: "make it live" ──► propose_dispatch_publish ──► the steps under Poe's reply
+operator: "yes" ──► create the document in atpota.to's repo ──► announce() ──► "it's live"
+```
+
+1. **Asking.** With `DISPATCH_DRAFTS=on`, the five-minute tick asks for a draft
+   at `DISPATCH_DRAFT_DAY` and `DISPATCH_DRAFT_HOUR_UTC` (Monday 12:00 UTC by
+   default), up to 20 hours late, once per week: the draft's id is
+   `dd-<that date>`. It is skipped (kept as `skipped`, with the reason) when a
+   draft from the last three days is still in play, or an issue was published in
+   the last three days. An operator can also DM `draft dispatch` (or "write this
+   week's newsletter", with what to cover on the lines after) at any time, and
+   with `DISPATCH_DRAFTS=ask` that is the only way. The issue covers the time
+   since the last issue (when that was a day to two weeks ago) or the last seven
+   days. A failed ask is retried on the next two ticks, then given up on with a DM.
+2. **Drafting.** The agent's drafting session (its own session per draft, the
+   `dispatch` channel) researches with Aturi and `read_weather` and saves the
+   issue with `save_dispatch_draft`. Each save arrives on the callback URL as
+   `{ draftingId, dispatchDraft: { action: "save", title, description, tags,
+   markdown | edits } }`, is turned into the exact `site.standard.document` it
+   would publish (Leaflet's `pub.leaflet.content` blocks, with link, bold,
+   italic, code and strikethrough facets and never a mention facet), and is kept
+   as a new version in `dispatch_draft_version`. Link cards are filled in here:
+   a page's title and description (public https hosts only), or a Bluesky post's
+   cid for an embed. What didn't come out right goes back to Poe as `notes`.
+3. **The DM.** When the drafting turn ends, its last message comes back as
+   `{ key, dispatchDraftDone: { draftId, text } }` and the droplet DMs the first
+   `ADMIN_DIDS` operator: the title, the preview link, Poe's note. This is a DM
+   Poe starts, not a reply, so it goes through `dispatch_outbox`
+   (`chat.bsky.convo.getConvoForMembers`, then the message): a send that might
+   have gone out is never sent again, like any DM here. A drafting turn that
+   hasn't reported back in 90 minutes is settled with the last version it saved.
+4. **Reviewing.** The preview is `atpota.to/blog/preview/<token>`, the issue as it
+   will look, rendered by the website from `GET /dispatch/preview/<token>` here.
+   The token is 24 random characters, one per draft, and the only key: the
+   endpoint is public, `no-store`, `noindex`. While `DISPATCH_DRAFTS` is on, every
+   operator DM handed to Poe carries `dispatchDrafts: true`, and while a draft is
+   in play `dispatchDraft: { id, status, version, title }` too, so Poe knows to
+   read it (`read_dispatch_draft`) and save the operator's
+   changes as `edits`, each a find (found exactly once) and its replacement. A
+   save from a DM puts the preview link under Poe's reply. Saves are serialized
+   per draft, at most 40 from a drafting turn and 15 calls per DM.
+5. **Making it live.** When the operator says so, Poe calls
+   `propose_dispatch_publish` with the version it read and an announcement post
+   (checked like any post: 300 graphemes, no @handles, no links, no markdown).
+   The steps go under its reply: the issue goes up on poe.leaflet.pub and
+   atpota.to/blog, Leaflet emails every subscriber, and the exact announcement.
+   A whole-message yes to that message, by the same rules as an announcement's,
+   publishes exactly that version; anything else keeps it a draft, and so does a
+   draft that changed since.
+6. **Publishing.** The yes runs beside the poll (its DM waits in `issue`, so a
+   restart finishes it). The document's record key (a TID) and `publishedAt` are
+   claimed first; the document is looked up under that key and only created if
+   it isn't there, with `com.atproto.repo.createRecord`, never a put: Leaflet
+   emails subscribers when it sees a new document created in a publication with
+   Newsletter Mode on, whoever wrote it. Then `announce()` posts and links it as
+   above, with the link held back until Leaflet has seen the create. Asking again
+   is always safe: it never makes a second issue or a second post.
+
+Publishing needs `DISPATCH_PUBLISHER_APP_PASSWORD`. Without it the drafts are
+still written and reviewed, and Poe tells the operator it can't publish. The kill
+switch, a nap and `STAGE` below 4 stop publishing; a nap also stops the weekly
+ask. `npm run drafts` lists the drafts (`npm run drafts -- <id>` shows one with
+every version and its log).
+
+Before turning it on: deploy the bot (it adds `POST /dispatch/draft` and the
+draft tools), add the nginx block for `/dispatch/preview/` (below), then set
+`DISPATCH_DRAFTS=on` (it needs `DISPATCH_ENABLED=true` and
+`OPERATOR_DM_ENABLED=true`) and restart. Until `DISPATCH_DRAFTS` is set, DMs are
+handed to Poe exactly as before.
 
 ## Likes Poe proposes (`appreciate_post`)
 
@@ -839,6 +928,8 @@ its own `location =` block, or the agent's call fails without reaching here:
 `/callback`, `/dm-draft`, `/memory`, `/health`, `/like-proposal`,
 `/dispatch/announce-proposal`, `/internal/bluesky-search`,
 `/internal/scan-budget/claim`, `/internal/list-records-budget/claim` and
-`/internal/scan-approval/request`. `/like-proposal` and the four `/internal/`
+`/internal/scan-approval/request`. The dispatch's draft previews need a prefix
+block, since each has its own token: `location ^~ /dispatch/preview/`. Everything
+else the drafts use comes on `/callback`. `/like-proposal` and the four `/internal/`
 routes were missing until 2026-10-19, so Poe's Bluesky search, list_records,
 collection scans and like proposals all failed in production before then.

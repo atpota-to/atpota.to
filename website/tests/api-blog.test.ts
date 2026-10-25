@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as api from '../api/blog.js';
 import { POE_DID } from '../server/blog/config.js';
 import { resetEmbedCaches } from '../server/blog/embeds.js';
-import { CACHE_MISSING, CACHE_OK, createBlogHandlers, type BlogDeps } from '../server/blog/handler.js';
+import { CACHE_MISSING, CACHE_OK, CACHE_PREVIEW, createBlogHandlers, type BlogDeps } from '../server/blog/handler.js';
 import { EMAIL_RETURN_COOKIE, LEAFLET_RETURN_PATH } from '../server/blog/subscribe.js';
 import { pageTitle } from '../server/routes.js';
 
@@ -27,6 +27,8 @@ interface Net {
   plcDown?: boolean;
   shellStatus?: number;
   posts?: unknown[];
+  /** The droplet's dispatch drafts, by token: what GET /dispatch/preview/<token> answers. */
+  previews?: Record<string, { status: number; body?: unknown }>;
 }
 
 interface Seen {
@@ -58,6 +60,10 @@ function fakeFetch(net: Net, seen: Seen): typeof fetch {
       }
     }
     if (url.origin === 'https://public.api.bsky.app') return json({ posts: net.posts ?? [] });
+    if (url.origin === 'https://hook.atpota.to' && url.pathname.startsWith('/dispatch/preview/')) {
+      const hit = net.previews?.[decodeURIComponent(url.pathname.slice('/dispatch/preview/'.length))];
+      return hit ? json(hit.body ?? {}, hit.status) : json({ error: 'NotFound' }, 404);
+    }
     if (url.origin === ORIGIN && url.pathname.startsWith('/shells/blog')) {
       seen.shellHeaders.push(new Headers(init?.headers));
       return new Response(net.shellStatus && net.shellStatus !== 200 ? 'missing' : SHELL, { status: net.shellStatus ?? 200, headers: { 'content-type': 'text/html' } });
@@ -397,5 +403,78 @@ describe('poe page titles', () => {
   it('names the blog and its posts without reading records', () => {
     expect(pageTitle('/blog')).toBe("poe's atmosphere dispatch");
     expect(pageTitle('/blog/issue-2')).toBe("a post in poe's atmosphere dispatch");
+  });
+});
+
+describe('/api/blog dispatch draft preview', () => {
+  const TOKEN = 'k3Jx9QwErTyUiOpAsDfGhJkL';
+  const draft = (extra: Record<string, unknown> = {}) => ({
+    status: 200,
+    body: {
+      draft: { status: 'ready', version: 3, savedAt: '2026-10-26T13:10:00.000Z', windowStart: '2026-10-19T19:02:15.894Z', windowEnd: '2026-10-26T12:00:00.000Z', ...extra },
+      record: {
+        $type: 'site.standard.document',
+        site: PUB_URI,
+        title: 'spaces near beta',
+        description: 'a quieter week',
+        tags: ['atmosphere', 'dispatch'],
+        textContent: 'what builders talked about\n\nspaces is close.',
+        content: content(
+          { $type: `${T}header`, level: 2, plaintext: 'what builders talked about' },
+          { $type: `${T}text`, plaintext: 'spaces is close.', facets: [{ index: { byteStart: 0, byteEnd: 6 }, features: [{ $type: 'pub.leaflet.richtext.facet#bold' }] }] },
+          { $type: `${T}bskyPost`, postRef: { uri: BSKY_URI, cid: 'c' } },
+        ),
+        contributors: [{ did: POE_DID }],
+      },
+    },
+  });
+
+  it('renders the draft as the issue will look, privately: no cache, no index, no canonical, no document link', async () => {
+    const net = { ...defaultNet(), previews: { [TOKEN]: draft() } };
+    const { h, seen } = setup(net);
+    const res = await h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(CACHE_PREVIEW);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(seen.urls).toContain(`https://hook.atpota.to/dispatch/preview/${TOKEN}`);
+    const d = html(await res.text());
+    expect(d.querySelector('h1')!.textContent).toBe('spaces near beta');
+    expect(d.querySelector('.post__subtitle')!.textContent).toBe('a quieter week');
+    expect(d.querySelector('.post-preview')!.textContent).toMatch(/^draft previewversion 3, saved .* · waiting for review\. this isn't published/);
+    expect(d.querySelector('.post__body strong')!.textContent).toBe('spaces');
+    expect(d.querySelector('.post__body')!.textContent).toContain('a post worth reading');
+    expect(d.querySelector('meta[name="robots"]')!.getAttribute('content')).toBe('noindex, nofollow');
+    expect(d.querySelector('link[rel="canonical"]')).toBeNull();
+    expect(d.querySelector('link[rel="site.standard.document"]')).toBeNull();
+    expect(d.querySelector('meta[name="atproto:uri"]')).toBeNull();
+    expect(d.querySelector('.post-end')).toBeNull();
+    expect(d.title).toBe('draft: spaces near beta - The Weekly Spud');
+  });
+
+  it('an unknown or malformed token is not found, and a published draft sends you to the issue', async () => {
+    const net = { ...defaultNet(), previews: { [TOKEN]: draft({ status: 'published', published: 'https://atpota.to/blog/3newissue' }) } };
+    const { h, seen } = setup(net);
+    const missing = await h.GET(get('view=preview&token=nopenopenopenopenopenope'));
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe(CACHE_PREVIEW);
+    expect(missing.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    const bad = await h.GET(get('view=preview&token=../../etc/passwd'));
+    expect(bad.status).toBe(404);
+    expect(seen.urls.some((u) => u.includes('etc'))).toBe(false);
+    const out = await h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(out.status).toBe(302);
+    expect(out.headers.get('location')).toBe('https://atpota.to/blog/3newissue');
+  });
+
+  it('says unavailable when the droplet is down, and reads DISPATCH_PREVIEW_ORIGIN', async () => {
+    const down = setup({ ...defaultNet(), previews: { [TOKEN]: { status: 502 } } });
+    const res = await down.h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(res.status).toBe(503);
+    expect(res.headers.get('cache-control')).toBe(CACHE_PREVIEW);
+    expect(down.logs.some((l) => l.event === 'preview_error')).toBe(true);
+
+    const other = setup(defaultNet(), { ...UNPINNED, DISPATCH_PREVIEW_ORIGIN: 'https://droplet.example' });
+    await other.h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(other.seen.urls).toContain(`https://droplet.example/dispatch/preview/${TOKEN}`);
   });
 });

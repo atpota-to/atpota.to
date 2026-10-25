@@ -46,6 +46,13 @@ function callerAddress(ctx: { session: { id: string; auth: { initiator?: Caller;
         return { sessionId };
       throw new Error("list_records requires an authenticated caller");
     }
+    // The dispatch's drafting session (channels/dispatch.ts), on the session budget.
+    if (caller?.authenticator === "atpotato-droplet-dispatch") {
+      const draftId = caller.attributes?.draftId;
+      if (caller.principalType === "service" && typeof draftId === "string" && /^dd-[A-Za-z0-9-]{8,48}$/.test(draftId))
+        return { sessionId };
+      throw new Error("list_records requires an authenticated caller");
+    }
   }
   for (const caller of callers) {
     if (caller?.authenticator === "oidc" &&
@@ -157,9 +164,9 @@ export default defineTool({
   description: "Read one page of full records from a PDS collection. Defaults to 50, at most 100 per page; " +
     "raw responses are capped at 64 KiB, so request fewer records if a page is too large. " +
     "Accepts a cursor and reverse ordering. Returns full record values, next cursor, and explicit " +
-    "partial/end status. Available for signed Bluesky posts, authenticated operator DMs, " +
-    "and authenticated eve sessions, not website chats. Budget: at most 10 page claims and 1,000 requested " +
-    "records per Bluesky attempt or DM/eve session, with no automatic approval to continue. " +
+    "partial/end status. Available for signed Bluesky posts, authenticated operator DMs, the dispatch's " +
+    "drafting session and authenticated eve sessions, not website chats. Budget: at most 10 page claims and 1,000 requested " +
+    "records per Bluesky attempt or DM/drafting/eve session, with no automatic approval to continue. " +
     "Stop on 429; label results incomplete if a cursor remains or a request stops early. " +
     "Use scan_collection for counts or date-window scans. To rank posts mentioning a handle " +
     "across authors, use top_mentioned_posts when available, not one account's list_records.",

@@ -71,7 +71,7 @@ test('latest is the newest issue by publishedAt in the dispatch, never another p
       { uri: `at://did:plc:someoneelse/site.standard.document/stray`, cid: 'x', value: documentValue('stray', { publishedAt: '2027-01-01T00:00:00Z' }) },
     ],
   };
-  assert.deepEqual(await latestDocument(deps), { rkey: 'issuetwo', title: 'issuetwo' });
+  assert.deepEqual(await latestDocument(deps), { rkey: 'issuetwo', title: 'issuetwo', publishedAt: '2026-10-26T09:00:00.000Z' });
   assert.equal(await latestDocument({ listDocuments: async () => [] }), null);
 });
 
@@ -434,4 +434,19 @@ test('with DISPATCH_ENABLED off an announce DM goes to the agent as before', asy
     assert.match(calls[0].url, /\/operator\/dm$/);
     assert.equal(calls[0].body.text, message.text);
   } finally { config.dispatch.enabled = true; }
+});
+
+test('an issue published moments ago is linked only after Leaflet has seen it created', async () => {
+  const k = 'justpublished';
+  const publishedAt = new Date(Date.now() - 60000).toISOString();
+  const { s, deps } = network(k, { value: documentValue(k, { publishedAt }) });
+  const slept = [];
+  deps.sleep = async (ms) => { slept.push(ms); };
+  s.beforePut = () => assert.ok(slept.some((ms) => ms > 3 * 60000), 'waited before the put');
+  const reply = await announce({ rkey: k, text: null }, deps);
+  assert.equal(s.created.length, 1, 'the post goes out at once');
+  assert.equal(s.puts.length, 1);
+  const wait = slept.find((ms) => ms > 60000);
+  assert.ok(wait <= config.dispatch.leafletSettleMs - 60000 + 1000 && wait >= config.dispatch.leafletSettleMs - 60000 - 5000, `waited ${wait}`);
+  assert.match(reply, /links to it now/);
 });

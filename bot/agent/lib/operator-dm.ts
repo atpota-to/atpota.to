@@ -6,7 +6,30 @@ export const OperatorDm = z.object({
   operatorDid: z.string().regex(/^did:(plc|web):[^\s]{1,290}$/),
   text: z.string().min(1).max(12000),
   guidance: z.boolean().optional(),
+  /** Set while the droplet has Poe writing the dispatch (DISPATCH_DRAFTS, mentions/src/dispatch-drafts.js). */
+  dispatchDrafts: z.literal(true).optional(),
+  /** The dispatch draft waiting on the operator, when there is one. */
+  dispatchDraft: z.object({
+    id: z.string().regex(/^dd-[A-Za-z0-9-]{8,48}$/),
+    status: z.enum(["asking", "drafting", "ready", "publishing"]),
+    version: z.number().int().min(0),
+    title: z.string().max(300),
+  }).strict().optional(),
 }).strict();
+
+/** The drafts' context as auth attributes, which hold strings only. */
+export function draftAttributes(dm: Pick<OperatorDm, "dispatchDrafts" | "dispatchDraft">): Record<string, string> {
+  if (!dm.dispatchDrafts) return {};
+  const draft = dm.dispatchDraft;
+  if (!draft) return { dispatchDrafts: "true" };
+  return {
+    dispatchDrafts: "true",
+    dispatchDraftId: draft.id,
+    dispatchDraftStatus: draft.status,
+    dispatchDraftVersion: String(draft.version),
+    dispatchDraftTitle: draft.title,
+  };
+}
 
 export type OperatorDm = z.infer<typeof OperatorDm>;
 

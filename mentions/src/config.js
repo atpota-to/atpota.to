@@ -279,7 +279,6 @@ function parseDispatch() {
   }
   return {
     enabled: flag('DISPATCH_ENABLED'),
-    publishEnabled: flag('DISPATCH_PUBLISH_ENABLED'),
     announceUrlBase,
     publicationUri,
     publisherDid: pub[1],
@@ -290,6 +289,44 @@ function parseDispatch() {
     publisherAppPassword: opt('DISPATCH_PUBLISHER_APP_PASSWORD', ''),
     pagePollMs: num('DISPATCH_PAGE_POLL_MS', 20000),
     pageTimeoutMs: num('DISPATCH_PAGE_TIMEOUT_MS', 600000),
+    // Leaflet emails subscribers when its job for a newly created document runs,
+    // about a minute after the last change it saw (a debounce of 60 s, at most
+    // 3 min). If the document changes again before that, the job sees an update
+    // instead of a create and sends nothing. So a document stays untouched this
+    // long after it was published before its announcement is linked to it.
+    leafletSettleMs: num('DISPATCH_LEAFLET_SETTLE_MS', 300000),
+    drafts: parseDispatchDrafts(),
+  };
+}
+
+// --- weekly drafts ---------------------------------------------------------
+// Poe researching and writing each week's issue on its own (dispatch-drafts.js):
+//   on   once a week, at DISPATCH_DRAFT_DAY and DISPATCH_DRAFT_HOUR_UTC, the
+//        droplet asks Poe for a draft and DMs it to the operator for review.
+//        Needs DISPATCH_ENABLED and OPERATOR_DM_ENABLED, and stage 4.
+//   ask  no weekly draft; one is written only when an operator asks in a DM
+//   off  nothing runs, and "draft dispatch" in a DM goes to Poe as plain words
+// Publishing a draft also needs DISPATCH_PUBLISHER_APP_PASSWORD.
+const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function parseDispatchDrafts() {
+  const mode = opt('DISPATCH_DRAFTS', 'off').toLowerCase();
+  if (!['off', 'ask', 'on'].includes(mode)) throw new Error(`DISPATCH_DRAFTS must be off, ask or on, got ${mode}`);
+  const dayName = opt('DISPATCH_DRAFT_DAY', 'monday').toLowerCase();
+  const day = /^[0-6]$/.test(dayName) ? Number(dayName) : DAYS.indexOf(dayName);
+  if (day < 0) throw new Error(`DISPATCH_DRAFT_DAY must be a day of the week, got ${dayName}`);
+  const hour = num('DISPATCH_DRAFT_HOUR_UTC', 12);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error(`DISPATCH_DRAFT_HOUR_UTC must be 0 to 23, got ${hour}`);
+  const previewUrlBase = opt('DISPATCH_PREVIEW_URL_BASE', 'https://atpota.to/blog/preview').replace(/\/+$/, '');
+  if (!/^https:\/\/[^/]+(\/.*)?$/.test(previewUrlBase)) throw new Error(`DISPATCH_PREVIEW_URL_BASE must be an https URL: ${previewUrlBase}`);
+  return {
+    mode,
+    day,
+    hour,
+    previewUrlBase,
+    tickMs: Math.max(num('DISPATCH_DRAFT_TICK_MS', 300000), 60000),
+    // A drafting turn that hasn't finished in this long is settled with what it saved.
+    turnTimeoutMs: num('DISPATCH_DRAFT_TIMEOUT_MS', 5400000),
   };
 }
 

@@ -346,8 +346,10 @@ describe('config', () => {
       commentsEnabled: true,
       emailEnabled: true,
       hiddenComments: new Set(),
+      previewOrigin: 'https://hook.atpota.to',
     });
     expect(readBlogConfig({ BLOG_EMAIL_DISABLED: '1' }).emailEnabled).toBe(false);
+    expect(readBlogConfig({ DISPATCH_PREVIEW_ORIGIN: 'http://insecure.example' }).previewOrigin).toBe('https://hook.atpota.to');
   });
 
   it('credits poe as the author and names the repo owner separately', () => {

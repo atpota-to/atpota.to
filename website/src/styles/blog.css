@@ -1579,3 +1579,22 @@ a.comment__time:hover {
     display: none !important;
   }
 }
+
+/* A dispatch draft's page (/blog/preview/<token>): which version, and that it isn't out yet. */
+.post-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 2px dashed var(--dash);
+  border-radius: 14px;
+  background: var(--butter);
+  color: var(--on-sun);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.post-preview strong {
+  font-weight: 800;
+}
