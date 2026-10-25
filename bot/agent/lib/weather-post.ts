@@ -26,7 +26,7 @@ export const WeatherMoment = z.strictObject({
     kind: z.enum(WEATHER_MOMENT_KINDS),
     text: z.string().max(3000),
     postedAt: z.string().max(40),
-  })).max(5).optional(),
+  })).max(10).optional(),
 });
 
 export type WeatherMoment = z.infer<typeof WeatherMoment>;
@@ -57,6 +57,10 @@ export function buildWeatherPrompt(moment: WeatherMoment): string {
     "Your last weather posts on Bluesky, newest first:",
     recent,
     "</weather_moment>",
+    "",
+    "Those numbers are why you were asked, not all there is: read_weather has much more (today, now, " +
+      "forecast, hosts). Look around, pick what's actually interesting today, and write it so it doesn't " +
+      "open, list or end the way your recent posts did.",
     "",
     `Write the post, or answer exactly "skip" if it isn't worth one. The card links ${WEATHER_PAGE}.`,
   ].join("\n");
