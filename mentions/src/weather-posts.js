@@ -262,7 +262,7 @@ function recentPosts() {
   // operator's weather post (operator-posts.js, kind 'operator') is here for the caps.
   return db.prepare(`SELECT kind, post_text AS text, posted_at AS postedAt FROM weather_post
     WHERE status = 'posted' AND kind IN (${MOMENT_KINDS.map(() => '?').join(', ')})
-    ORDER BY posted_at DESC LIMIT 5`).all(...MOMENT_KINDS);
+    ORDER BY posted_at DESC LIMIT 8`).all(...MOMENT_KINDS);
 }
 
 /**
