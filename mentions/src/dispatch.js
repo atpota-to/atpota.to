@@ -1,7 +1,8 @@
 // dispatch.js
-// Poe's weekly dispatch, the droplet's half. Phase 0: the operator's
-// `announce <link>` command, which posts the announcement for an issue that was
-// already published by hand, and links the issue to it.
+// Poe's weekly dispatch, the droplet's half. The operator's `announce <link>`
+// command, which posts the announcement for an issue that is already published
+// and links the issue to it. Issues Poe drafts are published by
+// dispatch-drafts.js, which then announces them with announce() here.
 //
 // Issues are site.standard.document records in atpota.to's repo, in the
 // Leaflet publication "poe's atmosphere dispatch". The announcement is a post
@@ -460,7 +461,7 @@ export async function latestDocument(deps) {
     Number.isFinite(Date.parse(r.value.publishedAt)));
   if (!docs.length) return null;
   docs.sort((a, b) => Date.parse(b.value.publishedAt) - Date.parse(a.value.publishedAt));
-  return { rkey: own.exec(docs[0].uri)[1], title: String(docs[0].value.title ?? '') };
+  return { rkey: own.exec(docs[0].uri)[1], title: String(docs[0].value.title ?? ''), publishedAt: docs[0].value.publishedAt };
 }
 
 export const defaultDeps = {
@@ -506,6 +507,14 @@ async function linkDocument(documentUri, rkey, doc, post, deps) {
       if (value.bskyPostRef?.uri) {
         event(documentUri, 'link_refused', { other: value.bskyPostRef.uri });
         return `the issue already links a different post (${postUrl(value.bskyPostRef.uri)}), so i left it alone.`;
+      }
+      // Leaflet emails a new document's subscribers only if the first thing its
+      // job sees is the create, so a document published moments ago is left
+      // alone until that job has run (config.dispatch.leafletSettleMs).
+      const settle = Date.parse(value.publishedAt) + config.dispatch.leafletSettleMs - Date.now();
+      if (settle > 0) {
+        event(documentUri, 'link_waits_for_leaflet', { ms: settle });
+        await deps.sleep(Math.min(settle, config.dispatch.leafletSettleMs));
       }
       const record = { ...value, bskyPostRef: { uri: post.uri, cid: post.cid }, updatedAt: nowIso() };
       try {

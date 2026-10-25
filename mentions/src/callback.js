@@ -29,8 +29,10 @@ import { handleAnnounceProposal } from './dispatch.js';
 import { receiveLikeProposal } from './likes.js';
 import { receiveWeatherDraft, handleWeatherDraft } from './weather-posts.js';
 import { handlePostProposal } from './operator-posts.js';
+import { handleDraftCall, receiveDraftDone, previewFor, sendOutbox } from './dispatch-drafts.js';
 
-const MAX_BODY_BYTES = 64 * 1024;
+// A whole issue of the dispatch, as markdown, is the biggest thing sent here.
+const MAX_BODY_BYTES = 256 * 1024;
 
 function secretMatches(given) {
   if (typeof given !== 'string' || !config.sharedSecret) return false;
@@ -286,6 +288,20 @@ export function startCallbackServer({ stats }) {
         uptimeSec: Math.round(process.uptime()),
       });
     }
+    // The draft preview, for atpota.to/blog/preview/<token>. The token in the
+    // path is the only key: unguessable, one per draft, shown only to operators.
+    if (req.method === 'GET' && req.url?.startsWith('/dispatch/preview/')) {
+      let token = '';
+      try { token = decodeURIComponent(req.url.slice('/dispatch/preview/'.length).split('?')[0]); }
+      catch { /* a malformed escape is no token */ }
+      const result = previewFor(token);
+      const payload = JSON.stringify(result.body);
+      res.writeHead(result.status, {
+        'content-type': 'application/json', 'content-length': Buffer.byteLength(payload),
+        'cache-control': 'no-store', 'x-robots-tag': 'noindex',
+      });
+      return res.end(payload);
+    }
     if (req.method !== 'POST') return send(res, 405, { error: 'MethodNotAllowed' });
 
     if (!secretMatches(req.headers['x-atpotato-secret'])) {
@@ -436,6 +452,31 @@ export function startCallbackServer({ stats }) {
         handleWeatherDraft(result.id).catch((err) =>
           logger.error('weather draft handling failed', { id: result.id, error: err.message }));
       }
+      return;
+    }
+
+    // Poe's dispatch draft tools (dispatch-drafts.js) come on this URL too, told
+    // apart by dispatchDraft: reading the draft, saving a version, proposing to
+    // make it live, starting one. None of them publishes anything.
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.hasOwn(parsed, 'dispatchDraft')) {
+      let result;
+      try { result = await handleDraftCall(parsed); }
+      catch (err) {
+        logger.error('dispatch draft call failed', { error: err.message });
+        return send(res, 500, { error: 'InternalError' });
+      }
+      return send(res, result.status, result.body);
+    }
+    // The drafting turn's last word: the draft is ready (or isn't), and the operator is told.
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.hasOwn(parsed, 'dispatchDraftDone')) {
+      let result;
+      try { result = receiveDraftDone(parsed); }
+      catch (err) {
+        logger.error('dispatch draft done failed', { error: err.message });
+        return send(res, 500, { error: 'InternalError' });
+      }
+      send(res, result.status, result.body);
+      sendOutbox().catch((err) => logger.error('dispatch DM failed', { error: err.message }));
       return;
     }
 

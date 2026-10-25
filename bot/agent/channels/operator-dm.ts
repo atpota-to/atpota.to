@@ -1,6 +1,6 @@
 import { defineChannel, POST } from "eve/channels";
 import { secretMatches } from "../lib/bluesky";
-import { OperatorDm, postDmDraft } from "../lib/operator-dm";
+import { OperatorDm, draftAttributes, postDmDraft } from "../lib/operator-dm";
 
 export default defineChannel({
   turnPolicy: "queue",
@@ -33,6 +33,7 @@ export default defineChannel({
             dmId: dm.dmId,
             operatorDid: dm.operatorDid,
             guidance: String(dm.guidance === true),
+            ...draftAttributes(dm),
           },
         },
       }).then(() => undefined));

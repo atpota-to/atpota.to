@@ -301,6 +301,25 @@ export interface PostInput {
   coverCid?: string | null;
   /** Comments and recommends; null when comments are switched off (BLOG_COMMENTS_DISABLED). */
   discussion?: Discussion | null;
+  /**
+   * A draft of the dispatch (/blog/preview/<token>): the same page, kept out of search
+   * and unfurls, with a note that it isn't published and nothing for readers to do.
+   */
+  preview?: { version: number; savedAt: string | null; status: string } | null;
+}
+
+/** The note on a draft's page: which version this is and that it isn't out yet. */
+function previewNote(preview: NonNullable<PostInput['preview']>): string {
+  const when = preview.savedAt ? `, saved <time datetime="${escapeAttr(preview.savedAt)}">${escapeHtml(formatDate(preview.savedAt))}</time>` : '';
+  const state = preview.status === 'ready' ? 'waiting for review'
+    : preview.status === 'drafting' ? 'still being written'
+    : preview.status === 'publishing' ? 'being published'
+    : preview.status === 'superseded' ? 'replaced by a newer draft'
+    : 'not published';
+  return (
+    `<p class="post-preview" role="note"><strong>draft preview</strong>` +
+    `<span>version ${preview.version}${when} · ${escapeHtml(state)}. this isn't published, and the link is private.</span></p>`
+  );
 }
 
 /** The post body alone (blocks + footnotes), shared with the feed. */
@@ -371,10 +390,11 @@ export function postPage(input: PostInput): Page {
       : '';
 
   const discussion = input.discussion ?? null;
-  const main =
-    `<div class="post-layout"${site.publication ? ` data-blog-publication="${escapeAttr(site.publication.uri)}"` : ''} data-blog-document="${escapeAttr(doc.uri)}">` +
+  const preview = input.preview ?? null;
+  const article =
     `<article class="post" data-poe-askable aria-labelledby="post-title">` +
     `<header class="post__header">` +
+    (preview ? previewNote(preview) : '') +
     `<nav class="post__crumbs" aria-label="breadcrumb"><ol class="post__crumbs-list" role="list"><li><a href="${BLOG_PATH}">${escapeHtml(site.name)}</a></li><li aria-current="page"><time datetime="${escapeAttr(doc.publishedAt)}">${escapeHtml(formatDate(doc.publishedAt))}</time></li></ol></nav>` +
     `<h1 class="post__title" id="post-title">${escapeHtml(doc.title)}</h1>` +
     (doc.description ? `<p class="post__subtitle">${escapeHtml(doc.description)}</p>` : '') +
@@ -386,7 +406,24 @@ export function postPage(input: PostInput): Page {
     `</header>` +
     cover +
     `<div class="post__body">${body}</div>` +
-    `</article>` +
+    `</article>`;
+  if (preview) {
+    return {
+      head: headHtml({
+        title: `draft: ${doc.title} - ${site.name}`,
+        description,
+        canonical: null,
+        type: 'article',
+        image: DEFAULT_OG_IMAGE,
+        site,
+        robots: 'noindex, nofollow',
+      }),
+      main: `<div class="post-layout post-layout--preview">${article}</div>`,
+    };
+  }
+  const main =
+    `<div class="post-layout"${site.publication ? ` data-blog-publication="${escapeAttr(site.publication.uri)}"` : ''} data-blog-document="${escapeAttr(doc.uri)}">` +
+    article +
     `<aside class="post-end" aria-label="after the post">` +
     `<div class="tile post-end__card" data-mascot-trigger>` +
     potato(input.assets, 'wink', 'post-end__potato', 150, 122, true) +

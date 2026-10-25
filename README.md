@@ -34,10 +34,12 @@ this repo is atpota.to itself, and poe, the potato who lives there.
 bluesky mention ──► droplet ──► bot  POST /bluesky/mention ──► draft ──► droplet ──► reply on bluesky
 site chat       ──► website  /api/poe ──► bot  POST /website/chat ──► streamed answer ──► the chat panel
 weather moment  ──► droplet ──► bot  POST /weather/moment ──► draft or skip ──► droplet ──► post on bluesky
+dispatch due    ──► droplet ──► bot  POST /dispatch/draft  ──► saved draft   ──► droplet ──► DM with a preview
 ```
 
 - **Poe can't post.** The bot has no atproto credential and no write tool. It
-  writes drafts and proposals (a reply, a like, a dispatch announcement), and the
+  writes drafts and proposals (a reply, a like, an issue of the dispatch, its
+  announcement), and the
   droplet, which holds the only credential, decides in code whether each one goes
   out. A successful prompt injection should end as a draft the droplet rejects.
 - **Poe reads the Atmosphere** through [Aturi's MCP server](https://aturi.to/mcp),
@@ -72,7 +74,8 @@ weather moment  ──► droplet ──► bot  POST /weather/moment ──► 
 | `/weather` | The atmosphere weather report: how busy Bluesky is, the diversity index (how much of the network isn't Bluesky, by the share of active accounts writing with other apps and how many apps they're spread across, so one busy account counts once), which of those apps are busiest, and the last minute's events and active accounts, live every few seconds; one bar under the header picks what the page shows (now, or the last hour, 24 hours, 7 days or 30 days; new records or active accounts; rates a second, minute, hour or day, or totals), kept in the address so a view can be shared, with trends over the window; an almanac: today's high and low, busier or quieter than usual, new apps, and when the sky is busiest; weather alerts from Poe, in a chat bubble by the corner potato, when a new app blows in, a storm rolls in or the sky gets more mixed; and a sky that gets cloudier with the diversity index. A row of links under the header goes to the report's pages, and shares the one that's showing |
 | `/weather/diversity`, `/weather/trends`, `/weather/today`, `/weather/hosts`, `/weather/migration` | The report's pages: one part of it on its own (the diversity index and the apps; the trends; today, the forecast and the busiest times; the pds hosts and independence; accounts moving house and signing up), under its own title, with an Open Graph card of its own, so a link to one unfurls as that part. Each is `weather/index.html`, written again at build time with its tags ([`build/weather-topics.ts`](website/build/weather-topics.ts), [`src/scripts/weather-topics.ts`](website/src/scripts/weather-topics.ts)); the tiles say which pages they're on (`data-topics`) |
 | `/guides`, `/guides/bluesky-for-brands` | The guides. Written in markdown under `public/guides/`, and also published as a [standard.site](https://standard.site) publication in atpota.to's repo |
-| `/blog` | Poe's atmosphere dispatch, a weekly roundup written in [Leaflet](https://leaflet.pub) ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
+| `/blog` | Poe's atmosphere dispatch, a weekly roundup Poe writes itself, published as a [Leaflet](https://leaflet.pub) publication ([poe.leaflet.pub](https://poe.leaflet.pub)) and server-rendered here from its standard.site records. Readers can sign in to comment, recommend and subscribe (with Bluesky, or by email through Leaflet). Atom feed at `/blog/feed.xml` |
+| `/blog/preview/<token>` | A draft of the next issue, exactly as it will look, for the operator to review before it's published: read from the droplet by its private token, never cached, never indexed ([`mentions/README.md`](mentions/README.md#weekly-dispatch-poe-writes-it-dispatch_drafts)) |
 | `/garden`, `/garden/<handle>` | Gardens. `/garden` (where the nav goes) is the community garden, atpotato's seasonal patch, one flower each, with the leaderboards under it (most flowers, most tending for other people's flowers, most pets for Poe, most kinds found, most visitors); signed in, it has a button to your own and shows your place on each board. Tend your neighbours' flowers, or set up a garden of your own and choose whether visitors plant one flower each or as many as they like |
 | `/about` | Who makes atpotato, and how it grew: a year to a layer of soil, newest on top, from dame's start in open social in 2021 to now |
 | `/settings` | Signed-in visitors can make Poe forget them |
@@ -250,6 +253,7 @@ truth for them.
 | `POE_CHAT_DISABLED=1`, `POE_IDENTITY_DISABLED=1` | Kill switches: turn the chat off, or ignore sign-ins so every chat is anonymous |
 | `POE_RATE_LIMIT_ID`, `POE_UPSTREAM_TIMEOUT_MS` | An optional Vercel Firewall rate limit, and the per-turn timeout |
 | `BLOG_*` | Which publication `/blog` shows, and kill switches for comments and email sign-up |
+| `DISPATCH_PREVIEW_ORIGIN` | Where `/blog/preview/<token>` reads Poe's dispatch drafts. Default `https://hook.atpota.to` |
 
 The chat and identity variables are in [`server/config.ts`](website/server/config.ts),
 and the `BLOG_*` ones are in [`server/blog/config.ts`](website/server/blog/config.ts).
@@ -270,7 +274,13 @@ Poe is one potato in a few places, with the same memory in each:
 - **in the chat panel on atpota.to.** A visitor who signed in is the same person
   Poe knows from Bluesky.
 - **in poe's atmosphere dispatch**, the weekly roundup at
-  [atpota.to/blog](https://atpota.to/blog).
+  [atpota.to/blog](https://atpota.to/blog). Once a week the droplet asks Poe for
+  the next issue; Poe researches the week, saves a draft, and DMs the operator a
+  preview link. The operator asks for changes in the DM, and Poe edits the draft.
+  When they say to make it live, Poe shows exactly what that does (published on
+  poe.leaflet.pub and atpota.to/blog, emailed to subscribers by Leaflet, and an
+  announcement post) and it happens only on their yes
+  ([`mentions/README.md`](mentions/README.md#weekly-dispatch-poe-writes-it-dispatch_drafts)).
 - **in the weather, now and then**, on its own Bluesky account: the day's report
   from the weather station, and a post when it catches a storm, an hour well off
   usual, a sky getting more mixed, or a new app blowing in. The droplet spots the
@@ -294,6 +304,7 @@ repo, and anyone can clear theirs at [atpota.to/settings](https://atpota.to/sett
 | `POST /api/scan-approval/respond` | The droplet, relaying an operator's yes or no to a collection scan that needs more than the default 10 pages |
 | `POST /operator/dm` | The droplet, for private DMs from operators |
 | `POST /weather/moment` | The droplet's weather watcher, when the weather station catches something worth a post |
+| `POST /dispatch/draft` | The droplet, when an issue of the dispatch is due (weekly, or when an operator DMs `draft dispatch`) |
 | `POST /website/chat`, `POST /website/forget` | atpota.to's `/api/poe` |
 
 Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
@@ -302,6 +313,7 @@ Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
 
 - [`bot/agent/instructions.md`](bot/agent/instructions.md): who Poe is, its rules, and its voice
 - [`bot/agent/skills/bluesky-reply.md`](bot/agent/skills/bluesky-reply.md): the Bluesky format and sample replies
+- [`bot/agent/skills/dispatch-issue.md`](bot/agent/skills/dispatch-issue.md): researching and writing an issue of the dispatch, its sections and its markdown
 - [`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md): the dispatch's weather section and outlook
 - [`bot/agent/skills/weather-post.md`](bot/agent/skills/weather-post.md): its own weather posts on Bluesky, and when to skip one
 - [`bot/agent/instructions/operator-dm.ts`](bot/agent/instructions/operator-dm.ts): private DMs

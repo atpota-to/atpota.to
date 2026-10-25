@@ -482,6 +482,34 @@ export async function putPublisherDocument(rkey, record, swapRecord) {
   return res.json;   // { uri, cid }
 }
 
+/**
+ * Create a new dispatch document in atpota.to's repo, at a record key the
+ * caller stored first, so a retry after an ambiguous failure can look for it
+ * instead of making a second issue. A create, never a put: Leaflet emails the
+ * publication's subscribers when it sees a new document created, and only then.
+ */
+export async function createPublisherDocument(rkey, record) {
+  if (record?.$type !== 'site.standard.document' || record.site !== config.dispatch.publicationUri) {
+    throw new Error('refusing to write a document outside the dispatch publication');
+  }
+  if (typeof rkey !== 'string' || !/^[a-z2-7]{13}$/.test(rkey)) throw new Error('createPublisherDocument needs a TID record key');
+  const res = await publisherAuthed((t) => {
+    if (killSwitchEngaged()) throw new Error('publishing paused by kill switch');
+    return rawPost('com.atproto.repo.createRecord', {
+      repo: config.dispatch.publisherDid,
+      collection: 'site.standard.document',
+      rkey, record,
+    }, t);
+  });
+  if (!res.ok) {
+    const err = new Error(`createRecord site.standard.document failed: ${res.status} ${res.json?.error ?? res.text.slice(0, 300)}`);
+    err.status = res.status;
+    err.error = res.json?.error;
+    throw err;
+  }
+  return res.json;   // { uri, cid }
+}
+
 // --- handle resolution ----------------------------------------------------
 // Jetstream commits carry a DID and no handle. The agent's payload contract
 // includes authorHandle, and omitting it is rejected with a 400 -- so a mention
@@ -576,6 +604,10 @@ export const getDmMessages = (convoId, cursor) => chatRequest('chat.bsky.convo.g
 /** A messageId makes it a reply to that message; null sends it plain. */
 export const sendDmMessage = (convoId, messageId, text) => chatRequest('chat.bsky.convo.sendMessage', {
   body: { convoId, message: { text, ...(messageId ? { replyTo: { messageId } } : {}) } },
+});
+/** The one-to-one conversation with these members, found or started: { convo }. */
+export const getDmConvoForMembers = (members) => chatRequest('chat.bsky.convo.getConvoForMembers', {
+  params: { members },
 });
 export const addDmReaction = (convoId, messageId, value) => chatRequest('chat.bsky.convo.addReaction', {
   body: { convoId, messageId, value },

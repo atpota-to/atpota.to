@@ -13,6 +13,9 @@ import {
 import {
   attachPostProposal, livePostProposalFor, decidePostProposal, publishPostProposal,
 } from './operator-posts.js';
+import {
+  attachDraftReply, currentDraft, decidePublish, livePublishFor, parseDraftCommand, publishConfirmed, runDraftCommand,
+} from './dispatch-drafts.js';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS style_feedback (
@@ -191,13 +194,18 @@ export function receiveDraft(body) {
   const accepted = db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_key = ?, draft_text = ?, updated_at = ?
     WHERE message_id = ? AND status = 'dispatched'`).run(body.key, text, nowIso(), body.dmId).changes > 0;
   if (accepted) {
-    // An announcement or a post Poe proposed in this turn goes under its reply,
-    // verbatim. One per reply, so a yes always means one thing.
-    const withProposal = (config.dispatch.enabled ? attachProposal(body.dmId, text) : null) ??
-      attachPostProposal(body.dmId, text);
-    if (withProposal) {
+    // What Poe did to the dispatch draft in this turn (dispatch-drafts.js) goes
+    // under its reply: the preview link for a new version, and the steps of
+    // making it live when it proposed that. Then an announcement or a post it
+    // proposed, verbatim. One proposal per reply, so a yes always means one thing.
+    const withDraft = attachDraftReply(body.dmId, text);
+    const base = withDraft?.text ?? text;
+    const withProposal = withDraft?.proposal ? null
+      : (config.dispatch.enabled ? attachProposal(body.dmId, base) : null) ?? attachPostProposal(body.dmId, base);
+    const final = withProposal ?? withDraft?.text;
+    if (final) {
       db.prepare(`UPDATE operator_dm SET draft_text = ? WHERE message_id = ? AND status = 'drafted'`)
-        .run(withProposal, body.dmId);
+        .run(final, body.dmId);
     }
   }
   return accepted ? 'accepted' : 'ignored';
@@ -252,9 +260,42 @@ function startCommand(messageId, api, dispatchDeps) {
   return job;
 }
 
+/**
+ * Publishing a draft the operator said yes to (dispatch-drafts.js) runs beside
+ * the poll the same way: it waits for the issue's page and for Leaflet. The
+ * yes is left in 'issue' until the reply is ready, so a restart finishes it.
+ */
+function startIssueJob(messageId, api, draftDeps) {
+  if (commandJobs.has(messageId)) return commandJobs.get(messageId);
+  const job = publishConfirmed(messageId, draftDeps)
+    .then(async (reply) => {
+      db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
+        WHERE message_id = ? AND status = 'issue'`).run(reply ?? 'that publish is no longer waiting.', nowIso(), messageId);
+      const row = db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(messageId);
+      if (row?.status === 'drafted') await deliverDm(row, api);
+    })
+    .catch((err) => logger.error('dispatch publish job failed', { messageId, error: err.message }))
+    .finally(() => commandJobs.delete(messageId));
+  commandJobs.set(messageId, job);
+  return job;
+}
+
 /** Wait for every running dispatch command. For tests and shutdown. */
 export function settleCommands() {
   return Promise.all(commandJobs.values());
+}
+
+/**
+ * What Poe should know about the dispatch's drafts in this DM: that it writes them
+ * (only said while DISPATCH_DRAFTS is on), and the draft waiting on the operator.
+ */
+function draftContext() {
+  if (config.dispatch.drafts.mode === 'off' || !config.dispatch.enabled) return {};
+  const draft = currentDraft();
+  return {
+    dispatchDrafts: true,
+    ...(draft ? { dispatchDraft: { id: draft.id, status: draft.status, version: draft.version, title: (draft.title ?? '').slice(0, 300) } } : {}),
+  };
 }
 
 async function dispatchDm(row, fetcher = fetch) {
@@ -264,6 +305,7 @@ async function dispatchDm(row, fetcher = fetch) {
   db.prepare(`UPDATE operator_dm SET status = 'dispatched', updated_at = ?
     WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
   const ac = AbortSignal.timeout(15000);
+  const drafts = draftContext();
   const response = await fetcher(`${config.agentUrl}/operator/dm`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-atpotato-secret': config.sharedSecret },
@@ -271,13 +313,14 @@ async function dispatchDm(row, fetcher = fetch) {
       dmId: row.message_id, operatorDid: row.operator_did,
       text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
       guidance: /^(?:remember|style):\s*\S/i.test(row.text),
+      ...drafts,
     }),
     signal: ac,
   });
   if (!response.ok) throw new Error(`operator DM dispatch failed: ${response.status}`);
 }
 
-export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDeps, postDeps } = {}) {
+export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDeps, postDeps, draftDeps } = {}) {
   if (!config.dmEnabled || config.stage < 4 || !config.adminDids.length || killSwitchEngaged()) return;
   const cutoff = baseline();
   let cursor;
@@ -325,11 +368,43 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
     for (const row of db.prepare(`SELECT message_id FROM operator_dm WHERE status = 'command'`).all()) {
       startCommand(row.message_id, api, dispatchDeps);
     }
+    for (const row of db.prepare(`SELECT message_id FROM operator_dm WHERE status = 'issue'`).all()) {
+      startIssueJob(row.message_id, api, draftDeps);
+    }
   }
   const queued = db.prepare(`SELECT *, draft_text AS text FROM operator_dm
     WHERE status = 'queued' ORDER BY received_at LIMIT 10`).all();
+  const draftsOn = config.dispatch.enabled && config.dispatch.drafts.mode !== 'off';
   for (const row of queued) {
     try {
+      // "draft dispatch": Poe writes an issue in a session of its own and DMs
+      // the preview when it's done, so this message only gets an "on it".
+      const draftCommand = draftsOn && isAdmin(row.operator_did) ? parseDraftCommand(row.text) : null;
+      if (draftCommand) {
+        db.prepare(`UPDATE operator_dm SET status = 'publishing', updated_at = ? WHERE message_id = ? AND status = 'queued'`)
+          .run(nowIso(), row.message_id);
+        const reply = await runDraftCommand(row, draftCommand, draftDeps) ?? "i can't write drafts right now.";
+        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
+          WHERE message_id = ? AND status = 'publishing'`).run(reply, nowIso(), row.message_id);
+        await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
+        continue;
+      }
+      // A plain yes or no straight back to Poe's proposal to make the draft live.
+      const publishAnswer = draftsOn && isAdmin(row.operator_did) ? parseConfirmation(row.text) : null;
+      const publishProposal = publishAnswer ? livePublishFor(row) : null;
+      if (publishProposal && decidePublish(publishProposal.id, publishAnswer, row.message_id)) {
+        if (publishAnswer === 'yes') {
+          db.prepare(`UPDATE operator_dm SET status = 'issue', draft_text = NULL, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
+          startIssueJob(row.message_id, api, draftDeps);
+        } else {
+          db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`)
+            .run("ok, it stays a draft. tell me what to change, or ask me to make it live when it's ready.", nowIso(), row.message_id);
+          await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
+        }
+        continue;
+      }
       // Dispatch commands are handled here and never forwarded to the agent.
       const dispatchCommand = config.dispatch.enabled && isAdmin(row.operator_did)
         ? parseAnnounceCommand(row.text) : null;

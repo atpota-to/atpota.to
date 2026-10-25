@@ -9,6 +9,7 @@ import { test } from "node:test";
 const stub = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig",
   "agent/instructions/bluesky.ts", "agent/instructions/operator-dm.ts", "agent/instructions/weather.ts",
+  "agent/instructions/dispatch.ts",
   "types/assets.d.ts",
   "--outDir", ".eve/channel-kind-test", "--rootDir", "agent", "--module", "esnext",
   "--moduleResolution", "bundler", "--target", "es2022", "--skipLibCheck", "--types", "node"],
@@ -34,7 +35,11 @@ const weather = (await load("instructions/weather", [instructionsStub, kindImpor
   ['from "../skills/weather-post.md?raw"', `from "${stub('export default "---\\nname: weather-post\\n---\\nweather rules";')}"`],
 ])).default;
 
-const turn = (definition, kind) => definition.events["turn.started"]({}, { channel: { kind } });
+const dispatch = (await load("instructions/dispatch", [instructionsStub, kindImport,
+  ['from "../skills/dispatch-issue.md?raw"', `from "${stub('export default "---\\nname: dispatch-issue\\n---\\nwriting rules";')}"`],
+])).default;
+
+const turn = (definition, kind, session) => definition.events["turn.started"]({}, { channel: { kind }, ...(session ? { session } : {}) });
 
 test("isChannelKind takes eve's runtime spelling and the bare stem, nothing else", () => {
   assert.equal(isChannelKind("channel:bluesky", "bluesky"), true);
@@ -57,6 +62,26 @@ test("the operator DM instructions load only on an operator DM turn", async () =
   assert.match((await turn(operatorDm, "operator-dm")).content, /private conversation/);
   for (const kind of ["channel:bluesky", "channel:website", "channel:eve", "unknown"]) {
     assert.equal(await turn(operatorDm, kind), null, kind);
+  }
+});
+
+test("the operator DM instructions name the dispatch draft waiting on the operator", async () => {
+  const attributes = { dmId: "dm-1", operatorDid: "did:plc:x", dispatchDrafts: "true", dispatchDraftId: "dd-2026-10-26",
+    dispatchDraftStatus: "ready", dispatchDraftVersion: "3", dispatchDraftTitle: "spaces near beta" };
+  const withDraft = (await turn(operatorDm, "channel:operator-dm", { auth: { current: { attributes } } })).content;
+  assert.match(withDraft, /Right now the dispatch draft "spaces near beta" \(version 3\) is waiting for the operator's review/);
+  assert.match(withDraft, /propose_dispatch_publish/);
+  const without = (await turn(operatorDm, "channel:operator-dm", { auth: { current: { attributes: { dmId: "dm-2", dispatchDrafts: "true" } } } })).content;
+  assert.doesNotMatch(without, /Right now the dispatch draft/);
+  assert.match(without, /read_dispatch_draft/, "how to handle a draft is there while drafts are on");
+  const off = (await turn(operatorDm, "channel:operator-dm", { auth: { current: { attributes: { dmId: "dm-3" } } } })).content;
+  assert.doesNotMatch(off, /read_dispatch_draft|start_dispatch_draft/, "and not while the droplet has them off");
+});
+
+test("the dispatch writing rules load only on a dispatch turn", async () => {
+  assert.match((await turn(dispatch, "channel:dispatch")).content, /^writing rules\n\nThis session is yours alone/);
+  for (const kind of ["channel:bluesky", "channel:operator-dm", "channel:website", "channel:weather", "unknown"]) {
+    assert.equal(await turn(dispatch, kind), null, kind);
   }
 });
 
