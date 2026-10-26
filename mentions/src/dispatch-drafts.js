@@ -19,6 +19,10 @@
 //      version they saw. Publishing creates the document in atpota.to's repo
 //      (Leaflet emails it to subscribers once it sees it), then announce()
 //      posts and links it.
+//   5. A typo found once it's live is a proposal too: Poe reads the issue as
+//      published, proposes small edits (propose_dispatch_correction), and the
+//      operator's yes puts the corrected record over the live one. A put, never
+//      a create, so Leaflet doesn't email anyone again.
 //
 // The agent never writes the record. It sends markdown; the record is built
 // here, every link checked, and nothing reaches atpota.to's repo without the
@@ -38,6 +42,7 @@ import {
 } from './dispatch-markdown.js';
 import {
   announce, answersProposal, defaultDeps as dispatchDeps, fitPostText, latestDocument, nextTid, ogContent, pageUrls,
+  parseIssueLink,
 } from './dispatch.js';
 import { postTextProblem } from './operator-posts.js';
 import { splitDmText } from './operator-dm.js';
@@ -106,6 +111,27 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS dispatch_publish_dm_idx ON dispatch_publish (dm_message_id, status);
 
+  -- A fix to an issue that is already live, proposed by Poe in an operator DM
+  -- and made only on the operator's yes to the DM that showed it.
+  CREATE TABLE IF NOT EXISTS dispatch_correction (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    draft_id            TEXT NOT NULL,
+    base_version        INTEGER NOT NULL,  -- the published version it changes
+    dm_message_id       TEXT NOT NULL,
+    operator_did        TEXT NOT NULL,
+    changes             TEXT NOT NULL,     -- JSON: { edits, title, description }, as shown to the operator
+    title               TEXT NOT NULL,
+    description         TEXT,
+    markdown            TEXT NOT NULL,
+    record              TEXT NOT NULL,     -- JSON: the corrected document, less publishedAt and path
+    status              TEXT NOT NULL,     -- proposed|attached|superseded|declined|confirmed|done|failed
+    decision_message_id TEXT,
+    reply               TEXT,
+    created_at          TEXT NOT NULL,
+    decided_at          TEXT
+  );
+  CREATE INDEX IF NOT EXISTS dispatch_correction_dm_idx ON dispatch_correction (dm_message_id, status);
+
   -- DMs Poe starts rather than answers ("your draft is ready"). One per draft and kind.
   CREATE TABLE IF NOT EXISTS dispatch_outbox (
     draft_id     TEXT NOT NULL,
@@ -132,6 +158,9 @@ const NOTE_GRAPHEMES = 900;
 const TOKEN = /^[A-Za-z0-9_-]{20,64}$/;
 const DRAFT_ID = /^dd-[A-Za-z0-9-]{8,48}$/;
 const LIVE = ['asking', 'drafting', 'ready', 'publishing'];
+// A correction is for a typo or a wrong name, small enough to show whole in the DM it is approved from.
+const CORRECTION_EDITS = 10;
+const CORRECTION_CHARS = 1500;
 
 function draftEvent(draftId, kind, detail = null) {
   db.prepare(`INSERT INTO dispatch_event (issue, document_uri, kind, detail, created_at) VALUES (?, NULL, ?, ?, ?)`)
@@ -405,7 +434,8 @@ export async function handleDraftCall(body, deps = defaultDeps) {
   const call = body?.dispatchDraft;
   const caller = body && typeof body === 'object' && !Array.isArray(body) ? callerOf(body) : null;
   if (!caller || !call || typeof call !== 'object' || Array.isArray(call) ||
-      !['read', 'save', 'propose_publish', 'start'].includes(call.action) ||
+      !['read', 'save', 'propose_publish', 'start', 'propose_correction'].includes(call.action) ||
+      (call.issue != null && (typeof call.issue !== 'string' || call.issue.length > 300)) ||
       (call.title != null && typeof call.title !== 'string') ||
       (call.description != null && typeof call.description !== 'string') ||
       (call.markdown != null && typeof call.markdown !== 'string') ||
@@ -420,7 +450,7 @@ export async function handleDraftCall(body, deps = defaultDeps) {
   if (caller.kind === 'drafting') {
     draft = getDraft(caller.draftId);
     if (!draft || !['asking', 'drafting'].includes(draft.status)) return { status: 409, body: { error: 'NotDrafting' } };
-    if (call.action !== 'read' && call.action !== 'save') return { status: 403, body: { error: 'OperatorOnly' } };
+    if ((call.action !== 'read' && call.action !== 'save') || call.issue != null) return { status: 403, body: { error: 'OperatorOnly' } };
     if (call.action === 'save' && overBudget(`drafting:${draft.id}`, SAVES_PER_DRAFTING)) {
       return { status: 429, body: { error: 'TooManySaves' } };
     }
@@ -432,12 +462,23 @@ export async function handleDraftCall(body, deps = defaultDeps) {
     }
     if (overBudget(`dm:${caller.dmId}`, CALLS_PER_DM)) return { status: 429, body: { error: 'TooManyCalls' } };
     if (call.action === 'start') return startFromDm(caller, call.guidance ?? null, deps);
+    if (call.issue != null || call.action === 'propose_correction') {
+      // An issue that is already live: read as published, or corrected.
+      if (call.action !== 'read' && call.action !== 'propose_correction') {
+        return { status: 200, body: { accepted: false, reason: 'a published issue is never saved over; propose a correction to it instead' } };
+      }
+      const found = publishedDraft(call.issue ?? 'latest');
+      if (!found.draft) return { status: 200, body: { found: false, accepted: false, reason: found.reason } };
+      if (call.action === 'read') return { status: 200, body: { found: true, draft: readable(found.draft) } };
+      return proposeCorrection(found.draft, call, caller, deps);
+    }
     draft = currentDraft();
     if (!draft) {
       const last = db.prepare('SELECT * FROM dispatch_draft ORDER BY created_at DESC LIMIT 1').get();
       return { status: 200, body: {
         found: false, accepted: false,
-        reason: last ? `there is no draft in review; the last one (${last.title ?? 'untitled'}) is ${last.status}` : 'there is no draft yet',
+        reason: last ? `there is no draft in review; the last one (${last.title ?? 'untitled'}) is ${last.status}` +
+          (last.status === 'published' ? '. to fix a mistake in it, read it with issue "latest"' : '') : 'there is no draft yet',
         ...(last?.status === 'published' && last.document_rkey ? { published: pageUrls(last.document_rkey)[0] } : {}),
       } };
     }
@@ -468,6 +509,9 @@ export async function handleDraftCall(body, deps = defaultDeps) {
   if (!deps.publisherConfigured()) {
     return { status: 200, body: { accepted: false,
       reason: "the droplet doesn't have atpota.to's app password (DISPATCH_PUBLISHER_APP_PASSWORD), so it can't publish; the operator has to add it first" } };
+  }
+  if (db.prepare(`SELECT 1 FROM dispatch_correction WHERE dm_message_id = ? AND status = 'proposed'`).get(caller.dmId)) {
+    return { status: 200, body: { accepted: false, reason: 'you already proposed a correction in this reply; one proposal per reply, so a yes means one thing' } };
   }
   const announcement = call.announcement?.trim() || null;
   if (announcement) {
@@ -645,18 +689,23 @@ export function attachDraftReply(dmId, reply, maxGraphemes = 999) {
     JOIN dispatch_draft d ON d.id = v.draft_id WHERE v.saved_by = ? ORDER BY v.version DESC LIMIT 1`).get(`dm:${dmId}`);
   const proposal = db.prepare(`SELECT * FROM dispatch_publish WHERE dm_message_id = ? AND status = 'proposed'
     ORDER BY id DESC LIMIT 1`).get(dmId);
-  if (!saved && !proposal) return null;
+  const correction = db.prepare(`SELECT * FROM dispatch_correction WHERE dm_message_id = ? AND status = 'proposed'
+    ORDER BY id DESC LIMIT 1`).get(dmId);
+  if (!saved && !proposal && !correction) return null;
   const extra = [];
   if (saved) extra.push(`preview (version ${saved.saved_version}): ${previewUrl(saved)}`);
   if (proposal) {
     db.prepare(`UPDATE dispatch_publish SET status = 'attached' WHERE id = ? AND status = 'proposed'`).run(proposal.id);
     extra.push(publishBlock(proposal, getDraft(proposal.draft_id)));
+  } else if (correction) {
+    db.prepare(`UPDATE dispatch_correction SET status = 'attached' WHERE id = ? AND status = 'proposed'`).run(correction.id);
+    extra.push(correctionBlock(correction, getDraft(correction.draft_id)));
   }
   const block = extra.join('\n\n');
   // The reply is cut to make room; the block never is.
   const room = maxGraphemes - graphemeLength(block) - 2;
   const head = reply.trim() && room > 20 ? fitPostText(reply.trim(), room, 9000) : '';
-  return { text: head ? `${head}\n\n${block}` : block, proposal: !!proposal };
+  return { text: head ? `${head}\n\n${block}` : block, proposal: !!(proposal || correction) };
 }
 
 /** The publish proposal an operator's message can answer, or null (see answersProposal). */
@@ -751,6 +800,253 @@ async function publishDraft(proposal, deps) {
     lines.push('', announced);
   }
   return lines.join('\n');
+}
+
+// --- correcting an issue that's live ------------------------------------------------------
+//
+// The issue's markdown stays on its draft after it's published, so a typo is
+// fixed the way a draft is edited: find/replace edits, turned into the record
+// here. The operator's yes puts that record over the live one, with swapRecord,
+// keeping its path, publishedAt and bskyPostRef. Leaflet emails subscribers
+// only when it sees a document created, so a put sends nothing; but a put inside
+// its first few minutes could stop that first email, so none is made before
+// DISPATCH_LEAFLET_SETTLE_MS has passed. Only issues Poe published here can be
+// corrected: one published another way has no markdown to edit.
+
+const LATEST = /^(?:the\s+)?(?:latest|last|newest)(?:\s+(?:dispatch|issue|one))?$/i;
+
+/** A published issue Poe wrote, by "latest", its link or its record key: { draft } or { reason }. */
+export function publishedDraft(issue) {
+  const name = String(issue).trim();
+  const latest = LATEST.test(name);
+  const rkey = latest ? null : parseIssueLink(name) ?? (/^[a-z2-7]{13}$/.test(name) ? name : null);
+  if (!latest && !rkey) return { reason: 'name the issue as "latest", or by its link' };
+  const draft = latest
+    ? db.prepare(`SELECT * FROM dispatch_draft WHERE status = 'published' ORDER BY published_at DESC LIMIT 1`).get()
+    : db.prepare(`SELECT * FROM dispatch_draft WHERE status = 'published' AND document_rkey = ?`).get(rkey);
+  if (draft) return { draft };
+  return { reason: latest
+    ? "i haven't published an issue from one of my drafts yet, so there's none i can correct"
+    : "that issue wasn't published from one of my drafts, so i can't correct it: only issues i wrote and published here can be" };
+}
+
+/** Text the operator reads: what each correction shows, counted as they'll see it. */
+function correctionLength({ edits = [], title, description }) {
+  return edits.reduce((n, e) => n + graphemeLength(e.find) + graphemeLength(e.replace), 0) +
+    graphemeLength(title ?? '') + graphemeLength(description ?? '');
+}
+
+async function proposeCorrection(draft, call, caller, deps) {
+  const no = (reason) => ({ status: 200, body: { accepted: false, reason } });
+  if (!Number.isInteger(call.version) || call.version !== draft.version) {
+    return no(`the issue is at version ${draft.version}; read it again so you propose a change to what's live`);
+  }
+  if (!deps.publisherConfigured()) {
+    return no("the droplet doesn't have atpota.to's app password (DISPATCH_PUBLISHER_APP_PASSWORD), so it can't change the issue");
+  }
+  const settled = Date.parse(draft.published_at) + config.dispatch.leafletSettleMs;
+  if (deps.now() < settled) {
+    return no(`it went out ${minutesAgo(draft.published_at, deps.now())} and leaflet may still be emailing it; a change now could ` +
+      `stop that email, so propose it again in ${Math.ceil((settled - deps.now()) / 60000)} minutes`);
+  }
+  if (db.prepare(`SELECT 1 FROM dispatch_publish WHERE dm_message_id = ? AND status = 'proposed'`).get(caller.dmId)) {
+    return no('you already proposed making a draft live in this reply; one proposal per reply, so a yes means one thing');
+  }
+  const edits = call.edits ?? [];
+  if (!edits.length && call.title == null && call.description == null) return no('give the edits, or a new title or description');
+  const changes = { edits, ...(call.title != null ? { title: call.title } : {}), ...(call.description != null ? { description: call.description } : {}) };
+  if (edits.length > CORRECTION_EDITS || correctionLength(changes) > CORRECTION_CHARS) {
+    return no(`a correction is for small fixes: at most ${CORRECTION_EDITS} edits and ${CORRECTION_CHARS} characters in all, ` +
+      'so the operator can read every change in the DM. send the most important ones');
+  }
+  const edited = edits.length ? applyEdits(draft.markdown, edits) : { markdown: draft.markdown };
+  if (edited.problem) return no(edited.problem.replace("isn't in the draft", "isn't in the issue").replace('in the draft', 'in the issue'));
+  const meta = {
+    title: call.title ?? draft.title,
+    description: call.description != null ? call.description : draft.description,
+    tags: draft.tags ? JSON.parse(draft.tags) : [],
+  };
+  const problems = metaProblems(meta);
+  const converted = markdownToBlocks(edited.markdown);
+  problems.push(...converted.problems);
+  if (problems.length) return no(problems.join('; '));
+  if (edited.markdown === draft.markdown && meta.title.trim() === draft.title &&
+      (meta.description?.trim() || null) === (draft.description || null)) {
+    return no('that changes nothing in the issue');
+  }
+  const { blocks, notes } = await enrichKeeping(converted.blocks, draft, deps);
+  const record = draftRecord({ ...meta, blocks }, { publicationUri: config.dispatch.publicationUri, authorDid: config.botDid });
+  if (recordSize(record) > MAX_RECORD_BYTES) return no(`the corrected issue is too big (${Math.round(recordSize(record) / 1024)} KB as a record)`);
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(`UPDATE dispatch_correction SET status = 'superseded', decided_at = ? WHERE status IN ('proposed', 'attached')`).run(nowIso());
+    db.prepare(`INSERT INTO dispatch_correction (draft_id, base_version, dm_message_id, operator_did, changes, title, description,
+      markdown, record, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)`)
+      .run(draft.id, draft.version, caller.dmId, caller.operatorDid, JSON.stringify(changes), record.title,
+        record.description ?? null, edited.markdown, JSON.stringify(record), nowIso());
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  draftEvent(draft.id, 'correction_proposed', { version: draft.version, dmId: caller.dmId, edits: edits.length });
+  return { status: 200, body: {
+    accepted: true, version: draft.version,
+    ...(notes.length ? { notes } : {}),
+    note: 'proposed, not changed. the operator sees each change under your reply, and the live issue changes only if they answer yes.',
+  } };
+}
+
+/**
+ * Fill in link cards for a corrected issue, keeping every block the edits left
+ * alone exactly as published: an untouched card isn't looked up again, so a
+ * page that changed its title since doesn't change the issue.
+ */
+async function enrichKeeping(blocks, draft, deps) {
+  const before = markdownToBlocks(draft.markdown ?? '').blocks;
+  const kept = JSON.parse(draft.record ?? '{}').content?.pages?.[0]?.blocks ?? [];
+  const known = new Map();
+  if (before.length === kept.length) before.forEach((b, i) => known.set(JSON.stringify(b), kept[i]));
+  const fresh = blocks.filter((b) => !known.has(JSON.stringify(b)));
+  const filled = await enrichBlocks(fresh, cachedDeps(deps));
+  let n = 0;
+  return { blocks: blocks.map((b) => known.get(JSON.stringify(b)) ?? filled.blocks[n++]), notes: filled.notes };
+}
+
+export function correctionBlock(correction, draft) {
+  const changes = JSON.parse(correction.changes);
+  const sites = DISPATCH_PAGE_BASES.map((u) => u.replace(/^https:\/\//, '')).join(' and ');
+  const lines = [`here's the fix to "${draft.title}", live at ${pageUrls(draft.document_rkey)[0]}:`, ''];
+  for (const e of changes.edits ?? []) lines.push(`- "${e.find}" becomes ${e.replace ? `"${e.replace}"` : 'nothing (deleted)'}`);
+  if (changes.title != null) lines.push(`- the title becomes "${correction.title}"`);
+  if (changes.description != null) {
+    lines.push(correction.description ? `- the description becomes "${correction.description}"` : '- the description is removed');
+  }
+  lines.push('', `it changes the issue on ${sites}. nobody is emailed again: subscribers keep the email they already got.`);
+  if (changes.title != null || changes.description != null) lines.push("a post that already links it keeps its old card.");
+  lines.push('', 'reply "yes" to fix it, or "no" to leave it as it is.');
+  return lines.join('\n');
+}
+
+/** The correction an operator's message can answer, or null (see answersProposal). */
+export function liveCorrectionFor(row) {
+  if (!enabled()) return null;
+  const correction = db.prepare(`SELECT * FROM dispatch_correction WHERE status = 'attached' ORDER BY id DESC LIMIT 1`).get();
+  return answersProposal(correction, row) ? correction : null;
+}
+
+/** Settle a correction with the operator's answer. False if it was no longer live. */
+export function decideCorrection(id, decision, messageId) {
+  const changed = db.prepare(`UPDATE dispatch_correction SET status = ?, decision_message_id = ?, decided_at = ?
+    WHERE id = ? AND status = 'attached'`).run(decision === 'yes' ? 'confirmed' : 'declined', messageId, nowIso(), id).changes > 0;
+  if (changed) {
+    const c = db.prepare('SELECT draft_id FROM dispatch_correction WHERE id = ?').get(id);
+    draftEvent(c.draft_id, `correction_${decision === 'yes' ? 'confirmed' : 'declined'}`, { messageId });
+  }
+  return changed;
+}
+
+/**
+ * Make the correction the operator said yes to, from their yes message's id.
+ * Returns the reply for them, or null when no correction waits on that yes.
+ * Safe to run again: a put that went through is recognised on the live record.
+ */
+export async function correctionConfirmed(messageId, deps = defaultDeps) {
+  const correction = db.prepare('SELECT * FROM dispatch_correction WHERE decision_message_id = ?').get(messageId);
+  if (!correction) return null;
+  if (correction.status === 'done' || correction.status === 'failed') return correction.reply;
+  if (correction.status !== 'confirmed') return null;
+  let reply;
+  let done = false;
+  try {
+    ({ reply, done } = await applyCorrection(correction, deps));
+  } catch (err) {
+    logger.error('dispatch correction failed', { draftId: correction.draft_id, error: err.message });
+    draftEvent(correction.draft_id, 'correction_failed', err.message);
+    reply = `the fix didn't go through (${err.message}), so the issue is as it was. ask me again to retry.`;
+  }
+  db.prepare('UPDATE dispatch_correction SET status = ?, reply = ? WHERE id = ?').run(done ? 'done' : 'failed', reply, correction.id);
+  return reply;
+}
+
+// Leaflet's fields and ours, compared whatever order the PDS gives the keys in.
+const canonical = (v) => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+  ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
+const CONTENT_FIELDS = ['title', 'description', 'tags', 'textContent', 'content'];
+const sameContent = (a, b) => CONTENT_FIELDS.every((f) => canonical(a?.[f]) === canonical(b?.[f]));
+
+async function applyCorrection(correction, deps) {
+  const draft = getDraft(correction.draft_id);
+  const fail = (reply) => ({ reply, done: false });
+  if (!draft || draft.status !== 'published' || !draft.document_rkey) return fail("that issue isn't published from here any more, so i changed nothing.");
+  if (config.stage < 4) return fail(`stage is ${config.stage}, so i changed nothing.`);
+  if (killSwitchEngaged()) return fail('the kill switch is on, so i changed nothing.');
+  if (isNapping()) return fail("i'm napping, so i changed nothing. wake me and ask again.");
+  if (!deps.publisherConfigured()) return fail("atpota.to's app password isn't set up here, so i couldn't change the issue.");
+  const rkey = draft.document_rkey;
+  const [page] = pageUrls(rkey);
+  const fixed = { reply: `fixed ✿ ${page} has it now (the page can take up to five minutes to catch up). nobody was emailed again.`, done: true };
+  // Made already, by a run a restart cut off before it could answer.
+  if (db.prepare('SELECT 1 FROM dispatch_draft_version WHERE draft_id = ? AND saved_by = ?')
+    .get(draft.id, `correction:${correction.decision_message_id}`)) return fixed;
+  if (draft.version !== correction.base_version) {
+    return fail(`the issue changed after that (it's at version ${draft.version} now), so i didn't apply it. ask me again to see the fix on top of the new one.`);
+  }
+  if (deps.now() < Date.parse(draft.published_at) + config.dispatch.leafletSettleMs) {
+    return fail("leaflet may still be emailing it, and a change now could stop that email. ask me again in a few minutes.");
+  }
+  const published = JSON.parse(draft.record);
+  const corrected = JSON.parse(correction.record);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const live = await deps.getDocument(rkey);
+    if (!live) return fail(`i couldn't find the issue at ${page}, so i changed nothing.`);
+    let cid = live.cid;
+    if (!sameContent(live.value, corrected)) {
+      if (!sameContent(live.value, published)) {
+        draftEvent(draft.id, 'correction_refused', 'the live issue differs from what was published');
+        return fail("the live issue isn't what i published any more (it was changed somewhere else), so i didn't touch it.");
+      }
+      // Everything of the live record stays but what the fix changes.
+      const record = { ...live.value, title: corrected.title, textContent: corrected.textContent, content: corrected.content, updatedAt: nowIso() };
+      for (const f of ['description', 'tags']) {
+        if (corrected[f] === undefined) delete record[f];
+        else record[f] = corrected[f];
+      }
+      try {
+        cid = (await deps.putDocument(rkey, record, live.cid))?.cid ?? null;
+      } catch (err) {
+        // Changed since we read it (the announcement's link, say): read it again and try once more.
+        if (err.error === 'InvalidSwap' && attempt === 0) { draftEvent(draft.id, 'correction_swap_retry'); continue; }
+        // It may have gone through even so. Look before saying it didn't.
+        const after = await deps.getDocument(rkey).catch(() => null);
+        if (!after || !sameContent(after.value, corrected)) throw err;
+        cid = after.cid;
+      }
+    }
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const version = draft.version + 1;
+      db.prepare(`INSERT INTO dispatch_draft_version (draft_id, version, title, description, tags, markdown, record, saved_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(draft.id, version, corrected.title, corrected.description ?? null,
+        JSON.stringify(corrected.tags ?? []), correction.markdown, correction.record, `correction:${correction.decision_message_id}`, nowIso());
+      db.prepare(`UPDATE dispatch_draft SET version = ?, title = ?, description = ?, markdown = ?, record = ?, document_cid = ?,
+        updated_at = ? WHERE id = ? AND version = ?`).run(version, corrected.title, corrected.description ?? null, correction.markdown,
+        correction.record, cid ?? draft.document_cid, nowIso(), draft.id, draft.version);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    draftEvent(draft.id, 'corrected', { version: draft.version + 1, cid });
+    logger.info('dispatch issue corrected', { draftId: draft.id, rkey });
+    return fixed;
+  }
+  return fail('the issue kept changing while i tried to fix it. ask me again to retry.');
+}
+
+/** Finish what the operator's yes confirmed: making a draft live, or correcting a live issue. */
+export async function runConfirmed(messageId, deps = defaultDeps) {
+  return (await publishConfirmed(messageId, deps)) ?? correctionConfirmed(messageId, deps);
 }
 
 // --- the preview page ---------------------------------------------------------------------
@@ -962,6 +1258,7 @@ export const defaultDeps = {
   fetchPageMeta,
   getDocument: dispatchDeps.getDocument,
   createDocument: (rkey, record) => atproto.createPublisherDocument(rkey, record),
+  putDocument: dispatchDeps.putDocument,
   publisherConfigured: () => atproto.publisherConfigured(),
   announce: (args) => announce(args, dispatchDeps),
   getDmConvoForMembers: (members) => atproto.getDmConvoForMembers(members),

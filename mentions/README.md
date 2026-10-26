@@ -805,6 +805,46 @@ draft tools), add the nginx block for `/dispatch/preview/` (below), then set
 `OPERATOR_DM_ENABLED=true`) and restart. Until `DISPATCH_DRAFTS` is set, DMs are
 handed to Poe exactly as before.
 
+### Fixing a typo once it's live (`propose_dispatch_correction`)
+
+An issue Poe published from a draft keeps its markdown on the draft, so a typo
+found after it went out is fixed the same way a draft is edited, with one more
+yes:
+
+1. The operator says what's wrong, in any words. Poe reads the issue as
+   published (`read_dispatch_draft` with `issue: "latest"` or the issue's link),
+   then calls `propose_dispatch_correction` with the version it read and
+   find/replace edits, and a new title or description if that's what's wrong.
+   A correction is small: at most 10 edits and 1,500 characters in all, so every
+   change fits in the DM it's approved from.
+2. The droplet builds the corrected record the way a save does, except that
+   every block the edits left alone is kept exactly as published: a card is
+   looked up again only if its own line changed. Under Poe's reply go each
+   change, word for word, and what it does: the pages change, nobody is emailed
+   again, and a post that already links the issue keeps its old card if the
+   title or description changed.
+3. A whole-message yes to that reply makes it, by the same rules as a publish
+   (`dispatch_correction` holds it; the yes waits in `issue` like a publish, so
+   a restart finishes it). The live record is read and checked against what Poe
+   published: if someone changed it elsewhere, nothing is written. Otherwise the
+   corrected title, description, tags, `textContent` and `content` are put over
+   it with `com.atproto.repo.putRecord` and `swapRecord`, keeping `path`,
+   `publishedAt`, `bskyPostRef` and anything else on it, and setting
+   `updatedAt`. A lost swap (the announcement's link landing at the same time) is
+   read again and retried once; a put whose answer was lost is recognised on the
+   live record. The draft gets the fix as a new version (`saved_by` is
+   `correction:<the yes>`), so a later fix builds on it.
+
+Leaflet emails subscribers only when the first thing its job sees for a new
+document is the create; an update never sends anything. So a correction is
+refused until `DISPATCH_LEAFLET_SETTLE_MS` after `publishedAt`, when that job has
+run, and the email that went out keeps the typo. The blog reads the record
+directly, so the fix shows there within its five-minute cache, and Leaflet
+re-renders its page when it sees the update. An issue published another way
+(issue one was) has no draft here, so Poe says it can't correct it. Corrections
+need nothing new on the droplet: no env var and no nginx route (the tools come on
+`/callback`).
+
 ## Likes Poe proposes (`appreciate_post`)
 
 The agent's `appreciate_post` tool calls `POST /like-proposal { postUri, attempt }`

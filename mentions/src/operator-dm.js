@@ -14,7 +14,8 @@ import {
   attachPostProposal, livePostProposalFor, decidePostProposal, publishPostProposal,
 } from './operator-posts.js';
 import {
-  attachDraftReply, currentDraft, decidePublish, livePublishFor, parseDraftCommand, publishConfirmed, runDraftCommand,
+  attachDraftReply, currentDraft, decideCorrection, decidePublish, liveCorrectionFor, livePublishFor, parseDraftCommand,
+  runConfirmed, runDraftCommand,
 } from './dispatch-drafts.js';
 
 db.exec(`
@@ -262,15 +263,16 @@ function startCommand(messageId, api, dispatchDeps) {
 
 /**
  * Publishing a draft the operator said yes to (dispatch-drafts.js) runs beside
- * the poll the same way: it waits for the issue's page and for Leaflet. The
- * yes is left in 'issue' until the reply is ready, so a restart finishes it.
+ * the poll the same way: it waits for the issue's page and for Leaflet. So does
+ * correcting a live issue. The yes is left in 'issue' until the reply is ready,
+ * so a restart finishes it.
  */
 function startIssueJob(messageId, api, draftDeps) {
   if (commandJobs.has(messageId)) return commandJobs.get(messageId);
-  const job = publishConfirmed(messageId, draftDeps)
+  const job = runConfirmed(messageId, draftDeps)
     .then(async (reply) => {
       db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
-        WHERE message_id = ? AND status = 'issue'`).run(reply ?? 'that publish is no longer waiting.', nowIso(), messageId);
+        WHERE message_id = ? AND status = 'issue'`).run(reply ?? "that's no longer waiting.", nowIso(), messageId);
       const row = db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(messageId);
       if (row?.status === 'drafted') await deliverDm(row, api);
     })
@@ -401,6 +403,20 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
           db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
             WHERE message_id = ? AND status = 'queued'`)
             .run("ok, it stays a draft. tell me what to change, or ask me to make it live when it's ready.", nowIso(), row.message_id);
+          await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
+        }
+        continue;
+      }
+      // Or to Poe's proposed fix to an issue that's already live.
+      const correction = publishAnswer ? liveCorrectionFor(row) : null;
+      if (correction && decideCorrection(correction.id, publishAnswer, row.message_id)) {
+        if (publishAnswer === 'yes') {
+          db.prepare(`UPDATE operator_dm SET status = 'issue', draft_text = NULL, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
+          startIssueJob(row.message_id, api, draftDeps);
+        } else {
+          db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`).run("ok, i'll leave the issue as it is.", nowIso(), row.message_id);
           await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         }
         continue;
