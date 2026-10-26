@@ -471,6 +471,14 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   // air quality
   const smog = smogOf(d);
   setText(report, '[data-p-smog-level]', smog.level);
-  setText(report, '[data-p-smog-words]', d.createdUnlisted === 0 ? 'every sign-up went somewhere the relay listens.' : `${formatIndex(smog.share)}% of sign-ups went to hosts no relay carries.`);
+  // against every sign-up, not the arrivals above, so the share doesn't read as theirs
+  const all = listed + d.createdUnlisted;
+  setText(
+    report,
+    '[data-p-smog-words]',
+    d.createdUnlisted === 0
+      ? 'every sign-up went somewhere the relay listens.'
+      : `${formatIndex(smog.share)}% of all ${plural(all, 'sign-up')} went to hosts no relay carries, so they're not in the new arrivals above.`,
+  );
   setText(report, '[data-p-deleted]', `${plural(d.deleted, 'account')} deleted ${d.deleted === 1 ? 'itself' : 'themselves'}.`);
 }

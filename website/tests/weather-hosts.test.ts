@@ -169,7 +169,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(report.querySelector('[data-p-chart="winds"] svg')).not.toBeNull();
     expect(text('[data-p-week]')).toBe('over the last 2 days: 49 accounts moved out, 2 moved back.');
     expect(text('[data-p-smog-level]')).toBe('thick smog');
-    expect(text('[data-p-smog-words]')).toMatch(/^9\d(\.\d)?% of sign-ups went to hosts no relay carries\.$/);
+    expect(text('[data-p-smog-words]')).toMatch(/^9\d(\.\d)?% of all [\d,]+ sign-ups went to hosts no relay carries, so they're not in the new arrivals above\.$/);
     expect(text('[data-p-deleted]')).toBe('1 account deleted itself.');
   });
 
