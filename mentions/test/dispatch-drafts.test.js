@@ -6,7 +6,7 @@ import { pollOperatorDms, receiveDraft, settleCommands } from '../src/operator-d
 import {
   weeklySlot, draftWindow, parseDraftCommand, applyEdits, tick, handleDraftCall, receiveDraftDone, sendOutbox,
   previewFor, getDraft, currentDraft, startDraft, publishConfirmed, attachDraftReply, livePublishFor, decidePublish,
-  publicPage,
+  publicPage, liveCorrectionFor, decideCorrection, runConfirmed,
 } from '../src/dispatch-drafts.js';
 
 const POE = 'did:plc:6qw63oash3jfnpykvpbwnq5z';
@@ -24,7 +24,7 @@ config.dispatch.drafts.hour = new Date().getUTCHours();
 
 beforeEach(() => {
   db.exec(`DELETE FROM dispatch_draft; DELETE FROM dispatch_draft_version; DELETE FROM dispatch_publish;
-    DELETE FROM dispatch_outbox; DELETE FROM operator_dm;`);
+    DELETE FROM dispatch_outbox; DELETE FROM operator_dm; DELETE FROM dispatch_correction;`);
 });
 
 const ISSUE = [
@@ -43,16 +43,33 @@ const ISSUE = [
   'see you next week.',
 ].join('\n');
 
+// The PDS hands a record back with its keys in its own order, not the order they were written in.
+const sortedKeys = (v) => (Array.isArray(v) ? v.map(sortedKeys)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortedKeys(v[k])])) : v);
+
 /** Poe's desk: the agent, the PDS, the web and the chat, all fake. */
 function desk({ publisher = true } = {}) {
-  const w = { asks: [], docs: new Map(), creates: [], announced: [], dms: [], cards: [], agentStatus: 202, now: Date.now() };
+  const w = { asks: [], docs: new Map(), creates: [], puts: [], announced: [], dms: [], cards: [], agentStatus: 202, now: Date.now() };
   w.deps = {
     now: () => w.now,
     askAgent: async (body) => { w.asks.push(body); return w.agentStatus; },
     latestIssue: async () => w.latest ?? { rkey: 'issueone', title: 'attie sites', publishedAt: new Date(w.now - 6 * 86400000).toISOString() },
     resolvePost: async (_actor, rkey) => ({ uri: `at://did:plc:someone/app.bsky.feed.post/${rkey}`, cid: 'bafypost' }),
     fetchPageMeta: async (url) => { w.cards.push(url); return { title: 'the atmosphere weather report', description: 'live from my station' }; },
-    getDocument: async (rkey) => structuredClone(w.docs.get(rkey) ?? null),
+    getDocument: async (rkey) => {
+      const doc = structuredClone(w.docs.get(rkey) ?? null);
+      return doc && w.sortKeys ? { ...doc, value: sortedKeys(doc.value) } : doc;
+    },
+    putDocument: async (rkey, record, swapRecord) => {
+      // Someone else's write landing between our read and our put.
+      if (w.writeFirst) { w.writeFirst(w.docs.get(rkey)); w.writeFirst = null; }
+      const doc = w.docs.get(rkey);
+      if (!doc || doc.cid !== swapRecord) throw Object.assign(new Error('putRecord failed: 400 InvalidSwap'), { error: 'InvalidSwap' });
+      w.puts.push({ rkey, record: structuredClone(record), swapRecord });
+      w.docs.set(rkey, { uri: doc.uri, cid: `bafyput${w.puts.length}`, value: structuredClone(record) });
+      if (w.failAfterPut) { w.failAfterPut = false; throw new Error('socket hang up'); }
+      return { uri: doc.uri, cid: `bafyput${w.puts.length}` };
+    },
     createDocument: async (rkey, record) => {
       w.creates.push({ rkey, record: structuredClone(record) });
       const doc = { uri: `at://${PUBLISHER}/site.standard.document/${rkey}`, cid: `bafydoc${w.creates.length}`, value: record };
@@ -410,6 +427,230 @@ test('no keeps it a draft', async () => {
   assert.equal(livePublishFor(no), null);
   assert.equal(currentDraft().status, 'ready');
   assert.equal(w.creates.length, 0);
+});
+
+// --- correcting a live issue ---
+
+/** An issue made live from a draft, as publishing leaves it, with the clock past Leaflet's email. */
+async function liveIssue(w) {
+  w.sortKeys = true;
+  const draft = await readyDraft(w);
+  const dm = answering();
+  await fromDm(dm, { action: 'propose_publish', version: 1 });
+  attachDraftReply(dm, 'ok');
+  db.prepare(`UPDATE dispatch_publish SET status = 'confirmed', decision_message_id = 'yes-live'`).run();
+  assert.match(await publishConfirmed('yes-live', w.deps), /^it's live/);
+  w.now += config.dispatch.leafletSettleMs + 60000;
+  return getDraft(draft.id);
+}
+
+const TYPO = { find: 'the beta is close', replace: 'the beta is very close' };
+let step = 0;
+
+/** Poe proposes a fix in a DM, it goes out under the reply, and the operator answers straight back. Returns the answer's id. */
+async function answerFix(call, answer = 'yes') {
+  const at = Date.now() + ++step * 10000;
+  const dm = `fix-${step}`;
+  db.prepare(`INSERT INTO operator_dm (message_id, convo_id, operator_did, received_at, status, updated_at)
+    VALUES (?, 'poe-convo', ?, ?, 'dispatched', ?)`).run(dm, admin, new Date(at).toISOString(), new Date().toISOString());
+  const proposed = await fromDm(dm, { action: 'propose_correction', issue: 'latest', ...call });
+  assert.equal(proposed.body.accepted, true, proposed.body.reason);
+  const shown = attachDraftReply(dm, 'fixed it up, take a look');
+  assert.equal(shown.proposal, true);
+  db.prepare(`UPDATE operator_dm SET status = 'sent', updated_at = ? WHERE message_id = ?`).run(new Date().toISOString(), dm);
+  const row = { message_id: `${answer}-${step}`, operator_did: admin, convo_id: 'poe-convo', received_at: new Date(at + 1000).toISOString() };
+  db.prepare(`INSERT INTO operator_dm (message_id, convo_id, operator_did, received_at, status, updated_at) VALUES (?, ?, ?, ?, 'queued', ?)`)
+    .run(row.message_id, row.convo_id, admin, row.received_at, new Date().toISOString());
+  const live = liveCorrectionFor(row);
+  assert.ok(live, 'the answer is to that fix');
+  assert.equal(decideCorrection(live.id, answer, row.message_id), true);
+  return { id: row.message_id, shown: shown.text };
+}
+
+test('a typo in a live issue: read as published, proposed, and put over the live record on a yes', async () => {
+  const w = desk();
+  const draft = await liveIssue(w);
+  const rkey = draft.document_rkey;
+  const created = w.creates[0].record;
+  // A card as it was read when the issue went out; the page may say something else today.
+  const published = JSON.parse(draft.record);
+  const card = published.content.pages[0].blocks.find((b) => b.block.src === 'https://atpota.to/weather');
+  card.block.title = 'the weather report, as it was';
+  db.prepare('UPDATE dispatch_draft SET record = ? WHERE id = ?').run(JSON.stringify(published), draft.id);
+  // And the announcement linked it, as announce() does once Leaflet has seen it.
+  const linked = { ...w.docs.get(rkey), cid: 'bafylinked',
+    value: { ...created, content: published.content, bskyPostRef: { uri: `at://${POE}/app.bsky.feed.post/3abc`, cid: 'bafyp' } } };
+  w.docs.set(rkey, linked);
+
+  const dm = answering();
+  const read = await fromDm(dm, { action: 'read', issue: 'latest' });
+  assert.equal(read.body.found, true);
+  assert.equal(read.body.draft.status, 'published');
+  assert.equal(read.body.draft.published, `https://atpota.to/blog/${rkey}`);
+  assert.match(read.body.draft.markdown, /the beta is close/);
+  assert.deepEqual((await fromDm(dm, { action: 'read', issue: `https://poe.leaflet.pub/${rkey}` })).body.draft.id, draft.id);
+  assert.match((await fromDm(dm, { action: 'propose_correction', issue: 'latest', version: 3, edits: [TYPO] })).body.reason, /version 1/);
+
+  const { id, shown } = await answerFix({ version: 1, edits: [TYPO] });
+  assert.match(shown, new RegExp(`here's the fix to "spaces near beta", live at https://atpota\\.to/blog/${rkey}:`));
+  assert.match(shown, /- "the beta is close" becomes "the beta is very close"/);
+  assert.match(shown, /nobody is emailed again: subscribers keep the email they already got\./);
+  assert.doesNotMatch(shown, /old card/, 'the title and description stay');
+  assert.match(shown, /reply "yes" to fix it, or "no" to leave it as it is\.$/);
+  assert.equal(w.puts.length, 0, 'a proposal changes nothing');
+
+  const reply = await runConfirmed(id, w.deps);
+  assert.match(reply, new RegExp(`^fixed ✿ https://atpota\\.to/blog/${rkey} has it now`));
+  assert.match(reply, /nobody was emailed again/);
+  assert.equal(w.creates.length, 1, 'a put, never a second create');
+  assert.equal(w.puts.length, 1);
+  const { record, swapRecord } = w.puts[0];
+  assert.equal(swapRecord, 'bafylinked');
+  assert.equal(record.path, created.path);
+  assert.equal(record.publishedAt, created.publishedAt);
+  assert.deepEqual(record.bskyPostRef, linked.value.bskyPostRef, 'the announcement link stays');
+  assert.ok(Date.parse(record.updatedAt) > 0);
+  assert.match(record.textContent, /the beta is very close/);
+  assert.doesNotMatch(record.textContent, /the beta is close/);
+  assert.equal(record.content.pages[0].blocks.find((b) => b.block.src === 'https://atpota.to/weather').block.title,
+    'the weather report, as it was', 'a card the fix left alone is kept as published, not read again');
+
+  const after = getDraft(draft.id);
+  assert.equal(after.status, 'published');
+  assert.equal(after.version, 2);
+  assert.match(after.markdown, /the beta is very close/);
+  assert.equal(db.prepare('SELECT saved_by FROM dispatch_draft_version WHERE draft_id = ? AND version = 2').get(draft.id).saved_by, `correction:${id}`);
+  assert.match(previewFor(draft.preview_token).body.record.textContent, /very close/);
+
+  // Asking again is safe: the stored answer, no second put.
+  assert.equal(await runConfirmed(id, w.deps), reply);
+  assert.equal(w.puts.length, 1);
+  // A second fix builds on the first.
+  assert.match((await fromDm(answering(), { action: 'propose_correction', issue: 'latest', version: 1, edits: [TYPO] })).body.reason, /version 2/);
+});
+
+test("a fix waits out Leaflet's email, stays small, and only touches issues Poe published here", async () => {
+  const w = desk();
+  last = w;
+  const dm = answering();
+  assert.match((await fromDm(dm, { action: 'read', issue: 'latest' })).body.reason, /haven't published an issue/);
+
+  const draft = await liveIssue(w);
+  w.now = Date.parse(draft.published_at) + 60000;
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1, edits: [TYPO] })).body.reason,
+    /leaflet may still be emailing it; a change now could stop that email, so propose it again in 4 minutes/);
+  w.now += config.dispatch.leafletSettleMs;
+
+  const many = Array.from({ length: 11 }, (_, i) => ({ find: `x${i}`, replace: `y${i}` }));
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1, edits: many })).body.reason, /small fixes: at most 10 edits/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1, edits: [{ find: 'see you next week.', replace: 'z'.repeat(1600) }] })).body.reason,
+    /1500 characters/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1, edits: [{ find: 'nope', replace: 'yes' }] })).body.reason, /isn't in the issue/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1, edits: [{ find: 'atmospher', replace: 'x' }] })).body.reason, /in the issue more than once/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1, edits: [{ find: TYPO.find, replace: TYPO.find }] })).body.reason, /changes nothing/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', version: 1 })).body.reason, /give the edits/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', issue: 'https://atpota.to/blog/3myasnk4bzk22', version: 1, edits: [TYPO] })).body.reason,
+    /wasn't published from one of my drafts/);
+  assert.match((await fromDm(dm, { action: 'propose_correction', issue: 'the one about cows', version: 1, edits: [TYPO] })).body.reason, /"latest", or by its link/);
+  assert.match((await fromDm(dm, { action: 'save', issue: 'latest', edits: [TYPO] })).body.reason, /never saved over; propose a correction/);
+  assert.equal((await fromDrafting(draft.id, { action: 'read', issue: 'latest' })).status, 409, 'the drafting turn is long over');
+
+  // A new title says the cards already out keep the old one.
+  const { id, shown } = await answerFix({ version: 1, title: 'spaces is nearly here' });
+  assert.match(shown, /- the title becomes "spaces is nearly here"/);
+  assert.match(shown, /a post that already links it keeps its old card\./);
+  await runConfirmed(id, w.deps);
+  assert.equal(w.puts.at(-1).record.title, 'spaces is nearly here');
+  assert.equal(w.puts.at(-1).record.description, 'a quieter week', 'what the fix leaves alone stays');
+  assert.equal(w.creates.length, 1);
+});
+
+test('a fix never writes over an edit made elsewhere, and survives a lost swap or a lost answer', async () => {
+  const w = desk();
+  const draft = await liveIssue(w);
+  const rkey = draft.document_rkey;
+
+  // Changed somewhere else since it went out: left alone.
+  const first = await answerFix({ version: 1, edits: [TYPO] });
+  const edited = w.docs.get(rkey);
+  w.docs.set(rkey, { ...edited, cid: 'bafyelsewhere', value: { ...edited.value, title: 'someone else wrote this' } });
+  assert.match(await runConfirmed(first.id, w.deps), /changed somewhere else\), so i didn't touch it/);
+  assert.equal(w.puts.length, 0);
+  assert.equal(getDraft(draft.id).version, 1);
+  w.docs.set(rkey, edited);
+
+  // The announcement's link lands between the read and the put: read again, keep it, put once.
+  const second = await answerFix({ version: 1, edits: [TYPO] });
+  w.writeFirst = (doc) => w.docs.set(rkey, { ...doc, cid: 'bafyraced', value: { ...doc.value, bskyPostRef: { uri: 'at://x/app.bsky.feed.post/1', cid: 'c' } } });
+  assert.match(await runConfirmed(second.id, w.deps), /^fixed/);
+  assert.equal(w.puts.length, 1);
+  assert.equal(w.puts[0].swapRecord, 'bafyraced');
+  assert.equal(w.puts[0].record.bskyPostRef.uri, 'at://x/app.bsky.feed.post/1');
+
+  // A put that went through though its answer was lost is found on the live record.
+  const third = await answerFix({ version: 2, edits: [{ find: 'see you next week.', replace: 'see you next week!' }] });
+  w.failAfterPut = true;
+  assert.match(await runConfirmed(third.id, w.deps), /^fixed/);
+  assert.equal(w.puts.length, 2);
+  assert.equal(getDraft(draft.id).version, 3);
+
+  // A run a restart cut off after it was made, but before it answered, answers without a second put.
+  db.prepare(`UPDATE dispatch_correction SET status = 'confirmed', reply = NULL WHERE decision_message_id = ?`).run(third.id);
+  assert.match(await runConfirmed(third.id, w.deps), /^fixed/);
+  assert.equal(w.puts.length, 2);
+
+  // And one that never landed says so, and leaves the issue as it was.
+  const fourth = await answerFix({ version: 3, edits: [{ find: 'see you next week!', replace: 'bye!' }] });
+  const put = w.deps.putDocument;
+  w.deps.putDocument = async () => { throw new Error('socket hang up'); };
+  assert.match(await runConfirmed(fourth.id, w.deps), /didn't go through \(socket hang up\), so the issue is as it was/);
+  w.deps.putDocument = put;
+  assert.equal(getDraft(draft.id).version, 3);
+});
+
+test('no leaves a live issue as it is', async () => {
+  const w = desk();
+  const draft = await liveIssue(w);
+  const { id } = await answerFix({ version: 1, edits: [TYPO] }, 'no');
+  assert.equal(await runConfirmed(id, w.deps), null, 'a no is never applied');
+  assert.equal(w.puts.length, 0);
+  assert.equal(getDraft(draft.id).version, 1);
+});
+
+test('through the DM poll: a fix proposed, shown under the reply, and made on a plain yes', async () => {
+  const w = desk();
+  await liveIssue(w);
+  const sent = [];
+  const toAgent = [];
+  const api = {
+    inbox: [],
+    listDmConvos: async () => ({ convos: [{ id: 'poe-convo', members: [{ did: POE }, { did: admin }] }] }),
+    getDmMessages: async () => ({ messages: api.inbox }),
+    sendDmMessage: async (_c, replyTo, text) => { sent.push({ replyTo, text }); return { id: `r${sent.length}` }; },
+  };
+  const fetcher = async (_url, options) => { toAgent.push(JSON.parse(options.body)); return { ok: true }; };
+  let clock = 0;
+  const say = async (text) => {
+    const message = { id: `fixpoll-${++clock}`, text, sender: { did: admin }, sentAt: new Date(Date.now() + 120000 + clock * 1000).toISOString() };
+    api.inbox = [message];
+    await pollOperatorDms({ api, fetcher, draftDeps: w.deps });
+    return message;
+  };
+
+  const ask = await say('typo in the latest issue: "the beta is close" should say very close');
+  assert.equal(toAgent.at(-1).dispatchDraft, undefined, 'no draft in review; the issue is live');
+  await fromDm(ask.id, { action: 'propose_correction', issue: 'latest', version: 1, edits: [TYPO] });
+  assert.equal(receiveDraft({ key: 'k-fix', dmId: ask.id, operatorDid: admin, text: 'fixed it up, take a look' }), 'accepted');
+  api.inbox = [];
+  await pollOperatorDms({ api, fetcher, draftDeps: w.deps });
+  assert.match(sent.at(-1).text, /reply "yes" to fix it/);
+
+  const agentCalls = toAgent.length;
+  await say('yes');
+  await settleCommands();
+  assert.equal(toAgent.length, agentCalls, 'the yes is not sent to Poe');
+  assert.equal(w.puts.length, 1);
+  assert.match(sent.at(-1).text, /^fixed ✿/);
 });
 
 test('on the callback server: the preview is public by its token, draft calls need the secret', async () => {

@@ -71,6 +71,7 @@ test("the operator DM instructions name the dispatch draft waiting on the operat
   const withDraft = (await turn(operatorDm, "channel:operator-dm", { auth: { current: { attributes } } })).content;
   assert.match(withDraft, /Right now the dispatch draft "spaces near beta" \(version 3\) is waiting for the operator's review/);
   assert.match(withDraft, /propose_dispatch_publish/);
+  assert.match(withDraft, /propose_dispatch_correction/, "and how to fix an issue that's already live");
   const without = (await turn(operatorDm, "channel:operator-dm", { auth: { current: { attributes: { dmId: "dm-2", dispatchDrafts: "true" } } } })).content;
   assert.doesNotMatch(without, /Right now the dispatch draft/);
   assert.match(without, /read_dispatch_draft/, "how to handle a draft is there while drafts are on");

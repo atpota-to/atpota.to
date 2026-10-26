@@ -132,6 +132,15 @@ as it is now. Don't rewrite what they didn't mention. If they ask for something 
 sentence or two saying what you changed; the preview link goes under your reply
 by itself.
 
+## Fixing an issue that's live
+
+Once an issue is published, its markdown can still be fixed, but only for mistakes:
+a typo, a wrong name, number or link. Read it with read_dispatch_draft and `issue`
+("latest", or its link), then propose_dispatch_correction with the version you read
+and `edits` copied from that markdown, the smallest that fix it. It isn't a second
+draft: don't reword, add or cut anything they didn't point out. Subscribers already
+have the email, so the fix only changes the pages.
+
 ## The note at the end
 
 When the drafting turn is done, your last message is a short note for the operator,

@@ -3,10 +3,11 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import test from "node:test";
 
-// lib/dispatch-draft.ts, lib/operator-dm.ts and the four draft tools, compiled as the
+// lib/dispatch-draft.ts, lib/operator-dm.ts and the five draft tools, compiled as the
 // other contract tests do, with eve's defineTool stubbed and the extensionless imports
 // made loadable by Node.
-const tools = ["read_dispatch_draft", "save_dispatch_draft", "propose_dispatch_publish", "start_dispatch_draft"];
+const tools = ["read_dispatch_draft", "save_dispatch_draft", "propose_dispatch_publish", "start_dispatch_draft",
+  "propose_dispatch_correction"];
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig",
   "agent/lib/dispatch-draft.ts", "agent/lib/operator-dm.ts", ...tools.map((t) => `agent/tools/${t}.ts`),
   "--outDir", ".eve/dispatch-draft-test", "--rootDir", "agent",
@@ -113,6 +114,29 @@ test("making it live and starting a draft are for operator DMs only", async () =
   assert.equal(f.requests.length, 2, "only the two DM calls reached the droplet");
   assert.deepEqual(f.requests[0].body.dispatchDraft, { action: "propose_publish", version: 3, announcement: "issue two is out!" });
   assert.deepEqual(f.requests[1].body.dispatchDraft, { action: "start", guidance: "spaces" });
+});
+
+test("a live issue is read and corrected only from an operator DM, and only proposed", async () => {
+  const f = withFetch(() => Response.json({ accepted: true, version: 1, note: "proposed, not changed" }));
+  const fix = { issue: "latest", version: 1, edits: [{ find: "the beta is close", replace: "the beta is very close" }] };
+  try {
+    await tool.read_dispatch_draft.execute({ issue: "latest" }, ctx(dmCaller));
+    assert.deepEqual(await tool.propose_dispatch_correction.execute(fix, ctx(dmCaller)),
+      { proposed: true, version: 1, note: "proposed, not changed" });
+    for (const caller of [drafting, bluesky, website, undefined]) {
+      assert.equal((await tool.propose_dispatch_correction.execute(fix, ctx(caller))).proposed, false);
+    }
+  } finally { f.restore(); }
+  assert.equal(f.requests.length, 2, "only the two DM calls reached the droplet");
+  assert.deepEqual(f.requests[0].body, { dmId: "dm-42", operatorDid: operator, dispatchDraft: { action: "read", issue: "latest" } });
+  assert.deepEqual(f.requests[1].body.dispatchDraft, { action: "propose_correction", ...fix });
+
+  const schema = tool.propose_dispatch_correction.inputSchema;
+  assert.equal(schema.safeParse(fix).success, true);
+  assert.equal(schema.safeParse({ issue: "latest", version: 1, title: "spaces is nearly here" }).success, true);
+  assert.equal(schema.safeParse({ issue: "latest", version: 1 }).success, false, "a fix needs something to fix");
+  assert.equal(schema.safeParse({ ...fix, edits: Array.from({ length: 11 }, () => fix.edits[0]) }).success, false, "small fixes only");
+  assert.equal(schema.safeParse({ ...fix, edits: [{ find: "x".repeat(501), replace: "y" }] }).success, false);
 });
 
 test("service errors are reasons, not throws", async () => {
