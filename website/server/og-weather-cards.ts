@@ -977,10 +977,10 @@ export function weekOf(d: CardData): IdentityDay[] {
   return (d.day?.hosts?.identities ?? []).slice(-7);
 }
 
-/** "1 in 17", from a week's listed sign-ups (weather-hosts.ts oddsWords); null without a week or anyone outside. */
+/** "1 in 17", from a week's listed sign-ups less the bulk ones (weather-hosts.ts oddsWords); null without a week or anyone outside. */
 export function oddsOf(week: IdentityDay[]): string | null {
-  const indep = week.reduce((t, x) => t + x.createdIndependent, 0);
-  const listed = week.reduce((t, x) => t + x.createdBluesky + x.createdIndependent, 0);
+  const indep = week.reduce((t, x) => t + x.createdIndependent - x.createdBulk, 0);
+  const listed = week.reduce((t, x) => t + x.createdBluesky + x.createdIndependent - x.createdBulk, 0);
   if (week.length < 2 || indep === 0 || listed === 0) return null;
   return `1 in ${int(Math.max(1, Math.round(listed / indep)))}`;
 }

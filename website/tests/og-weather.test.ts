@@ -106,7 +106,7 @@ const HOSTS = {
 
 const day = (d: string, over: Partial<IdentityDay> = {}): IdentityDay => ({
   day: d, ops: 266_000, createdBluesky: 17_000, createdIndependent: 1000, createdUnlisted: 245_000, createdCustomHandle: 300,
-  movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], ...over,
+  createdBulk: 0, bulk: [], movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], ...over,
 });
 
 /** The day's hosts, as /api/weather-history?range=day has them: two censuses, and the plc directory's last eight days. */
@@ -196,6 +196,10 @@ describe('og weather: the page\'s words', () => {
     expect(`over the last 7 days: ${oddsOf(week)} started outside bluesky.`).toBe(hostsPage.oddsWords(week));
     expect(oddsOf(week.slice(-1))).toBeNull(); // a day is too few to say
     expect(hostsPage.oddsWords(week.slice(-1))).toBe('');
+    // a batch on one host leaves the odds as they were, on both
+    const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615 }] }];
+    expect(oddsOf(batch)).toBe(oddsOf(week));
+    expect(`over the last 7 days: ${oddsOf(batch)} started outside bluesky.`).toBe(hostsPage.oddsWords(batch));
   });
 
   it('says usual the way the almanac does', () => {

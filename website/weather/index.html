@@ -496,7 +496,7 @@
                 </div>
             </section>
 
-            <!-- today's sign-ups, from atmosphere_plc_day (weather-hosts.ts renderIdentities) -->
+            <!-- the range's sign-ups (today so far, or the last 7 or 30 days), from atmosphere_plc_day (weather-hosts.ts renderIdentities) -->
             <section class="tile weather-tile weather-pds weather-arrivals" aria-labelledby="weather-arrivals-title" data-p-arrivals hidden data-topics="migration">
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
@@ -519,6 +519,8 @@
                     <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>independent</dt><dd data-p-indep>&ndash;</dd></div>
                 </dl>
                 <p class="weather-pds__line" data-p-own></p>
+                <!-- new accounts made in bulk on one host, counted apart from the numbers above (weather-hosts.ts bulkWords) -->
+                <p class="weather-pds__line" data-p-bulk hidden></p>
                 <p class="weather-pds__line" data-p-odds hidden></p>
                 <!-- air quality: the day's sign-ups to hosts no relay carries (weather-hosts.ts smogOf) -->
                 <div class="weather-smog" data-p-smog hidden>

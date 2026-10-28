@@ -678,27 +678,47 @@ export function hostsNowOf(x: unknown) {
   };
 }
 
+/** Hostnames with a count, checked. */
+const hostCounts = (x: unknown) => list(x).flatMap((h) => {
+  const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+  const n = isRecord(h) ? count(h.accounts) : null;
+  return hostname && n !== null ? [{ hostname, accounts: n }] : [];
+}).slice(0, TOP);
+
+/** Hosts by name, added up, busiest first. */
+function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>) {
+  const by = new Map<string, number>();
+  for (const l of lists) for (const h of l) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  return [...by].map(([hostname, accounts]) => ({ hostname, accounts })).sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP);
+}
+
 /** A day of the PLC directory's log (atmosphere_plc_day), in the page's words. */
 function identityDayOf(x: unknown) {
   if (!isRecord(x) || typeof x.day !== "string" || !DAY_RE.test(x.day)) return null;
   const c = counts(x, ["createdBluesky", "createdIndependent", "createdUnlisted", "createdCustomHandle", "movedOut", "movedIn", "movedBetween", "deleted"] as const);
   if (!c) return null;
+  // the website's server counts these (server/weather-hosts.ts BULK_MIN); an older answer has none
+  const bulk = Math.min(count(x.createdBulk) ?? 0, c.createdIndependent);
+  const independent = c.createdIndependent - bulk;
   return {
     date: x.day,
-    signups: { onBlueskyHosts: c.createdBluesky, onIndependentHosts: c.createdIndependent, withOwnDomainHandle: c.createdCustomHandle },
-    // of new accounts on hosts the relay carries, the percent that started outside bluesky
-    ...(c.createdBluesky + c.createdIndependent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((c.createdIndependent / (c.createdBluesky + c.createdIndependent)) * 100) } : {}),
+    signups: {
+      onBlueskyHosts: c.createdBluesky,
+      onIndependentHosts: independent,
+      withOwnDomainHandle: c.createdCustomHandle,
+      // new accounts on an independent host that took in 1,000 or more that day: usually one service making accounts in a
+      // batch, not people signing up one by one. left out of onIndependentHosts and the percent; not people leaving bluesky
+      ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: hostCounts(x.bulk) } } : {}),
+    },
+    // of new accounts on hosts the relay carries, less the bulk ones, the percent that started outside bluesky
+    ...(c.createdBluesky + independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((independent / (c.createdBluesky + independent)) * 100) } : {}),
     movingHouse: {
       outOfBluesky: c.movedOut,
       backToBluesky: c.movedIn,
       betweenIndependentHosts: c.movedBetween,
       wind: windOf(c.movedOut, c.movedIn),
       // the independent hosts movers went to, busiest first
-      movedTo: list(x.destinations).flatMap((h) => {
-        const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
-        const n = isRecord(h) ? count(h.accounts) : null;
-        return hostname && n !== null ? [{ hostname, accounts: n }] : [];
-      }).slice(0, TOP),
+      movedTo: hostCounts(x.destinations),
     },
     // sign-ups on hosts no relay carries: test servers, typos, bulk sign-ups nobody relays. not the network's weather
     airQuality: { ...smogOf({ bluesky: c.createdBluesky, independent: c.createdIndependent, unlisted: c.createdUnlisted }), unlistedSignups: c.createdUnlisted },
@@ -782,9 +802,7 @@ export function hostHistoryOf(x: unknown) {
 
 /** Where the days' movers went, adding up each day's busiest destinations. */
 function movedTo(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
-  const by = new Map<string, number>();
-  for (const d of days) for (const h of d.movingHouse.movedTo) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
-  return [...by].map(([hostname, accounts]) => ({ hostname, accounts })).sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP);
+  return mergeHosts(days.map((d) => d.movingHouse.movedTo));
 }
 
 /** Sign-ups, moves and deletions summed over identity days. */
@@ -793,12 +811,19 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
   const out = sum((d) => d.movingHouse.outOfBluesky);
   const back = sum((d) => d.movingHouse.backToBluesky);
   const created = { bluesky: sum((d) => d.signups.onBlueskyHosts), independent: sum((d) => d.signups.onIndependentHosts), unlisted: sum((d) => d.airQuality.unlistedSignups) };
+  const bulk = sum((d) => d.signups.madeInBulk?.accounts ?? 0);
   return {
     days: days.length,
-    signups: { onBlueskyHosts: created.bluesky, onIndependentHosts: created.independent, withOwnDomainHandle: sum((d) => d.signups.withOwnDomainHandle) },
+    signups: {
+      onBlueskyHosts: created.bluesky,
+      onIndependentHosts: created.independent,
+      withOwnDomainHandle: sum((d) => d.signups.withOwnDomainHandle),
+      ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: mergeHosts(days.map((d) => d.signups.madeInBulk?.onHosts ?? [])) } } : {}),
+    },
     ...(created.bluesky + created.independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((created.independent / (created.bluesky + created.independent)) * 100) } : {}),
     movingHouse: { outOfBluesky: out, backToBluesky: back, betweenIndependentHosts: sum((d) => d.movingHouse.betweenIndependentHosts), wind: windOf(out, back), movedTo: movedTo(days) },
-    airQuality: smogOf(created),
+    // against every sign-up, the bulk ones included (as each day's)
+    airQuality: smogOf({ ...created, independent: created.independent + bulk }),
     deletedAccounts: sum((d) => d.deletedAccounts),
   };
 }

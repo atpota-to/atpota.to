@@ -48,7 +48,7 @@ const HOSTS = {
     { day: 'tomorrow', active: 1 },
   ],
   identities: [
-    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }, { hostname: 'Not A Host', accounts: 1 }, { hostname: 'blacksky.app', accounts: -1 }] },
+    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }, { hostname: 'Not A Host', accounts: 1 }, { hostname: 'blacksky.app', accounts: -1 }], created_hosts: [{ hostname: 'goodmkt.id', accounts: 4000 }, { hostname: 'eurosky.social', accounts: 999 }, { hostname: 'Not A Host', accounts: 5000 }] },
     { day: '2026-10-23', ops: 'lots' },
   ],
   activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }, { day: 'x', independent: 1 }],
@@ -138,7 +138,7 @@ describe('weather history', () => {
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
       identities: [
-        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000 }], destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
       ],
       activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
       liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
