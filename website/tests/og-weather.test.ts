@@ -197,7 +197,7 @@ describe('og weather: the page\'s words', () => {
     expect(oddsOf(week.slice(-1))).toBeNull(); // a day is too few to say
     expect(hostsPage.oddsWords(week.slice(-1))).toBe('');
     // a batch on one host leaves the odds as they were, on both
-    const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615 }] }];
+    const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 }] }];
     expect(oddsOf(batch)).toBe(oddsOf(week));
     expect(`over the last 7 days: ${oddsOf(batch)} started outside bluesky.`).toBe(hostsPage.oddsWords(batch));
   });

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backfill, daysOf, hostsBefore, hostsOnDay, parseArgs, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
+import { backfill, bulkRun, daysOf, hostsBefore, hostsOnDay, newPace, paceAt, parseArgs, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
 import { handleOfOp, hostOfOp, isCustomHandle, sideOf, slimEntry } from '../src/plc.js';
 
 const BSKY = 'amanita.us-east.host.bsky.network';
@@ -83,12 +83,10 @@ test('PlcHistory: counts each day\'s identity weather', () => {
     { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
   ].map((e) => ({ did: 'did:plc:mover', cid: e.createdAt, ...e }))));
   h.settle();
-  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, created_hosts: {} });
-  // the mover went to eurosky: that's where the wind blew; the new account signed up on blacksky
-  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: { 'eurosky.social': 1 }, created_hosts: { 'blacksky.app': 1 } });
-  // sign-ups the relay doesn't carry name no host
+  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {} });
+  // the mover went to eurosky: that's where the wind blew
+  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, created_bulk: 0, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: { 'eurosky.social': 1 }, bulk_hosts: {} });
   assert.equal(h.signals[2].created_unlisted, 2);
-  assert.deepEqual(h.signals[2].created_hosts, {});
   assert.equal(h.signals[2].deleted, 1);
   // today's move is in the walk back, not in any day's signals
   assert.equal(h.signals.reduce((n, s) => n + s.moved_out, 0), 1);
@@ -230,10 +228,81 @@ test('plcRow: a day\'s row names its ten busiest destinations', () => {
   assert.deepEqual(plcRow('2026-10-22', { ops: 0 }).destinations, []);
 });
 
-test('plcRow: and the ten hosts the most new accounts signed up on', () => {
-  const created_hosts = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`h${String(i).padStart(2, '0')}.example`, i === 3 ? 4615 : i + 1]));
-  const row = plcRow('2026-10-28', { ops: 1, created_independent: 4681, created_hosts });
-  assert.equal(row.created_hosts.length, 10);
-  assert.deepEqual(row.created_hosts[0], { hostname: 'h03.example', accounts: 4615 });
-  assert.deepEqual(plcRow('2026-10-28', { ops: 0 }).created_hosts, []);
+// ---------- made in bulk ----------
+
+const S = (hms) => `2026-10-28T${hms}.000Z`;
+const at = (base, seconds) => new Date(Date.parse(S(base)) + Math.round(seconds * 1000)).toISOString();
+const hosts = new Set([BSKY, 'goodmkt.id', 'pds.1095.me', 'pds.oso.social', 'eurosky.social']);
+
+/** One day's history: Bluesky's hosts signing up one account every 5 seconds all day (0.2 a second), and the given sign-ups. */
+function day(signUps) {
+  const h = new PlcHistory({ from: '2026-10-28', days: 1, relayHosts: hosts });
+  const ops = [];
+  for (let i = 0; i < 17_280; i++) ops.push(raw(`did:plc:bsky${i}`, at('00:00:00', i * 5), BSKY, { prev: null }));
+  signUps.forEach(([host, when], i) => ops.push(raw(`did:plc:${host}${i}`, when, host, { prev: null })));
+  ops.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  return { h, ops: ops.map(slimEntry) };
+}
+const run = (host, base, gaps) => {
+  let t = 0;
+  return [[host, at(base, 0)], ...gaps.map((g) => [host, at(base, (t += g))])];
+};
+/** Gaps as uneven as people's: they cycle through these seconds (a coefficient of variation near 0.7). */
+const ragged = (n, scale = 1) => Array.from({ length: n }, (_, i) => [2, 35, 8, 50, 15, 3, 41, 22, 6, 28][i % 10] * scale);
+
+test('bulk: a run faster than all of Bluesky, or too even for people, is made in bulk', () => {
+  const { h, ops } = day([
+    // 300 in about 75 seconds, unevenly: four a second against Bluesky's one in five
+    ...run('goodmkt.id', '06:00:00', ragged(299, 0.012)),
+    // forty exactly ten seconds apart: slower than Bluesky, but no crowd keeps time like that
+    ...run('pds.1095.me', '07:25:34', Array(39).fill(10)),
+    // fifty people in twenty minutes, at random
+    ...run('pds.oso.social', '15:38:04', ragged(49, 1.2)),
+    // nine quick ones: too few to say
+    ...run('eurosky.social', '09:00:00', Array(8).fill(0.3)),
+  ]);
+  ops.forEach((e) => h.add(e));
+  // all four runs are still going as far as the history knows: counted in, not ended
+  const soFar = h.signalsOf(0);
+  assert.equal(soFar.created_bulk, 340);
+  assert.equal(h.signals[0].created_bulk, 0);
+  h.endRuns();
+  const s = h.signals[0];
+  assert.equal(s.created_independent, 399);
+  assert.equal(s.created_bulk, 340);
+  assert.deepEqual(Object.keys(s.bulk_hosts).sort(), ['goodmkt.id', 'pds.1095.me']);
+  assert.deepEqual(s.bulk_hosts['pds.1095.me'], { accounts: 40, bursts: 1, seconds: 390 });
+  assert.deepEqual(plcRow('2026-10-28', s).bulk_hosts, [
+    { hostname: 'goodmkt.id', accounts: 300, bursts: 1, seconds: 75 },
+    { hostname: 'pds.1095.me', accounts: 40, bursts: 1, seconds: 390 },
+  ]);
+  assert.deepEqual(plcRow('2026-10-28', { ops: 0 }).bulk_hosts, []);
+});
+
+test('bulk: a gap of over a minute starts a new run, and each is judged on its own', () => {
+  const { h, ops } = day([
+    ...run('goodmkt.id', '06:00:00', Array(14).fill(0.2)),
+    // two minutes later: fifteen more, then a slow trickle that's people
+    ...run('goodmkt.id', '06:02:03', Array(14).fill(0.2)),
+    ...run('goodmkt.id', '08:00:00', ragged(11, 2)),
+  ]);
+  ops.forEach((e) => h.add(e));
+  h.endRuns();
+  assert.equal(h.signals[0].created_bulk, 30);
+  assert.equal(h.signals[0].bulk_hosts['goodmkt.id'].bursts, 2);
+});
+
+test('bulk: the bar is Bluesky\'s pace over the hour before', () => {
+  const pace = newPace();
+  const h = new PlcHistory({ from: '2026-10-28', days: 1, relayHosts: hosts, pace });
+  // an hour of Bluesky at one a second
+  for (let i = 0; i < 3600; i++) h.add(op(`did:plc:b${i}`, at('05:00:00', i), BSKY, { prev: null }));
+  assert.ok(Math.abs(paceAt(pace, Date.parse(S('06:00:00'))) - 1) < 0.02);
+  // a run at one every two seconds, unevenly: slower than Bluesky now, so people
+  run('eurosky.social', '06:00:00', ragged(29, 0.1)).forEach(([host, when], i) => h.add(op(`did:plc:e${i}`, when, host, { prev: null })));
+  h.endRuns();
+  assert.equal(h.signals[0].created_bulk, 0);
+  // the gaps' spread: exactly even is 0, people about 1
+  assert.deepEqual(bulkRun({ n: 40, start: 0, last: 39_000, sum: 39, sumSq: 39, pace: 5 }), { fast: false, even: true });
+  assert.equal(bulkRun({ n: 9, start: 0, last: 1000, sum: 1, sumSq: 1, pace: 0 }), null);
 });

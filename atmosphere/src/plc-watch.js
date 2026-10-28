@@ -3,9 +3,10 @@
 // it goes, after each host census, and keeps today's row of atmosphere_plc_day
 // (sql/atmosphere_hosts.sql) up to date. It counts exactly as backfill-hosts.js does
 // (PlcHistory, one day at a time): new accounts by where they signed up, new accounts
-// with a handle on their own domain (and the independent hosts they signed up on), accounts
-// moving out of Bluesky's hosts, back in and between independent hosts (and the hosts they
-// moved to), and deletions.
+// with a handle on their own domain, the ones made in bulk on independent hosts (and those
+// hosts), accounts moving out of Bluesky's hosts, back in and between independent hosts (and
+// the hosts they moved to), and deletions. A run of sign-ups still going is counted in each
+// write as it stands, and judged for good once it's over.
 //
 // A move needs to know where an account was before. One seen earlier today is known; one
 // that wasn't, and now names an independent host (or deletes itself), has its history
@@ -35,7 +36,8 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
 
   const begin = (d) => {
     day = d;
-    history = new PlcHistory({ from: d, days: 1, relayHosts: history?.relayHosts ?? new Set() });
+    // Bluesky's pace goes on from the day before, so a run just after midnight is judged against the hour before it
+    history = new PlcHistory({ from: d, days: 1, relayHosts: history?.relayHosts ?? new Set(), pace: history?.pace });
     audited = new Set();
   };
 
@@ -49,7 +51,7 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
   }
 
   async function write() {
-    await upsert('atmosphere_plc_day', 'day', [plcRow(day, history.signals[0])]);
+    await upsert('atmosphere_plc_day', 'day', [plcRow(day, history.signalsOf(0))]);
   }
 
   async function poll() {
@@ -78,6 +80,7 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
           if (d > day) {
             // midnight: finish the day before starting the next
             await audit(Infinity);
+            history.endRuns();
             await write();
             log?.info('plc day written', { day, moved_out: history.signals[0].moved_out });
             begin(d);
@@ -90,8 +93,8 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
       }
       const audits = await audit(maxAudits);
       await write();
-      const { destinations, created_hosts, ...counted } = history.signals[0];
-      log?.info('plc counted', { day, pages, audits, up: after, ...counted, destinations: Object.keys(destinations).length, created_hosts: Object.keys(created_hosts).length });
+      const { destinations, bulk_hosts, ...counted } = history.signalsOf(0);
+      log?.info('plc counted', { day, pages, audits, up: after, ...counted, destinations: Object.keys(destinations).length, bulk_hosts: Object.keys(bulk_hosts).join(' ') });
     } catch (err) {
       log?.warn('could not count plc', { err: err?.message ?? String(err) });
     } finally {
@@ -105,7 +108,7 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
       return day;
     },
     get signals() {
-      return history?.signals[0] ?? null;
+      return history?.signalsOf(0) ?? null;
     },
   };
 }

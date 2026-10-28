@@ -749,7 +749,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "- on bluesky's hosts: people signing up through the bluesky app",
       "- on independent hosts: people signing up anywhere else the relay listens to, like a community's own server or one somebody runs for themselves",
       "- own domain: new accounts that start out with a handle like yourname.com instead of one their host hands out",
-      "- made in bulk: when one independent host takes in a thousand or more new accounts in a day, that's usually one service making accounts in a batch, not people signing up one by one. i still count them, but apart, so a batch doesn't look like a crowd leaving bluesky",
+      "- made in bulk: new accounts on an independent host that arrive in a run no crowd makes: faster than all of bluesky's sign-ups at the time, or spaced as evenly as a clock. people signing up on their own come at random, one now and another a while later. a run like that is usually one service making accounts, so i still count them, but apart, and a batch doesn't look like a crowd leaving bluesky",
       '',
       "the numbers follow the window you pick, by utc day: today so far for the last minute, hour or 24 hours, or the last 7 or 30 days.",
       '',

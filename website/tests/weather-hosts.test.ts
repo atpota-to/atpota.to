@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, bulkWords, destinationsOf, hostBars, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, bulkWords, destinationsOf, hostBars, identityView, identityViewWords, lastedWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -211,15 +211,16 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(report.querySelector<HTMLElement>('[data-p-odds]')!.hidden).toBe(false);
   });
 
-  it('counts new accounts made in bulk apart, naming the host', () => {
-    const batch = idDay('2026-10-29', { createdBluesky: 9905, createdIndependent: 5561, createdCustomHandle: 50, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615 }] });
+  it('counts new accounts made in bulk apart, naming the host and how they came', () => {
+    const goodmkt = { hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 };
+    const batch = idDay('2026-10-29', { createdBluesky: 9905, createdIndependent: 5561, createdCustomHandle: 50, createdBulk: 4615, bulk: [goodmkt] });
     renderIdentities(report, [idDay('2026-10-28', { createdBluesky: 18395, createdIndependent: 840 }), batch], NOW);
     expect(text('[data-p-signups]')).toBe('10,851');
     expect(text('[data-p-indep]')).toBe('946');
     expect(text('[data-p-own]')).toBe('8.7% started outside bluesky, and 50 with a handle on their own domain.');
     const line = report.querySelector<HTMLElement>('[data-p-bulk]')!;
     expect(line.hidden).toBe(false);
-    expect(line.textContent).toBe('plus 4,615 made in bulk on goodmkt.id, left out above. one host taking in a thousand or more in a day is usually a service making accounts, not people signing up.');
+    expect(line.textContent).toBe("plus 4,615 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. sign-ups coming faster than all of bluesky's, or too evenly spaced to be people, look like a service making accounts.");
     // the week's odds leave them out too
     expect(text('[data-p-odds]')).toBe('over the last 2 days: 1 in 17 started outside bluesky.');
     // the air quality is against every sign-up, the bulk ones included
@@ -228,11 +229,15 @@ describe('where the atmosphere lives: the identity tiles', () => {
     renderIdentities(report, [idDay('2026-10-29')], NOW);
     expect(line.hidden).toBe(true);
 
-    expect(bulkWords({ ...batch, bulk: [{ hostname: 'goodmkt.id', accounts: 4000 }, { hostname: 'pds.svpn.com', accounts: 615 }] })).toMatch(/^plus 4,615 made in bulk on goodmkt\.id and pds\.svpn\.com,/);
-    expect(bulkWords({ ...batch, bulk: [{ hostname: 'a.example', accounts: 2000 }, { hostname: 'b.example', accounts: 1500 }, { hostname: 'c.example', accounts: 1115 }] })).toMatch(/^plus 4,615 made in bulk on a\.example and 2 other hosts,/);
-    // over a week, each day's batches add up by host
-    const week = sumDays([batch, idDay('2026-10-28', { createdBulk: 1000, bulk: [{ hostname: 'goodmkt.id', accounts: 1000 }] })])!;
-    expect([week.createdBulk, week.bulk]).toEqual([5615, [{ hostname: 'goodmkt.id', accounts: 5615 }]]);
+    const oneBurst = { hostname: 'pds.1095.me', accounts: 38, bursts: 1, seconds: 37 };
+    expect(bulkWords({ ...batch, createdBulk: 38, bulk: [oneBurst] })).toMatch(/^plus 38 made in bulk on pds\.1095\.me \(one burst, 37 seconds\), left out above\./);
+    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4541 }, { ...oneBurst, accounts: 74, bursts: 2 }] })).toMatch(/^plus 4,615 made in bulk, left out above: 4,541 on goodmkt\.id and 74 on pds\.1095\.me\. sign-ups/);
+    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4500 }, { ...oneBurst, accounts: 76 }, { ...oneBurst, hostname: 'a.example', accounts: 30 }, { ...oneBurst, hostname: 'b.example', accounts: 9 }] })).toMatch(/: 4,500 on goodmkt\.id, 76 on pds\.1095\.me and 39 on 2 other hosts\./);
+    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [] })).toBe('');
+    expect([lastedWords(1), lastedWords(75), lastedWords(1929), lastedWords(13_080)]).toEqual(['1 second', 'a minute', '32 minutes', '3.6 hours']);
+    // over a week, each day's runs add up by host
+    const week = sumDays([batch, idDay('2026-10-28', { createdBulk: 3903, bulk: [{ hostname: 'goodmkt.id', accounts: 3903, bursts: 2, seconds: 13_080 }] })])!;
+    expect([week.createdBulk, week.bulk]).toEqual([8518, [{ hostname: 'goodmkt.id', accounts: 8518, bursts: 4, seconds: 15_009 }]]);
   });
 
   it('keeps the chart back with only one day', () => {
@@ -285,8 +290,8 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(odd.identities.map((d) => d.destinations)).toEqual([[{ hostname: 'eurosky.social', accounts: 2 }], []]);
     // an answer from before bulk sign-ups were counted has none; more than all the independent ones is held to them
     const { createdBulk: _, bulk: __, ...older } = idDay('2026-10-29');
-    const bulk = toHostHistory({ ...HOSTS, identities: [older, idDay('2026-10-28', { createdBulk: 99_999, bulk: [{ hostname: 'goodmkt.id', accounts: 99_999 }, { hostname: '<b>', accounts: 5000 }] })] })!;
-    expect(bulk.identities.map((d) => [d.createdBulk, d.bulk])).toEqual([[0, []], [4383, [{ hostname: 'goodmkt.id', accounts: 99_999 }]]]);
+    const bulk = toHostHistory({ ...HOSTS, identities: [older, idDay('2026-10-28', { createdBulk: 99_999, bulk: [{ hostname: 'goodmkt.id', accounts: 99_999, bursts: 1, seconds: 60 }, { hostname: '<b>', accounts: 5000, bursts: 1, seconds: 1 }] })] })!;
+    expect(bulk.identities.map((d) => [d.createdBulk, d.bulk])).toEqual([[0, []], [4383, [{ hostname: 'goodmkt.id', accounts: 99_999, bursts: 1, seconds: 60 }]]]);
   });
 });
 

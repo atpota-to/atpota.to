@@ -37,8 +37,9 @@
 // Alongside, from the same operations, each day's identity weather in atmosphere_plc_day:
 // new accounts by where they signed up (Bluesky's hosts, independent hosts, unlisted
 // ones), how many of the new accounts on listed hosts started with a handle on their own
-// domain (not one their host hands out), accounts moving out of Bluesky's hosts, back in, and between independent hosts,
-// and deletions, and the independent hosts accounts moved to and signed up on. These are counted, not estimated.
+// domain (not one their host hands out), the new accounts on independent hosts made in bulk (bulkRun), accounts
+// moving out of Bluesky's hosts, back in, and between independent hosts, and deletions, and the independent hosts
+// accounts moved to. These are counted, not estimated.
 //
 // Days the station already wrote itself are left alone unless --overwrite. The log pages
 // and the audit answers are cached in --cache (default ./plc-cache), so a run that stops
@@ -89,26 +90,86 @@ export function daysOf(from, today) {
   return days;
 }
 
-const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, created_hosts: {} });
+const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {} });
 
-/** How many destinations (and sign-up hosts) a day's row names. */
+/** How many destinations (and hosts making accounts in bulk) a day's row names. */
 export const TOP_DESTINATIONS = 10;
 
-/** Hosts by count, the TOP_DESTINATIONS busiest, as [{ hostname, accounts }]. */
-const topHosts = (byHost) =>
-  Object.entries(byHost ?? {})
-    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
-    .slice(0, TOP_DESTINATIONS)
-    .map(([hostname, accounts]) => ({ hostname, accounts }));
+// ---------- new accounts made in bulk ----------
+// People signing up on their own arrive at random, one now and one a while later. A
+// service making accounts arrives in runs: thousands a few tenths of a second apart
+// (goodmkt.id, October 2026), blocks of 45 in thirteen seconds (pds.svpn.com), or forty
+// exactly a second apart, twice a day (pds.1095.me). So each independent host's sign-ups
+// are cut into runs, each within RUN_GAP_MS of the last (and within one UTC day), and a
+// run counts as made in bulk if either:
+//   fast  it's BULK_FAST_MIN or more, signing up accounts faster than all of Bluesky's
+//         hosts together over the hour before it ended (so a wave everywhere raises the bar)
+//   even  it's BULK_EVEN_MIN or more, its gaps too even for people: their coefficient of
+//         variation under BULK_EVEN_CV. Random arrivals give about 1 (a little under in a
+//         slow run, its long gaps cut off at RUN_GAP_MS); in simulation, random runs of
+//         twenty or more never came under 0.2
+// A busy hour of people on one host (pds.oso.social's fifty in twenty minutes) is neither.
+
+export const RUN_GAP_MS = 60_000;
+export const BULK_FAST_MIN = 10;
+export const BULK_EVEN_MIN = 20;
+export const BULK_EVEN_CV = 0.2;
+/** Bluesky's pace is its sign-ups over this many minutes before a run ends. */
+export const PACE_MINUTES = 60;
+
+/** Bluesky's sign-ups by minute, the last PACE_MINUTES or so, and when counting began (ms). */
+export const newPace = (from = null) => ({ from, minutes: new Map() });
+
+function countPace(pace, ms) {
+  pace.from ??= ms;
+  const m = Math.floor(ms / 60_000);
+  pace.minutes.set(m, (pace.minutes.get(m) ?? 0) + 1);
+  if (pace.minutes.size > PACE_MINUTES * 2) for (const k of pace.minutes.keys()) if (k <= m - PACE_MINUTES * 2) pace.minutes.delete(k);
+}
+
+/** Bluesky's sign-ups a second over the PACE_MINUTES to `ms` (or since counting began, at least a minute). */
+export function paceAt(pace, ms) {
+  const m = Math.floor(ms / 60_000);
+  let n = 0;
+  for (let k = m - PACE_MINUTES + 1; k <= m; k++) n += pace.minutes.get(k) ?? 0;
+  const seconds = Math.max(60, Math.min(PACE_MINUTES * 60, pace.from === null ? 0 : (ms - pace.from) / 1000));
+  return n / seconds;
+}
+
+/** Whether a run ({ n, start, last, sum, sumSq }: its gaps' sums in seconds, `pace` Bluesky's at its last) was made in bulk, and why. */
+export function bulkRun(run) {
+  if (run.n < BULK_FAST_MIN) return null;
+  const fast = (run.n - 1) / Math.max(1, (run.last - run.start) / 1000) > run.pace;
+  const mean = run.sum / (run.n - 1);
+  const cv = mean > 0 ? Math.sqrt(Math.max(0, run.sumSq / (run.n - 1) - mean * mean)) / mean : 0;
+  const even = run.n >= BULK_EVEN_MIN && cv < BULK_EVEN_CV;
+  return fast || even ? { fast, even } : null;
+}
+
+function addBulk(s, host, run) {
+  s.created_bulk += run.n;
+  const b = (s.bulk_hosts[host] ??= { accounts: 0, bursts: 0, seconds: 0 });
+  b.accounts += run.n;
+  b.bursts++;
+  b.seconds += (run.last - run.start) / 1000;
+}
 
 /**
  * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
- * accounts moved to, out of Bluesky's hosts or from another independent one) and
- * `created_hosts` (independent hosts new accounts signed up on), each cut to the
- * TOP_DESTINATIONS busiest.
+ * accounts moved to, out of Bluesky's hosts or from another independent one, by count)
+ * and `bulk_hosts` (independent hosts that made accounts in bulk: how many, in how many
+ * runs, over how many seconds) cut to the TOP_DESTINATIONS busiest.
  */
 export function plcRow(day, signals) {
-  return { day, ...signals, destinations: topHosts(signals.destinations), created_hosts: topHosts(signals.created_hosts) };
+  const destinations = Object.entries(signals.destinations ?? {})
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .slice(0, TOP_DESTINATIONS)
+    .map(([hostname, accounts]) => ({ hostname, accounts }));
+  const bulk_hosts = Object.entries(signals.bulk_hosts ?? {})
+    .sort((a, b) => b[1].accounts - a[1].accounts || (a[0] < b[0] ? -1 : 1))
+    .slice(0, TOP_DESTINATIONS)
+    .map(([hostname, b]) => ({ hostname, accounts: b.accounts, bursts: b.bursts, seconds: Math.round(b.seconds) }));
+  return { day, ...signals, destinations, bulk_hosts };
 }
 
 /**
@@ -118,7 +179,7 @@ export function plcRow(day, signals) {
  * walk back, never written).
  */
 export class PlcHistory {
-  constructor({ from, days, relayHosts }) {
+  constructor({ from, days, relayHosts, pace = newPace() }) {
     this.fromMs = startOfDay(from);
     this.days = days;
     this.relayHosts = relayHosts;
@@ -127,6 +188,48 @@ export class PlcHistory {
     this.dids = new Map();
     this.signals = Array.from({ length: days }, emptySignals);
     this.seen = 0;
+    /** Bluesky's sign-ups by minute (plc-watch hands it on from the day before). */
+    this.pace = pace;
+    /** Each independent host's run of sign-ups, while it may go on. */
+    this.runs = new Map();
+  }
+
+  /** A sign-up on an independent host, into its run; the run before it is judged once it's over. */
+  signUp(host, day, ms) {
+    let run = this.runs.get(host);
+    if (run && (run.day !== day || ms - run.last > RUN_GAP_MS)) {
+      this.endRun(host, run);
+      run = undefined;
+    }
+    if (!run) this.runs.set(host, { day, n: 1, start: ms, last: ms, sum: 0, sumSq: 0, pace: paceAt(this.pace, ms) });
+    else {
+      const gap = (ms - run.last) / 1000;
+      run.n++;
+      run.sum += gap;
+      run.sumSq += gap * gap;
+      run.last = ms;
+      run.pace = paceAt(this.pace, ms);
+    }
+  }
+
+  endRun(host, run) {
+    this.runs.delete(host);
+    if (run.day < this.days && bulkRun(run)) addBulk(this.signals[run.day], host, run);
+  }
+
+  /** Judges every run still going: at the end of what was read. */
+  endRuns() {
+    for (const [host, run] of [...this.runs]) this.endRun(host, run);
+  }
+
+  /** A day's signals with the runs still going counted in, without ending them: today's row so far. */
+  signalsOf(day) {
+    const s = this.signals[day];
+    const open = [...this.runs].filter(([, run]) => run.day === day && bulkRun(run));
+    if (!open.length) return s;
+    const copy = { ...s, bulk_hosts: Object.fromEntries(Object.entries(s.bulk_hosts).map(([h, b]) => [h, { ...b }])) };
+    for (const [host, run] of open) addBulk(copy, host, run);
+    return copy;
   }
 
   /** A host as an index: NONE, UNLISTED, or a listed host's place in `hosts`. */
@@ -183,8 +286,10 @@ export class PlcHistory {
         const side = this.sideOfIndex(host) ?? 'unlisted';
         s[`created_${side}`]++;
         if (side !== 'unlisted' && isCustomHandle(entry.handle, entry.host)) s.created_custom_handle++;
-        // where they signed up: a thousand or more on one host in a day is a batch (website/server/weather-hosts.ts BULK_MIN)
-        if (side === 'independent' && isHostname(entry.host)) s.created_hosts[entry.host] = (s.created_hosts[entry.host] ?? 0) + 1;
+        // Bluesky's pace, and each independent host's runs: made in bulk or not (bulkRun)
+        const ms = Date.parse(entry.at);
+        if (side === 'bluesky') countPace(this.pace, ms);
+        else if (side === 'independent' && isHostname(entry.host)) this.signUp(entry.host, day, ms);
       }
     }
     let rec = this.dids.get(entry.did);
@@ -478,6 +583,7 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   const a = await readAudits({ fetchImpl, dids: audit, cacheFile: path.join(args.cache, 'audit.ndjson'), concurrency: args.concurrency, onLog: (did, entries) => history.fromAudit(did, entries), log });
   log(`audited ${a.fetched.toLocaleString('en-US')} (${a.cached.toLocaleString('en-US')} from the cache)`);
   history.settle();
+  history.endRuns();
   const delta = history.deltas();
   const floors = await hostsBefore({ fetchImpl, census, history, deltas: delta, concurrency: args.concurrency, log });
   const seenActive = db ? await db.seenActive() : new Set();
