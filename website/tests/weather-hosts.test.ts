@@ -220,7 +220,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(text('[data-p-own]')).toBe('8.7% started outside bluesky, and 50 with a handle on their own domain.');
     const line = report.querySelector<HTMLElement>('[data-p-bulk]')!;
     expect(line.hidden).toBe(false);
-    expect(line.textContent).toBe("plus 4,615 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. sign-ups coming faster than all of bluesky's, or too evenly spaced to be people, look like a service making accounts.");
+    expect(line.textContent).toBe('plus 4,615 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. they came the way scripts make accounts, at a steady pace switched on and off, or in floods out of nowhere again and again. people signing up build up and trail off.');
     // the week's odds leave them out too
     expect(text('[data-p-odds]')).toBe('over the last 2 days: 1 in 17 started outside bluesky.');
     // the air quality is against every sign-up, the bulk ones included
@@ -231,7 +231,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
 
     const oneBurst = { hostname: 'pds.1095.me', accounts: 38, bursts: 1, seconds: 37 };
     expect(bulkWords({ ...batch, createdBulk: 38, bulk: [oneBurst] })).toMatch(/^plus 38 made in bulk on pds\.1095\.me \(one burst, 37 seconds\), left out above\./);
-    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4541 }, { ...oneBurst, accounts: 74, bursts: 2 }] })).toMatch(/^plus 4,615 made in bulk, left out above: 4,541 on goodmkt\.id and 74 on pds\.1095\.me\. sign-ups/);
+    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4541 }, { ...oneBurst, accounts: 74, bursts: 2 }] })).toMatch(/^plus 4,615 made in bulk, left out above: 4,541 on goodmkt\.id and 74 on pds\.1095\.me\. they came the way scripts/);
     expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4500 }, { ...oneBurst, accounts: 76 }, { ...oneBurst, hostname: 'a.example', accounts: 30 }, { ...oneBurst, hostname: 'b.example', accounts: 9 }] })).toMatch(/: 4,500 on goodmkt\.id, 76 on pds\.1095\.me and 39 on 2 other hosts\./);
     expect(bulkWords({ ...batch, createdBulk: 0, bulk: [] })).toBe('');
     expect([lastedWords(1), lastedWords(75), lastedWords(1929), lastedWords(13_080)]).toEqual(['1 second', 'a minute', '32 minutes', '3.6 hours']);

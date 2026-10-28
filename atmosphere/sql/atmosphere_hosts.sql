@@ -75,9 +75,9 @@ create table if not exists public.atmosphere_plc_day (
 -- the independent hosts accounts moved to that day (out of Bluesky's hosts, or from another
 -- independent one), the ten busiest: [{ hostname, accounts }]. Added 2026-10-22.
 alter table public.atmosphere_plc_day add column if not exists destinations jsonb not null default '[]'::jsonb;
--- the new accounts on independent hosts made in bulk that day: in runs on one host too fast
--- (quicker than all of Bluesky's hosts) or too evenly spaced to be people signing up
--- (src/backfill-hosts.js bulkRun), and the hosts that made them, the ten with the most:
+-- the new accounts on independent hosts made in bulk that day: in runs on one host shaped as
+-- no crowd of people makes them, switched on and off at a machine's steady pace or in floods
+-- again and again (src/backfill-hosts.js bulkRun), and the hosts that made them, the ten with the most:
 -- [{ hostname, accounts, bursts, seconds }], seconds being how long the runs lasted in all.
 -- The weather report counts them apart. Zero on days counted before they were added, until
 -- the backfill recounts them. Added 2026-10-28.

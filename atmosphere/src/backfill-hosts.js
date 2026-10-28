@@ -96,62 +96,102 @@ const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0
 export const TOP_DESTINATIONS = 10;
 
 // ---------- new accounts made in bulk ----------
-// People signing up on their own arrive at random, one now and one a while later. A
-// service making accounts arrives in runs: thousands a few tenths of a second apart
-// (goodmkt.id, October 2026), blocks of 45 in thirteen seconds (pds.svpn.com), or forty
-// exactly a second apart, twice a day (pds.1095.me). So each independent host's sign-ups
-// are cut into runs, each within RUN_GAP_MS of the last (and within one UTC day), and a
-// run counts as made in bulk if either:
-//   fast  it's BULK_FAST_MIN or more, signing up accounts faster than all of Bluesky's
-//         hosts together over the hour before it ended (so a wave everywhere raises the bar)
-//   even  it's BULK_EVEN_MIN or more, its gaps too even for people: their coefficient of
-//         variation under BULK_EVEN_CV. Random arrivals give about 1 (a little under in a
-//         slow run, its long gaps cut off at RUN_GAP_MS); in simulation, random runs of
-//         twenty or more never came under 0.2
-// A busy hour of people on one host (pds.oso.social's fifty in twenty minutes) is neither.
+// Only the obvious: sign-ups arriving in a shape no crowd of people makes. A crowd, even a
+// huge rush for a new app, builds up and trails off: people see a post, take a minute or two
+// to sign up, and keep coming for hours. A script switches on at full speed, keeps a machine's
+// pace, and stops dead. So each independent host's sign-ups are cut into runs, each within
+// RUN_GAP_MS of the last (and within one UTC day), and a run of BULK_MIN or more is made in
+// bulk if it started and stopped at full speed (its first and last EDGE at half its pace or
+// better, one stray sign-up allowed at either end), the host then went quiet (QUIET_MAX or
+// fewer sign-ups in the QUIET_MS after it), and it was either:
+//   clockwork  its gaps too even for people: their coefficient of variation under CLOCKWORK_CV
+//              (random arrivals give about 1; random runs of twenty or more never came under
+//              0.2 in simulation). pds.1095.me's forty a second apart, goodmkt.id's 3,846 one
+//              every 3 seconds
+//   plateau    its pace too flat for people: the middle 80% cut into 40 to 60 equal stretches
+//              of time, their counts' variance under PLATEAU_DISPERSION of their mean (random
+//              arrivals give 1, and a crowd more). goodmkt.id's 4,500 at 208 to 230 a minute
+// Or it's one of FLOODS_MIN or more runs on the host that day that each opened with EDGE
+// sign-ups within FLOOD_MS, out of a minute of nobody (pds.svpn.com's blocks of 45). One
+// flood can be sign-ups opening at a set time; five in a day can't.
+//
+// Checked against simulated crowds: rushes of 200 to 50,000 people, sign-ups opening at a set
+// time with 5,000 waiting, outages mid-rush, servers too slow for the crowd, workshops pressing
+// submit together; none of them counted. What can: a server maxed out by a crowd that then
+// falls over, whose last minutes look just like a script's (website/server/weather-hosts.ts
+// NOT_BULK lets a host be let off by hand).
 
 export const RUN_GAP_MS = 60_000;
-export const BULK_FAST_MIN = 10;
-export const BULK_EVEN_MIN = 20;
-export const BULK_EVEN_CV = 0.2;
-/** Bluesky's pace is its sign-ups over this many minutes before a run ends. */
-export const PACE_MINUTES = 60;
+export const BULK_MIN = 20;
+export const EDGE = 10;
+export const CLOCKWORK_CV = 0.2;
+export const PLATEAU_PER_BIN = 5;
+export const PLATEAU_BINS_MIN = 40;
+export const PLATEAU_BINS_MAX = 60;
+export const PLATEAU_DISPERSION = 0.35;
+export const QUIET_MS = 600_000;
+export const QUIET_MAX = 5;
+export const FLOOD_MS = 3000;
+export const FLOODS_MIN = 5;
 
-/** Bluesky's sign-ups by minute, the last PACE_MINUTES or so, and when counting began (ms). */
-export const newPace = (from = null) => ({ from, minutes: new Map() });
+/** Sign-ups a second over a run of times (ms). */
+const paceOf = (t, from = 0, to = t.length) => (to - from - 1) / Math.max(0.001, (t[to - 1] - t[from]) / 1000);
 
-function countPace(pace, ms) {
-  pace.from ??= ms;
-  const m = Math.floor(ms / 60_000);
-  pace.minutes.set(m, (pace.minutes.get(m) ?? 0) + 1);
-  if (pace.minutes.size > PACE_MINUTES * 2) for (const k of pace.minutes.keys()) if (k <= m - PACE_MINUTES * 2) pace.minutes.delete(k);
+/** The EDGE sign-ups from `i` came at least half as fast as `pace`. */
+const atSpeed = (t, i, pace) => i >= 0 && i + EDGE <= t.length && (t[i + EDGE - 1] - t[i]) / 1000 <= (2 * (EDGE - 1)) / pace;
+
+/** The variance over the mean of the counts in equal stretches of the middle 80% of a run, or null with too few to say. */
+export function plateauOf(t) {
+  const k = Math.floor(t.length / 10);
+  const n = t.length - 2 * k;
+  const bins = Math.min(PLATEAU_BINS_MAX, Math.floor(n / PLATEAU_PER_BIN));
+  if (bins < PLATEAU_BINS_MIN) return null;
+  const a = t[k];
+  const w = (t[k + n - 1] - a) / bins;
+  if (w <= 0) return 0;
+  const c = new Array(bins).fill(0);
+  for (let i = k; i < k + n; i++) c[Math.min(bins - 1, Math.floor((t[i] - a) / w))]++;
+  const mean = n / bins;
+  return c.reduce((v, x) => v + (x - mean) ** 2, 0) / bins / mean;
 }
 
-/** Bluesky's sign-ups a second over the PACE_MINUTES to `ms` (or since counting began, at least a minute). */
-export function paceAt(pace, ms) {
-  const m = Math.floor(ms / 60_000);
-  let n = 0;
-  for (let k = m - PACE_MINUTES + 1; k <= m; k++) n += pace.minutes.get(k) ?? 0;
-  const seconds = Math.max(60, Math.min(PACE_MINUTES * 60, pace.from === null ? 0 : (ms - pace.from) / 1000));
-  return n / seconds;
+/** It opened with EDGE sign-ups within FLOOD_MS, among its first thirty. */
+export function floodStart(t) {
+  if (t.length < BULK_MIN) return false;
+  for (let i = 0; i + EDGE <= Math.min(30, t.length); i++) if (t[i + EDGE - 1] - t[i] < FLOOD_MS) return true;
+  return false;
 }
 
-/** Whether a run ({ n, start, last, sum, sumSq }: its gaps' sums in seconds, `pace` Bluesky's at its last) was made in bulk, and why. */
-export function bulkRun(run) {
-  if (run.n < BULK_FAST_MIN) return null;
-  const fast = (run.n - 1) / Math.max(1, (run.last - run.start) / 1000) > run.pace;
-  const mean = run.sum / (run.n - 1);
-  const cv = mean > 0 ? Math.sqrt(Math.max(0, run.sumSq / (run.n - 1) - mean * mean)) / mean : 0;
-  const even = run.n >= BULK_EVEN_MIN && cv < BULK_EVEN_CV;
-  return fast || even ? { fast, even } : null;
+/**
+ * Whether a run (its sign-up times, ms) was made in bulk by its shape, and how: `after` is how
+ * many sign-ups the host had in the QUIET_MS after it. Null if not, or if nothing says so.
+ */
+export function bulkRun(t, after = 0) {
+  if (t.length < BULK_MIN || after > QUIET_MAX) return null;
+  const k = Math.floor(t.length / 10);
+  const pace = paceOf(t, k, t.length - k);
+  const n = t.length;
+  if (!(atSpeed(t, 0, pace) || atSpeed(t, 1, pace)) || !(atSpeed(t, n - EDGE, pace) || atSpeed(t, n - EDGE - 1, pace))) return null;
+  let sum = 0;
+  let sumSq = 0;
+  for (let i = 1; i < n; i++) {
+    const g = (t[i] - t[i - 1]) / 1000;
+    sum += g;
+    sumSq += g * g;
+  }
+  const mean = sum / (n - 1);
+  const clockwork = mean <= 0 || Math.sqrt(Math.max(0, sumSq / (n - 1) - mean * mean)) / mean < CLOCKWORK_CV;
+  const d = plateauOf(t);
+  const plateau = d !== null && d < PLATEAU_DISPERSION;
+  return clockwork || plateau ? { clockwork, plateau } : null;
 }
 
-function addBulk(s, host, run) {
-  s.created_bulk += run.n;
+function addBulk(s, host, t) {
+  s.created_bulk += t.length;
   const b = (s.bulk_hosts[host] ??= { accounts: 0, bursts: 0, seconds: 0 });
-  b.accounts += run.n;
+  b.accounts += t.length;
   b.bursts++;
-  b.seconds += (run.last - run.start) / 1000;
+  b.seconds += (t[t.length - 1] - t[0]) / 1000;
 }
 
 /**
@@ -179,7 +219,7 @@ export function plcRow(day, signals) {
  * walk back, never written).
  */
 export class PlcHistory {
-  constructor({ from, days, relayHosts, pace = newPace() }) {
+  constructor({ from, days, relayHosts }) {
     this.fromMs = startOfDay(from);
     this.days = days;
     this.relayHosts = relayHosts;
@@ -188,47 +228,69 @@ export class PlcHistory {
     this.dids = new Map();
     this.signals = Array.from({ length: days }, emptySignals);
     this.seen = 0;
-    /** Bluesky's sign-ups by minute (plc-watch hands it on from the day before). */
-    this.pace = pace;
-    /** Each independent host's run of sign-ups, while it may go on. */
+    /** The latest operation's time (ms): the log's own clock. */
+    this.clock = 0;
+    /** Each independent host's run of sign-ups while it may go on: { day, t: [ms] }. */
     this.runs = new Map();
+    /** Runs that are over, waiting out QUIET_MS to see if the host went quiet: { host, day, t, after }. */
+    this.pending = [];
+    /** Per day, each host's runs that opened with a flood and weren't made in bulk by their shape: [times]. */
+    this.floods = Array.from({ length: days }, () => new Map());
   }
 
-  /** A sign-up on an independent host, into its run; the run before it is judged once it's over. */
+  /** A sign-up on an independent host: counted against its runs waiting out QUIET_MS, and into its run. */
   signUp(host, day, ms) {
+    for (const p of this.pending) if (p.host === host && ms - p.t[p.t.length - 1] <= QUIET_MS) p.after++;
     let run = this.runs.get(host);
-    if (run && (run.day !== day || ms - run.last > RUN_GAP_MS)) {
+    if (run && (run.day !== day || ms - run.t[run.t.length - 1] > RUN_GAP_MS)) {
       this.endRun(host, run);
       run = undefined;
     }
-    if (!run) this.runs.set(host, { day, n: 1, start: ms, last: ms, sum: 0, sumSq: 0, pace: paceAt(this.pace, ms) });
-    else {
-      const gap = (ms - run.last) / 1000;
-      run.n++;
-      run.sum += gap;
-      run.sumSq += gap * gap;
-      run.last = ms;
-      run.pace = paceAt(this.pace, ms);
-    }
+    if (run) run.t.push(ms);
+    else this.runs.set(host, { day, t: [ms] });
   }
 
   endRun(host, run) {
     this.runs.delete(host);
-    if (run.day < this.days && bulkRun(run)) addBulk(this.signals[run.day], host, run);
+    if (run.day < this.days && run.t.length >= BULK_MIN) this.pending.push({ host, day: run.day, t: run.t, after: 0 });
   }
 
-  /** Judges every run still going: at the end of what was read. */
+  /** Ends the runs that have gone a minute without a sign-up, and judges the ones that have waited out QUIET_MS. */
+  settleRuns(all = false) {
+    for (const [host, run] of [...this.runs]) if (all || this.clock - run.t[run.t.length - 1] > RUN_GAP_MS) this.endRun(host, run);
+    const waiting = [];
+    for (const p of this.pending) {
+      if (!all && this.clock - p.t[p.t.length - 1] <= QUIET_MS) waiting.push(p);
+      else if (bulkRun(p.t, p.after)) addBulk(this.signals[p.day], p.host, p.t);
+      else if (floodStart(p.t)) {
+        const f = this.floods[p.day];
+        f.set(p.host, [...(f.get(p.host) ?? []), p.t]);
+      }
+    }
+    this.pending = waiting;
+  }
+
+  /** Judges every run, over or not: at the end of what was read. */
   endRuns() {
-    for (const [host, run] of [...this.runs]) this.endRun(host, run);
+    this.settleRuns(true);
   }
 
-  /** A day's signals with the runs still going counted in, without ending them: today's row so far. */
+  /**
+   * A day's signals as they stand: the runs judged so far, the ones still waiting out
+   * QUIET_MS as they look now, and the floods. A run still going isn't judged till it's over.
+   */
   signalsOf(day) {
     const s = this.signals[day];
-    const open = [...this.runs].filter(([, run]) => run.day === day && bulkRun(run));
-    if (!open.length) return s;
     const copy = { ...s, bulk_hosts: Object.fromEntries(Object.entries(s.bulk_hosts).map(([h, b]) => [h, { ...b }])) };
-    for (const [host, run] of open) addBulk(copy, host, run);
+    const floods = new Map([...this.floods[day]].map(([h, runs]) => [h, [...runs]]));
+    const flood = (host, t) => floods.set(host, [...(floods.get(host) ?? []), t]);
+    for (const p of this.pending) {
+      if (p.day !== day) continue;
+      if (bulkRun(p.t, p.after)) addBulk(copy, p.host, p.t);
+      else if (floodStart(p.t)) flood(p.host, p.t);
+    }
+    for (const [host, run] of this.runs) if (run.day === day && floodStart(run.t)) flood(host, run.t);
+    for (const [host, runs] of floods) if (runs.length >= FLOODS_MIN) for (const t of runs) addBulk(copy, host, t);
     return copy;
   }
 
@@ -277,6 +339,12 @@ export class PlcHistory {
     const day = this.dayIndex(entry.at);
     if (!Number.isFinite(day) || day < 0) return;
     this.seen++;
+    // the log's clock: once a minute, end the runs gone quiet and judge the ones that have waited long enough
+    const ms = Date.parse(entry.at);
+    if (Math.floor(ms / 60_000) > Math.floor(this.clock / 60_000)) {
+      this.clock = ms;
+      this.settleRuns();
+    } else this.clock = Math.max(this.clock, ms);
     const host = this.intern(entry.host);
     if (day < this.days) {
       const s = this.signals[day];
@@ -286,10 +354,8 @@ export class PlcHistory {
         const side = this.sideOfIndex(host) ?? 'unlisted';
         s[`created_${side}`]++;
         if (side !== 'unlisted' && isCustomHandle(entry.handle, entry.host)) s.created_custom_handle++;
-        // Bluesky's pace, and each independent host's runs: made in bulk or not (bulkRun)
-        const ms = Date.parse(entry.at);
-        if (side === 'bluesky') countPace(this.pace, ms);
-        else if (side === 'independent' && isHostname(entry.host)) this.signUp(entry.host, day, ms);
+        // each independent host's runs of sign-ups: made in bulk or not (bulkRun)
+        if (side === 'independent' && isHostname(entry.host)) this.signUp(entry.host, day, Date.parse(entry.at));
       }
     }
     let rec = this.dids.get(entry.did);
@@ -597,7 +663,7 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   for (let d = 0; d < days.length; d++) {
     const day = days[d];
     const rows = dayRows(day, hostsOnDay(census, history, delta[d], { floors, seenActive }), listed);
-    const s = history.signals[d];
+    const s = history.signalsOf(d);
     const plc = plcRow(day, s);
     log(
       `${day}  ${pad(rows.summary.active, 6)} ${pad(rows.summary.independent, 6)}  ${pad(rows.summary.accounts.independent.toLocaleString('en-US'), 18)}  ${pad(rows.summary.diversity.index, 9)}   ${pad(s.created_bluesky, 9)} ${pad(s.created_independent, 6)} ${pad(s.created_unlisted, 9)} ${pad(s.created_custom_handle, 11)}   ${pad(s.moved_out, 10)} ${pad(s.moved_in, 3)} ${pad(s.moved_between, 8)}   ${pad(s.deleted, 7)}`,

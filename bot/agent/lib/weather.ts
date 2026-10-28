@@ -723,10 +723,11 @@ function identityDayOf(x: unknown) {
       onBlueskyHosts: c.createdBluesky,
       onIndependentHosts: independent,
       withOwnDomainHandle: c.createdCustomHandle,
-      // new accounts on independent hosts that came in runs no crowd makes: faster than all of bluesky's sign-ups at the
-      // time, or as evenly spaced as a clock. usually one service making accounts, not people signing up, so they're left
-      // out of onIndependentHosts and the percent; don't read them as people leaving bluesky. onHosts says how many runs
-      // ("bursts") each host made and how many minutes they lasted in all
+      // new accounts on independent hosts that came the way only a script makes them: switched on at full speed, at a
+      // machine's steady pace, stopped dead, or in floods out of nowhere again and again. a rush of people, even a huge one
+      // for a new app, builds up and trails off and never counts. they're left out of onIndependentHosts and the percent;
+      // don't read them as people leaving bluesky, or call them spam: they're accounts made in bulk. onHosts says how
+      // many runs ("bursts") each host made and how many minutes they lasted in all
       ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: bulkHostsOf(x.bulk) } } : {}),
     },
     // of new accounts on hosts the relay carries, less the bulk ones, the percent that started outside bluesky

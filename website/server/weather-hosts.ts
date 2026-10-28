@@ -15,8 +15,8 @@
  *             day's last census and the change from the day before, and the independent
  *             hosts that joined and left. Each is null where there's nothing to compare.
  *   identities  day by day over the same days: new accounts by where they signed up,
- *             own-domain handles among them, the ones made in bulk (runs of sign-ups too
- *             fast or too even for people: atmosphere/src/backfill-hosts.js bulkRun), accounts
+ *             own-domain handles among them, the ones made in bulk (runs of sign-ups shaped
+ *             as no crowd makes them: atmosphere/src/backfill-hosts.js bulkRun), accounts
  *             moving out of Bluesky's hosts, back in and between independent hosts, and
  *             deletions, from the PLC directory's log (atmosphere/src/plc-watch.js; today's
  *             so far)
@@ -105,9 +105,9 @@ export interface IdentityDay {
   /** New accounts on listed hosts with a handle on their own domain. */
   createdCustomHandle: number;
   /**
-   * Of createdIndependent, the ones made in bulk: in runs on one host faster than all of
-   * Bluesky's sign-ups, or too evenly spaced for people (the station's bulkRun). Zero on
-   * days counted before the station looked.
+   * Of createdIndependent, the ones made in bulk: in runs on one host shaped as no crowd of
+   * people makes them (the station's bulkRun), less any on hosts in NOT_BULK. Zero on days
+   * counted before the station looked.
    */
   createdBulk: number;
   /** The hosts that made them, the most first: how many, in how many runs, over how many seconds in all. */
@@ -148,18 +148,28 @@ const hostCounts = (x: unknown) =>
     })
     .slice(0, TOP_HOSTS);
 
-export function toIdentityDay(x: unknown): IdentityDay | null {
+/**
+ * Hosts never counted as made in bulk, whatever the station finds. Its rules only count runs
+ * of sign-ups no crowd of people makes, but one thing can look like them: a server maxed out
+ * by a rush for a new app, then falling over, whose last minutes are as steady and as sudden
+ * to stop as a script's. A host named here has its sign-ups counted as people again, every day.
+ */
+export const NOT_BULK: ReadonlySet<string> = new Set<string>([]);
+
+export function toIdentityDay(x: unknown, notBulk: ReadonlySet<string> = NOT_BULK): IdentityDay | null {
   if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
   const c = counts(x, Object.values(IDENTITY_KEYS));
   if (!c) return null;
   // a row from before the station counted them has neither
-  const createdBulk = Math.min(c.created_independent, countOrNull(x.created_bulk) ?? 0);
-  const bulk = (Array.isArray(x.bulk_hosts) ? x.bulk_hosts : [])
+  const found = (Array.isArray(x.bulk_hosts) ? x.bulk_hosts : [])
     .flatMap((h) => {
       const b = counts(h, ['accounts', 'bursts', 'seconds'] as const);
       return isRecord(h) && hostname(h.hostname) && b ? [{ hostname: h.hostname, ...b }] : [];
     })
     .slice(0, TOP_HOSTS);
+  const bulk = found.filter((h) => !notBulk.has(h.hostname));
+  const letOff = found.reduce((t, h) => t + (notBulk.has(h.hostname) ? h.accounts : 0), 0);
+  const createdBulk = Math.max(0, Math.min(c.created_independent, (countOrNull(x.created_bulk) ?? 0) - letOff));
   return {
     day: x.day,
     ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations' | 'createdBulk' | 'bulk'>),
@@ -230,7 +240,7 @@ export function toHostHistory(body: unknown, bucket: HostBucket): HostHistory | 
       })
       .slice(0, TOP_HOSTS),
     daily: (Array.isArray(body.daily) ? body.daily : []).map(toHostDay).filter((d): d is HostDay => d !== null),
-    identities: (Array.isArray(body.identities) ? body.identities : []).map(toIdentityDay).filter((d): d is IdentityDay => d !== null),
+    identities: (Array.isArray(body.identities) ? body.identities : []).map((d) => toIdentityDay(d)).filter((d): d is IdentityDay => d !== null),
     activeDaily: (Array.isArray(body.activeDaily) ? body.activeDaily : []).map(toActiveDay).filter((d): d is ActiveDay => d !== null),
     liveliest: toLiveliest(body.liveliest),
   };
