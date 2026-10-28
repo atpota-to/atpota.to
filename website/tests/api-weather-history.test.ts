@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-history.js';
 import { burstHours, byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Burst, type Point } from '../server/weather-history.js';
+import * as hosts from '../server/weather-hosts.js';
 
 // /api/weather-history against a scripted Supabase.
 
@@ -467,5 +468,24 @@ describe('active accounts in the trends', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(PARTIAL_CACHE);
     expect('accounts' in ((await res.json()) as object)).toBe(false);
+  });
+});
+
+describe('new accounts made in bulk', () => {
+  const row = { day: '2026-10-28', ops: 1, created_bluesky: 9905, created_independent: 5561, created_unlisted: 0, created_custom_handle: 50, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: [] };
+  const found = { ...row, created_bulk: 4574, bulk_hosts: [{ hostname: 'goodmkt.id', accounts: 4500, bursts: 1, seconds: 1278 }, { hostname: 'pds.1095.me', accounts: 74, bursts: 2, seconds: 72 }] };
+
+  it("takes the station's count, and none from a row from before it looked", () => {
+    expect(hosts.toIdentityDay(found)).toMatchObject({ createdBulk: 4574, bulk: [{ hostname: 'goodmkt.id', accounts: 4500 }, { hostname: 'pds.1095.me', accounts: 74 }] });
+    expect(hosts.toIdentityDay(row)).toMatchObject({ createdBulk: 0, bulk: [] });
+    // never more than the independent sign-ups
+    expect(hosts.toIdentityDay({ ...found, created_bulk: 99_999 })!.createdBulk).toBe(5561);
+  });
+
+  it('lets a host off by hand: its sign-ups count as people again', () => {
+    expect(hosts.NOT_BULK.size).toBe(0);
+    const d = hosts.toIdentityDay(found, new Set(['goodmkt.id']))!;
+    expect(d.createdBulk).toBe(74);
+    expect(d.bulk.map((h) => h.hostname)).toEqual(['pds.1095.me']);
   });
 });

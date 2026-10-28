@@ -66,7 +66,7 @@ export interface IdentityDay {
   createdIndependent: number;
   createdUnlisted: number;
   createdCustomHandle: number;
-  /** Of createdIndependent, the ones made in bulk: in runs too fast or too even for people (atmosphere/src/backfill-hosts.js bulkRun). */
+  /** Of createdIndependent, the ones made in bulk: in runs shaped as no crowd makes them (atmosphere/src/backfill-hosts.js bulkRun). */
   createdBulk: number;
   /** The hosts that made them, the most first: how many, in how many runs, over how many seconds in all. */
   bulk: BulkHost[];
@@ -485,7 +485,7 @@ export function lastedWords(seconds: number): string {
  */
 export function bulkWords(d: IdentityDay): string {
   if (d.createdBulk === 0 || d.bulk.length === 0) return '';
-  const why = "sign-ups coming faster than all of bluesky's, or too evenly spaced to be people, look like a service making accounts.";
+  const why = 'they came the way scripts make accounts, at a steady pace switched on and off, or in floods out of nowhere again and again. people signing up build up and trail off.';
   const [first, second] = d.bulk;
   if (d.bulk.length === 1) {
     const runs = first!.bursts === 1 ? `one burst, ${lastedWords(first!.seconds)}` : `${formatCount(first!.bursts)} bursts, ${lastedWords(first!.seconds)} in all`;

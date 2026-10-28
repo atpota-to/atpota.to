@@ -5,8 +5,9 @@
 // (PlcHistory, one day at a time): new accounts by where they signed up, new accounts
 // with a handle on their own domain, the ones made in bulk on independent hosts (and those
 // hosts), accounts moving out of Bluesky's hosts, back in and between independent hosts (and
-// the hosts they moved to), and deletions. A run of sign-ups still going is counted in each
-// write as it stands, and judged for good once it's over.
+// the hosts they moved to), and deletions. A run of sign-ups is judged once it's over and the
+// host has had ten minutes to go quiet (backfill-hosts.js bulkRun), so today's row can take
+// that long to count a batch.
 //
 // A move needs to know where an account was before. One seen earlier today is known; one
 // that wasn't, and now names an independent host (or deletes itself), has its history
@@ -36,8 +37,7 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
 
   const begin = (d) => {
     day = d;
-    // Bluesky's pace goes on from the day before, so a run just after midnight is judged against the hour before it
-    history = new PlcHistory({ from: d, days: 1, relayHosts: history?.relayHosts ?? new Set(), pace: history?.pace });
+    history = new PlcHistory({ from: d, days: 1, relayHosts: history?.relayHosts ?? new Set() });
     audited = new Set();
   };
 

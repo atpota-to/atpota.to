@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backfill, bulkRun, daysOf, hostsBefore, hostsOnDay, newPace, paceAt, parseArgs, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
+import { backfill, bulkRun, daysOf, floodStart, hostsBefore, hostsOnDay, parseArgs, plateauOf, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
 import { handleOfOp, hostOfOp, isCustomHandle, sideOf, slimEntry } from '../src/plc.js';
 
 const BSKY = 'amanita.us-east.host.bsky.network';
@@ -232,77 +232,95 @@ test('plcRow: a day\'s row names its ten busiest destinations', () => {
 
 const S = (hms) => `2026-10-28T${hms}.000Z`;
 const at = (base, seconds) => new Date(Date.parse(S(base)) + Math.round(seconds * 1000)).toISOString();
-const hosts = new Set([BSKY, 'goodmkt.id', 'pds.1095.me', 'pds.oso.social', 'eurosky.social']);
+const hosts = new Set([BSKY, 'goodmkt.id', 'pds.1095.me', 'pds.svpn.com', 'pds.oso.social', 'eurosky.social']);
+const ms = (base, seconds) => Date.parse(S(base)) + Math.round(seconds * 1000);
 
-/** One day's history: Bluesky's hosts signing up one account every 5 seconds all day (0.2 a second), and the given sign-ups. */
+/** A seeded stream of random numbers, so the crowds below are the same every run. */
+function rand(seed) {
+  let x = seed;
+  return () => ((x = (x * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648);
+}
+const exp = (r, mean) => -Math.log(1 - r()) * mean;
+
+/** One day's history from sign-ups ([host, iso]), with Bluesky's hosts signing someone up every 20 seconds all day (the log's clock). */
 function day(signUps) {
   const h = new PlcHistory({ from: '2026-10-28', days: 1, relayHosts: hosts });
   const ops = [];
-  for (let i = 0; i < 17_280; i++) ops.push(raw(`did:plc:bsky${i}`, at('00:00:00', i * 5), BSKY, { prev: null }));
+  for (let i = 0; i < 4320; i++) ops.push(raw(`did:plc:bsky${i}`, at('00:00:00', i * 20), BSKY, { prev: null }));
   signUps.forEach(([host, when], i) => ops.push(raw(`did:plc:${host}${i}`, when, host, { prev: null })));
-  ops.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-  return { h, ops: ops.map(slimEntry) };
+  ops.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+  for (const e of ops) h.add(slimEntry(e));
+  return h;
 }
-const run = (host, base, gaps) => {
-  let t = 0;
-  return [[host, at(base, 0)], ...gaps.map((g) => [host, at(base, (t += g))])];
-};
-/** Gaps as uneven as people's: they cycle through these seconds (a coefficient of variation near 0.7). */
-const ragged = (n, scale = 1) => Array.from({ length: n }, (_, i) => [2, 35, 8, 50, 15, 3, 41, 22, 6, 28][i % 10] * scale);
+/** Sign-ups on a host at these seconds after `base`. */
+const on = (host, base, seconds) => seconds.map((x) => [host, at(base, x)]);
+const cumulative = (gaps) => gaps.reduce((t, g) => [...t, t[t.length - 1] + g], [0]);
 
-test('bulk: a run faster than all of Bluesky, or too even for people, is made in bulk', () => {
-  const { h, ops } = day([
-    // 300 in about 75 seconds, unevenly: four a second against Bluesky's one in five
-    ...run('goodmkt.id', '06:00:00', ragged(299, 0.012)),
-    // forty exactly ten seconds apart: slower than Bluesky, but no crowd keeps time like that
-    ...run('pds.1095.me', '07:25:34', Array(39).fill(10)),
-    // fifty people in twenty minutes, at random
-    ...run('pds.oso.social', '15:38:04', ragged(49, 1.2)),
-    // nine quick ones: too few to say
-    ...run('eurosky.social', '09:00:00', Array(8).fill(0.3)),
+test('bulk: clockwork and a flat plateau, each switched on and off, then quiet', () => {
+  const r = rand(1);
+  const h = day([
+    // forty exactly a second apart
+    ...on('pds.1095.me', '07:25:34', cumulative(Array(39).fill(1))),
+    // one account, then 4,500 at a steady three and a half a second, uneven second to second but flat minute to minute
+    ...on('goodmkt.id', '05:55:00', [0, ...cumulative(Array.from({ length: 4498 }, () => 0.02 + r() * 0.53)).map((x) => 41.7 + x)]),
   ]);
-  ops.forEach((e) => h.add(e));
-  // all four runs are still going as far as the history knows: counted in, not ended
-  const soFar = h.signalsOf(0);
-  assert.equal(soFar.created_bulk, 340);
-  assert.equal(h.signals[0].created_bulk, 0);
-  h.endRuns();
-  const s = h.signals[0];
-  assert.equal(s.created_independent, 399);
-  assert.equal(s.created_bulk, 340);
-  assert.deepEqual(Object.keys(s.bulk_hosts).sort(), ['goodmkt.id', 'pds.1095.me']);
-  assert.deepEqual(s.bulk_hosts['pds.1095.me'], { accounts: 40, bursts: 1, seconds: 390 });
-  assert.deepEqual(plcRow('2026-10-28', s).bulk_hosts, [
-    { hostname: 'goodmkt.id', accounts: 300, bursts: 1, seconds: 75 },
-    { hostname: 'pds.1095.me', accounts: 40, bursts: 1, seconds: 390 },
-  ]);
-  assert.deepEqual(plcRow('2026-10-28', { ops: 0 }).bulk_hosts, []);
+  const s = h.signalsOf(0);
+  assert.equal(s.created_independent, 4540);
+  assert.equal(s.created_bulk, 4540);
+  assert.deepEqual(plcRow('2026-10-28', s).bulk_hosts.map((b) => [b.hostname, b.accounts, b.bursts]), [['goodmkt.id', 4500, 1], ['pds.1095.me', 40, 1]]);
+  assert.deepEqual(bulkRun(on('x', '07:00:00', cumulative(Array(39).fill(1))).map(([, w]) => Date.parse(w))), { clockwork: true, plateau: false });
 });
 
-test('bulk: a gap of over a minute starts a new run, and each is judged on its own', () => {
-  const { h, ops } = day([
-    ...run('goodmkt.id', '06:00:00', Array(14).fill(0.2)),
-    // two minutes later: fifteen more, then a slow trickle that's people
-    ...run('goodmkt.id', '06:02:03', Array(14).fill(0.2)),
-    ...run('goodmkt.id', '08:00:00', ragged(11, 2)),
-  ]);
-  ops.forEach((e) => h.add(e));
-  h.endRuns();
-  assert.equal(h.signals[0].created_bulk, 30);
-  assert.equal(h.signals[0].bulk_hosts['goodmkt.id'].bursts, 2);
+test('bulk: a crowd builds up and trails off, so it never counts, however big', () => {
+  const r = rand(2);
+  // 3,000 people after an announcement: it takes them a minute or so to sign up, and the news fades over an hour
+  const times = [];
+  while (times.length < 3000) {
+    const t = exp(r, 3600);
+    if (r() < 1 - Math.exp(-t / 60)) times.push(t);
+  }
+  times.sort((a, b) => a - b);
+  const h = day(on('eurosky.social', '09:00:00', times));
+  assert.equal(h.signalsOf(0).created_independent, 3000);
+  assert.equal(h.signalsOf(0).created_bulk, 0);
 });
 
-test('bulk: the bar is Bluesky\'s pace over the hour before', () => {
-  const pace = newPace();
-  const h = new PlcHistory({ from: '2026-10-28', days: 1, relayHosts: hosts, pace });
-  // an hour of Bluesky at one a second
-  for (let i = 0; i < 3600; i++) h.add(op(`did:plc:b${i}`, at('05:00:00', i), BSKY, { prev: null }));
-  assert.ok(Math.abs(paceAt(pace, Date.parse(S('06:00:00'))) - 1) < 0.02);
-  // a run at one every two seconds, unevenly: slower than Bluesky now, so people
-  run('eurosky.social', '06:00:00', ragged(29, 0.1)).forEach(([host, when], i) => h.add(op(`did:plc:e${i}`, when, host, { prev: null })));
-  h.endRuns();
+test('bulk: a steady run the host keeps signing people up after is a crowd behind a busy server', () => {
+  // a flat run at one a second, but people keep coming in the ten minutes after
+  const h = day([
+    ...on('pds.oso.social', '12:00:00', cumulative(Array(299).fill(1))),
+    ...on('pds.oso.social', '12:00:00', [370, 420, 470, 520, 580, 640]),
+  ]);
+  assert.equal(h.signalsOf(0).created_bulk, 0);
+  // and one that ramps up into its flat stretch isn't switched on
+  const ramp = [...cumulative([50, 40, 30, 25, 20, 15, 12, 10, 8, 6, 5, 4, 3, 2]), ...cumulative(Array(280).fill(1)).map((x) => 230 + x)];
+  assert.equal(bulkRun(ramp.map((x) => ms('12:00:00', x))), null);
+});
+
+test('bulk: five runs or more that open with a flood are a script; one is sign-ups opening on time', () => {
+  // blocks of 45: ten in under two seconds, then thirty-five over the next half minute, again and again
+  const block = [...cumulative(Array(9).fill(0.2)), ...cumulative(Array(34).fill(0.9)).map((x) => 2.7 + x)];
+  const blocks = (host, n) => Array.from({ length: n }, (_, i) => on(host, '06:00:00', block.map((x) => x + i * 300))).flat();
+  assert.equal(day(blocks('pds.svpn.com', 6)).signalsOf(0).created_bulk, 270);
+  assert.equal(day(blocks('pds.svpn.com', 4)).signalsOf(0).created_bulk, 0);
+  assert.equal(floodStart(block.map((x) => ms('06:00:00', x))), true);
+});
+
+test('bulk: a run is judged once it is over and the host has had ten minutes to go quiet', () => {
+  const h = new PlcHistory({ from: '2026-10-28', days: 1, relayHosts: hosts });
+  const add = (host, iso, i) => h.add(op(`did:plc:${host}${iso}${i}`, iso, host, { prev: null }));
+  cumulative(Array(39).fill(1)).forEach((x, i) => add('pds.1095.me', at('07:00:00', x), i));
+  // still going as far as the log knows: not judged
+  assert.equal(h.signalsOf(0).created_bulk, 0);
+  // two minutes on, it's over and waiting: counted as it stands
+  add(BSKY, at('07:02:39', 0), 0);
+  assert.equal(h.signalsOf(0).created_bulk, 40);
+  // a stray sign-up inside the ten minutes is fine; six more aren't quiet
+  [100, 160, 220, 280, 340, 400].forEach((x, i) => add('pds.1095.me', at('07:00:39', x), i + 100));
+  assert.equal(h.signalsOf(0).created_bulk, 0);
+  add(BSKY, at('07:30:00', 0), 1);
   assert.equal(h.signals[0].created_bulk, 0);
-  // the gaps' spread: exactly even is 0, people about 1
-  assert.deepEqual(bulkRun({ n: 40, start: 0, last: 39_000, sum: 39, sumSq: 39, pace: 5 }), { fast: false, even: true });
-  assert.equal(bulkRun({ n: 9, start: 0, last: 1000, sum: 1, sumSq: 1, pace: 0 }), null);
+  // a gap of over a minute splits runs, and a short one is never judged
+  assert.equal(day(on('goodmkt.id', '06:00:00', [...cumulative(Array(9).fill(1)), ...cumulative(Array(9).fill(1)).map((x) => x + 200)])).signalsOf(0).created_bulk, 0);
+  assert.equal(plateauOf(Array.from({ length: 100 }, (_, i) => i * 1000)), null);
 });

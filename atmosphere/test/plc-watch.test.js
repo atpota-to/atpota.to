@@ -55,21 +55,21 @@ test('reads today from midnight, reads a mover\'s history once, and writes today
   assert.equal(rows.at(-1).ops, 4);
 });
 
-test('counts a run made in bulk as it goes, in every row it writes', async () => {
+test('counts a run made in bulk once it is over and the host has gone quiet', async () => {
   const at = (s) => new Date(Date.parse('2026-10-22T01:00:00.000Z') + s * 1000).toISOString();
   const ops = [
-    // Bluesky's hosts, one a minute for the hour before
-    ...Array.from({ length: 60 }, (_, i) => raw(`did:plc:b${i}`, at(i * 60 - 3600), BSKY, { prev: null })),
-    // twelve on blacksky in a little over two seconds
-    ...Array.from({ length: 12 }, (_, i) => raw(`did:plc:x${i}`, at(i * 0.2), 'blacksky.app', { prev: null })),
+    // forty on blacksky exactly a second apart
+    ...Array.from({ length: 40 }, (_, i) => raw(`did:plc:x${i}`, at(i), 'blacksky.app', { prev: null })),
+    // and Bluesky's hosts signing people up every 30 seconds for the quarter of an hour after
+    ...Array.from({ length: 30 }, (_, i) => raw(`did:plc:b${i}`, at(40 + i * 30), BSKY, { prev: null })),
   ];
   const { fetchImpl } = directory(ops);
   const rows = [];
-  const w = createPlcWatch({ census, fetchImpl, upsert: async (table, conflict, r) => rows.push(...r), now: () => Date.parse('2026-10-22T01:00:30Z') });
+  const w = createPlcWatch({ census, fetchImpl, upsert: async (table, conflict, r) => rows.push(...r), now: () => Date.parse('2026-10-22T01:20:00Z') });
   await w.poll();
-  assert.equal(rows.at(-1).created_independent, 12);
-  assert.equal(rows.at(-1).created_bulk, 12);
-  assert.deepEqual(rows.at(-1).bulk_hosts, [{ hostname: 'blacksky.app', accounts: 12, bursts: 1, seconds: 2 }]);
+  assert.equal(rows.at(-1).created_independent, 40);
+  assert.equal(rows.at(-1).created_bulk, 40);
+  assert.deepEqual(rows.at(-1).bulk_hosts, [{ hostname: 'blacksky.app', accounts: 40, bursts: 1, seconds: 39 }]);
 });
 
 test('finishes the day at midnight and starts the next', async () => {
