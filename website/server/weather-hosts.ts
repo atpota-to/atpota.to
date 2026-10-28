@@ -15,7 +15,8 @@
  *             day's last census and the change from the day before, and the independent
  *             hosts that joined and left. Each is null where there's nothing to compare.
  *   identities  day by day over the same days: new accounts by where they signed up,
- *             own-domain handles among them, the ones made in bulk (BULK_MIN), accounts
+ *             own-domain handles among them, the ones made in bulk (runs of sign-ups too
+ *             fast or too even for people: atmosphere/src/backfill-hosts.js bulkRun), accounts
  *             moving out of Bluesky's hosts, back in and between independent hosts, and
  *             deletions, from the PLC directory's log (atmosphere/src/plc-watch.js; today's
  *             so far)
@@ -103,16 +104,27 @@ export interface IdentityDay {
   createdUnlisted: number;
   /** New accounts on listed hosts with a handle on their own domain. */
   createdCustomHandle: number;
-  /** Of createdIndependent, the ones made in bulk: on a host that took in BULK_MIN or more that day. */
+  /**
+   * Of createdIndependent, the ones made in bulk: in runs on one host faster than all of
+   * Bluesky's sign-ups, or too evenly spaced for people (the station's bulkRun). Zero on
+   * days counted before the station looked.
+   */
   createdBulk: number;
-  /** Those hosts, busiest first. Empty on days counted before the station kept sign-ups by host. */
-  bulk: Array<{ hostname: string; accounts: number }>;
+  /** The hosts that made them, the most first: how many, in how many runs, over how many seconds in all. */
+  bulk: BulkHost[];
   movedOut: number;
   movedIn: number;
   movedBetween: number;
   deleted: number;
   /** Where the day's movers went (out of Bluesky's hosts or between independent ones), busiest first. */
   destinations: Array<{ hostname: string; accounts: number }>;
+}
+
+export interface BulkHost {
+  hostname: string;
+  accounts: number;
+  bursts: number;
+  seconds: number;
 }
 
 const IDENTITY_KEYS = {
@@ -127,16 +139,6 @@ const IDENTITY_KEYS = {
   deleted: 'deleted',
 } as const;
 
-/**
- * New accounts on one independent host in a UTC day from which they count as made in bulk.
- * People signing up one by one don't come to an independent host that fast: in October
- * 2026 the busiest took in a few hundred a day, while one service making accounts in
- * batches (goodmkt.id) took in thousands at a time. Bulk accounts still count as
- * accounts; the report keeps them out of the shares, so a batch doesn't read as a wave of
- * people leaving Bluesky.
- */
-export const BULK_MIN = 1000;
-
 /** A row's [{ hostname, accounts }], checked. */
 const hostCounts = (x: unknown) =>
   (Array.isArray(x) ? x : [])
@@ -150,10 +152,14 @@ export function toIdentityDay(x: unknown): IdentityDay | null {
   if (!isRecord(x) || typeof x.day !== 'string' || !DAY_RE.test(x.day)) return null;
   const c = counts(x, Object.values(IDENTITY_KEYS));
   if (!c) return null;
-  const bulk = hostCounts(x.created_hosts)
-    .filter((h) => h.accounts >= BULK_MIN)
-    .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1));
-  const createdBulk = Math.min(c.created_independent, bulk.reduce((t, h) => t + h.accounts, 0));
+  // a row from before the station counted them has neither
+  const createdBulk = Math.min(c.created_independent, countOrNull(x.created_bulk) ?? 0);
+  const bulk = (Array.isArray(x.bulk_hosts) ? x.bulk_hosts : [])
+    .flatMap((h) => {
+      const b = counts(h, ['accounts', 'bursts', 'seconds'] as const);
+      return isRecord(h) && hostname(h.hostname) && b ? [{ hostname: h.hostname, ...b }] : [];
+    })
+    .slice(0, TOP_HOSTS);
   return {
     day: x.day,
     ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations' | 'createdBulk' | 'bulk'>),

@@ -685,6 +685,23 @@ const hostCounts = (x: unknown) => list(x).flatMap((h) => {
   return hostname && n !== null ? [{ hostname, accounts: n }] : [];
 }).slice(0, TOP);
 
+/** The hosts that made accounts in bulk, checked: how many, in how many runs, over how many seconds in all. */
+const bulkHostsOf = (x: unknown) => list(x).flatMap((h) => {
+  const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+  const c = counts(h, ["accounts", "bursts", "seconds"] as const);
+  return hostname && c ? [{ hostname, accounts: c.accounts, bursts: c.bursts, minutes: round1(c.seconds / 60) }] : [];
+}).slice(0, TOP);
+
+/** The same over days, each host's added up, the most first. */
+function mergeBulk(lists: ReturnType<typeof bulkHostsOf>[]) {
+  const by = new Map<string, ReturnType<typeof bulkHostsOf>[number]>();
+  for (const l of lists) for (const h of l) {
+    const b = by.get(h.hostname);
+    by.set(h.hostname, b ? { hostname: h.hostname, accounts: b.accounts + h.accounts, bursts: b.bursts + h.bursts, minutes: round1(b.minutes + h.minutes) } : h);
+  }
+  return [...by.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP);
+}
+
 /** Hosts by name, added up, busiest first. */
 function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>) {
   const by = new Map<string, number>();
@@ -697,7 +714,7 @@ function identityDayOf(x: unknown) {
   if (!isRecord(x) || typeof x.day !== "string" || !DAY_RE.test(x.day)) return null;
   const c = counts(x, ["createdBluesky", "createdIndependent", "createdUnlisted", "createdCustomHandle", "movedOut", "movedIn", "movedBetween", "deleted"] as const);
   if (!c) return null;
-  // the website's server counts these (server/weather-hosts.ts BULK_MIN); an older answer has none
+  // the station finds these (atmosphere/src/backfill-hosts.js bulkRun); an older answer has none
   const bulk = Math.min(count(x.createdBulk) ?? 0, c.createdIndependent);
   const independent = c.createdIndependent - bulk;
   return {
@@ -706,9 +723,11 @@ function identityDayOf(x: unknown) {
       onBlueskyHosts: c.createdBluesky,
       onIndependentHosts: independent,
       withOwnDomainHandle: c.createdCustomHandle,
-      // new accounts on an independent host that took in 1,000 or more that day: usually one service making accounts in a
-      // batch, not people signing up one by one. left out of onIndependentHosts and the percent; not people leaving bluesky
-      ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: hostCounts(x.bulk) } } : {}),
+      // new accounts on independent hosts that came in runs no crowd makes: faster than all of bluesky's sign-ups at the
+      // time, or as evenly spaced as a clock. usually one service making accounts, not people signing up, so they're left
+      // out of onIndependentHosts and the percent; don't read them as people leaving bluesky. onHosts says how many runs
+      // ("bursts") each host made and how many minutes they lasted in all
+      ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: bulkHostsOf(x.bulk) } } : {}),
     },
     // of new accounts on hosts the relay carries, less the bulk ones, the percent that started outside bluesky
     ...(c.createdBluesky + independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((independent / (c.createdBluesky + independent)) * 100) } : {}),
@@ -818,7 +837,7 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
       onBlueskyHosts: created.bluesky,
       onIndependentHosts: created.independent,
       withOwnDomainHandle: sum((d) => d.signups.withOwnDomainHandle),
-      ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: mergeHosts(days.map((d) => d.signups.madeInBulk?.onHosts ?? [])) } } : {}),
+      ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: mergeBulk(days.map((d) => d.signups.madeInBulk?.onHosts ?? [])) } } : {}),
     },
     ...(created.bluesky + created.independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((created.independent / (created.bluesky + created.independent)) * 100) } : {}),
     movingHouse: { outOfBluesky: out, backToBluesky: back, betweenIndependentHosts: sum((d) => d.movingHouse.betweenIndependentHosts), wind: windOf(out, back), movedTo: movedTo(days) },

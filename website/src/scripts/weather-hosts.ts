@@ -66,16 +66,23 @@ export interface IdentityDay {
   createdIndependent: number;
   createdUnlisted: number;
   createdCustomHandle: number;
-  /** Of createdIndependent, the ones made in bulk: on a host that took in a thousand or more that day (server/weather-hosts.ts BULK_MIN). */
+  /** Of createdIndependent, the ones made in bulk: in runs too fast or too even for people (atmosphere/src/backfill-hosts.js bulkRun). */
   createdBulk: number;
-  /** Those hosts, busiest first. */
-  bulk: Array<{ hostname: string; accounts: number }>;
+  /** The hosts that made them, the most first: how many, in how many runs, over how many seconds in all. */
+  bulk: BulkHost[];
   movedOut: number;
   movedIn: number;
   movedBetween: number;
   deleted: number;
   /** Where the day's movers went, busiest first (server/weather-hosts.ts). */
   destinations: Array<{ hostname: string; accounts: number }>;
+}
+
+export interface BulkHost {
+  hostname: string;
+  accounts: number;
+  bursts: number;
+  seconds: number;
 }
 
 const IDENTITY_COUNTS = ['ops', 'createdBluesky', 'createdIndependent', 'createdUnlisted', 'createdCustomHandle', 'movedOut', 'movedIn', 'movedBetween', 'deleted'] as const;
@@ -118,6 +125,7 @@ const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' 
 const hostname = (x: unknown): x is string => typeof x === 'string' && HOSTNAME_RE.test(x);
 const orNull = (x: unknown): x is number | null => x === null || n(x);
 const hostCounts = (x: unknown): Array<{ hostname: string; accounts: number }> => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : []);
+const bulkHosts = (x: unknown): BulkHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.bursts) && n(h.seconds)).slice(0, 10) : []);
 const isDay = (d: unknown): d is HostDay =>
   obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && orNull(d.active) && (d.change === null || (typeof d.change === 'number' && Number.isFinite(d.change))) && orNull(d.joined) && orNull(d.left);
 
@@ -139,7 +147,7 @@ export function toHostHistory(x: unknown): HostHistory | null {
           .map((d) => ({
             ...d,
             createdBulk: n(d.createdBulk) ? Math.min(d.createdBulk, d.createdIndependent) : 0,
-            bulk: hostCounts(d.bulk),
+            bulk: bulkHosts(d.bulk),
             destinations: hostCounts(d.destinations),
           }))
       : [],
@@ -416,12 +424,23 @@ function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>,
     .slice(0, top);
 }
 
+/** The bulk hosts over days, each one's accounts, runs and seconds added up, the most first. */
+function mergeBulk(lists: BulkHost[][]): BulkHost[] {
+  const by = new Map<string, BulkHost>();
+  for (const list of lists)
+    for (const h of list) {
+      const b = by.get(h.hostname) ?? { hostname: h.hostname, accounts: 0, bursts: 0, seconds: 0 };
+      by.set(h.hostname, { ...b, accounts: b.accounts + h.accounts, bursts: b.bursts + h.bursts, seconds: b.seconds + h.seconds });
+    }
+  return [...by.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, 10);
+}
+
 /** A view's days added up into one: the latest day's date, every count summed, the bulk hosts and destinations merged. */
 export function sumDays(view: IdentityDay[]): IdentityDay | null {
   const last = view[view.length - 1];
   if (!last) return null;
   const sums = Object.fromEntries(IDENTITY_SUMS.map((k) => [k, view.reduce((t, d) => t + d[k], 0)])) as Record<(typeof IDENTITY_SUMS)[number], number>;
-  return { day: last.day, ...sums, bulk: mergeHosts(view.map((d) => d.bulk), 10), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
+  return { day: last.day, ...sums, bulk: mergeBulk(view.map((d) => d.bulk)), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
 }
 
 /** New accounts on independent hosts, less the ones made in bulk: people signing up somewhere else. */
@@ -452,12 +471,30 @@ export function oddsWords(days: IdentityDay[]): string {
   return `over the last ${week.length} days: 1 in ${formatCount(Math.max(1, Math.round(listed / indep)))} started outside bluesky.`;
 }
 
-/** "plus 4,615 made in bulk on goodmkt.id, left out above. ...": what the numbers above leave out, or '' when nothing was. */
+/** How long runs lasted: "40 seconds", "a minute", "32 minutes", "3.6 hours". */
+export function lastedWords(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} second${Math.round(seconds) === 1 ? '' : 's'}`;
+  if (seconds < 90) return 'a minute';
+  if (seconds < 5400) return `${Math.round(seconds / 60)} minutes`;
+  return `${Number((seconds / 3600).toFixed(1))} hours`;
+}
+
+/**
+ * "plus 5,101 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. ...":
+ * what the numbers above leave out and why, or '' when nothing was.
+ */
 export function bulkWords(d: IdentityDay): string {
   if (d.createdBulk === 0 || d.bulk.length === 0) return '';
+  const why = "sign-ups coming faster than all of bluesky's, or too evenly spaced to be people, look like a service making accounts.";
   const [first, second] = d.bulk;
-  const where = d.bulk.length === 1 ? first!.hostname : d.bulk.length === 2 ? `${first!.hostname} and ${second!.hostname}` : `${first!.hostname} and ${d.bulk.length - 1} other hosts`;
-  return `plus ${formatCount(d.createdBulk)} made in bulk on ${where}, left out above. one host taking in a thousand or more in a day is usually a service making accounts, not people signing up.`;
+  if (d.bulk.length === 1) {
+    const runs = first!.bursts === 1 ? `one burst, ${lastedWords(first!.seconds)}` : `${formatCount(first!.bursts)} bursts, ${lastedWords(first!.seconds)} in all`;
+    return `plus ${formatCount(d.createdBulk)} made in bulk on ${first!.hostname} (${runs}), left out above. ${why}`;
+  }
+  const on = (h: BulkHost) => `${formatCount(h.accounts)} on ${h.hostname}`;
+  const rest = d.bulk.slice(2);
+  const where = rest.length === 0 ? `${on(first!)} and ${on(second!)}` : `${on(first!)}, ${on(second!)} and ${formatCount(rest.reduce((t, h) => t + h.accounts, 0))} on ${rest.length === 1 ? 'one other host' : `${rest.length} other hosts`}`;
+  return `plus ${formatCount(d.createdBulk)} made in bulk, left out above: ${where}. ${why}`;
 }
 
 /** Where movers went over the given days, busiest first, adding up each day's top destinations. */

@@ -48,11 +48,28 @@ test('reads today from midnight, reads a mover\'s history once, and writes today
   // each operation is handed on, with the hosts the relay lists (host-activity.js keeps its directory with them)
   assert.equal(entries.length, 4);
   assert.deepEqual(entries.find(([did]) => did === 'did:plc:mover'), ['did:plc:mover', 'blacksky.app', true]);
-  assert.deepEqual(rows.at(-1), { day: '2026-10-22', ops: 4, created_bluesky: 1, created_independent: 1, created_unlisted: 1, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: [{ hostname: 'blacksky.app', accounts: 1 }], created_hosts: [{ hostname: 'blacksky.app', accounts: 1 }] });
+  assert.deepEqual(rows.at(-1), { day: '2026-10-22', ops: 4, created_bluesky: 1, created_independent: 1, created_unlisted: 1, created_custom_handle: 1, created_bulk: 0, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: [{ hostname: 'blacksky.app', accounts: 1 }], bulk_hosts: [] });
   // nothing new: the same row again, no second history read
   await w.poll();
   assert.deepEqual(asked, ['did:plc:mover']);
   assert.equal(rows.at(-1).ops, 4);
+});
+
+test('counts a run made in bulk as it goes, in every row it writes', async () => {
+  const at = (s) => new Date(Date.parse('2026-10-22T01:00:00.000Z') + s * 1000).toISOString();
+  const ops = [
+    // Bluesky's hosts, one a minute for the hour before
+    ...Array.from({ length: 60 }, (_, i) => raw(`did:plc:b${i}`, at(i * 60 - 3600), BSKY, { prev: null })),
+    // twelve on blacksky in a little over two seconds
+    ...Array.from({ length: 12 }, (_, i) => raw(`did:plc:x${i}`, at(i * 0.2), 'blacksky.app', { prev: null })),
+  ];
+  const { fetchImpl } = directory(ops);
+  const rows = [];
+  const w = createPlcWatch({ census, fetchImpl, upsert: async (table, conflict, r) => rows.push(...r), now: () => Date.parse('2026-10-22T01:00:30Z') });
+  await w.poll();
+  assert.equal(rows.at(-1).created_independent, 12);
+  assert.equal(rows.at(-1).created_bulk, 12);
+  assert.deepEqual(rows.at(-1).bulk_hosts, [{ hostname: 'blacksky.app', accounts: 12, bursts: 1, seconds: 2 }]);
 });
 
 test('finishes the day at midnight and starts the next', async () => {
