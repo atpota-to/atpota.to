@@ -3,8 +3,9 @@
 // it goes, after each host census, and keeps today's row of atmosphere_plc_day
 // (sql/atmosphere_hosts.sql) up to date. It counts exactly as backfill-hosts.js does
 // (PlcHistory, one day at a time): new accounts by where they signed up, new accounts
-// with a handle on their own domain, accounts moving out of Bluesky's hosts, back in and
-// between independent hosts (and the hosts they moved to), and deletions.
+// with a handle on their own domain (and the independent hosts they signed up on), accounts
+// moving out of Bluesky's hosts, back in and between independent hosts (and the hosts they
+// moved to), and deletions.
 //
 // A move needs to know where an account was before. One seen earlier today is known; one
 // that wasn't, and now names an independent host (or deletes itself), has its history
@@ -89,8 +90,8 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
       }
       const audits = await audit(maxAudits);
       await write();
-      const { destinations, ...counted } = history.signals[0];
-      log?.info('plc counted', { day, pages, audits, up: after, ...counted, destinations: Object.keys(destinations).length });
+      const { destinations, created_hosts, ...counted } = history.signals[0];
+      log?.info('plc counted', { day, pages, audits, up: after, ...counted, destinations: Object.keys(destinations).length, created_hosts: Object.keys(created_hosts).length });
     } catch (err) {
       log?.warn('could not count plc', { err: err?.message ?? String(err) });
     } finally {

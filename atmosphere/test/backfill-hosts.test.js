@@ -83,10 +83,12 @@ test('PlcHistory: counts each day\'s identity weather', () => {
     { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
   ].map((e) => ({ did: 'did:plc:mover', cid: e.createdAt, ...e }))));
   h.settle();
-  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {} });
-  // the mover went to eurosky: that's where the wind blew
-  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: { 'eurosky.social': 1 } });
+  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, created_hosts: {} });
+  // the mover went to eurosky: that's where the wind blew; the new account signed up on blacksky
+  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: { 'eurosky.social': 1 }, created_hosts: { 'blacksky.app': 1 } });
+  // sign-ups the relay doesn't carry name no host
   assert.equal(h.signals[2].created_unlisted, 2);
+  assert.deepEqual(h.signals[2].created_hosts, {});
   assert.equal(h.signals[2].deleted, 1);
   // today's move is in the walk back, not in any day's signals
   assert.equal(h.signals.reduce((n, s) => n + s.moved_out, 0), 1);
@@ -226,4 +228,12 @@ test('plcRow: a day\'s row names its ten busiest destinations', () => {
   assert.deepEqual(row.destinations[0], { hostname: 'h11.example', accounts: 12 });
   assert.equal(row.day, '2026-10-22');
   assert.deepEqual(plcRow('2026-10-22', { ops: 0 }).destinations, []);
+});
+
+test('plcRow: and the ten hosts the most new accounts signed up on', () => {
+  const created_hosts = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`h${String(i).padStart(2, '0')}.example`, i === 3 ? 4615 : i + 1]));
+  const row = plcRow('2026-10-28', { ops: 1, created_independent: 4681, created_hosts });
+  assert.equal(row.created_hosts.length, 10);
+  assert.deepEqual(row.created_hosts[0], { hostname: 'h03.example', accounts: 4615 });
+  assert.deepEqual(plcRow('2026-10-28', { ops: 0 }).created_hosts, []);
 });

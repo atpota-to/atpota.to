@@ -66,6 +66,10 @@ export interface IdentityDay {
   createdIndependent: number;
   createdUnlisted: number;
   createdCustomHandle: number;
+  /** Of createdIndependent, the ones made in bulk: on a host that took in a thousand or more that day (server/weather-hosts.ts BULK_MIN). */
+  createdBulk: number;
+  /** Those hosts, busiest first. */
+  bulk: Array<{ hostname: string; accounts: number }>;
   movedOut: number;
   movedIn: number;
   movedBetween: number;
@@ -75,6 +79,8 @@ export interface IdentityDay {
 }
 
 const IDENTITY_COUNTS = ['ops', 'createdBluesky', 'createdIndependent', 'createdUnlisted', 'createdCustomHandle', 'movedOut', 'movedIn', 'movedBetween', 'deleted'] as const;
+/** The same, and the bulk ones, which an answer from before they were counted leaves out. */
+const IDENTITY_SUMS = [...IDENTITY_COUNTS, 'createdBulk'] as const;
 
 export interface HostDay {
   day: string;
@@ -111,6 +117,7 @@ const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(
 const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const hostname = (x: unknown): x is string => typeof x === 'string' && HOSTNAME_RE.test(x);
 const orNull = (x: unknown): x is number | null => x === null || n(x);
+const hostCounts = (x: unknown): Array<{ hostname: string; accounts: number }> => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : []);
 const isDay = (d: unknown): d is HostDay =>
   obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && orNull(d.active) && (d.change === null || (typeof d.change === 'number' && Number.isFinite(d.change))) && orNull(d.joined) && orNull(d.left);
 
@@ -129,7 +136,12 @@ export function toHostHistory(x: unknown): HostHistory | null {
     identities: Array.isArray(x.identities)
       ? x.identities
           .filter((d): d is IdentityDay => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && IDENTITY_COUNTS.every((k) => n(d[k])))
-          .map((d) => ({ ...d, destinations: Array.isArray(d.destinations) ? d.destinations.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : [] }))
+          .map((d) => ({
+            ...d,
+            createdBulk: n(d.createdBulk) ? Math.min(d.createdBulk, d.createdIndependent) : 0,
+            bulk: hostCounts(d.bulk),
+            destinations: hostCounts(d.destinations),
+          }))
       : [],
     activeDaily: Array.isArray(x.activeDaily)
       ? x.activeDaily.filter((d): d is NonNullable<HostHistory['activeDaily']>[number] => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && n(d.independent) && orNull(d.all))
@@ -346,7 +358,7 @@ export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, d
     if (mine !== asked) return; // the lens moved on
     if (history) {
       if (part) renderHostTrends(part, history.hosts, range, drawBars);
-      renderIdentities(report, history.hosts?.identities ?? [], Date.now(), drawBars);
+      renderIdentities(report, history.hosts?.identities ?? [], Date.now(), drawBars, range);
       onHosts?.(history.hosts);
     } else if (!quietly && part) part.hidden = true;
   };
@@ -372,6 +384,49 @@ export function identityDayWords(day: string, now = Date.now()): string {
   return dayWords(day);
 }
 
+/** How many of the PLC directory's days each range adds up: its UTC days, today's so far. */
+export const IDENTITY_SPAN: Record<HostRange, number> = { day: 1, week: 7, month: 30 };
+
+/**
+ * The days a range shows: the latest for a day (today so far, or the last one counted),
+ * the days in the last 7 or 30 for a week or a month.
+ */
+export function identityView(days: IdentityDay[], range: HostRange, now = Date.now()): IdentityDay[] {
+  if (range === 'day') return days.slice(-1);
+  const from = new Date(now - (IDENTITY_SPAN[range] - 1) * 86_400_000).toISOString().slice(0, 10);
+  return days.filter((d) => d.day >= from);
+}
+
+/** The identity tiles' aside for a view: "today so far (utc)", "the last 7 days (utc)", or since the first day kept when that's later. */
+export function identityViewWords(view: IdentityDay[], range: HostRange, now = Date.now()): string {
+  const first = view[0];
+  if (!first) return '';
+  if (range === 'day') return identityDayWords(first.day, now);
+  const from = new Date(now - (IDENTITY_SPAN[range] - 1) * 86_400_000).toISOString().slice(0, 10);
+  return first.day > from ? `since ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${first.day}T00:00:00Z`)).toLowerCase()} (utc)` : `${WINDOW_INFO[range].words} (utc)`;
+}
+
+/** Hosts by name, added up over days, busiest first. */
+function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>, top = HOST_LIST_TOP): Array<{ hostname: string; accounts: number }> {
+  const by = new Map<string, number>();
+  for (const list of lists) for (const h of list) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  return [...by]
+    .map(([hostname, accounts]) => ({ hostname, accounts }))
+    .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1))
+    .slice(0, top);
+}
+
+/** A view's days added up into one: the latest day's date, every count summed, the bulk hosts and destinations merged. */
+export function sumDays(view: IdentityDay[]): IdentityDay | null {
+  const last = view[view.length - 1];
+  if (!last) return null;
+  const sums = Object.fromEntries(IDENTITY_SUMS.map((k) => [k, view.reduce((t, d) => t + d[k], 0)])) as Record<(typeof IDENTITY_SUMS)[number], number>;
+  return { day: last.day, ...sums, bulk: mergeHosts(view.map((d) => d.bulk), 10), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
+}
+
+/** New accounts on independent hosts, less the ones made in bulk: people signing up somewhere else. */
+export const independentOf = (d: IdentityDay): number => Math.max(0, d.createdIndependent - d.createdBulk);
+
 /** How smoggy a day was: the share of its sign-ups that went to hosts no relay carries. */
 export const SMOG_LEVELS = [
   ['thick smog', 90],
@@ -387,60 +442,76 @@ export function smogOf(d: IdentityDay): { share: number; level: string } {
 
 const plural = (v: number, one: string, many = `${one}s`) => `${formatCount(v)} ${v === 1 ? one : many}`;
 
-/** "over the last 7 days: 1 in 4 started outside bluesky", from the last week's listed sign-ups. */
+/** "over the last 7 days: 1 in 4 started outside bluesky", from the last week's listed sign-ups, leaving out the bulk ones. */
 export function oddsWords(days: IdentityDay[]): string {
   const week = days.slice(-7);
-  const indep = week.reduce((t, d) => t + d.createdIndependent, 0);
-  const listed = week.reduce((t, d) => t + d.createdBluesky + d.createdIndependent, 0);
+  const indep = week.reduce((t, d) => t + independentOf(d), 0);
+  const listed = week.reduce((t, d) => t + d.createdBluesky + independentOf(d), 0);
   if (indep === 0 || listed === 0) return '';
   if (week.length === 1) return '';
   return `over the last ${week.length} days: 1 in ${formatCount(Math.max(1, Math.round(listed / indep)))} started outside bluesky.`;
 }
 
-/** Where the last week's movers went, busiest first, adding up each day's top destinations. */
+/** "plus 4,615 made in bulk on goodmkt.id, left out above. ...": what the numbers above leave out, or '' when nothing was. */
+export function bulkWords(d: IdentityDay): string {
+  if (d.createdBulk === 0 || d.bulk.length === 0) return '';
+  const [first, second] = d.bulk;
+  const where = d.bulk.length === 1 ? first!.hostname : d.bulk.length === 2 ? `${first!.hostname} and ${second!.hostname}` : `${first!.hostname} and ${d.bulk.length - 1} other hosts`;
+  return `plus ${formatCount(d.createdBulk)} made in bulk on ${where}, left out above. one host taking in a thousand or more in a day is usually a service making accounts, not people signing up.`;
+}
+
+/** Where movers went over the given days, busiest first, adding up each day's top destinations. */
 export function destinationsOf(days: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
-  const by = new Map<string, number>();
-  for (const d of days.slice(-7)) for (const h of d.destinations) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
-  return [...by]
-    .map(([hostname, accounts]) => ({ hostname, accounts }))
-    .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1))
-    .slice(0, HOST_LIST_TOP);
+  return mergeHosts(days.map((d) => d.destinations));
 }
 
 /**
  * The identity tiles from the PLC directory's days (new arrivals with its air quality,
- * migration winds); each stays hidden without a day to show. `drawBars` draws the
- * movers' destinations.
+ * migration winds), added up over the range: today so far for a day, or the last 7 or
+ * 30 days. Each stays hidden without a day to show. New accounts made in bulk are counted
+ * apart, so they don't swell the share that started outside bluesky. `drawBars` draws
+ * the movers' destinations.
  */
-export function renderIdentities(report: ParentNode, days: IdentityDay[], now = Date.now(), drawBars?: (list: HTMLElement, bars: Bar[]) => void): void {
+export function renderIdentities(report: ParentNode, days: IdentityDay[], now = Date.now(), drawBars?: (list: HTMLElement, bars: Bar[]) => void, range: HostRange = 'day'): void {
   const tiles = ['[data-p-arrivals]', '[data-p-winds]', '[data-p-smog]'].map((sel) => $(report, sel));
-  const d = days[days.length - 1];
+  const view = identityView(days, range, now);
+  const d = sumDays(view);
   for (const tile of tiles) if (tile) tile.hidden = !d;
   if (!d) return;
-  for (const el of Array.from(report.querySelectorAll<HTMLElement>('[data-p-day]'))) el.textContent = identityDayWords(d.day, now);
+  const span = identityViewWords(view, range, now);
+  for (const el of Array.from(report.querySelectorAll<HTMLElement>('[data-p-day]'))) el.textContent = span;
+  // a day on its own is set against the last 7; a week or a month says it all itself
+  const single = range === 'day';
 
-  // new arrivals: on listed hosts only; unlisted sign-ups are the smog
-  const listed = d.createdBluesky + d.createdIndependent;
+  // new arrivals: on listed hosts only, less the bulk ones; unlisted sign-ups are the smog
+  const indep = independentOf(d);
+  const listed = d.createdBluesky + indep;
   setText(report, '[data-p-signups]', formatCount(listed));
   setText(report, '[data-p-bsky]', formatCount(d.createdBluesky));
-  setText(report, '[data-p-indep]', formatCount(d.createdIndependent));
-  renderShare($(report, '[data-p-bar-bsky]'), $(report, '[data-p-bar-else]'), listed > 0 ? (d.createdIndependent / listed) * 100 : 0);
+  setText(report, '[data-p-indep]', formatCount(indep));
+  renderShare($(report, '[data-p-bar-bsky]'), $(report, '[data-p-bar-else]'), listed > 0 ? (indep / listed) * 100 : 0);
   setText(
     report,
     '[data-p-own]',
     listed > 0
-      ? `${formatIndex((d.createdIndependent / listed) * 100)}% started outside bluesky, and ${formatCount(d.createdCustomHandle)} with a handle on their own domain.`
+      ? `${formatIndex((indep / listed) * 100)}% started outside bluesky, and ${formatCount(d.createdCustomHandle)} with a handle on their own domain.`
       : 'nobody has signed up yet.',
   );
+  const bulk = bulkWords(d);
+  const bulkLine = $(report, '[data-p-bulk]');
+  if (bulkLine) {
+    bulkLine.hidden = !bulk;
+    bulkLine.textContent = bulk;
+  }
   const card = $(report, '[data-p-arrivals-card]');
   const chart = $(report, '[data-p-chart="arrivals"]');
   if (card) card.hidden = days.length < 2;
   if (chart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
-    const shareOf = (x: IdentityDay) => (x.createdBluesky + x.createdIndependent > 0 ? (x.createdIndependent / (x.createdBluesky + x.createdIndependent)) * 100 : null);
+    const shareOf = (x: IdentityDay) => (x.createdBluesky + independentOf(x) > 0 ? (independentOf(x) / (x.createdBluesky + independentOf(x))) * 100 : null);
     renderChart(chart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: shareOf(x) })), { label: 'new accounts starting outside bluesky each day, as a share', color: 'var(--weather-else)', format: (v) => `${formatIndex(v)}%`, formatTick: (v) => `${Number(v.toFixed(1))}%`, formatTime: dayFmt, stepMs: 86_400_000 });
   }
-  const odds = oddsWords(days);
+  const odds = single ? oddsWords(days) : '';
   const oddsLine = $(report, '[data-p-odds]');
   if (oddsLine) {
     oddsLine.hidden = !odds;
@@ -460,19 +531,21 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
     renderChart(windsChart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.movedOut })), { label: 'accounts moving out of bluesky each day', color: 'var(--weather-bsky)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
   }
-  setText(report, '[data-p-week]', week.length > 1 ? `over the last ${week.length} days: ${plural(sum('movedOut'), 'account')} moved out, ${formatCount(sum('movedIn'))} moved back.` : '');
-  const went = destinationsOf(days);
+  setText(report, '[data-p-week]', single && week.length > 1 ? `over the last ${week.length} days: ${plural(sum('movedOut'), 'account')} moved out, ${formatCount(sum('movedIn'))} moved back.` : '');
+  // where they went: a day's movers are few, so a day shows the last week's
+  const movers = single ? week : view;
+  const went = destinationsOf(movers);
   const dest = $(report, '[data-p-dest-wrap]');
   if (dest) dest.hidden = went.length === 0 || !drawBars;
   const destList = $(report, '[data-p-dest]');
   if (destList && drawBars && went.length) drawBars(destList, went.map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover') })));
-  setText(report, '[data-p-dest-note]', week.length > 1 ? `over the last ${week.length} days. tap one to see how it's grown.` : `today. tap one to see how it's grown.`);
+  setText(report, '[data-p-dest-note]', movers.length > 1 ? `over the last ${movers.length} days. tap one to see how it's grown.` : `today. tap one to see how it's grown.`);
 
   // air quality
   const smog = smogOf(d);
   setText(report, '[data-p-smog-level]', smog.level);
   // against every sign-up, not the arrivals above, so the share doesn't read as theirs
-  const all = listed + d.createdUnlisted;
+  const all = d.createdBluesky + d.createdIndependent + d.createdUnlisted;
   setText(
     report,
     '[data-p-smog-words]',

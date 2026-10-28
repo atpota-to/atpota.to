@@ -38,7 +38,7 @@
 // new accounts by where they signed up (Bluesky's hosts, independent hosts, unlisted
 // ones), how many of the new accounts on listed hosts started with a handle on their own
 // domain (not one their host hands out), accounts moving out of Bluesky's hosts, back in, and between independent hosts,
-// and deletions, and the independent hosts accounts moved to. These are counted, not estimated.
+// and deletions, and the independent hosts accounts moved to and signed up on. These are counted, not estimated.
 //
 // Days the station already wrote itself are left alone unless --overwrite. The log pages
 // and the audit answers are cached in --cache (default ./plc-cache), so a run that stops
@@ -89,22 +89,26 @@ export function daysOf(from, today) {
   return days;
 }
 
-const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {} });
+const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, created_hosts: {} });
 
-/** How many destinations a day's row names. */
+/** How many destinations (and sign-up hosts) a day's row names. */
 export const TOP_DESTINATIONS = 10;
 
-/**
- * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
- * accounts moved to, out of Bluesky's hosts or from another independent one, by count) cut
- * to the TOP_DESTINATIONS busiest as [{ hostname, accounts }].
- */
-export function plcRow(day, signals) {
-  const destinations = Object.entries(signals.destinations ?? {})
+/** Hosts by count, the TOP_DESTINATIONS busiest, as [{ hostname, accounts }]. */
+const topHosts = (byHost) =>
+  Object.entries(byHost ?? {})
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, TOP_DESTINATIONS)
     .map(([hostname, accounts]) => ({ hostname, accounts }));
-  return { day, ...signals, destinations };
+
+/**
+ * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
+ * accounts moved to, out of Bluesky's hosts or from another independent one) and
+ * `created_hosts` (independent hosts new accounts signed up on), each cut to the
+ * TOP_DESTINATIONS busiest.
+ */
+export function plcRow(day, signals) {
+  return { day, ...signals, destinations: topHosts(signals.destinations), created_hosts: topHosts(signals.created_hosts) };
 }
 
 /**
@@ -179,6 +183,8 @@ export class PlcHistory {
         const side = this.sideOfIndex(host) ?? 'unlisted';
         s[`created_${side}`]++;
         if (side !== 'unlisted' && isCustomHandle(entry.handle, entry.host)) s.created_custom_handle++;
+        // where they signed up: a thousand or more on one host in a day is a batch (website/server/weather-hosts.ts BULK_MIN)
+        if (side === 'independent' && isHostname(entry.host)) s.created_hosts[entry.host] = (s.created_hosts[entry.host] ?? 0) + 1;
       }
     }
     let rec = this.dids.get(entry.did);
