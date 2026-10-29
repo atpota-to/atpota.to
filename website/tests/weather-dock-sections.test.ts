@@ -2,10 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { currentSection, hintWords, initLensDock, sectionsOf } from '../src/scripts/weather-dock.js';
+import { currentSection, initLensDock, sectionsOf } from '../src/scripts/weather-dock.js';
 import { createLens } from '../src/scripts/weather-lens.js';
 
-// The page's map in the dock: jump to a section, see which one you're in, what the controls reach there.
+// The page's sections in the dock: what the controls reach in the one you're in.
 
 const PAGE = readFileSync(resolve(process.cwd(), 'weather/index.html'), 'utf8');
 const MAIN = PAGE.slice(PAGE.indexOf('<main'), PAGE.indexOf('</main>') + '</main>'.length);
@@ -23,9 +23,7 @@ beforeEach(() => {
   document.body.innerHTML = MAIN;
   report = document.querySelector<HTMLElement>('[data-weather-report]')!;
   Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
-  Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
   window.requestAnimationFrame = (fn) => { fn(0); return 0; };
-  Element.prototype.scrollIntoView = function () {};
 });
 
 describe('the page\'s sections', () => {
@@ -47,35 +45,20 @@ describe('the page\'s sections', () => {
     place({ sky: 0, trends: 900 });
     expect(currentSection(sectionsOf(report), 800)!.key).toBe('sky');
   });
-
-  it('says what is below in words', () => {
-    expect(hintWords([])).toBe('more below');
-    expect(hintWords(['trends'])).toBe('more below: trends');
-    expect(hintWords(['trends', 'patterns', 'where it lives'])).toBe('more below: trends, patterns and where it lives');
-  });
 });
 
-describe('the dock as the page\'s map', () => {
-  it('lists the sections to jump to, marks the one on screen, and leads the strip with it', () => {
+describe('the dock and the page\'s sections', () => {
+  const visible = () => [...report.querySelectorAll<HTMLElement>('[data-dock-now] [data-part]')].filter((s) => !s.hidden).map((s) => s.textContent).join('');
+
+  it('says only what the controls are set to: no section name, no hint, no sections to jump to', () => {
     place({ sky: 0, trends: 900, patterns: 3000, hosts: 6000 });
     initLensDock(report, createLens());
-    const links = [...report.querySelectorAll<HTMLAnchorElement>('[data-dock-nav] a')];
-    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
-      ['the sky', '#the-sky'],
-      ['trends', '#trends'],
-      ['patterns', '#patterns-and-outlook'],
-      ['where it lives', '#where-the-atmosphere-lives'],
-    ]);
-    expect(links[0]!.getAttribute('aria-current')).toBe('true');
-    expect(report.querySelector('[data-dock-section]')!.textContent).toBe('the sky');
-    // at the top, a hint that there's more
-    const hint = report.querySelector<HTMLAnchorElement>('[data-dock-hint]')!;
-    expect(hint.hidden).toBe(false);
-    expect(hint.textContent).toBe('more below: trends, patterns and where it lives');
-    expect(hint.getAttribute('href')).toBe('#trends');
+    expect(report.querySelector('[data-weather-dock]')!.textContent!.replace(/\s+/g, ' ').trim()).not.toMatch(/the sky|more below/);
+    expect(report.querySelector('[data-weather-dock] a')).toBeNull();
+    expect(visible()).toBe('1h · accounts');
   });
 
-  it('dims the controls a section does not follow, says so, and drops the hint once the reader scrolls', () => {
+  it('dims the controls a section does not follow, and says so', () => {
     place({ sky: -5000, trends: -4000, patterns: -3000, hosts: 100 });
     initLensDock(report, createLens());
     const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
@@ -88,26 +71,21 @@ describe('the dock as the page\'s map', () => {
     const note = report.querySelector<HTMLElement>('[data-dock-note]')!;
     expect(note.hidden).toBe(false);
     expect(note.textContent).toMatch(/only the window reaches/);
-    // scrolled: the hint goes, and stays gone
-    Object.defineProperty(window, 'scrollY', { value: 4000, configurable: true });
-    window.dispatchEvent(new Event('scroll'));
-    expect(report.querySelector<HTMLElement>('[data-dock-hint]')!.hidden).toBe(true);
+    expect(visible()).toBe('1h');
     // back at the sky: every control counts again
     place({ sky: 0, trends: 900, patterns: 3000, hosts: 6000 });
-    Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
     window.dispatchEvent(new Event('scroll'));
     expect(measureSeg.hasAttribute('data-inactive')).toBe(false);
     expect(note.hidden).toBe(true);
-    expect(report.querySelector<HTMLElement>('[data-dock-hint]')!.hidden).toBe(true);
+    expect(visible()).toBe('1h · accounts');
   });
 
-  it('a jump closes the panel', () => {
-    place({ sky: 0, trends: 900, patterns: 3000, hosts: 6000 });
+  it('says it all rather than nothing where none of what the strip shows reaches (patterns, by accounts)', () => {
+    place({ sky: -5000, trends: -4000, patterns: 100, hosts: 6000 });
     initLensDock(report, createLens());
-    const strip = report.querySelector<HTMLButtonElement>('.weather-dock__strip')!;
-    strip.click();
-    expect(strip.getAttribute('aria-expanded')).toBe('true');
-    report.querySelector<HTMLAnchorElement>('[data-dock-nav] a[href="#where-the-atmosphere-lives"]')!.click();
-    expect(strip.getAttribute('aria-expanded')).toBe('false');
+    const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
+    expect(dock.dataset.section).toBe('patterns');
+    expect(dock.dataset.lensOff).toBe('window measure');
+    expect(visible()).toBe('1h · accounts');
   });
 });
