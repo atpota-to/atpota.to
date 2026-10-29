@@ -2552,25 +2552,6 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   color: var(--text);
 }
 
-.weather-dock__hint:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* The section on screen, leading the strip: "patterns · 1h · accounts". */
-.weather-dock__section {
-  color: var(--muted);
-}
-
-.weather-dock__section:not(:empty)::after {
-  content: " ·";
-}
-
-/* nothing after it when nothing up here reaches the section ("today", not "today ·") */
-.weather-dock__strip:not(:has(.weather-dock__now [data-part]:not([hidden]))) .weather-dock__section::after {
-  content: none;
-}
-
 /* A control the section on screen doesn't follow: still there (it changes the sections that do), but faint. */
 .weather-dock [data-inactive] {
   opacity: 0.45;
@@ -2583,45 +2564,7 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   color: var(--muted);
 }
 
-/* There's more below: until the reader scrolls. */
-.weather-dock__hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 6px 14px 6px 10px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--card) 92%, transparent);
-  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--text) 45%, transparent);
-  color: var(--text-soft);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.weather-dock__hint svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-}
-
-.weather-dock__hint[hidden] {
-  display: none;
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .weather-dock__hint svg {
-    animation: weather-hint-bob 1.6s var(--ease-out) infinite;
-  }
-
-  @keyframes weather-hint-bob {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(3px); }
-  }
-
   .weather-dock__chev {
     transition: transform var(--dur-fast) var(--ease-out);
   }

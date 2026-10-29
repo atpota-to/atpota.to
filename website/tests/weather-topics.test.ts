@@ -197,14 +197,12 @@ describe('the page, on a topic', () => {
     expect(sectionsOf(report).map((s) => [s.key, s.label, [...s.lens]])).toEqual([['hosts', 'pds hosts', ['window']]]);
     initLensDock(report, createLens());
     const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
-    expect(dock.querySelector('[data-dock-section]')!.textContent).toBe('pds hosts');
-    expect(dock.querySelector('.weather-dock__panel a')).toBeNull();
+    expect(dock.querySelector('a')).toBeNull();
     expect(dock.dataset.lensOff).toBe('measure unit');
     const note = dock.querySelector<HTMLElement>('[data-dock-note]')!;
     expect(note.hidden).toBe(false);
     expect(note.textContent).toBe(PAGE_NOTES.window);
-    expect(dock.querySelector<HTMLElement>('[data-dock-hint]')!.hidden).toBe(true);
-    // the strip says only what reaches it: "pds hosts · 1h"
+    // the strip says only what reaches it: "1h"
     expect([...dock.querySelectorAll<HTMLElement>('[data-dock-now] [data-part]')].filter((x) => !x.hidden).map((x) => x.textContent)).toEqual(['1h']);
   });
 

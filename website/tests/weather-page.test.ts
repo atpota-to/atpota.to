@@ -671,8 +671,11 @@ describe('the lens', () => {
     const now = dock.querySelector<HTMLElement>('[data-dock-now]')!;
     punctuate(now, '');
     expect(visible()).toBe('1h · accounts');
+    // all of it off would leave the strip blank: it says it all instead
     punctuate(now, 'window measure');
-    expect(visible()).toBe('');
+    expect(visible()).toBe('1h · accounts');
+    punctuate(now, 'measure');
+    expect(visible()).toBe('1h');
     // the header says what the number is over, and a tap on it opens the controls too
     const period = report.querySelector<HTMLButtonElement>('[data-r-period]')!;
     expect(period.textContent).toBe('the last hour');

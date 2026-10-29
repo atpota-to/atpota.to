@@ -7,17 +7,15 @@
  * It floats rather than sitting in the page: under a header whose height follows the
  * reading, a bar in the page slid out from under the finger with every change.
  *
- * It also knows where the reader is (initSections). The strip leads with the name of the
- * report's section on screen ([data-section]: the sky, trends, patterns, where it lives),
- * and the controls a section doesn't follow (data-section-lens names the ones it does) are
- * dimmed while it's on screen, with a line saying so. Until the reader scrolls, a hint above
- * the strip says there's more below.
+ * It also knows where the reader is (initSections). The controls the report's section on
+ * screen ([data-section]: the sky, trends, patterns, where it lives) doesn't follow
+ * (data-section-lens names the ones it does) are dimmed while it's on screen, with a line
+ * saying so, and the strip leaves them out.
  *
- * A topic's page (/weather/<topic>, weather-topics.ts) is one section: the strip leads with
- * the topic, and the controls that don't reach its tiles are dimmed for the whole page.
+ * A topic's page (/weather/<topic>, weather-topics.ts) is one section: the controls that
+ * don't reach its tiles are dimmed for the whole page.
  */
 
-import { motionOK } from './roll';
 import { WINDOW_INFO, type Lens, type LensState, type Window } from './weather-lens';
 import { topicOf, type Topic } from './weather-topics';
 
@@ -42,11 +40,16 @@ export function dockParts(controls: HTMLElement, s: LensState, unitAlone = false
   return parts.filter(([, w]) => w);
 }
 
-/** Hides the strip's parts named in `off` ("measure unit") and dots the rest: "1h · accounts". */
+/**
+ * Hides the strip's parts named in `off` ("measure unit") and dots the rest: "1h · accounts".
+ * If that would hide them all, it shows them all: a blank strip would say nothing at all.
+ */
 export function punctuate(now: HTMLElement, off: string): void {
-  const hidden = new Set(off.split(' '));
+  const spans = [...now.querySelectorAll<HTMLElement>('[data-part]')];
+  const named = off.split(' ');
+  const hidden = new Set(spans.every((span) => named.includes(span.dataset.part ?? '')) ? [] : named);
   let first = true;
-  for (const span of now.querySelectorAll<HTMLElement>('[data-part]')) {
+  for (const span of spans) {
     const part = span.dataset.part ?? '';
     span.hidden = hidden.has(part);
     const word = span.dataset.word ?? span.textContent ?? '';
@@ -170,32 +173,14 @@ export function currentSection(sections: Section[], viewHeight: number): Section
   return at;
 }
 
-/** "more below: trends, patterns and where it lives". */
-export function hintWords(labels: string[]): string {
-  if (!labels.length) return 'more below';
-  const list = labels.length === 1 ? labels[0]! : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
-  return `more below: ${list}`;
-}
-
-/** Jump to a section: smoothly unless the reader asked for less motion. */
-function jump(section: Section): void {
-  section.el.scrollIntoView({ behavior: motionOK() ? 'smooth' : 'auto', block: 'start' });
-  section.el.focus?.({ preventScroll: true });
-}
-
 export function initSections(report: HTMLElement, dock: HTMLElement): void {
   const topic = topicOf(report.ownerDocument);
   const sections = sectionsOf(report, topic);
-  const label = dock.querySelector<HTMLElement>('[data-dock-section]');
   const note = dock.querySelector<HTMLElement>('[data-dock-note]');
-  const hint = dock.querySelector<HTMLAnchorElement>('[data-dock-hint]');
   const panel = dock.querySelector<HTMLElement>('.weather-dock__panel');
   // a page of one section (a topic's) still says what reaches it
   if (!panel || sections.length < (topic ? 1 : 2)) return;
   const win = dock.ownerDocument.defaultView ?? window;
-  // each section can be landed on (for the hint's jump) without joining the tab order
-  for (const s of sections) if (!s.el.hasAttribute('tabindex')) s.el.setAttribute('tabindex', '-1');
-
   const parts: Record<LensPart, HTMLElement | null> = {
     window: panel.querySelector<HTMLElement>('[data-lens-window]')?.closest<HTMLElement>('.weather-seg') ?? null,
     measure: panel.querySelector<HTMLElement>('[data-lens-measure]')?.closest<HTMLElement>('.weather-seg') ?? null,
@@ -203,13 +188,11 @@ export function initSections(report: HTMLElement, dock: HTMLElement): void {
   };
 
   let shown: string | null = null;
-  let scrolled = false;
   const update = () => {
     const at = currentSection(sections, win.innerHeight);
     if (at && at.key !== shown) {
       shown = at.key;
       dock.dataset.section = at.key;
-      if (label) label.textContent = at.label;
       // the strip leaves out what doesn't reach this section ("accounts" means nothing to the hosts)
       dock.dataset.lensOff = (Object.keys(parts) as LensPart[]).filter((p) => !at.lens.has(p)).join(' ');
       const now = dock.querySelector<HTMLElement>('[data-dock-now]');
@@ -226,24 +209,7 @@ export function initSections(report: HTMLElement, dock: HTMLElement): void {
         note.textContent = all ? '' : (notes[[...at.lens].sort().join(' ')] ?? notes['']!);
       }
     }
-    if (hint) {
-      // once the reader has scrolled, they know: it doesn't come back
-      if (win.scrollY > 80) scrolled = true;
-      const below = sections.filter((s) => s.el.getBoundingClientRect().top > win.innerHeight);
-      hint.hidden = scrolled || below.length === 0;
-      if (!hint.hidden) {
-        const words = hint.querySelector<HTMLElement>('[data-dock-hint-words]');
-        if (words) words.textContent = hintWords(below.map((s) => s.label));
-        hint.href = `#${below[0]!.el.id}`;
-      }
-    }
   };
-  hint?.addEventListener('click', (event) => {
-    const next = sections.find((s) => `#${s.el.id}` === hint.getAttribute('href'));
-    if (!next) return;
-    event.preventDefault();
-    jump(next);
-  });
   let queued = false;
   const soon = () => {
     if (queued) return;
