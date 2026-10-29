@@ -7,11 +7,11 @@
  * It floats rather than sitting in the page: under a header whose height follows the
  * reading, a bar in the page slid out from under the finger with every change.
  *
- * It's also the page's map (initSections). The report's sections ([data-section]: the sky,
- * trends, patterns, where it lives) are listed in the panel to jump to, the one on screen
- * marked; the strip leads with its name; and the controls a section doesn't follow
- * (data-section-lens names the ones it does) are dimmed while it's on screen, with a line
- * saying so. Until the reader scrolls, a hint above the strip says there's more below.
+ * It also knows where the reader is (initSections). The strip leads with the name of the
+ * report's section on screen ([data-section]: the sky, trends, patterns, where it lives),
+ * and the controls a section doesn't follow (data-section-lens names the ones it does) are
+ * dimmed while it's on screen, with a line saying so. Until the reader scrolls, a hint above
+ * the strip says there's more below.
  *
  * A topic's page (/weather/<topic>, weather-topics.ts) is one section: the strip leads with
  * the topic, and the controls that don't reach its tiles are dimmed for the whole page.
@@ -102,7 +102,7 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
 
   const periods = report.querySelectorAll<HTMLElement>('[data-r-period]');
   const unitAlone = unitAloneOn(topicOf(report.ownerDocument));
-  initSections(report, dock, () => open(false));
+  initSections(report, dock);
   const show = (s: LensState) => {
     // each part its own span, so a section the part doesn't reach can leave it out (initSections)
     now.replaceChildren(
@@ -123,7 +123,7 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
   lens.onChange(show);
 }
 
-// ---------- the page's map ----------
+// ---------- the page's sections ----------
 
 export type LensPart = 'window' | 'measure' | 'unit';
 
@@ -183,35 +183,19 @@ function jump(section: Section): void {
   section.el.focus?.({ preventScroll: true });
 }
 
-export function initSections(report: HTMLElement, dock: HTMLElement, close: () => void): void {
+export function initSections(report: HTMLElement, dock: HTMLElement): void {
   const topic = topicOf(report.ownerDocument);
   const sections = sectionsOf(report, topic);
-  const nav = dock.querySelector<HTMLElement>('[data-dock-nav]');
   const label = dock.querySelector<HTMLElement>('[data-dock-section]');
   const note = dock.querySelector<HTMLElement>('[data-dock-note]');
   const hint = dock.querySelector<HTMLAnchorElement>('[data-dock-hint]');
   const panel = dock.querySelector<HTMLElement>('.weather-dock__panel');
-  // a page of one section (a topic's) has nowhere to jump to, but still says what reaches it
-  if (!nav || !panel || sections.length < (topic ? 1 : 2)) return;
-  nav.hidden = sections.length < 2;
+  // a page of one section (a topic's) still says what reaches it
+  if (!panel || sections.length < (topic ? 1 : 2)) return;
   const win = dock.ownerDocument.defaultView ?? window;
-  // each section can be landed on (for the jump's focus) without joining the tab order
+  // each section can be landed on (for the hint's jump) without joining the tab order
   for (const s of sections) if (!s.el.hasAttribute('tabindex')) s.el.setAttribute('tabindex', '-1');
 
-  const links = (sections.length < 2 ? [] : sections).map((s) => {
-    const a = dock.ownerDocument.createElement('a');
-    a.className = 'weather-dock__jump';
-    a.href = `#${s.el.id}`;
-    a.textContent = s.label;
-    a.addEventListener('click', (event) => {
-      event.preventDefault();
-      close();
-      jump(s);
-      win.history?.replaceState?.(win.history.state, '', `#${s.el.id}`);
-    });
-    nav.append(a);
-    return a;
-  });
   const parts: Record<LensPart, HTMLElement | null> = {
     window: panel.querySelector<HTMLElement>('[data-lens-window]')?.closest<HTMLElement>('.weather-seg') ?? null,
     measure: panel.querySelector<HTMLElement>('[data-lens-measure]')?.closest<HTMLElement>('.weather-seg') ?? null,
@@ -226,7 +210,6 @@ export function initSections(report: HTMLElement, dock: HTMLElement, close: () =
       shown = at.key;
       dock.dataset.section = at.key;
       if (label) label.textContent = at.label;
-      links.forEach((a, i) => (sections[i] === at ? a.setAttribute('aria-current', 'true') : a.removeAttribute('aria-current')));
       // the strip leaves out what doesn't reach this section ("accounts" means nothing to the hosts)
       dock.dataset.lensOff = (Object.keys(parts) as LensPart[]).filter((p) => !at.lens.has(p)).join(' ');
       const now = dock.querySelector<HTMLElement>('[data-dock-now]');

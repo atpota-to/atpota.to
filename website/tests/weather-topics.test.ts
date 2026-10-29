@@ -193,13 +193,12 @@ describe('the page, on a topic', () => {
     expect(topicOf(document)).toBeNull();
   });
 
-  it("is one section in the dock: the topic's, with what reaches it, and nowhere to jump", () => {
+  it("is one section in the dock: the topic's, with what reaches it", () => {
     expect(sectionsOf(report).map((s) => [s.key, s.label, [...s.lens]])).toEqual([['hosts', 'pds hosts', ['window']]]);
     initLensDock(report, createLens());
     const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
     expect(dock.querySelector('[data-dock-section]')!.textContent).toBe('pds hosts');
-    expect(dock.querySelector<HTMLElement>('[data-dock-nav]')!.hidden).toBe(true);
-    expect(dock.querySelectorAll('[data-dock-nav] a')).toHaveLength(0);
+    expect(dock.querySelector('.weather-dock__panel a')).toBeNull();
     expect(dock.dataset.lensOff).toBe('measure unit');
     const note = dock.querySelector<HTMLElement>('[data-dock-note]')!;
     expect(note.hidden).toBe(false);

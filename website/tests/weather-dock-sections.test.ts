@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { currentSection, hintWords, initLensDock, sectionsOf } from '../src/scripts/weather-dock.js';
 import { createLens } from '../src/scripts/weather-lens.js';
 
-// The page's map in the dock: jump to a section, see which one you're in, what the controls reach there.
+// The page's sections in the dock: see which one you're in and what the controls reach there.
 
 const PAGE = readFileSync(resolve(process.cwd(), 'weather/index.html'), 'utf8');
 const MAIN = PAGE.slice(PAGE.indexOf('<main'), PAGE.indexOf('</main>') + '</main>'.length);
@@ -55,18 +55,11 @@ describe('the page\'s sections', () => {
   });
 });
 
-describe('the dock as the page\'s map', () => {
-  it('lists the sections to jump to, marks the one on screen, and leads the strip with it', () => {
+describe('the dock and the page\'s sections', () => {
+  it('leads the strip with the section on screen, and lists no sections to jump to', () => {
     place({ sky: 0, trends: 900, patterns: 3000, hosts: 6000 });
     initLensDock(report, createLens());
-    const links = [...report.querySelectorAll<HTMLAnchorElement>('[data-dock-nav] a')];
-    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
-      ['the sky', '#the-sky'],
-      ['trends', '#trends'],
-      ['patterns', '#patterns-and-outlook'],
-      ['where it lives', '#where-the-atmosphere-lives'],
-    ]);
-    expect(links[0]!.getAttribute('aria-current')).toBe('true');
+    expect(report.querySelector('.weather-dock__panel a')).toBeNull();
     expect(report.querySelector('[data-dock-section]')!.textContent).toBe('the sky');
     // at the top, a hint that there's more
     const hint = report.querySelector<HTMLAnchorElement>('[data-dock-hint]')!;
@@ -99,15 +92,5 @@ describe('the dock as the page\'s map', () => {
     expect(measureSeg.hasAttribute('data-inactive')).toBe(false);
     expect(note.hidden).toBe(true);
     expect(report.querySelector<HTMLElement>('[data-dock-hint]')!.hidden).toBe(true);
-  });
-
-  it('a jump closes the panel', () => {
-    place({ sky: 0, trends: 900, patterns: 3000, hosts: 6000 });
-    initLensDock(report, createLens());
-    const strip = report.querySelector<HTMLButtonElement>('.weather-dock__strip')!;
-    strip.click();
-    expect(strip.getAttribute('aria-expanded')).toBe('true');
-    report.querySelector<HTMLAnchorElement>('[data-dock-nav] a[href="#where-the-atmosphere-lives"]')!.click();
-    expect(strip.getAttribute('aria-expanded')).toBe('false');
   });
 });

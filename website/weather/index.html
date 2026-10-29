@@ -50,7 +50,7 @@
     <main id="main" class="weather-page" tabindex="-1">
         <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
         <div class="weather" data-weather-report data-state="loading">
-            <!-- the page's sections ([data-section]): the dock jumps between them and says which one you're in (weather-dock.ts initSections) -->
+            <!-- the page's sections ([data-section]): the dock says which one you're in and what reaches it (weather-dock.ts initSections) -->
             <header class="tile weather-hero" id="the-sky" aria-labelledby="weather-title" data-weather-hero data-lensed data-section="sky" data-section-label="the sky" data-section-lens="window measure unit">
                 <!-- the weather itself: wind, rain or snow, and now and then a rainbow (src/scripts/weather-hero.ts) -->
                 <div class="weather-air" aria-hidden="true" data-weather-air></div>
@@ -102,8 +102,6 @@
                 <!-- a hint there's more below, until the reader scrolls (weather-dock.ts initSections) -->
                 <a class="weather-dock__hint" href="#trends" data-dock-hint hidden><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-dock-hint-words>more below</span></a>
                 <div class="weather-dock__panel" id="weather-dock-panel" role="group" aria-label="what the report shows" hidden>
-                    <!-- jump to a section; the one on screen is marked (weather-dock.ts initSections) -->
-                    <nav class="weather-dock__nav" aria-label="sections of the report" data-dock-nav></nav>
                     <div class="weather-seg" role="group" aria-label="over">
                         <button type="button" class="weather-seg__btn" data-lens-window="now" aria-pressed="false" aria-label="now: the last minute, live">now</button>
                         <button type="button" class="weather-seg__btn" data-lens-window="hour" aria-pressed="true" aria-label="the last hour">1h</button>
