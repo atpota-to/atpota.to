@@ -103,6 +103,18 @@ test('an empty or whitespace draft is rejected', () => {
   }
 });
 
+test('a draft of only markup or invisible characters is rejected as empty', () => {
+  for (const d of ['<br>', '<br/>', ' <br> <BR /> ', '<p></p>', '&nbsp;', '&#8203;', '​', '<!-- -->']) {
+    assert.equal(evaluateOutbound(d, deps()).gate, 'empty', `should reject ${JSON.stringify(d)}`);
+  }
+});
+
+test('a tag-shaped placeholder inside an answer, or a face on its own, still passes', () => {
+  for (const d of ['the record key goes where <rkey> is in the uri', '(◕‿◕)', 'i <3 that feed']) {
+    assert.equal(evaluateOutbound(d, deps()).ok, true, `should pass ${JSON.stringify(d)}`);
+  }
+});
+
 test('a draft tagging a third party is rejected', () => {
   const r = evaluateOutbound('Ask @someoneelse.bsky.social about it.', deps());
   assert.equal(r.ok, false);
