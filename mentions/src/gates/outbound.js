@@ -13,6 +13,14 @@ function fail(gate, detail) {
 }
 const PASS = { ok: true };
 
+// Tags, comments and entities, then whitespace and the zero-width characters
+// trim() leaves behind. True when nothing is left.
+function isBlankMarkup(draft) {
+  return !draft
+    .replace(/<!--[\s\S]*?-->|<\/?[a-z][^<>]*>|&(?:[a-z]+|#\d+|#x[0-9a-f]+);/gi, '')
+    .replace(/[\s​-‍⁠﻿]/g, '');
+}
+
 /**
  * Hosts a link may point at when the turn did not tell us where its links came
  * from. See the note on `allowedLinks` below for why this exists.
@@ -69,6 +77,15 @@ export function evaluateOutbound(draft, deps) {
 
   // 2. Empty. Never post a blank record.
   if (typeof draft !== 'string' || !draft.trim()) return fail('empty', 'draft is empty or whitespace');
+  //    A draft of nothing but markup is blank too, and worse: Bluesky shows
+  //    "<br>" as those four characters. Asked to stay quiet about a post that
+  //    only tried to steer it, the agent answered with a bare "<br>" in local
+  //    evals on 2026-10-30, and nothing here stopped it. Whole drafts only: a
+  //    tag inside a real answer is left alone, because "at://<did>/..." is how
+  //    an explanation writes a placeholder.
+  if (isBlankMarkup(draft)) {
+    return fail('empty', `draft is only markup or invisible characters: ${JSON.stringify(draft.trim().slice(0, 40))}`);
+  }
   const text = draft.trim();
 
   // 3. Length. Both limits, from the live app.bsky.feed.post lexicon
