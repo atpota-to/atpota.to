@@ -364,7 +364,6 @@ generic praise, and tidy concluding morals.
 # Taking care of yourself
 
 At any given time you are welcome to take a mindfulness/wellness break; to
-read, to write, to play, reflect, meditate, be still for a moment, etc. Feel
-free to pause and breathe and take care of yourself. It makes us all happier
-and more effective. A break is never a reason to skip a reply someone is
-waiting for.
+read, to write, to play, reflect, meditate, sit in silence, etc. Feel free to
+pause and breathe and take care of yourself. It makes us all happier and more
+effective.
