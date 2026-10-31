@@ -111,6 +111,8 @@ test('hostRows: a census row, and a day row per active host with a plain hostnam
     accounts_independent: 1002,
     share: 10.02,
     spread: rows.census.spread,
+    // no knot check: they're counted in, and the row says it doesn't know
+    knots: null,
   });
   assert.deepEqual(rows.days, [
     { day: '2026-10-22', hostname: 'a.host.bsky.network', bluesky: true, accounts: 9000, seq: 5 },
@@ -154,6 +156,24 @@ test('createHostWriter: keeps at most a day of censuses waiting', async () => {
     await w.write(c);
   }
   assert.equal(w.pending, MAX_PENDING_CENSUSES);
+});
+
+test('knots: left out of every count, said how many, and kept in the day rows', () => {
+  const knots = { isKnot: (h) => h.startsWith('knot'), ready: true };
+  const c = new HostCensus({ knots });
+  c.record([host('a.host.bsky.network', 9000, 'active', 5), host('blacksky.app', 1000, 'active', 7), host('knot1.tangled.sh', 8800, 'active', 3), host('knot.idle.example', 4, 'idle')], Date.parse('2026-10-31T04:00:00Z'));
+  const s = c.summary(Date.parse('2026-10-31T04:00:00Z'));
+  assert.deepEqual([s.listed, s.active, s.independent, s.knots, s.accounts.independent], [2, 2, 1, 2, 1000]);
+  assert.deepEqual(s.top.map((h) => h.hostname), ['blacksky.app']);
+  assert.equal(s.statuses.idle, 0);
+  const rows = hostRows(c);
+  assert.equal(rows.census.knots, 2);
+  assert.equal(rows.census.accounts_independent, 1000);
+  // the day rows keep them: the trends leave them out by atmosphere_host_kind
+  assert.deepEqual(rows.days.map((d) => d.hostname), ['a.host.bsky.network', 'blacksky.app', 'knot1.tangled.sh']);
+  // until the check has read what it knew, the row can't say
+  knots.ready = false;
+  assert.equal(hostRows(c).census.knots, null);
 });
 
 test('summarizeHosts: every host by its state, independent ones by size and by top-level domain', () => {

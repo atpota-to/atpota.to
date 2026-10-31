@@ -138,7 +138,7 @@ describe('alerts from where the atmosphere lives', () => {
   it('new hosts by name, and accounts moving house, after the first look', () => {
     const pushed: WeatherAlert[] = [];
     const see = watchHosts({ push: (a) => pushed.push(a) });
-    const day = (movedOut: number, movedIn: number) => ({ day: '2026-10-22', ops: 1, createdBluesky: 1, createdIndependent: 1, createdUnlisted: 1, createdCustomHandle: 0, createdBulk: 0, bulk: [], createdUnnamed: 0, movedOut, movedIn, movedBetween: 0, deleted: 0, destinations: [] });
+    const day = (movedOut: number, movedIn: number) => ({ day: '2026-10-22', ops: 1, createdBluesky: 1, createdIndependent: 1, createdUnlisted: 1, createdCustomHandle: 0, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut, movedIn, movedBetween: 0, deleted: 0, destinations: [] });
     const history = (names: string[], movedOut: number, movedIn = 0) => ({
       bucket: 'hour' as const, since: '2026-10-08', points: [], newHosts: names.length, growing: [], daily: [],
       new: names.map((hostname) => ({ hostname, accounts: 3, people: 3, first: '2026-10-22' })),

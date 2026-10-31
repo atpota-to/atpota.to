@@ -516,6 +516,7 @@ test("hosts: the live census and the hosts' week, in the page's words, names che
   assert.equal(r.report, "hosts");
   assert.equal(r.now.activeHosts, 1889);
   assert.equal(r.now.hostsTheRelayKnows, 6442);
+  assert.equal("tangledKnotsLeftOut" in r.now, false);
   assert.deepEqual(r.now.wroteLately, { hosts: 702, independent: 615, overMinutes: 60 });
   assert.deepEqual(r.now.biggestIndependentHosts.map((h) => h.hostname), ["atproto.brid.gy", "blacksky.app"]);
   assert.equal(r.now.independentHostsBySize.justOnePerson, 764);
@@ -572,6 +573,25 @@ test("hosts: new accounts made in bulk are counted apart, the host named", async
   const plain = await lib.readWeather("hosts", "UTC", fakeFetch(FULL).impl, NOW);
   assert.equal("madeInBulk" in plain.latestIdentityDay.signups, false);
   assert.equal("withNoHandle" in plain.latestIdentityDay.signups, false);
+});
+
+test("hosts: tangled's knots left out of the census are said so", async () => {
+  const live = structuredClone(FULL["/api/atmosphere"]);
+  live.hosts.knots = 47;
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/atmosphere": live }).impl, NOW);
+  assert.equal(r.now.tangledKnotsLeftOut, 47);
+});
+
+test("hosts: sign-ups the trends call scripted are counted apart, the hosts named and why", async () => {
+  const days = { ...HOST_HISTORY, identities: [
+    HOST_HISTORY.identities[0],
+    idDay("2026-10-27", { createdIndependent: 2662, createdScripted: 1662, scripted: [{ hostname: "refpds.oyster.cafe", accounts: 1062, why: "stopped" }, { hostname: "goodmkt.id", accounts: 600, why: "bulk" }, { hostname: "goodmkt.id", accounts: 1, why: "maybe" }] }),
+  ] };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: days } }).impl, NOW);
+  assert.equal(r.latestIdentityDay.signups.onIndependentHosts, 1000);
+  assert.deepEqual(r.latestIdentityDay.signups.likelyScripted, { accounts: 1662, onHosts: [{ hostname: "refpds.oyster.cafe", accounts: 1062, why: "stopped" }, { hostname: "goodmkt.id", accounts: 600, why: "bulk" }] });
+  assert.equal(r.latestIdentityDay.newAccountsStartingOutsideBlueskyPercent, 5.6);
+  assert.equal(r.identityTotals.signups.likelyScripted.accounts, 1662);
 });
 
 test("hosts: identities with no handle are counted apart too, never as people", async () => {

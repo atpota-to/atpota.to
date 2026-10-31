@@ -686,7 +686,9 @@ export function renderHostCensus(report: HTMLElement, h: Hosts): void {
     const list = $(report, '[data-p-roll-list]');
     const entries = Object.entries(h.statuses).filter(([, v]) => v > 0);
     if (list) renderBars(list, entries.map(([k, v]) => bar(STATUS_NAMES[k] ?? k, v)), undefined);
-    setText(report, '[data-p-roll-lede]', `the relay has heard of ${formatCount(h.listed)} hosts. ${formatCount(h.statuses.active)} are up and about right now.`);
+    // tangled's knots are left out of every count (atmosphere/src/knots.js)
+    const knots = h.knots ? ` that's leaving out ${formatCount(h.knots)} tangled knot${h.knots === 1 ? '' : 's'}: git servers, whose "accounts" are repositories.` : '';
+    setText(report, '[data-p-roll-lede]', `the relay has heard of ${formatCount(h.listed)} hosts. ${formatCount(h.statuses.active)} are up and about right now.${knots}`);
   }
   const census = $(report, '[data-p-census]');
   if (census) census.hidden = !h.tlds?.length && !h.statuses;
@@ -735,6 +737,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       '- active hosts are the ones the relay is happily listening to right now',
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
       "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
+      "- tangled's knots don't count. they're git servers the relay lists alongside the hosts, and their \"accounts\" are git repositories, not people. i ask each host what it is once a week",
       "- liveliest counts the accounts on each host that actually wrote something that day. i keep a list of which independent host each account lives on (from each host's own list, kept up to date from the plc directory), so i can tell where everyone writing lives without keeping who they are",
       "- growing fastest counts people arriving: signing up, or moving their account in, from the plc directory. not the relay's count, which also goes up when a script makes thousands of accounts at once, or when a git server makes an identity for each of its repositories",
       "- new hosts are ones i hadn't seen before, as long as most of their accounts are new too. a server that's been running for years and only just turned up on the relay isn't new",
@@ -753,6 +756,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "- own domain: new accounts that start out with a handle like yourname.com instead of one their host hands out",
       "- made in bulk: new accounts that arrive the way only a script makes them. people signing up, even a huge rush for a new app, build up and trail off: they see a post, take a minute or two to sign up, and keep coming for hours. a script switches on at full speed, keeps a machine's steady pace, stops dead and goes quiet, or fires off floods of ten in a few seconds, again and again. only runs like that count. i still count them, but apart, so a batch doesn't look like a crowd leaving bluesky",
       "- no handle: new identities that never had a handle, so nobody signs in to them. a git server makes one for each repository, say. i count those apart too",
+      "- scripts i didn't catch in the act: once a host has made accounts in bulk, the rest of its sign-ups that month count as a script's too, and so does a day of a hundred or more on one host when nobody signs up there for the three days after. a crowd keeps coming; a script stops dead",
       '',
       "the numbers follow the window you pick, by utc day: today so far for the last minute, hour or 24 hours, or the last 7 or 30 days.",
       '',

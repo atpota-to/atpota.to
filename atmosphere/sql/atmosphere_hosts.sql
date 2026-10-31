@@ -127,9 +127,32 @@ create table if not exists public.atmosphere_host_active_day (
 alter table public.atmosphere_host_active_day enable row level security;
 create policy "anyone can read" on public.atmosphere_host_active_day for select using (true);
 
+-- ---------- Tangled's knots (src/knots.js) ----------
+-- Git servers the relay lists beside the PDS hosts, whose "accounts" are git repositories
+-- (knot1.tangled.sh held 8,829 on 2026-10-31). They don't count as hosts. The station asks
+-- each active independent host what it is (GET /xrpc/_health: a knot answers "knot 2.0.0")
+-- once a week and keeps the answer here; the census leaves knots out from then on, and says
+-- how many in atmosphere_hosts.knots. A census from before (knots null) still counts them,
+-- and the trends take them out of it. atmosphere_host_day keeps a row for them, as for any
+-- active host, which is what they're taken out with. Added 2026-10-31.
+create table if not exists public.atmosphere_host_kind (
+  hostname    text        not null primary key check (hostname ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$' and length(hostname) <= 253),
+  knot        boolean     not null,
+  version     text        check (length(version) <= 100),  -- what /xrpc/_health said
+  checked_at  timestamptz not null
+);
+alter table public.atmosphere_host_kind enable row level security;
+create policy "anyone can read" on public.atmosphere_host_kind for select using (true);
+-- how many knots a census left out, or null when it counted them in
+alter table public.atmosphere_hosts add column if not exists knots integer check (knots >= 0);
+
 -- ---------- the trends ----------
 -- For a range starting at `since`, bucketed by `bucket` (minute, hour, day or month, as
--- atmosphere_apps_over_time):
+-- atmosphere_apps_over_time). Tangled's knots (atmosphere_host_kind) count nowhere: a
+-- census from before the station left them out has that day's knots taken out of it, by
+-- their rows in atmosphere_host_day (hosts and accounts, and the spread worked out again
+-- without them: spread is e^entropy, and entropy = ln T - (sum of a ln a) / T). A knot's
+-- accounts can change during a day, so this is as of the day's last census.
 --   points   the last census in each bucket
 --   since    the first day the station kept hosts (nothing before it is "new")
 --   new      independent hosts first seen active since `since` (but not on that first
@@ -138,24 +161,26 @@ create policy "anyone can read" on public.atmosphere_host_active_day for select 
 --            or moved in, by atmosphere_host_arrival_day, whoever made them). haruhwa.com, first
 --            seen with 14,217 accounts from 2025, isn't. (The first rule is for a host whose
 --            first sign-ups came before the relay listed it: the station only counts arrivals
---            on hosts the relay lists.) The ones the most people arrived on (signed up, not in
---            bulk, or moved in), with the accounts they have now; newHosts is how many
---   growing  independent hosts the most people arrived on over the range: signed up, not in
---            bulk, or moved in, on the UTC days after the one `since` falls on, as the sign-ups
---            tile counts them (a day's range is today so far, a week's the last 6 days and
---            today, as the relay's count against the day before's last census was). Not the
---            relay's count, which goes up for accounts made in bulk and identities nobody
---            signs in to as much as for people. prevAccounts is the relay's count on their
---            first day in the range, for comparison. Accounts leaving aren't taken off: the
---            log can't say where most moves back to Bluesky's hosts came from (backfill-hosts.js)
+--            on hosts the relay lists.) The ones the most people arrived on (signed up, not
+--            scripted, or moved in), with the accounts they have now; newHosts is how many
+--   growing  independent hosts the most people arrived on over the range: signed up, not
+--            scripted, or moved in, on the UTC days after the one `since` falls on, as the
+--            sign-ups tile counts them (a day's range is today so far, a week's the last 6
+--            days and today, as the relay's count against the day before's last census was).
+--            Not the relay's count, which goes up for accounts made in bulk and identities
+--            nobody signs in to as much as for people. prevAccounts is the relay's count on
+--            their first day in the range, for comparison. Accounts leaving aren't taken off:
+--            the log can't say where most moves back to Bluesky's hosts came from
+--            (backfill-hosts.js)
 --
---            The station's bulkRun only catches the obvious runs, so two more rules, on whole
---            hosts and days, keep scripts out of the people (October 2026's checks are in
---            atmosphere/README.md):
---            - a host caught making accounts in bulk in the range has none of its sign-ups
---              counted as people, only its moves in: the same scripts make runs too uneven to
---              catch (goodmkt.id's 4,500 in one run on Oct 28 were caught, the 601 an hour later
---              weren't; on Oct 23 it made runs of 50 every five minutes on the dot)
+--            Scripted: the station's bulkRun only catches the obvious runs, so two more rules,
+--            on whole hosts and days, keep scripts out of the people (October 2026's checks
+--            are in atmosphere/README.md):
+--            - a host caught making accounts in bulk in the last 30 days (or the range, if
+--              longer) has none of its sign-ups counted as people, only its moves in: the same
+--              scripts make runs too uneven to catch (goodmkt.id's 4,500 in one run on Oct 28
+--              were caught, the 601 an hour later weren't; on Oct 23 it made runs of 50 every
+--              five minutes on the dot)
 --            - a day of 100 or more sign-ups on a host, after which it signed nobody up for
 --              the next 3 days, isn't people either: a crowd keeps coming, a script stops dead
 --              (refpds.oyster.cafe's 1,062 in 45 minutes on Oct 26, then none). Until the 3 days
@@ -166,7 +191,13 @@ create policy "anyone can read" on public.atmosphere_host_active_day for select 
 --            other way round). Joined and left are null on the first day kept, and
 --            `estimated` marks a day from the backfill (src/backfill-hosts.js).
 --   identities  atmosphere_plc_day's rows over the same days: each day's sign-ups, moves
---            and deletions from the PLC directory's log (today's so far).
+--            and deletions from the PLC directory's log (today's so far), and the sign-ups
+--            the rules above call scripted (created_scripted, of created_independent's people:
+--            not the bulk or unnamed ones) and the hosts that made them, the ten with the
+--            most: [{ hostname, accounts, why }], why being 'bulk' (the host made accounts in
+--            bulk) or 'stopped' (it then signed nobody up for 3 days)
+--   activeDaily  each day's accounts active on independent hosts, knots' left out, and
+--            everyone's; liveliest, the independent hosts with the most accounts active
 
 create or replace function public.atmosphere_host_trends(since timestamptz, bucket text, max_hosts integer default 10)
 returns jsonb
@@ -175,42 +206,79 @@ stable
 security invoker
 set search_path = ''
 as $$
-  with pts as (
-    select distinct on (date_trunc(bucket, h.t, 'UTC')) date_trunc(bucket, h.t, 'UTC') as b, h.*
+  with knot as (select k.hostname from public.atmosphere_host_kind k where k.knot),
+  -- each day's knots, as its last census had them
+  knot_day as (
+    select d.day, count(*) as hosts, sum(d.accounts) as accounts,
+      sum(case when d.accounts > 0 then d.accounts * ln(d.accounts::numeric) else 0 end) as aln
+    from public.atmosphere_host_day d join knot k using (hostname)
+    group by d.day
+  ),
+  -- every census in the range (and the day before the daily table's), knots out
+  census as (
+    select h.t, h.estimated, h.bluesky, h.accounts_bluesky, h.writing_minutes, h.writing_bluesky, h.writing_independent,
+      h.listed - coalesce(k.hosts, 0) as listed,
+      h.active - coalesce(k.hosts, 0) as active,
+      h.independent - coalesce(k.hosts, 0) as independent,
+      h.accounts_independent - coalesce(k.accounts, 0) as accounts_independent,
+      case when k.hosts is null then h.share
+        when h.accounts_bluesky + h.accounts_independent - k.accounts <= 0 then 0
+        else round(100.0 * (h.accounts_independent - k.accounts) / (h.accounts_bluesky + h.accounts_independent - k.accounts), 2) end as share,
+      case when k.hosts is null then h.spread
+        when h.accounts_independent - k.accounts <= 0 or h.spread <= 0 then 0
+        else round(exp(ln((h.accounts_independent - k.accounts)::numeric)
+          - (h.accounts_independent * (ln(h.accounts_independent::numeric) - ln(h.spread)) - k.aln) / (h.accounts_independent - k.accounts)), 2) end as spread
     from public.atmosphere_hosts h
+    left join knot_day k on h.knots is null and k.day = (h.t at time zone 'UTC')::date
+    where h.t >= least(date_trunc(bucket, since, 'UTC'), ((least(since, now() - interval '6 days') at time zone 'UTC')::date - 1)::timestamp at time zone 'UTC')
+  ),
+  pts as (
+    select distinct on (date_trunc(bucket, h.t, 'UTC')) date_trunc(bucket, h.t, 'UTC') as b, h.*
+    from census h
     where h.t >= date_trunc(bucket, since, 'UTC')
     order by date_trunc(bucket, h.t, 'UTC'), h.t desc
+  ),
+  hd as (
+    select d.* from public.atmosphere_host_day d
+    where not d.bluesky and not exists (select 1 from knot k where k.hostname = d.hostname)
   ),
   first_day as (select min(day) as day from public.atmosphere_host_day),
   last_day as (select max(day) as day from public.atmosphere_host_day),
   now_hosts as (
-    select d.hostname, d.accounts from public.atmosphere_host_day d, last_day l
-    where d.day = l.day and not d.bluesky
+    select d.hostname, d.accounts from hd d, last_day l
+    where d.day = l.day
   ),
   seen as (
     select distinct on (d.hostname) d.hostname, d.day as first, d.accounts as first_accounts
-    from public.atmosphere_host_day d
-    where not d.bluesky
+    from hd d
     order by d.hostname, d.day
   ),
-  -- each host's days of arrivals in the range, with its sign-ups as people: none on a day of
-  -- 100 or more after which it signed nobody up for 3 days
-  arrival as (
-    select a.*, case
-        when a.signed_up >= 100 and a.day + 3 < (now() at time zone 'UTC')::date
-          and not exists (select 1 from public.atmosphere_host_arrival_day x
-            where x.hostname = a.hostname and x.day > a.day and x.day <= a.day + 3 and x.signed_up + x.bulk > 0)
-        then 0 else a.signed_up end as people_signed_up
-    from public.atmosphere_host_arrival_day a
-    where a.day > (since at time zone 'UTC')::date
+  -- the days the scripted rules look at: the range, and at least the last 30
+  window_arrival as (
+    select a.* from public.atmosphere_host_arrival_day a
+    where a.day >= (least(since, now() - interval '30 days') at time zone 'UTC')::date
   ),
-  -- who arrived on each independent host over the range: people (none of the sign-ups on a
-  -- host that made any in bulk), and everything that came
+  -- hosts caught making accounts in bulk: none of their sign-ups are people
+  caught as (select distinct a.hostname from window_arrival a where a.bulk > 0),
+  -- each host's sign-ups each day a script made, by the rules: on a host caught at it, or on
+  -- a day of 100 or more after which it signed nobody up for 3 days
+  scripted as (
+    select a.day, a.hostname, a.signed_up as accounts,
+      case when a.hostname in (select hostname from caught) then 'bulk' else 'stopped' end as why
+    from window_arrival a
+    where a.signed_up > 0 and (a.hostname in (select hostname from caught) or (
+      a.signed_up >= 100 and a.day + 3 < (now() at time zone 'UTC')::date
+      and not exists (select 1 from public.atmosphere_host_arrival_day x
+        where x.hostname = a.hostname and x.day > a.day and x.day <= a.day + 3 and x.signed_up + x.bulk > 0)))
+  ),
+  -- who arrived on each independent host over the range: people, and everything that came
   arrived as (
     select a.hostname,
-      sum(a.moved_in) + case when sum(a.bulk) > 0 then 0 else sum(a.people_signed_up) end as people,
+      sum(a.moved_in + a.signed_up - coalesce(s.accounts, 0)) as people,
       sum(a.signed_up + a.bulk + a.unnamed + a.moved_in) as everything
-    from arrival a
+    from public.atmosphere_host_arrival_day a
+    left join scripted s using (day, hostname)
+    where a.day > (since at time zone 'UTC')::date
     group by a.hostname
   ),
   fresh as (
@@ -220,8 +288,8 @@ as $$
       and (s.first_accounts <= 25 or n.accounts <= 2 * coalesce(r.everything, 0))
   ),
   base as (
-    select distinct on (d.hostname) d.hostname, d.accounts from public.atmosphere_host_day d
-    where d.day >= (since at time zone 'UTC')::date and not d.bluesky
+    select distinct on (d.hostname) d.hostname, d.accounts from hd d
+    where d.day >= (since at time zone 'UTC')::date
     order by d.hostname, d.day
   ),
   grew as (
@@ -240,20 +308,20 @@ as $$
   ),
   census_day as (
     select distinct on ((h.t at time zone 'UTC')::date) (h.t at time zone 'UTC')::date as day, h.active, h.estimated
-    from public.atmosphere_hosts h
+    from census h
     where h.t >= (least(since, now() - interval '6 days') at time zone 'UTC')::date - 1
     order by (h.t at time zone 'UTC')::date, h.t desc
   ),
   daily as (
     select d.day, c.active, c.active - p.active as change, coalesce(c.estimated, false) as estimated,
       case when d.day > (select day from first_day) then (
-        select count(*) from public.atmosphere_host_day x
-        where x.day = d.day and not x.bluesky
+        select count(*) from hd x
+        where x.day = d.day
           and not exists (select 1 from public.atmosphere_host_day y where y.day = d.day - 1 and y.hostname = x.hostname)
       ) end as joined,
       case when d.day > (select day from first_day) then (
-        select count(*) from public.atmosphere_host_day x
-        where x.day = d.day - 1 and not x.bluesky
+        select count(*) from hd x
+        where x.day = d.day - 1
           and not exists (select 1 from public.atmosphere_host_day y where y.day = d.day and y.hostname = x.hostname)
       ) end as left_
     from days d
@@ -264,6 +332,12 @@ as $$
   active_last as (
     select coalesce(max(day) filter (where day < (now() at time zone 'UTC')::date), max(day)) as day
     from public.atmosphere_host_active_day
+  ),
+  -- each day's accounts active on knots, to take out of everyone's on independent hosts
+  knot_active as (
+    select a.day, sum(a.dids) as dids
+    from public.atmosphere_host_active_day a join knot k using (hostname)
+    group by a.day
   )
   select jsonb_build_object(
     'since', (select day from first_day),
@@ -279,19 +353,24 @@ as $$
     'growing', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'prevAccounts', x.prev, 'people', x.people) order by x.people desc, x.hostname)
         from (select * from grew order by people desc, hostname limit max_hosts) x), '[]'::jsonb),
     'daily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'active', d.active, 'change', d.change, 'joined', d.joined, 'left', d.left_, 'estimated', d.estimated) order by d.day) from daily d), '[]'::jsonb),
-    'identities', coalesce((select jsonb_agg(to_jsonb(p) order by p.day) from public.atmosphere_plc_day p
+    'identities', coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object(
+          'created_scripted', coalesce((select sum(s.accounts) from scripted s where s.day = p.day), 0),
+          'scripted_hosts', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'why', x.why) order by x.accounts desc, x.hostname)
+            from (select * from scripted s where s.day = p.day order by s.accounts desc, s.hostname limit 10) x), '[]'::jsonb)
+        ) order by p.day) from public.atmosphere_plc_day p
         where p.day >= (least(since, now() - interval '6 days') at time zone 'UTC')::date), '[]'::jsonb),
-    -- each day's active accounts on independent hosts, and everyone's (atmosphere_account_sketch)
-    'activeDaily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'independent', a.dids, 'all', s.dids) order by d.day)
+    -- each day's active accounts on independent hosts, knots' taken out, and everyone's (atmosphere_account_sketch)
+    'activeDaily', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'independent', greatest(0, a.dids - coalesce(k.dids, 0)), 'all', s.dids) order by d.day)
         from days d
         join public.atmosphere_host_active_day a on a.day = d.day and a.hostname = '*'
+        left join knot_active k on k.day = d.day
         left join public.atmosphere_account_sketch s on s.period = 'day' and s.t = (d.day::timestamp at time zone 'UTC')), '[]'::jsonb),
     -- the independent hosts with the most accounts active that day, and how many accounts they hold
     'liveliest', (select jsonb_build_object('day', l.day, 'soFar', l.day >= (now() at time zone 'UTC')::date, 'hosts', coalesce((
         select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'active', x.dids, 'accounts', x.accounts) order by x.dids desc, x.hostname)
         from (select a.hostname, a.dids, h.accounts from public.atmosphere_host_active_day a
               left join public.atmosphere_host_day h on h.day = a.day and h.hostname = a.hostname
-              where a.day = l.day and a.hostname <> '*'
+              where a.day = l.day and a.hostname <> '*' and not exists (select 1 from knot k where k.hostname = a.hostname)
               order by a.dids desc, a.hostname limit max_hosts) x), '[]'::jsonb))
       from active_last l where l.day is not null)
   );

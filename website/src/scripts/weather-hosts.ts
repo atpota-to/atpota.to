@@ -74,6 +74,14 @@ export interface IdentityDay {
   bulk: BulkHost[];
   /** Of createdIndependent, the identities with no handle, which nobody signs in to (a git server's repositories). */
   createdUnnamed: number;
+  /**
+   * Of the rest, the ones a script made by the trends' rules (server/weather-hosts.ts): on a host
+   * caught making accounts in bulk in the last 30 days, or on a day of 100 or more after which
+   * the host signed nobody up for 3 days.
+   */
+  createdScripted: number;
+  /** The hosts that made them, the most first, and which rule: 'bulk' or 'stopped'. */
+  scripted: ScriptedHost[];
   movedOut: number;
   movedIn: number;
   movedBetween: number;
@@ -89,9 +97,15 @@ export interface BulkHost {
   seconds: number;
 }
 
+export interface ScriptedHost {
+  hostname: string;
+  accounts: number;
+  why: 'bulk' | 'stopped';
+}
+
 const IDENTITY_COUNTS = ['ops', 'createdBluesky', 'createdIndependent', 'createdUnlisted', 'createdCustomHandle', 'movedOut', 'movedIn', 'movedBetween', 'deleted'] as const;
-/** The same, and the bulk and unnamed ones, which an answer from before they were counted leaves out. */
-const IDENTITY_SUMS = [...IDENTITY_COUNTS, 'createdBulk', 'createdUnnamed'] as const;
+/** The same, and the bulk, unnamed and scripted ones, which an answer from before they were counted leaves out. */
+const IDENTITY_SUMS = [...IDENTITY_COUNTS, 'createdBulk', 'createdUnnamed', 'createdScripted'] as const;
 
 export interface HostDay {
   day: string;
@@ -130,6 +144,7 @@ const hostname = (x: unknown): x is string => typeof x === 'string' && HOSTNAME_
 const orNull = (x: unknown): x is number | null => x === null || n(x);
 const hostCounts = (x: unknown): Array<{ hostname: string; accounts: number }> => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : []);
 const bulkHosts = (x: unknown): BulkHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.bursts) && n(h.seconds)).slice(0, 10) : []);
+const scriptedHosts = (x: unknown): ScriptedHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && (h.why === 'bulk' || h.why === 'stopped')).slice(0, 10) : []);
 const isDay = (d: unknown): d is HostDay =>
   obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && orNull(d.active) && (d.change === null || (typeof d.change === 'number' && Number.isFinite(d.change))) && orNull(d.joined) && orNull(d.left);
 
@@ -150,10 +165,13 @@ export function toHostHistory(x: unknown): HostHistory | null {
           .filter((d): d is IdentityDay => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && IDENTITY_COUNTS.every((k) => n(d[k])))
           .map((d) => {
             const createdBulk = n(d.createdBulk) ? Math.min(d.createdBulk, d.createdIndependent) : 0;
+            const createdUnnamed = n(d.createdUnnamed) ? Math.min(d.createdUnnamed, d.createdIndependent - createdBulk) : 0;
             return {
               ...d,
               createdBulk,
-              createdUnnamed: n(d.createdUnnamed) ? Math.min(d.createdUnnamed, d.createdIndependent - createdBulk) : 0,
+              createdUnnamed,
+              createdScripted: n(d.createdScripted) ? Math.min(d.createdScripted, d.createdIndependent - createdBulk - createdUnnamed) : 0,
+              scripted: scriptedHosts(d.scripted),
               bulk: bulkHosts(d.bulk),
               destinations: hostCounts(d.destinations),
             };
@@ -453,16 +471,27 @@ function mergeBulk(lists: BulkHost[][]): BulkHost[] {
   return [...by.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, 10);
 }
 
-/** A view's days added up into one: the latest day's date, every count summed, the bulk hosts and destinations merged. */
+/** The scripted hosts over days, each one's accounts added up, the most first (a host caught making accounts in bulk on any of them is 'bulk'). */
+function mergeScripted(lists: ScriptedHost[][]): ScriptedHost[] {
+  const by = new Map<string, ScriptedHost>();
+  for (const list of lists)
+    for (const h of list) {
+      const b = by.get(h.hostname);
+      by.set(h.hostname, b ? { hostname: h.hostname, accounts: b.accounts + h.accounts, why: b.why === 'bulk' || h.why === 'bulk' ? 'bulk' : 'stopped' } : { ...h });
+    }
+  return [...by.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, 10);
+}
+
+/** A view's days added up into one: the latest day's date, every count summed, the bulk and scripted hosts and destinations merged. */
 export function sumDays(view: IdentityDay[]): IdentityDay | null {
   const last = view[view.length - 1];
   if (!last) return null;
   const sums = Object.fromEntries(IDENTITY_SUMS.map((k) => [k, view.reduce((t, d) => t + d[k], 0)])) as Record<(typeof IDENTITY_SUMS)[number], number>;
-  return { day: last.day, ...sums, bulk: mergeBulk(view.map((d) => d.bulk)), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
+  return { day: last.day, ...sums, bulk: mergeBulk(view.map((d) => d.bulk)), scripted: mergeScripted(view.map((d) => d.scripted)), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
 }
 
-/** New accounts on independent hosts, less the ones made in bulk and the identities with no handle: people signing up somewhere else. */
-export const independentOf = (d: IdentityDay): number => Math.max(0, d.createdIndependent - d.createdBulk - d.createdUnnamed);
+/** New accounts on independent hosts, less the ones made in bulk, the identities with no handle and the scripted ones: people signing up somewhere else. */
+export const independentOf = (d: IdentityDay): number => Math.max(0, d.createdIndependent - d.createdBulk - d.createdUnnamed - d.createdScripted);
 
 /** How smoggy a day was: the share of its sign-ups that went to hosts no relay carries. */
 export const SMOG_LEVELS = [
@@ -499,14 +528,41 @@ export function lastedWords(seconds: number): string {
 
 /**
  * "plus 5,101 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. ...",
- * and the identities with no handle: what the numbers above leave out and why, or '' when
- * nothing was.
+ * the ones the trends' rules call scripted, and the identities with no handle: what the numbers
+ * above leave out and why, or '' when nothing was.
  */
 export function bulkWords(d: IdentityDay): string {
-  const bulk = madeInBulkWords(d);
-  if (d.createdUnnamed === 0) return bulk;
-  const unnamed = `${plural(d.createdUnnamed, 'new identity', 'new identities')} with no handle, left out ${bulk ? 'too' : 'above'}: nobody signs in to one (a git server makes them for its repositories, say).`;
-  return bulk ? `${bulk} and ${unnamed}` : `plus ${unnamed}`;
+  const parts = [madeInBulkWords(d)].filter(Boolean);
+  const scripted = scriptedWords(d, parts.length > 0);
+  if (scripted) parts.push(scripted);
+  if (d.createdUnnamed > 0) {
+    const unnamed = `${plural(d.createdUnnamed, 'new identity', 'new identities')} with no handle, left out ${parts.length ? 'too' : 'above'}: nobody signs in to one (a git server makes them for its repositories, say).`;
+    parts.push(parts.length ? `and ${unnamed}` : `plus ${unnamed}`);
+  }
+  return parts.join(' ');
+}
+
+/** Why a host's sign-ups count as a script's, by the trends' rules. */
+const SCRIPTED_WHY = { bulk: 'made accounts in bulk in the last 30 days', stopped: 'all in one day, then nobody for three days' } as const;
+
+/**
+ * "and 603 more on goodmkt.id, left out too: it made accounts in bulk in the last 30 days, so its
+ * other sign-ups count as a script's.", or '' with none. `after`: it follows another sentence.
+ */
+function scriptedWords(d: IdentityDay, after: boolean): string {
+  if (d.createdScripted === 0 || d.scripted.length === 0) return '';
+  const lead = after ? 'and' : 'plus';
+  const where = after ? 'left out too' : 'left out above';
+  const [first, second] = d.scripted;
+  if (d.scripted.length === 1) {
+    return first!.why === 'bulk'
+      ? `${lead} ${formatCount(d.createdScripted)}${after ? ' more' : ''} on ${first!.hostname}, ${where}: it made accounts in bulk in the last 30 days, so its other sign-ups count as a script's.`
+      : `${lead} ${formatCount(d.createdScripted)} on ${first!.hostname}, ${where}: they all came in one day, then nobody for three days. a crowd keeps coming; a script stops dead.`;
+  }
+  const on = (h: ScriptedHost) => `${formatCount(h.accounts)} on ${h.hostname} (${SCRIPTED_WHY[h.why]})`;
+  const rest = d.scripted.slice(2);
+  const list = rest.length === 0 ? `${on(first!)} and ${on(second!)}` : `${on(first!)}, ${on(second!)} and ${formatCount(rest.reduce((t, h) => t + h.accounts, 0))} on ${rest.length === 1 ? 'one other host' : `${rest.length} other hosts`}`;
+  return `${lead} ${formatCount(d.createdScripted)}${after ? ' more' : ''} a script made, by the shape of the hosts' days, ${where}: ${list}.`;
 }
 
 function madeInBulkWords(d: IdentityDay): string {

@@ -20,9 +20,14 @@
 // (spreadOf). It goes by accounts hosted, not accounts active, so it is its own number on
 // its own scale, not part of the diversity index.
 //
+// Tangled's knots are left out (knots.js): git servers the relay lists beside the PDS
+// hosts, whose "accounts" are git repositories. A census says how many it left out.
+//
 // With Supabase, each census is also kept (createHostWriter): a row of its counts in
 // atmosphere_hosts, and a row per active host for the day in atmosphere_host_day
-// (atmosphere/sql/atmosphere_hosts.sql), for the weather report's trends.
+// (atmosphere/sql/atmosphere_hosts.sql), for the weather report's trends. The day rows
+// keep the knots too (the trends leave them out by atmosphere_host_kind), so a census
+// from before they were left out can have them taken out of it.
 
 import { diversityIndex, spreadOf } from './atmosphere.js';
 
@@ -103,12 +108,14 @@ export async function fetchHosts(fetchImpl, relay = DEFAULT_RELAY) {
  * one small entry per host the relay lists, nothing else.
  */
 export class HostCensus {
-  constructor() {
+  /** `knots`: { isKnot(hostname), ready } (knots.js createKnotCheck), or null to count every host. */
+  constructor({ knots = null } = {}) {
     /** hostname -> { seq, movedAt } (movedAt null: not seen to move yet). */
     this.seen = new Map();
     this.hosts = null;
     this.at = null;
     this.firstAt = null;
+    this.knots = knots;
   }
 
   /** Takes a whole census, taken at `nowMs`. */
@@ -136,6 +143,7 @@ export class HostCensus {
       measuredAt: new Date(this.at).toISOString(),
       writing,
       writingMinutes: watched > 0 ? Math.round(Math.min(watched, WRITING_MS) / 60_000) : null,
+      isKnot: this.knots ? (h) => this.knots.isKnot(h) : undefined,
     });
   }
 }
@@ -144,9 +152,10 @@ export class HostCensus {
  * A census as a reading's `hosts`: how many the relay lists and how many are active,
  * Bluesky's and everyone else's, how many wrote lately, the accounts on each side, the
  * hosting diversity ({ index, share, spread }), and the independent hosts with the most
- * accounts.
+ * accounts. Hosts `isKnot` names aren't counted in any of it; `knots` says how many.
  */
-export function summarizeHosts(hosts, { measuredAt, writing = () => false, writingMinutes = null } = {}) {
+export function summarizeHosts(all, { measuredAt, writing = () => false, writingMinutes = null, isKnot = () => false } = {}) {
+  const hosts = all.filter((h) => !isKnot(h.hostname));
   const active = hosts.filter((h) => h.status === 'active');
   const bluesky = active.filter((h) => isBlueskyHost(h.hostname));
   const independent = active.filter((h) => !isBlueskyHost(h.hostname));
@@ -163,6 +172,7 @@ export function summarizeHosts(hosts, { measuredAt, writing = () => false, writi
     bluesky: bluesky.length,
     independent: independent.length,
     writing: wrote && { ...wrote, minutes: writingMinutes },
+    knots: all.length - hosts.length,
     accounts,
     diversity: { index: diversityIndex(share, spread), share, spread },
     top: independent
@@ -216,7 +226,9 @@ export const MAX_PENDING_CENSUSES = 144;
 
 /**
  * A census as rows: { census: an atmosphere_hosts row, days: an atmosphere_host_day row
- * per active host with a plain hostname }, or null with no census.
+ * per active host with a plain hostname, knots too }, or null with no census. The census
+ * row's `knots` is how many it left out, or null while the station doesn't know yet which
+ * hosts are knots (they're counted in then, and the trends take them out).
  */
 export function hostRows(census) {
   const s = census.summary(census.at ?? 0);
@@ -236,6 +248,7 @@ export function hostRows(census) {
       accounts_independent: s.accounts.independent,
       share: s.diversity.share,
       spread: s.diversity.spread,
+      knots: census.knots?.ready ? s.knots : null,
     },
     days: census.hosts
       .filter((h) => h.status === 'active' && isHostname(h.hostname))

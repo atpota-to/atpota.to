@@ -32,7 +32,7 @@ import { conditionFor, diversityLevel, hostingLevel, type Condition, type Divers
 import { NEW_APPS, type NewApps, type Normal, type Today } from './weather-almanac.js';
 import type { Accounts } from './weather-accounts.js';
 import type { App as HistoryApp, Point } from './weather-history.js';
-import type { HostHistory, IdentityDay } from './weather-hosts.js';
+import { peopleIndependentOf, type HostHistory, type IdentityDay } from './weather-hosts.js';
 
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
@@ -978,10 +978,10 @@ export function weekOf(d: CardData): IdentityDay[] {
   return (d.day?.hosts?.identities ?? []).slice(-7);
 }
 
-/** "1 in 17", from a week's listed sign-ups less the bulk ones (weather-hosts.ts oddsWords); null without a week or anyone outside. */
+/** "1 in 17", from a week's listed sign-ups by people, not scripts (weather-hosts.ts oddsWords); null without a week or anyone outside. */
 export function oddsOf(week: IdentityDay[]): string | null {
-  const indep = week.reduce((t, x) => t + x.createdIndependent - x.createdBulk, 0);
-  const listed = week.reduce((t, x) => t + x.createdBluesky + x.createdIndependent - x.createdBulk, 0);
+  const indep = week.reduce((t, x) => t + peopleIndependentOf(x), 0);
+  const listed = week.reduce((t, x) => t + x.createdBluesky + peopleIndependentOf(x), 0);
   if (week.length < 2 || indep === 0 || listed === 0) return null;
   return `1 in ${int(Math.max(1, Math.round(listed / indep)))}`;
 }
