@@ -891,16 +891,25 @@ A moment goes to the agent as `POST /weather/moment` (shared secret) with the
 station's numbers and Poe's last five weather posts. Poe reads the station and
 answers with the post, or `skip`, on `DROPLET_CALLBACK_URL`, the URL a reply's
 draft comes back on; its `momentId` tells it from a reply, so nginx needs nothing
-new. The draft goes through
+new. When the post is about one part of the report, Poe names that page
+(`choose_weather_page`), and the draft carries it as `page`: `diversity`, `trends`,
+`today`, `hosts` or `migration` (`WEATHER_PAGES` in `gates/weather.js`, checked
+against the website's `weather-topics.ts` by the tests). A page the droplet doesn't
+know is ignored, and the card stays on the whole report. The draft goes through
 the reply gates as a single post (length, markdown, non-answers, `@handles`), with
-no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
-same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
-posted with an `app.bsky.embed.external` card for the weather page, and the caps
-are checked again first. The card's image is always the live weather card,
+no `@handle` allowed at all, no link but `https://atpota.to/weather` and its pages,
+and not the same text as the last weather post. With `WEATHER_POSTS=post` at stage 4
+it is posted with an `app.bsky.embed.external` card for the page Poe named
+(`https://atpota.to/weather/migration`, say) or for the whole report, with that
+page's title and description, and the caps are checked again first. The card's image
+is always the live weather card,
 `https://atpota.to/og/weather.png` (`WEATHER_CARD`), fetched by that address rather
 than from the page's og:image, fresh to the minute and in the design that suits the
-post (`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
-apps for a mixed sky or a new one, the day's chart for the daily report. A redirect
+post: the named page's own (`WEATHER_PAGES`), or else the kind's (`CARD_FOR`): the
+sky for a storm, the barometer for an hour off usual, the other apps for a mixed sky
+or a new one, the day's chart for the daily report. Until Poe could name a page, a
+daily report about accounts moving house (2026-10-30) went out under the whole
+report and the day's chart. A redirect
 (the website's fallback to the home page's card) counts as no card. Without the card
 a post isn't posted bare: the draft waits, and each tick tries again, for up to 30
 minutes (`CARD_WAIT_MS`), then it is dropped as `rejected` (`no_card`). The first

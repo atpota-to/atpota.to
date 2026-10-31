@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 import { config, GATE_DEFAULTS } from '../src/config.js';
 import { db } from '../src/db.js';
 import {
-  WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, pickMoment, postGate,
+  WEATHER_PAGE, WEATHER_PAGES, askGate, dueMoments, evaluateWeatherDraft, isSkip, pickMoment, postGate, weatherPageUrl,
 } from '../src/gates/weather.js';
 import {
   parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft, freshCardUrl, CARD_WAIT_MS,
@@ -180,12 +181,14 @@ test('skip is a whole answer, never the start of a post', () => {
   }
 });
 
-test('the draft gates: one post, no handles, no link but the weather page', () => {
+test('the draft gates: one post, no handles, no link but the weather report and its pages', () => {
   const ok = (t, extra) => evaluateWeatherDraft(t, { gates: g, killSwitch: () => null, ...extra });
   assert.equal(ok('breezy skies today, about 430 new records a second (◕‿◕)').ok, true);
   assert.equal(ok(`breezy today. the full report: ${WEATHER_PAGE}`).ok, true);
   assert.equal(ok('breezy today, see https://evil.example/weather').gate, 'unsourced_link');
   assert.equal(ok(`see ${WEATHER_PAGE}/../admin`).gate, 'unsourced_link');
+  assert.equal(ok(`who's moving house: ${WEATHER_PAGE}/migration`).ok, true, 'a page of the report is the report');
+  assert.equal(ok(`see ${WEATHER_PAGE}/elsewhere`).gate, 'unsourced_link');
   assert.equal(ok('storm warning! thanks @someone.bsky.social').gate, 'third_party_mention');
   assert.equal(ok('storm warning! says @poe.atpota.to').gate, 'third_party_mention');
   assert.equal(ok('**storm warning!** 640 new records a second').gate, 'markdown');
@@ -396,6 +399,68 @@ test('each kind of post gets its own card design, fresh to the minute', () => {
   assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png?card=trend', 'new_app', at)).searchParams.get('card'), 'mix');
   assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'unusual', at)).searchParams.get('card'), 'today');
   assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'mixed', at)).searchParams.get('card'), 'mix');
+  // A page Poe named wins over the kind; one it doesn't know is no page at all.
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, 'migration')).searchParams.get('card'), 'migration');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'storm', at, 'hosts')).searchParams.get('card'), 'hosts');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, 'constructor')).searchParams.get('card'), 'trend');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, null)).searchParams.get('card'), 'trend');
+});
+
+test("the report's pages and their cards match the website's", (t) => {
+  const file = new URL('../../website/src/scripts/weather-topics.ts', import.meta.url);
+  if (!existsSync(file)) return t.skip("the website isn't checked out next to the droplet");
+  const source = readFileSync(file, 'utf8');
+  const topics = [...source.matchAll(/slug: '([a-z]+)',[\s\S]*?card: '([a-z]+)'/g)].map((m) => [m[1], m[2]]);
+  assert.ok(topics.length >= 5, 'read the topics');
+  assert.deepEqual(Object.entries(WEATHER_PAGES), topics);
+  assert.equal(weatherPageUrl('migration'), 'https://atpota.to/weather/migration');
+  assert.equal(weatherPageUrl(null), WEATHER_PAGE);
+  assert.equal(weatherPageUrl('__proto__'), WEATHER_PAGE);
+});
+
+test('a post Poe says is about one page of the report links that page, with its card and its words', async () => {
+  clear();
+  const w = fakeWorld();
+  w.deps.fetchPage = async (url) => ({
+    status: 200,
+    url,
+    html: url === 'https://atpota.to/weather/migration'
+      ? `<meta property="og:title" content="pds migration · the atmosphere weather report · atpotato">
+        <meta property="og:description" content="accounts moving house in the atmosphere">`
+      : '<meta property="og:title" content="the atmosphere weather report · atpotato">',
+  });
+  const pages = [];
+  const fetchPage = w.deps.fetchPage;
+  w.deps.fetchPage = async (url) => { pages.push(url); return fetchPage(url); };
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  assert.equal(asked.kind, 'daily', 'a daily report, whose card would be the day\'s chart');
+  const text = 'twenty-five accounts packed up and left bluesky\'s hosts today and not one came back';
+  assert.equal(receiveWeatherDraft({ key: 'page:1', momentId: `wx-${asked.id}`, text, links: [], page: 'migration' }).status, 200);
+  await handleWeatherDraft(asked.id, w.deps);
+
+  assert.equal(w.posts.length, 1);
+  const { external } = w.posts[0].record.embed;
+  assert.equal(external.uri, 'https://atpota.to/weather/migration');
+  assert.equal(external.title, 'pds migration · the atmosphere weather report · atpotato');
+  assert.equal(external.description, 'accounts moving house in the atmosphere');
+  assert.deepEqual(pages, ['https://atpota.to/weather/migration']);
+  assert.equal(new URL(w.cards[0]).searchParams.get('card'), 'migration');
+  assert.equal(db.prepare('SELECT page FROM weather_post WHERE id = ?').get(asked.id).page, 'migration');
+});
+
+test("a page the droplet doesn't know leaves the card on the whole report; a malformed one is refused", async () => {
+  clear();
+  const w = fakeWorld();
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  const draft = { key: 'page:2', momentId: `wx-${asked.id}`, text: 'breezy skies today', links: [] };
+  assert.equal(receiveWeatherDraft({ ...draft, page: 5 }).status, 400);
+  assert.equal(receiveWeatherDraft({ ...draft, page: 'x'.repeat(65) }).status, 400);
+  assert.equal(receiveWeatherDraft({ ...draft, page: 'tornadoes' }).status, 200);
+  await handleWeatherDraft(asked.id, w.deps);
+  assert.equal(w.posts.length, 1);
+  assert.equal(w.posts[0].record.embed.external.uri, WEATHER_PAGE);
+  assert.equal(new URL(w.cards[0]).searchParams.get('card'), 'trend');
+  assert.equal(db.prepare('SELECT page FROM weather_post WHERE id = ?').get(asked.id).page, null);
 });
 
 test('facts carry the trigger and the sky around it', () => {

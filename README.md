@@ -285,7 +285,8 @@ Poe is one potato in a few places, with the same memory in each:
   from the weather station, and a post when it catches a storm, an hour well off
   usual, a sky getting more mixed, or a new app blowing in. The droplet spots the
   moment and asks; Poe writes the post or skips it, and the droplet gates it and
-  posts it with a card for `/weather`
+  posts it with a card for `/weather`, or for the page of the report the post is
+  about (`/weather/migration`, say) when Poe names one
   ([`mentions/README.md`](mentions/README.md#weather-posts-weather_posts)).
 - **in private DMs** with the people who run it, who can also ask it in plain words
   for a public post (the weather right now, a nudge to read the newsletter,
