@@ -106,7 +106,7 @@ const HOSTS = {
 
 const day = (d: string, over: Partial<IdentityDay> = {}): IdentityDay => ({
   day: d, ops: 266_000, createdBluesky: 17_000, createdIndependent: 1000, createdUnlisted: 245_000, createdCustomHandle: 300,
-  movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], ...over,
+  createdBulk: 0, bulk: [], createdUnnamed: 0, movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], ...over,
 });
 
 /** The day's hosts, as /api/weather-history?range=day has them: two censuses, and the plc directory's last eight days. */
@@ -118,7 +118,8 @@ function hostHistory(): HostHistory {
     points: [point('2026-10-20T13:00:00.000Z', 363_205), point('2026-10-21T12:00:00.000Z', 363_931)],
     newHosts: 3,
     new: [],
-    growing: [{ hostname: 'goodmkt.id', accounts: 4165, prevAccounts: 2880 }, { hostname: 'eurosky.social', accounts: 38177, prevAccounts: 38074 }],
+    // goodmkt.id's accounts were made in bulk: nobody arrived there, so it isn't growing
+    growing: [{ hostname: 'eurosky.social', accounts: 38177, prevAccounts: 38074, people: 98 }, { hostname: 'goodmkt.id', accounts: 4165, prevAccounts: 2880, people: 0 }],
     daily: [],
     identities: [
       day('2026-10-14', { movedOut: 999 }), // more than a week ago: not on the card
@@ -196,6 +197,10 @@ describe('og weather: the page\'s words', () => {
     expect(`over the last 7 days: ${oddsOf(week)} started outside bluesky.`).toBe(hostsPage.oddsWords(week));
     expect(oddsOf(week.slice(-1))).toBeNull(); // a day is too few to say
     expect(hostsPage.oddsWords(week.slice(-1))).toBe('');
+    // a batch on one host leaves the odds as they were, on both
+    const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 }] }];
+    expect(oddsOf(batch)).toBe(oddsOf(week));
+    expect(`over the last 7 days: ${oddsOf(batch)} started outside bluesky.`).toBe(hostsPage.oddsWords(batch));
   });
 
   it('says usual the way the almanac does', () => {
@@ -302,7 +307,8 @@ describe('og weather: the cards', () => {
   it("shows the hosts from the day's last census, and who grew, when the station's isn't in", async () => {
     const art = await cardArt();
     const words = texts(drawCard('hosts', data({ now: null }), art));
-    expect(words).toEqual(expect.arrayContaining(['1.51%', 'growing fastest', 'goodmkt.id', '+1,285']));
+    expect(words).toEqual(expect.arrayContaining(['1.51%', 'growing fastest', 'people signing up or moving in, the last 24 hours', 'eurosky.social', '+98']));
+    expect(words).not.toContain('goodmkt.id');
     // nobody grew: the share has the card to itself
     const still = data({ now: null });
     still.day!.hosts!.growing = [];

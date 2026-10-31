@@ -940,11 +940,12 @@ function barList(rows: Array<{ name: string; n: number; value: string }>, width:
 function hostsCard(d: CardData, art: Art): El | null {
   const l = livingOf(d);
   if (!l) return null;
-  const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.accounts > x.prevAccounts);
+  // the people who arrived (signed up, not in bulk, or moved in), not the relay's count, which goes up for scripts too
+  const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.people > 0);
   const side = l.top.length
     ? { title: 'the biggest independent hosts', sub: 'by the accounts they hold', rows: l.top.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts, value: int(x.accounts) })) }
     : growing.length
-      ? { title: 'growing fastest', sub: 'accounts gained, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts - x.prevAccounts, value: signed(x.accounts - x.prevAccounts) })) }
+      ? { title: 'growing fastest', sub: 'people signing up or moving in, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.people, value: signed(x.people) })) }
       : null;
   const left = side ? 600 : 1144;
   return page(
@@ -977,10 +978,10 @@ export function weekOf(d: CardData): IdentityDay[] {
   return (d.day?.hosts?.identities ?? []).slice(-7);
 }
 
-/** "1 in 17", from a week's listed sign-ups (weather-hosts.ts oddsWords); null without a week or anyone outside. */
+/** "1 in 17", from a week's listed sign-ups less the bulk ones (weather-hosts.ts oddsWords); null without a week or anyone outside. */
 export function oddsOf(week: IdentityDay[]): string | null {
-  const indep = week.reduce((t, x) => t + x.createdIndependent, 0);
-  const listed = week.reduce((t, x) => t + x.createdBluesky + x.createdIndependent, 0);
+  const indep = week.reduce((t, x) => t + x.createdIndependent - x.createdBulk, 0);
+  const listed = week.reduce((t, x) => t + x.createdBluesky + x.createdIndependent - x.createdBulk, 0);
   if (week.length < 2 || indep === 0 || listed === 0) return null;
   return `1 in ${int(Math.max(1, Math.round(listed / indep)))}`;
 }

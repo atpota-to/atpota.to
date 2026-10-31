@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, destinationsOf, hostBars, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, bulkWords, destinationsOf, growingWords, hostBars, independentOf, identityView, identityViewWords, lastedWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -21,10 +21,11 @@ const HOSTS: HostHistory = {
   points: [point('2026-10-22T13:00:00.000Z', 1887), point('2026-10-29T11:00:00.000Z', 1902, 7.6)],
   newHosts: 7,
   new: [
-    { hostname: 'fresh.example', accounts: 40, first: '2026-10-25' },
-    { hostname: 'tiny.example', accounts: 2, first: '2026-10-28' },
+    { hostname: 'fresh.example', accounts: 40, people: 31, first: '2026-10-25' },
+    { hostname: 'tiny.example', accounts: 2, people: 2, first: '2026-10-28' },
   ],
-  growing: [{ hostname: 'blacksky.app', accounts: 42900, prevAccounts: 42366 }],
+  // the relay's count went up 534, but 312 people arrived: the rest came some other way
+  growing: [{ hostname: 'blacksky.app', accounts: 42900, prevAccounts: 42366, people: 312 }],
   daily: [
     { day: '2026-10-24', active: 1887, change: null, joined: null, left: null, estimated: true },
     { day: '2026-10-25', active: 1890, change: 3, joined: 5, left: 2 },
@@ -34,7 +35,7 @@ const HOSTS: HostHistory = {
   identities: [],
 };
 
-const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], ...extra });
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, createdBulk: 0, bulk: [], createdUnnamed: 0, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], ...extra });
 
 let part: HTMLElement;
 const bars = (list: HTMLElement, b: Parameters<typeof renderBars>[1]) => renderBars(list, b, undefined);
@@ -53,8 +54,10 @@ describe('where accounts live, over time', () => {
   });
 
   it('checks the history answer, dropping hostnames that do not check out', () => {
-    const h = toHostHistory({ ...HOSTS, new: [...HOSTS.new, { hostname: '<b>x</b>.com', accounts: 1, first: '2026-10-28' }], points: [...HOSTS.points, { t: 'nope' }] })!;
+    const h = toHostHistory({ ...HOSTS, new: [...HOSTS.new, { hostname: '<b>x</b>.com', accounts: 1, people: 1, first: '2026-10-28' }], points: [...HOSTS.points, { t: 'nope' }] })!;
     expect(h.new.map((x) => x.hostname)).toEqual(['fresh.example', 'tiny.example']);
+    // a host without the people who arrived on it (an answer from before they were counted) isn't listed
+    expect(toHostHistory({ ...HOSTS, growing: [{ hostname: 'goodmkt.id', accounts: 11022, prevAccounts: 20 }] })!.growing).toEqual([]);
     expect(h.points).toHaveLength(2);
     expect(toHostHistory({ bucket: 'fortnight', points: [], new: [], growing: [] })).toBeNull();
     expect(toHostHistory(null)).toBeNull();
@@ -80,8 +83,11 @@ describe('where accounts live, over time', () => {
     expect(part.querySelector('[data-h-chart="active"] svg')).not.toBeNull();
     expect(part.querySelector('[data-h-chart="index"] svg')).not.toBeNull();
     expect([...part.querySelectorAll('[data-h-new] .weather-bars__label')].map((el) => el.textContent)).toEqual(['fresh.example', 'tiny.example']);
-    expect(part.querySelector('[data-h-new-note]')!.textContent).toBe('7 new independent hosts in the last 7 days, the 5 with the most accounts.');
-    expect(part.querySelector('[data-h-growing] .weather-bars__value')!.textContent).toBe('+534');
+    expect(part.querySelector('[data-h-new-note]')!.textContent).toBe('7 new independent hosts in the last 7 days, the 2 with the most people arriving.');
+    expect([...part.querySelectorAll('[data-h-new] .weather-bars__value')].map((el) => el.textContent)).toEqual(['31', '2']);
+    // the people who arrived, not the relay's count
+    expect(part.querySelector('[data-h-growing] .weather-bars__value')!.textContent).toBe('+312');
+    expect(part.querySelector('[data-h-growing-note]')!.textContent).toBe("people who signed up or moved in over the last 7 days. accounts made in bulk, and identities with no handle, don't count.");
     // the week reaches back before the station kept hosts
     const since = part.querySelector<HTMLElement>('[data-h-since]')!;
     expect(since.hidden).toBe(false);
@@ -145,7 +151,14 @@ describe('where accounts live, over time', () => {
   it('says so when nothing is new', () => {
     expect(newHostsWords({ ...HOSTS, newHosts: 0 }, 'day')).toBe('no new independent hosts in the last 24 hours.');
     expect(newHostsWords({ ...HOSTS, newHosts: 1 }, 'day')).toBe('1 new independent host in the last 24 hours.');
-    expect(hostBars(HOSTS.growing, true)).toEqual([{ label: 'blacksky.app', perSecond: 534, count: 534, value: '+534' }]);
+    // new hosts nobody arrived on (a git server's, say) are counted, not listed
+    const knots: HostHistory = { ...HOSTS, newHosts: 56, new: [{ hostname: 'knot.example', accounts: 23, people: 0, first: '2026-10-29' }] };
+    expect(newHostsWords(knots, 'day')).toBe('56 new independent hosts in the last 24 hours. nobody has signed up on one or moved there yet.');
+    expect(newHostsWords({ ...knots, new: [...knots.new, { hostname: 'pds.example', accounts: 4, people: 3, first: '2026-10-29' }] }, 'day')).toBe('56 new independent hosts in the last 24 hours, the one with the most people arriving.');
+    renderHostTrends(part, knots, 'day', bars, NOW);
+    expect(part.querySelectorAll('[data-h-new] li')).toHaveLength(0);
+    expect(hostBars(HOSTS.growing, true)).toEqual([{ label: 'blacksky.app', perSecond: 312, count: 312, value: '+312' }]);
+    expect(growingWords({ ...HOSTS, growing: [] }, 'day')).toBe('nobody has signed up on or moved to an independent host over the last 24 hours yet.');
   });
 });
 
@@ -178,6 +191,70 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(shareHeadline(up, 'week')).toBe("1.51% of accounts live off bluesky's servers, up from 1.46% over the last 7 days: +2,866 accounts on independent hosts.");
     expect(shareHeadline({ ...HOSTS, points: [point('2026-10-29T11:00:00.000Z', 1902)] }, 'day')).toBe("1.51% of accounts live off bluesky's servers.");
     expect(shareHeadline({ ...HOSTS, points: [] }, 'day')).toBe('');
+  });
+
+  it('adds up the window\'s days: today so far, or the last 7 or 30', () => {
+    // the 8th to the 29th: 22 days, the last today
+    const days = Array.from({ length: 22 }, (_, i) => idDay(`2026-10-${String(i + 8).padStart(2, '0')}`, { createdBluesky: 1000, createdIndependent: 50, movedOut: 2, deleted: 1 }));
+    expect(identityView(days, 'day', NOW).map((d) => d.day)).toEqual(['2026-10-29']);
+    expect(identityView(days, 'week', NOW).map((d) => d.day)).toEqual(['2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29']);
+    expect(identityView(days, 'month', NOW)).toHaveLength(22);
+    expect(identityViewWords(identityView(days, 'week', NOW), 'week', NOW)).toBe('the last 7 days (utc)');
+    // fewer days kept than the window: since the first
+    expect(identityViewWords(identityView(days, 'month', NOW), 'month', NOW)).toBe('since oct 8 (utc)');
+    // a missing day isn't made up from one before the window
+    expect(identityView([idDay('2026-10-20'), idDay('2026-10-28')], 'week', NOW).map((d) => d.day)).toEqual(['2026-10-28']);
+
+    renderIdentities(report, days, NOW, bars, 'week');
+    expect(text('[data-p-day]')).toBe('the last 7 days (utc)');
+    expect(text('[data-p-signups]')).toBe('7,350');
+    expect(text('[data-p-indep]')).toBe('350');
+    expect(text('[data-p-out]')).toBe('14');
+    expect(text('[data-p-deleted]')).toBe('7 accounts deleted themselves.');
+    // the week says it all itself: no line against the last 7 days
+    expect(report.querySelector<HTMLElement>('[data-p-odds]')!.hidden).toBe(true);
+    expect(text('[data-p-week]')).toBe('');
+    renderIdentities(report, days, NOW, bars, 'month');
+    expect(text('[data-p-signups]')).toBe('23,100');
+    expect(text('[data-p-day]')).toBe('since oct 8 (utc)');
+    // and back: today so far, set against the week
+    renderIdentities(report, days, NOW, bars, 'day');
+    expect(text('[data-p-signups]')).toBe('1,050');
+    expect(text('[data-p-day]')).toBe('today so far (utc)');
+    expect(report.querySelector<HTMLElement>('[data-p-odds]')!.hidden).toBe(false);
+  });
+
+  it('counts new accounts made in bulk apart, naming the host and how they came', () => {
+    const goodmkt = { hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 };
+    const batch = idDay('2026-10-29', { createdBluesky: 9905, createdIndependent: 5561, createdCustomHandle: 50, createdBulk: 4615, bulk: [goodmkt] });
+    renderIdentities(report, [idDay('2026-10-28', { createdBluesky: 18395, createdIndependent: 840 }), batch], NOW);
+    expect(text('[data-p-signups]')).toBe('10,851');
+    expect(text('[data-p-indep]')).toBe('946');
+    expect(text('[data-p-own]')).toBe('8.7% started outside bluesky, and 50 with a handle on their own domain.');
+    const line = report.querySelector<HTMLElement>('[data-p-bulk]')!;
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toBe('plus 4,615 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. they came the way scripts make accounts, at a steady pace switched on and off, or in floods out of nowhere again and again. people signing up build up and trail off.');
+    // the week's odds leave them out too
+    expect(text('[data-p-odds]')).toBe('over the last 2 days: 1 in 17 started outside bluesky.');
+    // the air quality is against every sign-up, the bulk ones included
+    expect(text('[data-p-smog-words]')).toContain('of all 166,311 sign-ups');
+    // a day without any hides the line again
+    renderIdentities(report, [idDay('2026-10-29')], NOW);
+    expect(line.hidden).toBe(true);
+
+    const oneBurst = { hostname: 'pds.1095.me', accounts: 38, bursts: 1, seconds: 37 };
+    expect(bulkWords({ ...batch, createdBulk: 38, bulk: [oneBurst] })).toMatch(/^plus 38 made in bulk on pds\.1095\.me \(one burst, 37 seconds\), left out above\./);
+    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4541 }, { ...oneBurst, accounts: 74, bursts: 2 }] })).toMatch(/^plus 4,615 made in bulk, left out above: 4,541 on goodmkt\.id and 74 on pds\.1095\.me\. they came the way scripts/);
+    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4500 }, { ...oneBurst, accounts: 76 }, { ...oneBurst, hostname: 'a.example', accounts: 30 }, { ...oneBurst, hostname: 'b.example', accounts: 9 }] })).toMatch(/: 4,500 on goodmkt\.id, 76 on pds\.1095\.me and 39 on 2 other hosts\./);
+    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [] })).toBe('');
+    // identities with no handle are left out too, and said so
+    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdUnnamed: 1 })).toBe('plus 1 new identity with no handle, left out above: nobody signs in to one (a git server makes them for its repositories, say).');
+    expect(bulkWords({ ...batch, createdUnnamed: 340 })).toMatch(/people signing up build up and trail off\. and 340 new identities with no handle, left out too: nobody signs in to one/);
+    expect(independentOf({ ...batch, createdUnnamed: 340 })).toBe(5561 - 4615 - 340);
+    expect([lastedWords(1), lastedWords(75), lastedWords(1929), lastedWords(13_080)]).toEqual(['1 second', 'a minute', '32 minutes', '3.6 hours']);
+    // over a week, each day's runs add up by host
+    const week = sumDays([batch, idDay('2026-10-28', { createdBulk: 3903, bulk: [{ hostname: 'goodmkt.id', accounts: 3903, bursts: 2, seconds: 13_080 }] })])!;
+    expect([week.createdBulk, week.bulk]).toEqual([8518, [{ hostname: 'goodmkt.id', accounts: 8518, bursts: 4, seconds: 15_009 }]]);
   });
 
   it('keeps the chart back with only one day', () => {
@@ -228,6 +305,10 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(toHostHistory({ ...HOSTS, identities: undefined })!.identities).toEqual([]);
     const odd = toHostHistory({ ...HOSTS, identities: [{ ...idDay('2026-10-29'), destinations: [{ hostname: 'eurosky.social', accounts: 2 }, { hostname: '<b>', accounts: 1 }] }, { ...idDay('2026-10-28'), destinations: undefined }] })!;
     expect(odd.identities.map((d) => d.destinations)).toEqual([[{ hostname: 'eurosky.social', accounts: 2 }], []]);
+    // an answer from before bulk sign-ups were counted has none; more than all the independent ones is held to them
+    const { createdBulk: _, bulk: __, ...older } = idDay('2026-10-29');
+    const bulk = toHostHistory({ ...HOSTS, identities: [older, idDay('2026-10-28', { createdBulk: 99_999, bulk: [{ hostname: 'goodmkt.id', accounts: 99_999, bursts: 1, seconds: 60 }, { hostname: '<b>', accounts: 5000, bursts: 1, seconds: 1 }] })] })!;
+    expect(bulk.identities.map((d) => [d.createdBulk, d.bulk])).toEqual([[0, []], [4383, [{ hostname: 'goodmkt.id', accounts: 99_999, bursts: 1, seconds: 60 }]]]);
   });
 });
 

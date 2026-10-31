@@ -170,9 +170,11 @@ atmosphere lives" tiles.
 After each census the station also reads the PLC directory's log of identity changes
 ([`src/plc-watch.js`](src/plc-watch.js), with [`src/plc.js`](src/plc.js)) and keeps today's
 row of `atmosphere_plc_day` up to date: new accounts by where they signed up, new accounts
-with a handle on their own domain, accounts moving out of Bluesky's hosts, back in and
-between independent hosts, and deletions (the columns are under "Backfilling hosts" below).
-It counts exactly as the backfill does. A move needs to know where the account was
+with a handle on their own domain, the ones made in bulk and the ones with no handle,
+accounts moving out of Bluesky's hosts, back in and between independent hosts, and
+deletions; and today's rows of `atmosphere_host_arrival_day`, who arrived on each
+independent host (the columns are under "Backfilling hosts" below). It counts exactly as
+the backfill does. A move needs to know where the account was
 before, so an account that names an independent host (or deletes itself), and wasn't seen
 earlier today, has its history read once. The log runs at about 250,000 operations a day,
 about 250 pages, so each poll reads a few dozen; on 2026-10-22 reading the day from midnight
@@ -244,8 +246,41 @@ What it writes, for each day from `--from` to yesterday:
   `atmosphere_host_day`; a run of the fixed script gives the same numbers.
 - `atmosphere_plc_day`: the day's identity weather, counted exactly from the log: new
   accounts on Bluesky's hosts, on independent ones and on unlisted ones; how many new
-  accounts on listed hosts started with a handle on their own domain; accounts moving out of
-  Bluesky's hosts, back in, and between independent hosts; and deletions.
+  accounts on listed hosts started with a handle on their own domain; how many of the
+  independent ones were made in bulk (runs of sign-ups shaped as no crowd makes them:
+  `bulkRun`, and the hosts that made them) and how many had no handle at all; accounts
+  moving out of Bluesky's hosts, back in, and between independent hosts; and deletions.
+- `atmosphere_host_arrival_day`: who arrived on each independent host that day, a row per
+  host: people signing up (a handle, not in bulk), accounts made in bulk, identities with no
+  handle (made or moved there), and accounts with a handle moving in. The relay's count of
+  a host's accounts goes up for all of them alike: in October 2026 goodmkt.id went from 20
+  to 11,022 in scripted batches, and knot1.tangled.sh, a git server for Tangled, from 2,157
+  to 8,564 in a day, with identities that have no handle: each is a git repository (it holds
+  an `org.tangled.repo.manifest` record naming the repository and its owner). So
+  the weather report's "growing fastest" and "new hosts" go by people arriving, from here,
+  not by the relay's count. Unlike the hosts' days, these are always rewritten.
+
+  The rows are what the log says, and `atmosphere_host_trends` reads them with two more
+  rules, since `bulkRun` only catches the obvious runs: a host caught making accounts in
+  bulk in the range has none of its sign-ups counted as people, and a day of 100 or more
+  sign-ups on a host after which it signed nobody up for 3 days isn't people either. A host
+  only counts as new if it had 25 or fewer accounts when the station first saw it, or at
+  least half its accounts arrived in the range. Checked on 2026-10-31 against the log from
+  Oct 8 (a backfill dry run, and the functions run over a copy of the live tables):
+
+  | host | relay's count, 30 days | people arriving | what else came |
+  | --- | --- | --- | --- |
+  | goodmkt.id | +11,017 | none counted | 13,451 in bulk; 1,206 more in uneven runs (on Oct 23 runs of 50 every five minutes on the dot) |
+  | knot1.tangled.sh | +6,643 | 0 | 403 new git repositories; the rest were made before Oct 8, and the relay began counting them on Oct 28 |
+  | pds.1095.me | +1,739 | none counted | 1,617 in bulk (`customerNNN` handles, about 78 a day) |
+  | refpds.oyster.cafe | first seen with 1,062 | none counted | 1,062 in 45 minutes on Oct 26, then none |
+  | haruhwa.com | first seen with 14,217 | 0 | accounts from January 2025: not new |
+  | pds.wsocial.network | +4,329 | 4,893 | |
+  | eurosky.social | +2,946 | 3,141 (748 moving in) | |
+
+  The rules flagged nothing on the hosts people were plainly signing up to (eurosky.social,
+  pds.wsocial.network, blacksky.app, 01.pds.objkt.network, pds.oso.social, tngl.sh).
+  tdpl.io, a bridge from Lemmy, counts as people, as atproto.brid.gy does.
 
 The log runs at about 190,000 operations a day (October 2026).
 
@@ -318,6 +353,7 @@ detail of old data never makes the report less accurate.
 | `atmosphere_hosts`: a census of the PDS hosts every 10 minutes | forever | ~5 MB a year |
 | `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
 | `atmosphere_plc_day`: each day's identity changes, from the PLC log | forever | tiny |
+| `atmosphere_host_arrival_day`: who arrived on each independent host, each day | forever | ~5 MB a year |
 | `atmosphere_host_active_day`: each independent host's active accounts, a sketch a day | forever | ~150 MB a year |
 
 The per-app minute rows were the long tail, about 23k rows (5 MB) a day.

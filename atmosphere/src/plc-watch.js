@@ -3,8 +3,12 @@
 // it goes, after each host census, and keeps today's row of atmosphere_plc_day
 // (sql/atmosphere_hosts.sql) up to date. It counts exactly as backfill-hosts.js does
 // (PlcHistory, one day at a time): new accounts by where they signed up, new accounts
-// with a handle on their own domain, accounts moving out of Bluesky's hosts, back in and
-// between independent hosts (and the hosts they moved to), and deletions.
+// with a handle on their own domain, the ones made in bulk on independent hosts (and those
+// hosts) and the ones there with no handle, accounts moving out of Bluesky's hosts, back in and
+// between independent hosts (and the hosts they moved to), and deletions; and today's rows of
+// atmosphere_host_arrival_day, who arrived on each independent host (arrivalRows). A run of
+// sign-ups is judged once it's over and the host has had ten minutes to go quiet
+// (backfill-hosts.js bulkRun), so today's row can take that long to count a batch.
 //
 // A move needs to know where an account was before. One seen earlier today is known; one
 // that wasn't, and now names an independent host (or deletes itself), has its history
@@ -14,7 +18,7 @@
 // After a restart it reads today again from midnight UTC, so today's row stays whole. A
 // day the station was down across the end of isn't finished: the backfill rewrites it.
 
-import { PlcHistory, plcRow } from './backfill-hosts.js';
+import { arrivalRows, PlcHistory, plcRow } from './backfill-hosts.js';
 import { auditLog, exportPage, PAGE_COUNT } from './plc.js';
 
 /** At most this many pages a poll: a restart's catch-up spreads over a poll or two. */
@@ -48,7 +52,10 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
   }
 
   async function write() {
-    await upsert('atmosphere_plc_day', 'day', [plcRow(day, history.signals[0])]);
+    const s = history.signalsOf(0);
+    await upsert('atmosphere_plc_day', 'day', [plcRow(day, s)]);
+    const arrivals = arrivalRows(day, s);
+    if (arrivals.length) await upsert('atmosphere_host_arrival_day', 'day,hostname', arrivals);
   }
 
   async function poll() {
@@ -77,6 +84,7 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
           if (d > day) {
             // midnight: finish the day before starting the next
             await audit(Infinity);
+            history.endRuns();
             await write();
             log?.info('plc day written', { day, moved_out: history.signals[0].moved_out });
             begin(d);
@@ -89,8 +97,8 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
       }
       const audits = await audit(maxAudits);
       await write();
-      const { destinations, ...counted } = history.signals[0];
-      log?.info('plc counted', { day, pages, audits, up: after, ...counted, destinations: Object.keys(destinations).length });
+      const { destinations, bulk_hosts, arrivals, ...counted } = history.signalsOf(0);
+      log?.info('plc counted', { day, pages, audits, up: after, ...counted, destinations: Object.keys(destinations).length, bulk_hosts: Object.keys(bulk_hosts).join(' '), arrivals: Object.keys(arrivals).length });
     } catch (err) {
       log?.warn('could not count plc', { err: err?.message ?? String(err) });
     } finally {
@@ -104,7 +112,7 @@ export function createPlcWatch({ census, upsert, log, fetchImpl = (u, i) => fetc
       return day;
     },
     get signals() {
-      return history?.signals[0] ?? null;
+      return history?.signalsOf(0) ?? null;
     },
   };
 }

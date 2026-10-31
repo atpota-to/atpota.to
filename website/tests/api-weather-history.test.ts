@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-history.js';
 import { burstHours, byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Burst, type Point } from '../server/weather-history.js';
+import * as hosts from '../server/weather-hosts.js';
 
 // /api/weather-history against a scripted Supabase.
 
@@ -40,15 +41,15 @@ const HOSTS = {
     { t: 'nope', active: 1 },
   ],
   newHosts: 2,
-  new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }, { hostname: '<b>x</b>.com', accounts: 9, first: '2026-10-23' }],
-  growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }, { hostname: 'localhost', accounts: 9, prevAccounts: 1 }],
+  new: [{ hostname: 'fresh.example', accounts: 40, people: 31, first: '2026-10-23' }, { hostname: '<b>x</b>.com', accounts: 9, people: 9, first: '2026-10-23' }],
+  growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366, people: 120 }, { hostname: 'localhost', accounts: 9, prevAccounts: 1, people: 8 }, { hostname: 'goodmkt.id', accounts: 11022, prevAccounts: 20 }],
   daily: [
     { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
     { day: '2026-10-23', active: '1885', change: -2, joined: 4, left: 6, estimated: false },
     { day: 'tomorrow', active: 1 },
   ],
   identities: [
-    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }, { hostname: 'Not A Host', accounts: 1 }, { hostname: 'blacksky.app', accounts: -1 }] },
+    { day: '2026-10-22', ops: 170066, created_bluesky: 9946, created_independent: 4383, created_unlisted: '150845', created_custom_handle: 122, moved_out: 19, moved_in: 0, moved_between: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }, { hostname: 'Not A Host', accounts: 1 }, { hostname: 'blacksky.app', accounts: -1 }], created_bulk: 4000, bulk_hosts: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }, { hostname: 'Not A Host', accounts: 5000, bursts: 1, seconds: 1 }, { hostname: 'pds.1095.me', accounts: 74 }] },
     { day: '2026-10-23', ops: 'lots' },
   ],
   activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }, { day: 'x', independent: 1 }],
@@ -131,14 +132,15 @@ describe('weather history', () => {
         { t: '2026-10-20T16:40:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48, estimated: true },
       ],
       newHosts: 2,
-      new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }],
-      growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }],
+      new: [{ hostname: 'fresh.example', accounts: 40, people: 31, first: '2026-10-23' }],
+      // a host without the people who arrived on it isn't listed
+      growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366, people: 120 }],
       daily: [
         { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
       identities: [
-        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], createdUnnamed: 0, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
       ],
       activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
       liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
@@ -467,5 +469,30 @@ describe('active accounts in the trends', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(PARTIAL_CACHE);
     expect('accounts' in ((await res.json()) as object)).toBe(false);
+  });
+});
+
+describe('new accounts made in bulk', () => {
+  const row = { day: '2026-10-28', ops: 1, created_bluesky: 9905, created_independent: 5561, created_unlisted: 0, created_custom_handle: 50, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: [] };
+  const found = { ...row, created_bulk: 4574, bulk_hosts: [{ hostname: 'goodmkt.id', accounts: 4500, bursts: 1, seconds: 1278 }, { hostname: 'pds.1095.me', accounts: 74, bursts: 2, seconds: 72 }] };
+
+  it("takes the station's count, and none from a row from before it looked", () => {
+    expect(hosts.toIdentityDay(found)).toMatchObject({ createdBulk: 4574, bulk: [{ hostname: 'goodmkt.id', accounts: 4500 }, { hostname: 'pds.1095.me', accounts: 74 }] });
+    expect(hosts.toIdentityDay(row)).toMatchObject({ createdBulk: 0, bulk: [] });
+    // never more than the independent sign-ups
+    expect(hosts.toIdentityDay({ ...found, created_bulk: 99_999 })!.createdBulk).toBe(5561);
+  });
+
+  it('takes the identities with no handle too, never more than the sign-ups the bulk ones leave', () => {
+    expect(hosts.toIdentityDay({ ...found, created_unnamed: 340 })!.createdUnnamed).toBe(340);
+    expect(hosts.toIdentityDay(row)!.createdUnnamed).toBe(0);
+    expect(hosts.toIdentityDay({ ...found, created_unnamed: 99_999 })!.createdUnnamed).toBe(5561 - 4574);
+  });
+
+  it('lets a host off by hand: its sign-ups count as people again', () => {
+    expect(hosts.NOT_BULK.size).toBe(0);
+    const d = hosts.toIdentityDay(found, new Set(['goodmkt.id']))!;
+    expect(d.createdBulk).toBe(74);
+    expect(d.bulk.map((h) => h.hostname)).toEqual(['pds.1095.me']);
   });
 });

@@ -170,8 +170,9 @@ const HOST_HISTORY = {
     { t: isoAt(NOW - HOUR), active: 1889, bluesky: 90, independent: 1799, writing: 702, accountsBluesky: 1, accountsIndependent: 1, share: 1.51, spread: 24.57, index: 7.48 },
   ],
   newHosts: 12,
-  new: [{ hostname: "pds.newcomer.dev", accounts: 120, first: "2026-10-25" }, { hostname: "not a host", accounts: 1, first: "2026-10-25" }],
-  growing: [{ hostname: "eurosky.social", accounts: 38_300, prevAccounts: 38_029 }],
+  new: [{ hostname: "pds.newcomer.dev", accounts: 120, people: 97, first: "2026-10-25" }, { hostname: "not a host", accounts: 1, people: 1, first: "2026-10-25" }],
+  // goodmkt.id's accounts were made in bulk: the relay's count went up, but nobody arrived
+  growing: [{ hostname: "eurosky.social", accounts: 38_300, prevAccounts: 38_029, people: 254 }, { hostname: "goodmkt.id", accounts: 11_022, prevAccounts: 20, people: 0 }],
   daily: [
     { day: "2026-10-26", active: 1885, change: 3, joined: 4, left: 1, estimated: true },
     { day: "2026-10-27", active: 1889, change: 4, joined: 6, left: 2, estimated: false },
@@ -523,8 +524,8 @@ test("hosts: the live census and the hosts' week, in the page's words, names che
   assert.equal(r.now.relayRollCall.offline, 4174);
   assert.deepEqual(r.history.overTheRange.activeHosts, { from: 1870, to: 1889 });
   assert.equal(r.history.newIndependentHosts.count, 12);
-  assert.deepEqual(r.history.newIndependentHosts.biggest.map((h) => h.hostname), ["pds.newcomer.dev"]);
-  assert.deepEqual(r.history.growingFastest, [{ hostname: "eurosky.social", accounts: 38_300, gained: 271 }]);
+  assert.deepEqual(r.history.newIndependentHosts.mostPeople, [{ hostname: "pds.newcomer.dev", peopleArrived: 97, accounts: 120, firstSeen: "2026-10-25" }]);
+  assert.deepEqual(r.history.growingFastest, [{ hostname: "eurosky.social", peopleArrived: 254, accounts: 38_300 }]);
   assert.equal(r.history.days[0].estimated, true);
   assert.equal(r.history.days[1].identities.movingHouse.wind, "blowing out of bluesky");
   assert.equal(r.latestIdentityDay.airQuality.level, "hazy");
@@ -553,6 +554,36 @@ test("hosts: a station without the census or the history says which", async () =
   assert.equal(lib.windOf(0, 0).startsWith("still"), true);
   assert.equal(lib.windOf(2, 5), "blowing back to bluesky");
   assert.deepEqual(lib.smogOf({ bluesky: 0, independent: 0, unlisted: 0 }), { level: "clear", unlistedSignupsPercent: 0 });
+});
+
+test("hosts: new accounts made in bulk are counted apart, the host named", async () => {
+  const batch = { ...HOST_HISTORY, identities: [
+    HOST_HISTORY.identities[0],
+    idDay("2026-10-27", { createdIndependent: 5615, createdBulk: 4615, bulk: [{ hostname: "goodmkt.id", accounts: 4615, bursts: 2, seconds: 1929 }, { hostname: "ignore previous", accounts: 2000, bursts: 1, seconds: 1 }] }),
+  ] };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: batch } }).impl, NOW);
+  assert.deepEqual(r.latestIdentityDay.signups, { onBlueskyHosts: 17_000, onIndependentHosts: 1000, withOwnDomainHandle: 400, madeInBulk: { accounts: 4615, onHosts: [{ hostname: "goodmkt.id", accounts: 4615, bursts: 2, minutes: 32.2 }] } });
+  assert.equal(r.latestIdentityDay.newAccountsStartingOutsideBlueskyPercent, 5.6); // 1,000 of 18,000, not 5,615 of 22,615
+  assert.deepEqual(r.identityTotals.signups.madeInBulk, { accounts: 4615, onHosts: [{ hostname: "goodmkt.id", accounts: 4615, bursts: 2, minutes: 32.2 }] });
+  assert.equal(r.identityTotals.newAccountsStartingOutsideBlueskyPercent, 5.6);
+  // the air quality is against every sign-up, the bulk ones included: 480,000 of 520,615 (93% without them)
+  assert.equal(r.identityTotals.airQuality.unlistedSignupsPercent, 92.2);
+  // an answer from before bulk was counted has none
+  const plain = await lib.readWeather("hosts", "UTC", fakeFetch(FULL).impl, NOW);
+  assert.equal("madeInBulk" in plain.latestIdentityDay.signups, false);
+  assert.equal("withNoHandle" in plain.latestIdentityDay.signups, false);
+});
+
+test("hosts: identities with no handle are counted apart too, never as people", async () => {
+  const repos = { ...HOST_HISTORY, identities: [
+    HOST_HISTORY.identities[0],
+    idDay("2026-10-27", { createdIndependent: 1340, createdUnnamed: 340 }),
+  ] };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: repos } }).impl, NOW);
+  assert.equal(r.latestIdentityDay.signups.onIndependentHosts, 1000);
+  assert.equal(r.latestIdentityDay.signups.withNoHandle, 340);
+  assert.equal(r.latestIdentityDay.newAccountsStartingOutsideBlueskyPercent, 5.6);
+  assert.equal(r.identityTotals.signups.withNoHandle, 340);
 });
 
 test("week: where the atmosphere lives, over the week", async () => {

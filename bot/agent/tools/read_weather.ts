@@ -42,7 +42,8 @@ export default defineTool({
     "hosts and the share of independent accounts the ten biggest hold, hosts by size (just one person, " +
     "household, village, town, city, metropolis) and the accounts on each size, top-level " +
     "domains, and the relay's roll call (active, idle, offline, banned). Its history covers the last 7 " +
-    "days: new and growing independent hosts, each day's hosts (days marked estimated came from a " +
+    "days: new independent hosts and the ones growing fastest (by people arriving: signed up, not in bulk, or moved " +
+    "in; not the relay's count, which goes up for scripted accounts too), each day's hosts (days marked estimated came from a " +
     "backfill, not the station), and from the PLC directory's log: sign-ups on Bluesky's hosts and on " +
     "independent ones (and the percent of new accounts starting outside Bluesky), own-domain handles, " +
     "accounts moving house (out of Bluesky, back in, between independent hosts: the migration wind, and " +
