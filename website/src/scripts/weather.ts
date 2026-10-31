@@ -172,6 +172,8 @@ export interface Hosts {
   /** The accounts on the hosts in each size. */
   sizeAccounts?: number[];
   tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
+  /** Tangled's knots left out of all of it: git servers whose "accounts" are repositories (server/atmosphere.ts). */
+  knots?: number;
 }
 
 const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
@@ -218,7 +220,7 @@ function clean(r: Reading): Reading {
   }
   const h = r.hosts;
   if (h && nums(h, ['listed', 'active', 'bluesky', 'independent']) && typeof h.measuredAt === 'string' && Number.isFinite(Date.parse(h.measuredAt)) && nums(h.accounts, ['bluesky', 'independent']) && nums(h.diversity, ['index', 'share', 'spread']) && Array.isArray(h.top)) {
-    const { statuses, sizes, sizeAccounts, tlds, ...rest } = h;
+    const { statuses, sizes, sizeAccounts, tlds, knots, ...rest } = h;
     out.hosts = {
       ...rest,
       writing: nums(h.writing, ['bluesky', 'independent', 'minutes']) ? h.writing : null,
@@ -228,6 +230,7 @@ function clean(r: Reading): Reading {
     if (Array.isArray(sizes) && sizes.length === 7 && sizes.every(num)) out.hosts.sizes = sizes;
     if (Array.isArray(sizeAccounts) && sizeAccounts.length === 7 && sizeAccounts.every(num)) out.hosts.sizeAccounts = sizeAccounts;
     if (Array.isArray(tlds)) out.hosts.tlds = tlds.filter((t) => nums(t, ['hosts', 'accounts']) && typeof t.tld === 'string' && /^[a-z0-9-]{2,63}$/.test(t.tld)).slice(0, 8);
+    if (num(knots)) out.hosts.knots = knots;
   }
   return out;
 }

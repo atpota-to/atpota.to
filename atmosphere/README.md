@@ -181,6 +181,22 @@ about 250 pages, so each poll reads a few dozen; on 2026-10-22 reading the day f
 took 17 s and 137 MB. After a restart it reads today again from midnight UTC. A day the
 station was down across the end of isn't finished, and the backfill rewrites it.
 
+### Tangled's knots aren't hosts
+
+The relay lists Tangled's knots beside the PDS hosts: git servers that serve the atproto
+sync endpoints, whose "accounts" are git repositories, each with an identity of its own
+(it holds an `org.tangled.repo.manifest` record naming the repository and its owner).
+knot1.tangled.sh held 8,829 of them on 2026-10-31, and 47 knots were listed. So they don't
+count as hosts anywhere ([`src/knots.js`](src/knots.js)). A knot says what it is when asked:
+`GET /xrpc/_health` answers `{"version":"knot 2.0.0"}`, where a PDS answers its own version
+or its software's name. After each census the station asks the active independent hosts it
+hasn't asked in a week (300 at a time, a day later for one that didn't answer) and keeps the
+answers in `atmosphere_host_kind`, read back on start. The census leaves knots out and says
+how many (`knots` in the reading and in `atmosphere_hosts`). `atmosphere_host_day` and
+`atmosphere_host_active_day` still have rows for them, as for any active host, and the
+trends leave them out by `atmosphere_host_kind`; a census from before (its `knots` null) has
+that day's knots taken out of it when it's read.
+
 ### Who's active on each host
 
 The relay's account counts are every account a host holds, quiet ones too. To count the
@@ -262,8 +278,9 @@ What it writes, for each day from `--from` to yesterday:
 
   The rows are what the log says, and `atmosphere_host_trends` reads them with two more
   rules, since `bulkRun` only catches the obvious runs: a host caught making accounts in
-  bulk in the range has none of its sign-ups counted as people, and a day of 100 or more
-  sign-ups on a host after which it signed nobody up for 3 days isn't people either. A host
+  bulk in the last 30 days has none of its sign-ups counted as people, and a day of 100 or
+  more sign-ups on a host after which it signed nobody up for 3 days isn't people either.
+  The sign-ups tile goes by the same rules (`created_scripted` on each day, and the hosts). A host
   only counts as new if it had 25 or fewer accounts when the station first saw it, or at
   least half its accounts arrived in the range. Checked on 2026-10-31 against the log from
   Oct 8 (a backfill dry run, and the functions run over a copy of the live tables):
@@ -354,6 +371,7 @@ detail of old data never makes the report less accurate.
 | `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
 | `atmosphere_plc_day`: each day's identity changes, from the PLC log | forever | tiny |
 | `atmosphere_host_arrival_day`: who arrived on each independent host, each day | forever | ~5 MB a year |
+| `atmosphere_host_kind`: which independent hosts are Tangled's knots, asked weekly | forever | tiny |
 | `atmosphere_host_active_day`: each independent host's active accounts, a sketch a day | forever | ~150 MB a year |
 
 The per-app minute rows were the long tail, about 23k rows (5 MB) a day.
@@ -627,6 +645,7 @@ src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
 src/plc.js         reading the PLC directory's log of identity changes
 src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day
+src/knots.js       which hosts are Tangled's knots (git servers, not counted), into atmosphere_host_kind
 src/host-activity.js  who's active on each independent host, a sketch a day, into atmosphere_host_active_day
 src/backfill-host-activity.js  the same, for days before the station counted, from the archive
 src/backfill-hosts.js  the hosts' days before the station kept them, estimated from that log

@@ -125,6 +125,15 @@ export interface IdentityDay {
    * server's repositories, on knot1.tangled.sh). Zero on days counted before the station looked.
    */
   createdUnnamed: number;
+  /**
+   * Of the rest of createdIndependent (not bulk, not unnamed), the ones a script made by the
+   * trends' rules (atmosphere_host_trends): on a host caught making accounts in bulk in the
+   * last 30 days, or on a day of 100 or more after which the host signed nobody up for 3 days.
+   * Zero from a function from before them.
+   */
+  createdScripted: number;
+  /** The hosts that made them, the most first, and why: 'bulk' or 'stopped'. */
+  scripted: ScriptedHost[];
   movedOut: number;
   movedIn: number;
   movedBetween: number;
@@ -132,6 +141,15 @@ export interface IdentityDay {
   /** Where the day's movers went (out of Bluesky's hosts or between independent ones), busiest first. */
   destinations: Array<{ hostname: string; accounts: number }>;
 }
+
+export interface ScriptedHost {
+  hostname: string;
+  accounts: number;
+  why: 'bulk' | 'stopped';
+}
+
+/** New accounts on independent hosts that people made: less the bulk ones, the unnamed ones and the scripted ones. */
+export const peopleIndependentOf = (d: IdentityDay): number => Math.max(0, d.createdIndependent - d.createdBulk - d.createdUnnamed - d.createdScripted);
 
 export interface BulkHost {
   hostname: string;
@@ -165,7 +183,8 @@ const hostCounts = (x: unknown) =>
  * Hosts never counted as made in bulk, whatever the station finds. Its rules only count runs
  * of sign-ups no crowd of people makes, but one thing can look like them: a server maxed out
  * by a rush for a new app, then falling over, whose last minutes are as steady and as sudden
- * to stop as a script's. A host named here has its sign-ups counted as people again, every day.
+ * to stop as a script's. A host named here has its sign-ups counted as people again, every day
+ * (in the sign-ups; the trends' lists of hosts are worked out in SQL and don't know it).
  */
 export const NOT_BULK: ReadonlySet<string> = new Set<string>([]);
 
@@ -183,13 +202,24 @@ export function toIdentityDay(x: unknown, notBulk: ReadonlySet<string> = NOT_BUL
   const bulk = found.filter((h) => !notBulk.has(h.hostname));
   const letOff = found.reduce((t, h) => t + (notBulk.has(h.hostname) ? h.accounts : 0), 0);
   const createdBulk = Math.max(0, Math.min(c.created_independent, (countOrNull(x.created_bulk) ?? 0) - letOff));
+  // never more than what's left of the day's independent sign-ups (bulk accounts all have a handle)
+  const createdUnnamed = Math.min(c.created_independent - createdBulk, countOrNull(x.created_unnamed) ?? 0);
+  const allScripted = (Array.isArray(x.scripted_hosts) ? x.scripted_hosts : [])
+    .flatMap((h) => {
+      const a = counts(h, ['accounts'] as const);
+      return isRecord(h) && hostname(h.hostname) && a && (h.why === 'bulk' || h.why === 'stopped') ? [{ hostname: h.hostname, accounts: a.accounts, why: h.why as ScriptedHost['why'] }] : [];
+    })
+    .slice(0, TOP_HOSTS);
+  const scripted = allScripted.filter((h) => !notBulk.has(h.hostname));
+  const scriptedOff = allScripted.reduce((t, h) => t + (notBulk.has(h.hostname) ? h.accounts : 0), 0);
   return {
     day: x.day,
-    ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations' | 'createdBulk' | 'bulk' | 'createdUnnamed'>),
+    ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations' | 'createdBulk' | 'bulk' | 'createdUnnamed' | 'createdScripted' | 'scripted'>),
     createdBulk,
     bulk,
-    // never more than what's left of the day's independent sign-ups (bulk accounts all have a handle)
-    createdUnnamed: Math.min(c.created_independent - createdBulk, countOrNull(x.created_unnamed) ?? 0),
+    createdUnnamed,
+    createdScripted: Math.max(0, Math.min(c.created_independent - createdBulk - createdUnnamed, (countOrNull(x.created_scripted) ?? 0) - scriptedOff)),
+    scripted,
     destinations: hostCounts(x.destinations),
   };
 }

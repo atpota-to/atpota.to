@@ -180,6 +180,8 @@ export interface Hosts {
   sizeAccounts?: number[];
   /** The top-level domains with the most independent hosts. */
   tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
+  /** Tangled's knots left out of all of it: git servers the relay lists, whose "accounts" are repositories (atmosphere/src/knots.js). */
+  knots?: number;
 }
 
 export const HOST_STATUSES = ['active', 'idle', 'offline', 'throttled', 'banned', 'other'] as const;
@@ -586,8 +588,9 @@ export function hostsOf(x: unknown): Hosts | undefined {
 }
 
 /** A census's statuses, sizes and top-level domains, each left out if it doesn't check out. */
-function hostExtras(x: Record<string, unknown>): Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds'> {
-  const out: Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds'> = {};
+function hostExtras(x: Record<string, unknown>): Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds' | 'knots'> {
+  const out: Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds' | 'knots'> = {};
+  if (isCount(x.knots)) out.knots = x.knots;
   const statuses = counts(x.statuses, HOST_STATUSES);
   if (statuses) out.statuses = statuses;
   if (Array.isArray(x.sizes) && x.sizes.length === HOST_SIZE_BOUNDS.length + 1 && x.sizes.every(isCount)) out.sizes = x.sizes as number[];

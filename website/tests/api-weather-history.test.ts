@@ -140,7 +140,7 @@ describe('weather history', () => {
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
       identities: [
-        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], createdUnnamed: 0, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], createdUnnamed: 0, createdScripted: 0, scripted: [], destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
       ],
       activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
       liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
@@ -481,6 +481,17 @@ describe('new accounts made in bulk', () => {
     expect(hosts.toIdentityDay(row)).toMatchObject({ createdBulk: 0, bulk: [] });
     // never more than the independent sign-ups
     expect(hosts.toIdentityDay({ ...found, created_bulk: 99_999 })!.createdBulk).toBe(5561);
+  });
+
+  it('takes the sign-ups the trends call scripted, and their hosts, never more than what the bulk and unnamed ones leave', () => {
+    const scripted = { ...found, created_unnamed: 40, created_scripted: 603, scripted_hosts: [{ hostname: 'goodmkt.id', accounts: 603, why: 'bulk' }, { hostname: 'Not A Host', accounts: 1, why: 'bulk' }, { hostname: 'refpds.oyster.cafe', accounts: 9, why: 'who knows' }] };
+    const d = hosts.toIdentityDay(scripted)!;
+    expect([d.createdScripted, d.scripted]).toEqual([603, [{ hostname: 'goodmkt.id', accounts: 603, why: 'bulk' }]]);
+    expect(hosts.peopleIndependentOf(d)).toBe(5561 - 4574 - 40 - 603);
+    expect(hosts.toIdentityDay({ ...scripted, created_scripted: 99_999 })!.createdScripted).toBe(5561 - 4574 - 40);
+    expect(hosts.toIdentityDay(row)).toMatchObject({ createdScripted: 0, scripted: [] });
+    // a host let off by hand is let off these too
+    expect(hosts.toIdentityDay(scripted, new Set(['goodmkt.id']))!.createdScripted).toBe(0);
   });
 
   it('takes the identities with no handle too, never more than the sign-ups the bulk ones leave', () => {

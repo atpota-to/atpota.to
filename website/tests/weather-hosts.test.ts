@@ -35,7 +35,7 @@ const HOSTS: HostHistory = {
   identities: [],
 };
 
-const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, createdBulk: 0, bulk: [], createdUnnamed: 0, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], ...extra });
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], ...extra });
 
 let part: HTMLElement;
 const bars = (list: HTMLElement, b: Parameters<typeof renderBars>[1]) => renderBars(list, b, undefined);
@@ -251,6 +251,18 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdUnnamed: 1 })).toBe('plus 1 new identity with no handle, left out above: nobody signs in to one (a git server makes them for its repositories, say).');
     expect(bulkWords({ ...batch, createdUnnamed: 340 })).toMatch(/people signing up build up and trail off\. and 340 new identities with no handle, left out too: nobody signs in to one/);
     expect(independentOf({ ...batch, createdUnnamed: 340 })).toBe(5561 - 4615 - 340);
+    // and the ones the trends call scripted, by host and why
+    expect(independentOf({ ...batch, createdUnnamed: 340, createdScripted: 600 })).toBe(5561 - 4615 - 340 - 600);
+    const leftover = { hostname: 'goodmkt.id', accounts: 603, why: 'bulk' as const };
+    const stopped = { hostname: 'refpds.oyster.cafe', accounts: 1062, why: 'stopped' as const };
+    expect(bulkWords({ ...batch, createdScripted: 603, scripted: [leftover] })).toMatch(/trail off\. and 603 more on goodmkt\.id, left out too: it made accounts in bulk in the last 30 days, so its other sign-ups count as a script's\.$/);
+    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdScripted: 1062, scripted: [stopped] })).toBe("plus 1,062 on refpds.oyster.cafe, left out above: they all came in one day, then nobody for three days. a crowd keeps coming; a script stops dead.");
+    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdScripted: 1665, scripted: [stopped, leftover], createdUnnamed: 2 })).toBe(
+      'plus 1,665 a script made, by the shape of the hosts\' days, left out above: 1,062 on refpds.oyster.cafe (all in one day, then nobody for three days) and 603 on goodmkt.id (made accounts in bulk in the last 30 days). and 2 new identities with no handle, left out too: nobody signs in to one (a git server makes them for its repositories, say).',
+    );
+    // over days, each host's add up
+    const two = sumDays([{ ...batch, createdScripted: 603, scripted: [leftover] }, { ...idDay('2026-10-28'), createdScripted: 527, scripted: [{ ...leftover, accounts: 527 }] }])!;
+    expect([two.createdScripted, two.scripted]).toEqual([1130, [{ hostname: 'goodmkt.id', accounts: 1130, why: 'bulk' }]]);
     expect([lastedWords(1), lastedWords(75), lastedWords(1929), lastedWords(13_080)]).toEqual(['1 second', 'a minute', '32 minutes', '3.6 hours']);
     // over a week, each day's runs add up by host
     const week = sumDays([batch, idDay('2026-10-28', { createdBulk: 3903, bulk: [{ hostname: 'goodmkt.id', accounts: 3903, bursts: 2, seconds: 13_080 }] })])!;
@@ -344,6 +356,10 @@ describe('where the atmosphere lives: the census tiles', () => {
     expect(labels('[data-p-roll-list]')).toEqual(['active', 'idle', 'offline', 'banned']);
     expect(report.querySelector<HTMLElement>('[data-p-rollcall]')!.hidden).toBe(false);
     expect(report.querySelector<HTMLElement>('[data-p-census]')!.hidden).toBe(false);
+    expect(report.querySelector('[data-p-roll-lede]')!.textContent).toBe(`the relay has heard of ${census.listed.toLocaleString()} hosts. 1,888 are up and about right now.`);
+    // tangled's knots aren't counted, and it says so
+    renderHostCensus(report, { ...census, statuses: { active: 1888, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 }, knots: 47 });
+    expect(report.querySelector('[data-p-roll-lede]')!.textContent).toMatch(/1,888 are up and about right now\. that's leaving out 47 tangled knots: git servers, whose "accounts" are repositories\.$/);
   });
 
   it('weighs the sizes by accounts when the station sends them, and says what the top ten hold', () => {

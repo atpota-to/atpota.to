@@ -5,8 +5,9 @@
 
 import { loadConfig } from './config.js';
 import { createHostActivity } from './host-activity.js';
-import { createHostWatch, createHostWriter } from './hosts.js';
+import { createHostWatch, createHostWriter, HostCensus } from './hosts.js';
 import { createJetstream, REWIND_US } from './jetstream.js';
+import { createKnotCheck } from './knots.js';
 import { createPlcWatch } from './plc-watch.js';
 import { createRepair, REPAIR_EVERY_MS, replayChild } from './repair.js';
 import { createLogger } from './logger.js';
@@ -50,20 +51,25 @@ if (config.supabase) {
 
 // the PDS hosts on the network, from the relay's list of them (hosts.js), kept in Supabase for the trends
 // and, after each census, today's identity changes from the PLC directory's log (plc-watch.js)
-// and who was active on each host (host-activity.js)
+// and who was active on each host (host-activity.js). Tangled's knots aren't hosts (knots.js): the
+// census leaves them out, and asks the hosts that are due what they are once it's written
 const hostWriter = rest ? createHostWriter({ upsert: rest.upsert, log }) : null;
+const knots = createKnotCheck({ upsert: rest?.upsert ?? null, getAll: rest?.getAll ?? null, log });
+void knots.check([]); // read what it knew, before the first census
 let plcWatch = null;
 const hostWatch = createHostWatch({
+  census: new HostCensus({ knots }),
   log,
   relay: config.relayUrl,
-  onCensus: hostWriter
-    ? async (census) => {
-        await hostWriter.write(census);
-        plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log, onEntry: hostActivity.onPlcEntry });
-        await plcWatch.poll();
-        await hostActivity.onCensus(census.hosts);
-      }
-    : null,
+  onCensus: async (census) => {
+    if (hostWriter) {
+      await hostWriter.write(census);
+      plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log, onEntry: hostActivity.onPlcEntry });
+      await plcWatch.poll();
+      await hostActivity.onCensus(census.hosts);
+    }
+    await knots.check(census.hosts);
+  },
 });
 
 // the minutes it missed, heard again from Jetstream's lookback once it's healthy (repair.js)

@@ -653,8 +653,11 @@ export function hostsNowOf(x: unknown) {
     activeHosts: c.active,
     blueskyHosts: c.bluesky,
     independentHosts: c.independent,
-    // every host the relay has heard of, in any state
+    // every host the relay has heard of, in any state, not counting tangled's knots
     hostsTheRelayKnows: c.listed,
+    // tangled's knots, left out of every count here: git servers the relay lists beside the pds hosts, whose "accounts" are
+    // git repositories, not people (knot1.tangled.sh held about 8,800). don't call them hosts or count them as accounts
+    ...(count(x.knots) ? { tangledKnotsLeftOut: count(x.knots) } : {}),
     // active hosts that sent the relay anything lately
     ...(writing ? { wroteLately: { hosts: writing.bluesky + writing.independent, independent: writing.independent, overMinutes: writing.minutes } } : {}),
     // every account each host holds, active or not (the relay's count): how big hosts are, not how busy
@@ -692,6 +695,14 @@ const bulkHostsOf = (x: unknown) => list(x).flatMap((h) => {
   return hostname && c ? [{ hostname, accounts: c.accounts, bursts: c.bursts, minutes: round1(c.seconds / 60) }] : [];
 }).slice(0, TOP);
 
+/** The hosts whose sign-ups the trends call scripted, checked: how many, and why ("bulk" or "stopped"). */
+const scriptedHostsOf = (x: unknown) => list(x).flatMap((h) => {
+  const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+  const n = isRecord(h) ? count(h.accounts) : null;
+  const why = isRecord(h) && (h.why === "bulk" || h.why === "stopped") ? h.why : null;
+  return hostname && n !== null && why ? [{ hostname, accounts: n, why }] : [];
+}).slice(0, TOP);
+
 /** The same over days, each host's added up, the most first. */
 function mergeBulk(lists: ReturnType<typeof bulkHostsOf>[]) {
   const by = new Map<string, ReturnType<typeof bulkHostsOf>[number]>();
@@ -717,7 +728,8 @@ function identityDayOf(x: unknown) {
   // the station finds these (atmosphere/src/backfill-hosts.js bulkRun); an older answer has none
   const bulk = Math.min(count(x.createdBulk) ?? 0, c.createdIndependent);
   const unnamed = Math.min(count(x.createdUnnamed) ?? 0, c.createdIndependent - bulk);
-  const independent = c.createdIndependent - bulk - unnamed;
+  const scripted = Math.min(count(x.createdScripted) ?? 0, c.createdIndependent - bulk - unnamed);
+  const independent = c.createdIndependent - bulk - unnamed - scripted;
   return {
     date: x.day,
     signups: {
@@ -733,8 +745,12 @@ function identityDayOf(x: unknown) {
       // new identities on independent hosts with no handle: nobody signs in to one (a git server, like tangled's knots,
       // makes them for its repositories). left out of onIndependentHosts and the percent too; they aren't people
       ...(unnamed > 0 ? { withNoHandle: unnamed } : {}),
+      // new accounts the station's runs didn't catch but a script made all the same, left out of onIndependentHosts and
+      // the percent too: on a host caught making accounts in bulk in the last 30 days ("bulk"), or on a day of 100 or more
+      // after which the host signed nobody up for three days ("stopped": a crowd keeps coming, a script stops dead)
+      ...(scripted > 0 ? { likelyScripted: { accounts: scripted, onHosts: scriptedHostsOf(x.scripted) } } : {}),
     },
-    // of new accounts on hosts the relay carries, less the bulk and no-handle ones, the percent that started outside bluesky
+    // of new accounts on hosts the relay carries, less the bulk, no-handle and scripted ones, the percent that started outside bluesky
     ...(c.createdBluesky + independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((independent / (c.createdBluesky + independent)) * 100) } : {}),
     movingHouse: {
       outOfBluesky: c.movedOut,
@@ -843,6 +859,12 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
   const created = { bluesky: sum((d) => d.signups.onBlueskyHosts), independent: sum((d) => d.signups.onIndependentHosts), unlisted: sum((d) => d.airQuality.unlistedSignups) };
   const bulk = sum((d) => d.signups.madeInBulk?.accounts ?? 0);
   const unnamed = sum((d) => d.signups.withNoHandle ?? 0);
+  const scripted = sum((d) => d.signups.likelyScripted?.accounts ?? 0);
+  const scriptedHosts = new Map<string, { hostname: string; accounts: number; why: string }>();
+  for (const d of days) for (const h of d.signups.likelyScripted?.onHosts ?? []) {
+    const was = scriptedHosts.get(h.hostname);
+    scriptedHosts.set(h.hostname, { hostname: h.hostname, accounts: (was?.accounts ?? 0) + h.accounts, why: was?.why === "bulk" ? "bulk" : h.why });
+  }
   return {
     days: days.length,
     signups: {
@@ -851,11 +873,12 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
       withOwnDomainHandle: sum((d) => d.signups.withOwnDomainHandle),
       ...(bulk > 0 ? { madeInBulk: { accounts: bulk, onHosts: mergeBulk(days.map((d) => d.signups.madeInBulk?.onHosts ?? [])) } } : {}),
       ...(unnamed > 0 ? { withNoHandle: unnamed } : {}),
+      ...(scripted > 0 ? { likelyScripted: { accounts: scripted, onHosts: [...scriptedHosts.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP) } } : {}),
     },
     ...(created.bluesky + created.independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((created.independent / (created.bluesky + created.independent)) * 100) } : {}),
     movingHouse: { outOfBluesky: out, backToBluesky: back, betweenIndependentHosts: sum((d) => d.movingHouse.betweenIndependentHosts), wind: windOf(out, back), movedTo: movedTo(days) },
-    // against every sign-up, the bulk and no-handle ones included (as each day's)
-    airQuality: smogOf({ ...created, independent: created.independent + bulk + unnamed }),
+    // against every sign-up, the bulk, no-handle and scripted ones included (as each day's)
+    airQuality: smogOf({ ...created, independent: created.independent + bulk + unnamed + scripted }),
     deletedAccounts: sum((d) => d.deletedAccounts),
   };
 }
