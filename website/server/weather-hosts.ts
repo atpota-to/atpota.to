@@ -8,15 +8,21 @@
  *   points    the last census in each minute, hour, day or month of the range, with its
  *             hosting diversity (worked out here from its parts, like the live reading's)
  *   since     the first day the station kept hosts: nothing before it counts as new
- *   newHosts  how many independent hosts were first seen active in the range, and `new`
- *             the ones with the most accounts now
- *   growing   the independent hosts that gained the most accounts over the range, by day
+ *   newHosts  how many independent hosts were first seen active in the range and are new,
+ *             not just newly seen (small when first seen, or at least half their accounts
+ *             arrived in the range), and `new` the ones the most people arrived on
+ *   growing   the independent hosts the most people arrived on over the range, by day:
+ *             signed up (not in bulk) or moved in, from the PLC directory's log
+ *             (atmosphere_host_arrival_day). Not the relay's count of their accounts, which
+ *             goes up for accounts made in bulk and for identities nobody signs in to (a git
+ *             server's repositories) as much as for people
  *   daily     day by day (UTC), over the range but at least a week: active hosts at the
  *             day's last census and the change from the day before, and the independent
  *             hosts that joined and left. Each is null where there's nothing to compare.
  *   identities  day by day over the same days: new accounts by where they signed up,
  *             own-domain handles among them, the ones made in bulk (runs of sign-ups shaped
- *             as no crowd makes them: atmosphere/src/backfill-hosts.js bulkRun), accounts
+ *             as no crowd makes them: atmosphere/src/backfill-hosts.js bulkRun) and the
+ *             identities with no handle, accounts
  *             moving out of Bluesky's hosts, back in and between independent hosts, and
  *             deletions, from the PLC directory's log (atmosphere/src/plc-watch.js; today's
  *             so far)
@@ -50,8 +56,10 @@ export interface HostHistory {
   since: string | null;
   points: HostPoint[];
   newHosts: number;
-  new: Array<{ hostname: string; accounts: number; first: string }>;
-  growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
+  /** `accounts`: the relay's count now; `people`: who signed up (not in bulk) or moved in over the range. */
+  new: Array<{ hostname: string; accounts: number; people: number; first: string }>;
+  /** The same, and `prevAccounts`, the relay's count on the host's first day in the range. */
+  growing: Array<{ hostname: string; accounts: number; prevAccounts: number; people: number }>;
   daily: HostDay[];
   identities: IdentityDay[];
   /** Each day's active accounts on independent hosts, and everyone's (null before the station counted them). */
@@ -112,6 +120,11 @@ export interface IdentityDay {
   createdBulk: number;
   /** The hosts that made them, the most first: how many, in how many runs, over how many seconds in all. */
   bulk: BulkHost[];
+  /**
+   * Of createdIndependent, the identities with no handle: nobody signs in to one (a git
+   * server's repositories, on knot1.tangled.sh). Zero on days counted before the station looked.
+   */
+  createdUnnamed: number;
   movedOut: number;
   movedIn: number;
   movedBetween: number;
@@ -172,9 +185,11 @@ export function toIdentityDay(x: unknown, notBulk: ReadonlySet<string> = NOT_BUL
   const createdBulk = Math.max(0, Math.min(c.created_independent, (countOrNull(x.created_bulk) ?? 0) - letOff));
   return {
     day: x.day,
-    ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations' | 'createdBulk' | 'bulk'>),
+    ...(Object.fromEntries(Object.entries(IDENTITY_KEYS).map(([k, col]) => [k, c[col]])) as Omit<IdentityDay, 'day' | 'destinations' | 'createdBulk' | 'bulk' | 'createdUnnamed'>),
     createdBulk,
     bulk,
+    // never more than what's left of the day's independent sign-ups (bulk accounts all have a handle)
+    createdUnnamed: Math.min(c.created_independent - createdBulk, countOrNull(x.created_unnamed) ?? 0),
     destinations: hostCounts(x.destinations),
   };
 }
@@ -229,14 +244,14 @@ export function toHostHistory(body: unknown, bucket: HostBucket): HostHistory | 
     newHosts: Number.isFinite(newHosts) && newHosts >= 0 ? newHosts : 0,
     new: body.new
       .flatMap((h) => {
-        const c = counts(h, ['accounts'] as const);
-        return isRecord(h) && hostname(h.hostname) && c && typeof h.first === 'string' && DAY_RE.test(h.first) ? [{ hostname: h.hostname, accounts: c.accounts, first: h.first }] : [];
+        const c = counts(h, ['accounts', 'people'] as const);
+        return isRecord(h) && hostname(h.hostname) && c && typeof h.first === 'string' && DAY_RE.test(h.first) ? [{ hostname: h.hostname, accounts: c.accounts, people: c.people, first: h.first }] : [];
       })
       .slice(0, TOP_HOSTS),
     growing: body.growing
       .flatMap((h) => {
-        const c = counts(h, ['accounts', 'prevAccounts'] as const);
-        return isRecord(h) && hostname(h.hostname) && c ? [{ hostname: h.hostname, accounts: c.accounts, prevAccounts: c.prevAccounts }] : [];
+        const c = counts(h, ['accounts', 'prevAccounts', 'people'] as const);
+        return isRecord(h) && hostname(h.hostname) && c ? [{ hostname: h.hostname, accounts: c.accounts, prevAccounts: c.prevAccounts, people: c.people }] : [];
       })
       .slice(0, TOP_HOSTS),
     daily: (Array.isArray(body.daily) ? body.daily : []).map(toHostDay).filter((d): d is HostDay => d !== null),

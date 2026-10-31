@@ -41,8 +41,8 @@ const HOSTS = {
     { t: 'nope', active: 1 },
   ],
   newHosts: 2,
-  new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }, { hostname: '<b>x</b>.com', accounts: 9, first: '2026-10-23' }],
-  growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }, { hostname: 'localhost', accounts: 9, prevAccounts: 1 }],
+  new: [{ hostname: 'fresh.example', accounts: 40, people: 31, first: '2026-10-23' }, { hostname: '<b>x</b>.com', accounts: 9, people: 9, first: '2026-10-23' }],
+  growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366, people: 120 }, { hostname: 'localhost', accounts: 9, prevAccounts: 1, people: 8 }, { hostname: 'goodmkt.id', accounts: 11022, prevAccounts: 20 }],
   daily: [
     { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
     { day: '2026-10-23', active: '1885', change: -2, joined: 4, left: 6, estimated: false },
@@ -132,14 +132,15 @@ describe('weather history', () => {
         { t: '2026-10-20T16:40:00.000Z', active: 1887, bluesky: 90, independent: 1797, writing: null, accountsBluesky: 23767508, accountsIndependent: 363866, share: 1.51, spread: 24.54, index: 7.48, estimated: true },
       ],
       newHosts: 2,
-      new: [{ hostname: 'fresh.example', accounts: 40, first: '2026-10-23' }],
-      growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366 }],
+      new: [{ hostname: 'fresh.example', accounts: 40, people: 31, first: '2026-10-23' }],
+      // a host without the people who arrived on it isn't listed
+      growing: [{ hostname: 'blacksky.app', accounts: 42500, prevAccounts: 42366, people: 120 }],
       daily: [
         { day: '2026-10-22', active: 1880, change: null, joined: null, left: null, estimated: true },
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
       identities: [
-        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], createdUnnamed: 0, destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
       ],
       activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
       liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
@@ -480,6 +481,12 @@ describe('new accounts made in bulk', () => {
     expect(hosts.toIdentityDay(row)).toMatchObject({ createdBulk: 0, bulk: [] });
     // never more than the independent sign-ups
     expect(hosts.toIdentityDay({ ...found, created_bulk: 99_999 })!.createdBulk).toBe(5561);
+  });
+
+  it('takes the identities with no handle too, never more than the sign-ups the bulk ones leave', () => {
+    expect(hosts.toIdentityDay({ ...found, created_unnamed: 340 })!.createdUnnamed).toBe(340);
+    expect(hosts.toIdentityDay(row)!.createdUnnamed).toBe(0);
+    expect(hosts.toIdentityDay({ ...found, created_unnamed: 99_999 })!.createdUnnamed).toBe(5561 - 4574);
   });
 
   it('lets a host off by hand: its sign-ups count as people again', () => {

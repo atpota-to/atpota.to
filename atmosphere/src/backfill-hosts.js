@@ -37,11 +37,13 @@
 // Alongside, from the same operations, each day's identity weather in atmosphere_plc_day:
 // new accounts by where they signed up (Bluesky's hosts, independent hosts, unlisted
 // ones), how many of the new accounts on listed hosts started with a handle on their own
-// domain (not one their host hands out), the new accounts on independent hosts made in bulk (bulkRun), accounts
-// moving out of Bluesky's hosts, back in, and between independent hosts, and deletions, and the independent hosts
-// accounts moved to. These are counted, not estimated.
+// domain (not one their host hands out), the new accounts on independent hosts made in bulk (bulkRun), the
+// new identities there with no handle, accounts moving out of Bluesky's hosts, back in, and between independent
+// hosts, and deletions, and the independent hosts accounts moved to; and in atmosphere_host_arrival_day, who
+// arrived on each independent host (arrivalRows). These are counted, not estimated.
 //
-// Days the station already wrote itself are left alone unless --overwrite. The log pages
+// Days the station already wrote itself are left alone unless --overwrite (the identity weather
+// and the arrivals are always rewritten: they're counted, so a recount only fills in). The log pages
 // and the audit answers are cached in --cache (default ./plc-cache), so a run that stops
 // picks up where it got to, and a dry run's reading is reused by the real one. About
 // 2,000 export pages for two weeks, plus an audit per identity that moved or changed
@@ -90,7 +92,7 @@ export function daysOf(from, today) {
   return days;
 }
 
-const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {} });
+const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, created_unnamed: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {}, arrivals: {} });
 
 /** How many destinations (and hosts making accounts in bulk) a day's row names. */
 export const TOP_DESTINATIONS = 10;
@@ -194,13 +196,44 @@ function addBulk(s, host, t) {
   b.seconds += (t[t.length - 1] - t[0]) / 1000;
 }
 
+// ---------- who arrived on each independent host ----------
+// The relay's count of a host's accounts goes up for anything the host serves, so a host
+// gaining accounts isn't people arriving: goodmkt.id's thousands were made in bulk, and
+// knot1.tangled.sh's (a git server) are identities with no handle, made for its
+// repositories. So the log says who arrived where, each day, on each independent host:
+//   signed_up  new accounts with a handle, not made in bulk: people signing up
+//   bulk       new accounts made in bulk (bulkRun)
+//   unnamed    identities with no handle, made there or moved there: nobody signs in to one
+//   moved_in   accounts with a handle that moved there, from Bluesky's hosts or another
+// The weather report's growing and new hosts count people (signed_up and moved_in), and
+// set everything against the relay's count to tell a new host from one long running.
+
+/** A host's tally of arrivals on a day: new accounts with a handle (bulk ones too, till they're judged), unnamed identities, accounts moving in. */
+const arrivalsOf = (s, host) => (s.arrivals[host] ??= { created: 0, unnamed: 0, moved_in: 0 });
+
+/**
+ * A day's atmosphere_host_arrival_day rows: each independent host anyone arrived on, by how
+ * they came. The accounts made in bulk come out of the ones with a handle (bulkRun only
+ * judges those).
+ */
+export function arrivalRows(day, signals) {
+  const bulk = signals.bulk_hosts ?? {};
+  return Object.entries(signals.arrivals ?? {})
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([hostname, a]) => {
+      const b = Math.min(a.created, bulk[hostname]?.accounts ?? 0);
+      return { day, hostname, signed_up: a.created - b, bulk: b, unnamed: a.unnamed, moved_in: a.moved_in };
+    });
+}
+
 /**
  * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
  * accounts moved to, out of Bluesky's hosts or from another independent one, by count)
  * and `bulk_hosts` (independent hosts that made accounts in bulk: how many, in how many
- * runs, over how many seconds) cut to the TOP_DESTINATIONS busiest.
+ * runs, over how many seconds) cut to the TOP_DESTINATIONS busiest. Who arrived on each
+ * host goes in its own rows (arrivalRows).
  */
-export function plcRow(day, signals) {
+export function plcRow(day, { arrivals, ...signals }) {
   const destinations = Object.entries(signals.destinations ?? {})
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, TOP_DESTINATIONS)
@@ -317,8 +350,11 @@ export class PlcHistory {
     return Math.floor((Date.parse(createdAt) - this.fromMs) / DAY_MS);
   }
 
-  /** A move from one host to another, counted on its day (Bluesky's hosts among themselves, and unlisted ones, aren't moves). */
-  countMove(day, from, to) {
+  /**
+   * A move from one host to another, counted on its day (Bluesky's hosts among themselves,
+   * and unlisted ones, aren't moves). `named`: the identity had a handle when it moved.
+   */
+  countMove(day, from, to, named = true) {
     if (from === to || from === NONE || to === NONE || day < 0 || day >= this.days) return;
     const a = this.sideOfIndex(from);
     const b = this.sideOfIndex(to);
@@ -329,7 +365,10 @@ export class PlcHistory {
     // where they went: an independent host, out of Bluesky's or from another
     if (b === 'independent' && (a === 'bluesky' || a === 'independent')) {
       const host = this.hosts[to];
-      if (isHostname(host)) s.destinations[host] = (s.destinations[host] ?? 0) + 1;
+      if (isHostname(host)) {
+        s.destinations[host] = (s.destinations[host] ?? 0) + 1;
+        arrivalsOf(s, host)[named ? 'moved_in' : 'unnamed']++;
+      }
     }
   }
 
@@ -354,8 +393,17 @@ export class PlcHistory {
         const side = this.sideOfIndex(host) ?? 'unlisted';
         s[`created_${side}`]++;
         if (side !== 'unlisted' && isCustomHandle(entry.handle, entry.host)) s.created_custom_handle++;
-        // each independent host's runs of sign-ups: made in bulk or not (bulkRun)
-        if (side === 'independent' && isHostname(entry.host)) this.signUp(entry.host, day, Date.parse(entry.at));
+        if (side === 'independent' && isHostname(entry.host)) {
+          if (entry.handle === null) {
+            // no handle: an identity nobody signs in to, kept apart from people and from runs
+            s.created_unnamed++;
+            arrivalsOf(s, entry.host).unnamed++;
+          } else {
+            arrivalsOf(s, entry.host).created++;
+            // each independent host's runs of sign-ups: made in bulk or not (bulkRun)
+            this.signUp(entry.host, day, Date.parse(entry.at));
+          }
+        }
       }
     }
     let rec = this.dids.get(entry.did);
@@ -366,7 +414,7 @@ export class PlcHistory {
       this.dids.set(entry.did, rec);
     } else {
       const last = rec.events.length ? rec.events[rec.events.length - 1] : rec.start;
-      this.countMove(day, last, host);
+      this.countMove(day, last, host, entry.handle !== null);
     }
     rec.events.push(day, host);
   }
@@ -395,15 +443,19 @@ export class PlcHistory {
     if (!rec || !Array.isArray(log)) return;
     let start = NONE;
     const events = [];
+    let named = true;
     for (const e of log) {
       if (!e || e.nullified) continue;
       const day = this.dayIndex(e.at);
       const host = this.intern(e.host);
       if (day < 0) start = host;
-      else events.push(day, host);
+      else {
+        if (!events.length) named = e.handle !== null;
+        events.push(day, host);
+      }
     }
     // its moves were counted against an unknown start: count its first one now
-    if (events.length) this.countMove(events[0], start, events[1]);
+    if (events.length) this.countMove(events[0], start, events[1], named);
     rec.start = start;
     rec.events = events;
   }
@@ -658,25 +710,40 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   if (db && !args.overwrite) skipBefore = await db.firstLiveDay();
   const listed = census.length;
   const written = [];
+  const arrived = new Map();
   log('');
-  log('day          active  indep   accounts elsewhere  diversity   new: bsky  indep  unlisted  own-domain   moved: out  in  between   deleted');
+  log('day          active  indep   accounts elsewhere  diversity   new: bsky  indep  unlisted  own-domain  bulk  unnamed   moved: out  in  between   deleted');
   for (let d = 0; d < days.length; d++) {
     const day = days[d];
     const rows = dayRows(day, hostsOnDay(census, history, delta[d], { floors, seenActive }), listed);
     const s = history.signalsOf(d);
     const plc = plcRow(day, s);
+    const arrivals = arrivalRows(day, s);
+    for (const a of arrivals) {
+      const t = arrived.get(a.hostname) ?? { signed_up: 0, bulk: 0, unnamed: 0, moved_in: 0 };
+      for (const k of Object.keys(t)) t[k] += a[k];
+      arrived.set(a.hostname, t);
+    }
     log(
-      `${day}  ${pad(rows.summary.active, 6)} ${pad(rows.summary.independent, 6)}  ${pad(rows.summary.accounts.independent.toLocaleString('en-US'), 18)}  ${pad(rows.summary.diversity.index, 9)}   ${pad(s.created_bluesky, 9)} ${pad(s.created_independent, 6)} ${pad(s.created_unlisted, 9)} ${pad(s.created_custom_handle, 11)}   ${pad(s.moved_out, 10)} ${pad(s.moved_in, 3)} ${pad(s.moved_between, 8)}   ${pad(s.deleted, 7)}`,
+      `${day}  ${pad(rows.summary.active, 6)} ${pad(rows.summary.independent, 6)}  ${pad(rows.summary.accounts.independent.toLocaleString('en-US'), 18)}  ${pad(rows.summary.diversity.index, 9)}   ${pad(s.created_bluesky, 9)} ${pad(s.created_independent, 6)} ${pad(s.created_unlisted, 9)} ${pad(s.created_custom_handle, 11)} ${pad(s.created_bulk, 5)} ${pad(s.created_unnamed, 8)}   ${pad(s.moved_out, 10)} ${pad(s.moved_in, 3)} ${pad(s.moved_between, 8)}   ${pad(s.deleted, 7)}`,
     );
     if (!db) continue;
     const live = skipBefore !== null && day >= skipBefore;
     await db.upsert('atmosphere_plc_day', 'day', [plc]);
+    for (let i = 0; i < arrivals.length; i += WRITE_BATCH) await db.upsert('atmosphere_host_arrival_day', 'day,hostname', arrivals.slice(i, i + WRITE_BATCH));
     if (live) continue;
     await db.upsert('atmosphere_hosts', 't', [rows.census]);
     for (let i = 0; i < rows.days.length; i += WRITE_BATCH) await db.upsert('atmosphere_host_day', 'day,hostname', rows.days.slice(i, i + WRITE_BATCH));
     written.push(day);
   }
   log('');
+  // a check on the run: the hosts people arrived on most, and anything else that arrived there
+  const most = [...arrived].sort((a, b) => b[1].signed_up + b[1].moved_in - (a[1].signed_up + a[1].moved_in) || (a[0] < b[0] ? -1 : 1)).slice(0, 15);
+  if (most.length) {
+    log('people arriving on independent hosts over the run, the most (signed up, moved in; and made in bulk, unnamed):');
+    for (const [host, t] of most) log(`  ${host.padEnd(36)} ${pad((t.signed_up + t.moved_in).toLocaleString('en-US'), 8)}  (${t.signed_up.toLocaleString('en-US')} + ${t.moved_in.toLocaleString('en-US')}; ${t.bulk.toLocaleString('en-US')} bulk, ${t.unnamed.toLocaleString('en-US')} unnamed)`);
+    log('');
+  }
   if (!db) log('dry run: nothing was written. run it again without --dry-run to write it (the cache makes that quick).');
   log(`peak memory ${Math.round(process.resourceUsage().maxRSS / 1024)} MB`);
   if (db) log(`wrote ${written.length} day(s) of hosts${skipBefore ? `; ${skipBefore} on are the station's own and were left alone (--overwrite to replace them)` : ''}, and ${days.length} day(s) of identity signals`);

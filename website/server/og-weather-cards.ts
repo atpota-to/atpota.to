@@ -940,11 +940,12 @@ function barList(rows: Array<{ name: string; n: number; value: string }>, width:
 function hostsCard(d: CardData, art: Art): El | null {
   const l = livingOf(d);
   if (!l) return null;
-  const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.accounts > x.prevAccounts);
+  // the people who arrived (signed up, not in bulk, or moved in), not the relay's count, which goes up for scripts too
+  const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.people > 0);
   const side = l.top.length
     ? { title: 'the biggest independent hosts', sub: 'by the accounts they hold', rows: l.top.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts, value: int(x.accounts) })) }
     : growing.length
-      ? { title: 'growing fastest', sub: 'accounts gained, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts - x.prevAccounts, value: signed(x.accounts - x.prevAccounts) })) }
+      ? { title: 'growing fastest', sub: 'people signing up or moving in, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.people, value: signed(x.people) })) }
       : null;
   const left = side ? 600 : 1144;
   return page(

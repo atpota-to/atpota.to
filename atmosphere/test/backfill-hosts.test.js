@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { backfill, bulkRun, daysOf, floodStart, hostsBefore, hostsOnDay, parseArgs, plateauOf, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
+import { arrivalRows, backfill, bulkRun, daysOf, floodStart, hostsBefore, hostsOnDay, parseArgs, plateauOf, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
 import { handleOfOp, hostOfOp, isCustomHandle, sideOf, slimEntry } from '../src/plc.js';
 
 const BSKY = 'amanita.us-east.host.bsky.network';
@@ -14,7 +14,7 @@ const raw = (did, createdAt, host, { prev = 'x', handle = `${did.slice(8)}.bsky.
   cid: `${did}-${createdAt}`,
   createdAt,
   nullified: false,
-  operation: { type, prev, alsoKnownAs: [`at://${handle}`], services: host ? { atproto_pds: { type: 'AtprotoPersonalDataServer', endpoint: `https://${host}` } } : {} },
+  operation: { type, prev, alsoKnownAs: handle === null ? [] : [`at://${handle}`], services: host ? { atproto_pds: { type: 'AtprotoPersonalDataServer', endpoint: `https://${host}` } } : {} },
 });
 const op = (...a) => slimEntry(raw(...a));
 const audit = (entries) => entries.map(slimEntry);
@@ -79,13 +79,21 @@ test('PlcHistory: counts each day\'s identity weather', () => {
   // the mover named an independent host and the deleted one left somewhere: both read their history; the renamed one doesn't
   assert.deepEqual(h.needsAudit().sort(), ['did:plc:gone', 'did:plc:mover']);
   h.fromAudit('did:plc:mover', audit([
-    { createdAt: '2026-01-01T00:00:00Z', operation: { prev: null, services: { atproto_pds: { endpoint: `https://${BSKY}` } } } },
-    { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
+    { createdAt: '2026-01-01T00:00:00Z', operation: { prev: null, alsoKnownAs: ['at://mover.bsky.social'], services: { atproto_pds: { endpoint: `https://${BSKY}` } } } },
+    { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', alsoKnownAs: ['at://mover.bsky.social'], services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
   ].map((e) => ({ did: 'did:plc:mover', cid: e.createdAt, ...e }))));
   h.settle();
-  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {} });
+  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, created_unnamed: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {}, arrivals: {} });
   // the mover went to eurosky: that's where the wind blew
-  assert.deepEqual(h.signals[1], { ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, created_bulk: 0, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0, destinations: { 'eurosky.social': 1 }, bulk_hosts: {} });
+  assert.deepEqual(h.signals[1], {
+    ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, created_bulk: 0, created_unnamed: 0, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0,
+    destinations: { 'eurosky.social': 1 }, bulk_hosts: {},
+    arrivals: { 'blacksky.app': { created: 1, unnamed: 0, moved_in: 0 }, 'eurosky.social': { created: 0, unnamed: 0, moved_in: 1 } },
+  });
+  assert.deepEqual(arrivalRows('2026-10-20', h.signals[1]), [
+    { day: '2026-10-20', hostname: 'blacksky.app', signed_up: 1, bulk: 0, unnamed: 0, moved_in: 0 },
+    { day: '2026-10-20', hostname: 'eurosky.social', signed_up: 0, bulk: 0, unnamed: 0, moved_in: 1 },
+  ]);
   assert.equal(h.signals[2].created_unlisted, 2);
   assert.equal(h.signals[2].deleted, 1);
   // today's move is in the walk back, not in any day's signals
@@ -226,6 +234,38 @@ test('plcRow: a day\'s row names its ten busiest destinations', () => {
   assert.deepEqual(row.destinations[0], { hostname: 'h11.example', accounts: 12 });
   assert.equal(row.day, '2026-10-22');
   assert.deepEqual(plcRow('2026-10-22', { ops: 0 }).destinations, []);
+  assert.equal('arrivals' in plcRow('2026-10-22', { ops: 0, arrivals: { 'blacksky.app': { created: 1, unnamed: 0, moved_in: 0 } } }), false);
+});
+
+test('arrivals: people signing up and moving in, apart from identities with no handle and accounts made in bulk', () => {
+  const h = new PlcHistory({ from: '2026-10-28', days: 1, relayHosts: new Set([...relayHosts, 'knot1.tangled.sh', 'goodmkt.id']) });
+  // a git server's repositories: identities with no handle, made in a run a second apart
+  for (let i = 0; i < 30; i++) h.add(op(`did:plc:repo${i}`, at('03:00:00', i), 'knot1.tangled.sh', { prev: null, handle: null }));
+  // forty accounts a second apart, a script's
+  for (let i = 0; i < 40; i++) h.add(op(`did:plc:made${i}`, at('04:00:00', i), 'goodmkt.id', { prev: null, handle: `made${i}.goodmkt.id` }));
+  // and a person signing up there later
+  h.add(op('did:plc:person', at('09:00:00', 0), 'goodmkt.id', { prev: null, handle: 'person.goodmkt.id' }));
+  // someone moving to eurosky, and a repository moving there: its history says where from
+  h.add(op('did:plc:mover', at('10:00:00', 0), 'eurosky.social'));
+  h.add(op('did:plc:repomove', at('10:00:01', 0), 'eurosky.social', { handle: null }));
+  for (const did of ['did:plc:mover', 'did:plc:repomove']) {
+    h.fromAudit(did, audit([
+      { createdAt: '2026-01-01T00:00:00Z', operation: { prev: null, alsoKnownAs: did === 'did:plc:mover' ? ['at://mover.example'] : [], services: { atproto_pds: { endpoint: `https://${BSKY}` } } } },
+      { createdAt: at('10:00:00', 0), operation: { prev: 'a', alsoKnownAs: did === 'did:plc:mover' ? ['at://mover.example'] : [], services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
+    ].map((e) => ({ did, cid: e.createdAt, ...e }))));
+  }
+  // and Bluesky's hosts signing people up for the quarter of an hour after (the log's clock)
+  for (let i = 0; i < 30; i++) h.add(op(`did:plc:b${i}`, at('10:01:00', i * 30), BSKY, { prev: null }));
+  h.endRuns();
+  const s = h.signalsOf(0);
+  // the repositories aren't sign-ups anyone made, so they're never a run either
+  assert.equal(s.created_unnamed, 30);
+  assert.equal(s.created_bulk, 40);
+  assert.deepEqual(arrivalRows('2026-10-28', s), [
+    { day: '2026-10-28', hostname: 'eurosky.social', signed_up: 0, bulk: 0, unnamed: 1, moved_in: 1 },
+    { day: '2026-10-28', hostname: 'goodmkt.id', signed_up: 1, bulk: 40, unnamed: 0, moved_in: 0 },
+    { day: '2026-10-28', hostname: 'knot1.tangled.sh', signed_up: 0, bulk: 0, unnamed: 30, moved_in: 0 },
+  ]);
 });
 
 // ---------- made in bulk ----------

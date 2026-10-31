@@ -5,10 +5,11 @@
  * `hosts` (server/weather-hosts.ts) with the rest of a range's history, so this shares the
  * page's history feed. It draws three charts (active hosts, the hosting diversity, and
  * independent hosts joining each day), lists the independent hosts new in the range and
- * the ones that grew most, and goes day by day in a table: active hosts, the change from
- * the day before, and the independent hosts that joined and left. A day's change is a
- * handful of hosts on nearly two thousand, which a chart from zero can't show, so the
- * table has it in numbers.
+ * the ones the most people arrived on (signed up or moved in, by the PLC directory's log:
+ * not the relay's count, which goes up for accounts made in bulk too), and goes day by
+ * day in a table: active hosts, the change from the day before, and the independent hosts
+ * that joined and left. A day's change is a handful of hosts on nearly two thousand, which
+ * a chart from zero can't show, so the table has it in numbers.
  *
  * It follows the lens's window, except that "now" and the last hour show the last 24
  * hours: a census every 10 minutes makes an hour only six points, and hosts don't change
@@ -47,8 +48,9 @@ export interface HostHistory {
   since: string | null;
   points: HostPoint[];
   newHosts: number;
-  new: Array<{ hostname: string; accounts: number; first: string }>;
-  growing: Array<{ hostname: string; accounts: number; prevAccounts: number }>;
+  /** `accounts`: the relay's count now; `people`: who signed up (not in bulk) or moved in over the range. */
+  new: Array<{ hostname: string; accounts: number; people: number; first: string }>;
+  growing: Array<{ hostname: string; accounts: number; prevAccounts: number; people: number }>;
   /** Day by day (UTC), oldest first (server/weather-hosts.ts HostDay). */
   daily: HostDay[];
   /** The PLC directory's log day by day, oldest first; the last is usually today, so far (server/weather-hosts.ts IdentityDay). */
@@ -70,6 +72,8 @@ export interface IdentityDay {
   createdBulk: number;
   /** The hosts that made them, the most first: how many, in how many runs, over how many seconds in all. */
   bulk: BulkHost[];
+  /** Of createdIndependent, the identities with no handle, which nobody signs in to (a git server's repositories). */
+  createdUnnamed: number;
   movedOut: number;
   movedIn: number;
   movedBetween: number;
@@ -86,8 +90,8 @@ export interface BulkHost {
 }
 
 const IDENTITY_COUNTS = ['ops', 'createdBluesky', 'createdIndependent', 'createdUnlisted', 'createdCustomHandle', 'movedOut', 'movedIn', 'movedBetween', 'deleted'] as const;
-/** The same, and the bulk ones, which an answer from before they were counted leaves out. */
-const IDENTITY_SUMS = [...IDENTITY_COUNTS, 'createdBulk'] as const;
+/** The same, and the bulk and unnamed ones, which an answer from before they were counted leaves out. */
+const IDENTITY_SUMS = [...IDENTITY_COUNTS, 'createdBulk', 'createdUnnamed'] as const;
 
 export interface HostDay {
   day: string;
@@ -138,18 +142,22 @@ export function toHostHistory(x: unknown): HostHistory | null {
     since: typeof x.since === 'string' && DAY_RE.test(x.since) ? x.since : null,
     points: x.points.filter((p): p is HostPoint => obj(p) && typeof p.t === 'string' && Number.isFinite(Date.parse(p.t)) && keys.every((k) => n(p[k])) && (p.writing === null || n(p.writing))),
     newHosts: n(x.newHosts) ? x.newHosts : 0,
-    new: x.new.filter((h): h is HostHistory['new'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && typeof h.first === 'string' && DAY_RE.test(h.first)).slice(0, 10),
-    growing: x.growing.filter((h): h is HostHistory['growing'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.prevAccounts)).slice(0, 10),
+    new: x.new.filter((h): h is HostHistory['new'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.people) && typeof h.first === 'string' && DAY_RE.test(h.first)).slice(0, 10),
+    growing: x.growing.filter((h): h is HostHistory['growing'][number] => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.prevAccounts) && n(h.people)).slice(0, 10),
     daily: Array.isArray(x.daily) ? x.daily.filter(isDay) : [],
     identities: Array.isArray(x.identities)
       ? x.identities
           .filter((d): d is IdentityDay => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && IDENTITY_COUNTS.every((k) => n(d[k])))
-          .map((d) => ({
-            ...d,
-            createdBulk: n(d.createdBulk) ? Math.min(d.createdBulk, d.createdIndependent) : 0,
-            bulk: bulkHosts(d.bulk),
-            destinations: hostCounts(d.destinations),
-          }))
+          .map((d) => {
+            const createdBulk = n(d.createdBulk) ? Math.min(d.createdBulk, d.createdIndependent) : 0;
+            return {
+              ...d,
+              createdBulk,
+              createdUnnamed: n(d.createdUnnamed) ? Math.min(d.createdUnnamed, d.createdIndependent - createdBulk) : 0,
+              bulk: bulkHosts(d.bulk),
+              destinations: hostCounts(d.destinations),
+            };
+          })
       : [],
     activeDaily: Array.isArray(x.activeDaily)
       ? x.activeDaily.filter((d): d is NonNullable<HostHistory['activeDaily']>[number] => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && n(d.independent) && orNull(d.all))
@@ -172,11 +180,17 @@ function setText(root: ParentNode, sel: string, text: string): void {
   if (el) el.textContent = text;
 }
 
+/** The new hosts the list shows: the ones anyone signed up on or moved to (a git server, say, has nobody). */
+export const newHostsShown = (h: HostHistory): HostHistory['new'] => h.new.filter((x) => x.people > 0).slice(0, HOST_LIST_TOP);
+
 /** "3 new independent hosts in the last 7 days", or why there's nothing to say yet. */
 export function newHostsWords(h: HostHistory, range: HostRange): string {
   const words = WINDOW_INFO[range].words;
   if (h.newHosts === 0) return `no new independent hosts in ${words}.`;
-  return `${formatCount(h.newHosts)} new independent host${h.newHosts === 1 ? '' : 's'} in ${words}${h.newHosts > HOST_LIST_TOP ? `, the ${HOST_LIST_TOP} with the most accounts` : ''}.`;
+  const hosts = `${formatCount(h.newHosts)} new independent host${h.newHosts === 1 ? '' : 's'} in ${words}`;
+  const shown = newHostsShown(h).length;
+  if (shown === 0) return `${hosts}. nobody has signed up on ${h.newHosts === 1 ? 'it' : 'one'} or moved there yet.`;
+  return `${hosts}${h.newHosts > shown ? `, the ${shown === 1 ? 'one' : formatCount(shown)} with the most people arriving` : ''}.`;
 }
 
 /** A share of accounts, to the hundredth: "1.51%". */
@@ -291,12 +305,16 @@ export function renderHostDays(table: HTMLTableElement, days: HostDay[], now = D
   body.replaceChildren(...rows);
 }
 
-/** The hosts' bars: their accounts, or what they gained ("+134"). */
+/** The hosts' bars: the people who signed up or moved in over the range, as a count or as a gain ("+134"). */
 export function hostBars(list: HostHistory['new'] | HostHistory['growing'], gained: boolean): Bar[] {
-  return list.slice(0, HOST_LIST_TOP).map((h) => {
-    const v = gained && 'prevAccounts' in h ? h.accounts - h.prevAccounts : h.accounts;
-    return { label: h.hostname, perSecond: v, count: v, value: gained ? `+${compactCount(v)}` : compactCount(v) };
-  });
+  return list.slice(0, HOST_LIST_TOP).map((h) => ({ label: h.hostname, perSecond: h.people, count: h.people, value: gained ? `+${compactCount(h.people)}` : compactCount(h.people) }));
+}
+
+/** What the growing hosts count, under their list. */
+export function growingWords(h: HostHistory, range: HostRange): string {
+  const words = WINDOW_INFO[range].words;
+  if (!h.growing.length) return `nobody has signed up on or moved to an independent host over ${words} yet.`;
+  return `people who signed up or moved in over ${words}. accounts made in bulk, and identities with no handle, don't count.`;
 }
 
 /**
@@ -336,11 +354,11 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   if (table) renderHostDays(table, h.daily, now);
 
   const fresh = $(part, '[data-h-new]');
-  if (fresh) drawBars(fresh, hostBars(h.new, false));
+  if (fresh) drawBars(fresh, hostBars(newHostsShown(h), false));
   setText(part, '[data-h-new-note]', newHostsWords(h, range));
   const growing = $(part, '[data-h-growing]');
   if (growing) drawBars(growing, hostBars(h.growing, true));
-  setText(part, '[data-h-growing-note]', h.growing.length ? `accounts gained over ${words}, by day.` : `no independent host has gained accounts over ${words} yet.`);
+  setText(part, '[data-h-growing-note]', growingWords(h, range));
   const since = $(part, '[data-h-since]');
   if (since) {
     // a range that reaches back before the station kept hosts says so
@@ -443,8 +461,8 @@ export function sumDays(view: IdentityDay[]): IdentityDay | null {
   return { day: last.day, ...sums, bulk: mergeBulk(view.map((d) => d.bulk)), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
 }
 
-/** New accounts on independent hosts, less the ones made in bulk: people signing up somewhere else. */
-export const independentOf = (d: IdentityDay): number => Math.max(0, d.createdIndependent - d.createdBulk);
+/** New accounts on independent hosts, less the ones made in bulk and the identities with no handle: people signing up somewhere else. */
+export const independentOf = (d: IdentityDay): number => Math.max(0, d.createdIndependent - d.createdBulk - d.createdUnnamed);
 
 /** How smoggy a day was: the share of its sign-ups that went to hosts no relay carries. */
 export const SMOG_LEVELS = [
@@ -480,10 +498,18 @@ export function lastedWords(seconds: number): string {
 }
 
 /**
- * "plus 5,101 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. ...":
- * what the numbers above leave out and why, or '' when nothing was.
+ * "plus 5,101 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. ...",
+ * and the identities with no handle: what the numbers above leave out and why, or '' when
+ * nothing was.
  */
 export function bulkWords(d: IdentityDay): string {
+  const bulk = madeInBulkWords(d);
+  if (d.createdUnnamed === 0) return bulk;
+  const unnamed = `${plural(d.createdUnnamed, 'new identity', 'new identities')} with no handle, left out ${bulk ? 'too' : 'above'}: nobody signs in to one (a git server makes them for its repositories, say).`;
+  return bulk ? `${bulk} and ${unnamed}` : `plus ${unnamed}`;
+}
+
+function madeInBulkWords(d: IdentityDay): string {
   if (d.createdBulk === 0 || d.bulk.length === 0) return '';
   const why = 'they came the way scripts make accounts, at a steady pace switched on and off, or in floods out of nowhere again and again. people signing up build up and trail off.';
   const [first, second] = d.bulk;
