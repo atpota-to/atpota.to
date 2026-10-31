@@ -8,12 +8,35 @@
 // No inbound post is involved, but the readings carry other people's text: an
 // app's name is whatever namespace somebody wrote records under. Those reach Poe
 // only as validated domains, and the draft goes through the same outbound gates
-// as a reply, with a stricter link rule: the weather page, or nothing.
+// as a reply, with a stricter link rule: the weather report's pages, or nothing.
 
 import { evaluateOutbound } from './outbound.js';
 
-/** The one link a weather post may carry. Its card links it whatever the text says. */
+/** The whole weather report: what a weather post's card links unless Poe names one of its pages. */
 export const WEATHER_PAGE = 'https://atpota.to/weather';
+
+/**
+ * The report's pages (website/src/scripts/weather-topics.ts), each one part of it at
+ * /weather/<page>, and the card design its og:image names. Poe says which one a post is
+ * about (bot/agent/tools/choose_weather_page.ts), and the card links that page and shows
+ * its design, so a post about accounts moving house doesn't unfurl as the whole sky.
+ */
+export const WEATHER_PAGES = Object.freeze({
+  diversity: 'mix',
+  trends: 'trend',
+  today: 'today',
+  hosts: 'hosts',
+  migration: 'migration',
+});
+
+/** A page Poe named, if it's one of the report's, or null for the whole report. */
+export const weatherPageOf = (page) => (typeof page === 'string' && Object.hasOwn(WEATHER_PAGES, page) ? page : null);
+
+/** The address a weather post's card links: the page Poe named, or the whole report. */
+export const weatherPageUrl = (page) => (weatherPageOf(page) ? `${WEATHER_PAGE}/${page}` : WEATHER_PAGE);
+
+/** The links a weather post may carry: the report and its pages. Its card links one whatever the text says. */
+const WEATHER_LINKS = new Set([WEATHER_PAGE, ...Object.keys(WEATHER_PAGES).map(weatherPageUrl)]);
 
 /** Every kind of moment, most newsworthy first: when two are due at once, the first is asked about. */
 export const MOMENT_KINDS = ['storm', 'unusual', 'new_app', 'mixed', 'daily'];
@@ -148,7 +171,7 @@ export function isSkip(text) {
 /**
  * Whether a draft is safe to post: the reply gates (markdown, non-answers, length,
  * @handles, links) for a single post, with no @handle allowed at all and no link
- * but the weather page, plus not repeating the last weather post.
+ * but the weather report's own, plus not repeating the last weather post.
  */
 export function evaluateWeatherDraft(draft, { gates: g, killSwitch, lastPostText = null }) {
   return evaluateOutbound(draft, {
@@ -157,7 +180,7 @@ export function evaluateWeatherDraft(draft, { gates: g, killSwitch, lastPostText
     replyingToHandle: null,
     botHandle: null,
     lastReplyText: lastPostText,
-    allowedLinks: new Set([WEATHER_PAGE]),
+    allowedLinks: WEATHER_LINKS,
     killSwitch,
   });
 }

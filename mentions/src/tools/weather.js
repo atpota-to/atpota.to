@@ -27,6 +27,7 @@ for (const r of rows) {
   console.log(`  ${dim('why    ')} ${JSON.stringify(facts.trigger)}`);
   if (r.draft_text) console.log(`  ${bold('draft  ')} ${r.draft_text.replace(/\n/g, ' ')}`);
   if (r.post_text && r.post_text !== r.draft_text) console.log(`  ${dim('posted ')} ${r.post_text.replace(/\n/g, ' ')}`);
+  if (r.draft_text) console.log(`  ${dim('card   ')} ${r.page ? `/weather/${r.page}` : '/weather'}`);
   if (r.detail) console.log(`  ${dim('detail ')} ${r.detail}`);
   if (r.post_uri) console.log(`  ${dim('link   ')} ${r.post_uri}`);
   console.log('');

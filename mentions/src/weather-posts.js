@@ -6,7 +6,8 @@
 // one, it hands Poe that moment. Poe reads the station and answers with a post or
 // "skip" on the callback URL replies use. The draft goes through the weather gates and, when
 // WEATHER_POSTS=post, is posted from Poe's account with a link card to the weather
-// page, whose og:image is the page's live weather card.
+// report, or to the page of it Poe said the post is about, with that page's live
+// weather card.
 //
 // One moment at a time, one row per moment in weather_post, and every step
 // records its result before the next one starts. Like the dispatch, the post's
@@ -23,7 +24,8 @@ import { isNapping } from './nap.js';
 import { faceRules } from './richtext.js';
 import { buildAnnouncement, defaultDeps as dispatchDeps, nextTid, ogContent, postUrl } from './dispatch.js';
 import {
-  MOMENT_KINDS, WEATHER_PAGE, askGate, dueMoments, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
+  MOMENT_KINDS, WEATHER_PAGES, askGate, dueMoments, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
+  weatherPageOf, weatherPageUrl,
 } from './gates/weather.js';
 
 db.exec(`
@@ -38,6 +40,7 @@ db.exec(`
     detail      TEXT,
     draft_key   TEXT UNIQUE,
     draft_text  TEXT,
+    page        TEXT,                      -- the report's page Poe said it's about (gates/weather.js WEATHER_PAGES), or null
     post_text   TEXT,                      -- what was (or would have been) posted
     post_rkey   TEXT UNIQUE,               -- claimed before posting
     post_uri    TEXT,
@@ -49,6 +52,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS weather_post_created_idx ON weather_post(created_at);
   CREATE INDEX IF NOT EXISTS weather_post_status_idx ON weather_post(status);
 `);
+// Added after the table shipped; harmless when it already exists.
+try { db.exec('ALTER TABLE weather_post ADD COLUMN page TEXT'); }
+catch { /* column already present */ }
 
 const CARD_TITLE = 'the atmosphere weather report · atpotato';
 const CARD_DESCRIPTION = "how busy bluesky is right now, how much of the network isn't bluesky at all, " +
@@ -75,18 +81,20 @@ const CARD_MAX_BYTES = 1_000_000;   // app.bsky.embed.external#external.thumb ma
  * Which of the weather card's designs (website/server/og-weather-cards.ts) goes
  * under each kind of post: the sky for a storm, the barometer for an hour off
  * usual, the other apps for a mixed sky or a new one, the day's chart for the
- * daily report.
+ * daily report. A post Poe said is about one page of the report gets that page's
+ * design instead (WEATHER_PAGES), whatever the moment was.
  */
 export const CARD_FOR = { daily: 'trend', storm: 'forecast', unusual: 'today', mixed: 'mix', new_app: 'mix' };
 
 /**
- * The card as of this minute, in the design for this kind of post. The CDN keeps
- * the bare URL for several minutes, and a storm post under a card from before the
- * storm would say the opposite of the post.
+ * The card as of this minute, in the design for this post: its page's, or its
+ * kind's. The CDN keeps the bare URL for several minutes, and a storm post under a
+ * card from before the storm would say the opposite of the post.
  */
-export function freshCardUrl(url, kind, nowMs = Date.now()) {
+export function freshCardUrl(url, kind, nowMs = Date.now(), page = null) {
   const u = new URL(url);
-  if (CARD_FOR[kind]) u.searchParams.set('card', CARD_FOR[kind]);
+  const design = weatherPageOf(page) ? WEATHER_PAGES[page] : CARD_FOR[kind];
+  if (design) u.searchParams.set('card', design);
   u.searchParams.set('v', String(Math.floor(nowMs / 60_000)));
   return u.href;
 }
@@ -374,19 +382,25 @@ export async function weatherTick({ nowMs = Date.now(), deps = defaultDeps } = {
 
 // --- Poe's answer -------------------------------------------------------------------
 
-/** Validate and store a weather draft from the callback URL (callback.js). Returns { status, body, id? }. */
+/**
+ * Validate and store a weather draft from the callback URL (callback.js). Returns { status, body, id? }.
+ * `page` is the page of the report Poe said the post is about; one this droplet doesn't
+ * know (a page newer than it, say) leaves the card on the whole report.
+ */
 export function receiveWeatherDraft(body) {
   if (!isObject(body)) return { status: 400, body: { error: 'BadRequest' } };
-  const { key, momentId, text, links } = body;
+  const { key, momentId, text, links, page } = body;
   const id = typeof momentId === 'string' ? /^wx-(\d{1,15})$/.exec(momentId)?.[1] : null;
   if (typeof key !== 'string' || !key.trim() || key.length > 500 || !id || typeof text !== 'string' ||
-      text.length > 10000 || (links != null && (!Array.isArray(links) || links.some((l) => typeof l !== 'string')))) {
+      text.length > 10000 || (links != null && (!Array.isArray(links) || links.some((l) => typeof l !== 'string'))) ||
+      (page != null && (typeof page !== 'string' || page.length > 64))) {
     return { status: 400, body: { error: 'BadRequest' } };
   }
+  if (page != null && !weatherPageOf(page)) logger.warn('weather draft named a page this droplet doesn\'t know', { momentId, page });
   let claimed;
   try {
-    claimed = db.prepare(`UPDATE weather_post SET status = 'drafted', draft_key = ?, draft_text = ?, updated_at = ?
-      WHERE id = ? AND status = 'dispatched'`).run(key.trim(), text, nowIso(), Number(id)).changes > 0;
+    claimed = db.prepare(`UPDATE weather_post SET status = 'drafted', draft_key = ?, draft_text = ?, page = ?, updated_at = ?
+      WHERE id = ? AND status = 'dispatched'`).run(key.trim(), text, weatherPageOf(page), nowIso(), Number(id)).changes > 0;
   } catch (err) {
     if (!/UNIQUE/i.test(err.message)) throw err;
     claimed = false;   // the same draft delivered twice
@@ -403,7 +417,8 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
   const row = getRow(id);
   if (row?.status !== 'drafted') return;
   const draft = String(row.draft_text ?? '').trim();
-  const log = { id, kind: row.kind, subject: row.subject };
+  const page = weatherPageOf(row.page);
+  const log = { id, kind: row.kind, subject: row.subject, ...(page ? { page } : {}) };
 
   if (isSkip(draft)) {
     if (!finish(id, 'skipped', { detail: draft.replace(/^skip\s*[:\-–—.!]?\s*/i, '').slice(0, 300) || null }, 'drafted')) return;
@@ -441,7 +456,7 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
   // next tick (settle) tries again, until CARD_WAIT_MS has passed since it came in.
   let thumb;
   try {
-    const card = await deps.fetchCard(freshCardUrl(WEATHER_CARD, row.kind));
+    const card = await deps.fetchCard(freshCardUrl(WEATHER_CARD, row.kind, Date.now(), page));
     thumb = await deps.uploadBlob(card.bytes, card.mimeType);
   } catch (err) {
     if (Date.now() - Date.parse(row.updated_at) < CARD_WAIT_MS) {
@@ -460,18 +475,19 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
     WHERE id = ? AND status = 'drafted'`).run(rkey, text, nowIso(), id).changes) return;
 
   // The page only for the card's words; its image is never used (WEATHER_CARD).
-  let page = null;
+  const pageUrl = weatherPageUrl(page);
+  let html = null;
   try {
-    const res = await deps.fetchPage(WEATHER_PAGE);
-    if (res.status === 200) page = res.html;
+    const res = await deps.fetchPage(pageUrl);
+    if (res.status === 200) html = res.html;
   } catch (err) {
-    logger.warn('weather page unreachable for the card', { error: err.message });
+    logger.warn('weather page unreachable for the card', { page: pageUrl, error: err.message });
   }
   const record = buildAnnouncement({
     text,
-    pageUrl: WEATHER_PAGE,
-    title: (page && ogContent(page, 'og:title')) || CARD_TITLE,
-    description: (page && ogContent(page, 'og:description')) || CARD_DESCRIPTION,
+    pageUrl,
+    title: (html && ogContent(html, 'og:title')) || CARD_TITLE,
+    description: (html && ogContent(html, 'og:description')) || CARD_DESCRIPTION,
     thumb,
   });
   try {

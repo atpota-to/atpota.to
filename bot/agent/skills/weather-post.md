@@ -1,5 +1,5 @@
 ---
-description: Use when your weather station hands you a weather moment to post about on your own Bluesky account (the daily report, a storm, an unusual hour, a more mixed sky, a new app). Covers when to skip, how to find something worth saying in the station's readings, and the format the service will accept.
+description: Use when your weather station hands you a weather moment to post about on your own Bluesky account (the daily report, a storm, an unusual hour, a more mixed sky, a new app). Covers when to skip, how to find something worth saying in the station's readings, the format the service will accept, and which page of the report the card under the post should link.
 ---
 
 # Weather posts
@@ -147,12 +147,36 @@ never standing in for a word a screen reader user would need.
 - Everything you write is the post: no preamble, no notes, no character count.
 - Lowercase, your usual voice. A face only on a short post, and not every time (the
   service drops faces from anything over 200 characters).
-- No link: the service adds a card for the weather page under your post. If you
-  write one anyway, it must be exactly the weather page's link as read_weather
-  returned it.
+- No link: the service adds a card for the weather report under your post (see
+  below). If you write one anyway, it must be exactly a weather page's link.
 - No @handles, no hashtags, no other markdown.
 - Don't call it a "weather alert" or "update" in a header; just say what's
   happening.
+
+## The card under your post
+
+Your post goes out with a link card to the weather report. The report also has a
+page for each of its parts, each with a card of its own, and the card should
+match the post: a post about accounts moving house should show the migration
+card, of who moved this week and where they went, and open the migration page,
+not the whole sky.
+
+So when your post is mostly about one part of the report, call
+`choose_weather_page` with that page before you answer:
+
+- `diversity`: the diversity index, Bluesky against everyone else, the busiest
+  apps outside Bluesky, and new ones blowing in
+- `trends`: how busy the sky has been over the last hour, day, week or month
+- `today`: today against usual, the high and low, apps new today, the forecast
+- `hosts`: where accounts live: independent hosts, the hosting diversity, the
+  biggest, newest and fastest growing hosts
+- `migration`: accounts moving house (out of Bluesky's hosts, back in, host to
+  host), sign-ups on and off Bluesky's hosts, air quality
+
+Go by what the post leads with. A post that opens with the migration wind and
+mentions the weather after is a migration post. A post about the sky as a whole,
+or a little of everything, needs no page: the card links the whole report. Never
+mention the card or the page in the post itself.
 
 ## Examples
 
