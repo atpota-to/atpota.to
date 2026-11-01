@@ -3,9 +3,10 @@
  * bubble by the potato (src/poe/say.ts), when something happens in the sky:
  *
  *   arrival  an app this visit hasn't heard at all blows in with at least ARRIVAL_MIN
- *            records in the live 60 seconds ("techne.app just blew in"). Apps with a
- *            record or two drift through the top ten every few seconds, and apps already
- *            about rise and fall; neither is news.
+ *            records in the live 60 seconds ("techne.app just blew in"); on the report,
+ *            REPORT_ARRIVAL_MIN, a real gust. Apps with a handful of records drift through
+ *            the top ten every minute or two, and apps already about rise and fall;
+ *            neither is news.
  *   new      the station hears an app for the very first time (the almanac's
  *            "new in the atmosphere", once the station has warmed up)
  *   record   the live minute beats the busiest minute on record (recordAlert, with the
@@ -20,9 +21,10 @@
  *            (watchHosts, from the PLC directory's day)
  *
  * The first reading of a visit only sets the scene; alerts come from what changes after
- * it. Poe says one at a time, at least GAP_MS apart, each for ALERT_MS (held while it's
- * hovered or focused). A record, a storm, a clearing or a more mixed sky alerts at most once every COOLDOWN_MS,
- * so a sky sitting on a line doesn't keep on about it. A small queue keeps the most
+ * it. Poe keeps quiet for the first QUIET_START_MS on a page, while the reader finds their
+ * feet, then says one at a time, at least GAP_MS apart, each for ALERT_MS (held while it's
+ * hovered or focused). Each kind but a brand new app or host alerts at most once every
+ * COOLDOWN_MS, so a sky sitting on a line doesn't keep on about it. A small queue keeps the most
  * important ones and waits while Poe is busy (its panel open, its nudge up) or the tab is
  * hidden, and lets go of any older than STALE_MS: by then it isn't news. The reader can
  * hush them, and that sticks in this browser (localStorage ALERTS_KEY).
@@ -39,11 +41,15 @@ import type { HostHistory } from './weather-hosts';
 
 /** How long Poe's bubble stays up. */
 export const ALERT_MS = 9000;
+/** Nothing on a page until it's been open this long. */
+export const QUIET_START_MS = 25_000;
 /** From one alert to the next, at least. */
-export const GAP_MS = 60_000;
+export const GAP_MS = 3 * 60_000;
 /** Records in the last minute before an app this visit hasn't heard counts as blowing in. */
 export const ARRIVAL_MIN = 5;
-/** A storm, or a more mixed sky, alerts at most this often. */
+/** The bar on the report, where an arrival has to be a gust: a record every two seconds or so, busier than most apps but Bluesky. */
+export const REPORT_ARRIVAL_MIN = 30;
+/** A storm, a more mixed sky, an app blowing in (each kind but the brand new) alerts at most this often. */
 export const COOLDOWN_MS = 10 * 60_000;
 /** A queued alert older than this is old news. */
 export const STALE_MS = 90_000;
@@ -65,7 +71,7 @@ export interface WeatherAlert {
 const RANK: Record<AlertKind, number> = { record: 4, storm: 3, new: 2, newhost: 2, clear: 1, mixed: 1, moving: 1, host: 0, arrival: 0 };
 /** Poe's face while it says each one. */
 const FACE: Record<AlertKind, MascotFace> = { record: 'wow', storm: 'wow', new: 'happy', newhost: 'happy', clear: 'happy', mixed: 'wink', moving: 'wink', host: 'kawaii', arrival: 'kawaii' };
-const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['record', 'storm', 'clear', 'mixed', 'moving', 'host']);
+const COOLS_DOWN: ReadonlySet<AlertKind> = new Set(['record', 'storm', 'clear', 'mixed', 'moving', 'host', 'arrival']);
 const LEVELS: DiversityLevel[] = ['low', 'moderate', 'high', 'very high', 'extreme'];
 
 // ---------- what's worth an alert ----------
@@ -83,11 +89,12 @@ export interface Watch {
 /**
  * What changed between the last reading and this one, as alerts, busiest first, and the
  * state to compare the next reading with. `prev` null is the visit's first reading.
+ * An unheard app needs `arrivalMin` records in the minute to count as blowing in.
  */
-export function alertsFor(prev: Watch | null, r: Reading): { watch: Watch; alerts: WeatherAlert[] } {
+export function alertsFor(prev: Watch | null, r: Reading, arrivalMin = ARRIVAL_MIN): { watch: Watch; alerts: WeatherAlert[] } {
   const apps = r.source === 'station' ? (r.apps ?? []) : [];
   const watch: Watch = { seen: new Set(prev?.seen), condition: r.condition, level: r.diversity?.level ?? null, independentHosts: r.hosts?.independent ?? prev?.independentHosts ?? null, censusAt: r.hosts?.measuredAt ?? prev?.censusAt ?? null };
-  const fresh = apps.filter((a) => !watch.seen.has(a.domain) && a.count >= ARRIVAL_MIN);
+  const fresh = apps.filter((a) => !watch.seen.has(a.domain) && a.count >= arrivalMin);
   for (const a of apps) watch.seen.add(a.domain);
   if (!prev) return { watch, alerts: [] };
   const alerts: WeatherAlert[] = [];
@@ -223,6 +230,7 @@ interface Queued {
 /** The alerts, said by Poe. `speak` and `now` are for tests. */
 export function createAlertDesk(win: Window = window, speak: (line: PoeLine) => PoeSpeech | null = say, now: () => number = () => Date.now()): AlertDesk {
   let hushed = alertsHushed(win);
+  const quietUntil = now() + QUIET_START_MS;
   let queue: Queued[] = [];
   let pushed = 0;
   let speech: PoeSpeech | null = null;
@@ -243,7 +251,8 @@ export function createAlertDesk(win: Window = window, speak: (line: PoeLine) => 
     queue = queue.filter((q) => t - q.at < STALE_MS);
     const first = queue[0];
     if (!first) return;
-    if (lastShown + GAP_MS > t) return later(lastShown + GAP_MS - t);
+    const from = Math.max(quietUntil, lastShown + GAP_MS);
+    if (from > t) return later(from - t);
     if (win.document.visibilityState === 'hidden') return later(RETRY_MS);
     const { alert } = first;
     const line: PoeLine = {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoeLine, PoeSpeech } from '../src/poe/say.js';
-import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, recordAlert, RETRY_MS, STALE_MS, watchHosts, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
+import { ALERT_MS, ALERTS_KEY, ARRIVAL_MIN, alertsFor, COOLDOWN_MS, createAlertDesk, GAP_MS, newAppAlert, QUIET_START_MS, recordAlert, REPORT_ARRIVAL_MIN, RETRY_MS, STALE_MS, watchHosts, type AlertDesk, type WeatherAlert } from '../src/scripts/weather-alerts.js';
 import { smoothPath } from '../src/scripts/weather-chart.js';
 import { watchNewApps } from '../src/scripts/weather-page.js';
 import { cloudCount, MAX_CLOUDS, renderClouds } from '../src/scripts/weather-sky.js';
@@ -93,6 +93,14 @@ describe('what makes a weather alert', () => {
     expect(alertsFor(drift.watch, { ...READING, apps: [app('mado.blue', 40), app('tangled.sh', 90)] }).alerts).toEqual([]);
   });
 
+  it('on the report, an app has to blow in with a real gust, not drift into the top ten', () => {
+    const first = alertsFor(null, READING, REPORT_ARRIVAL_MIN).watch;
+    const drift = alertsFor(first, { ...READING, apps: [...READING.apps!, app('techne.app', 7)] }, REPORT_ARRIVAL_MIN);
+    expect(drift.alerts).toEqual([]);
+    const gust = alertsFor(drift.watch, { ...READING, apps: [...READING.apps!, app('titlegraph.org', REPORT_ARRIVAL_MIN)] }, REPORT_ARRIVAL_MIN);
+    expect(gust.alerts.map((a) => a.text)).toEqual(['titlegraph.org just blew in']);
+  });
+
   it('a storm rolling in, and the sky getting more mixed', () => {
     const calm = alertsFor(null, { ...READING, condition: 'breezy' }).watch;
     const { alerts } = alertsFor(calm, { ...READING, diversity: { index: 3.4, level: 'moderate', apps: 9, collections: 30 } });
@@ -159,7 +167,7 @@ describe('alerts from where the atmosphere lives', () => {
 });
 
 describe('Poe says the alerts', () => {
-  const alert = (text: string, kind: WeatherAlert['kind'] = 'arrival'): WeatherAlert => ({ kind, label: 'weather alert', text, sub: 'sub' });
+  const alert = (text: string, kind: WeatherAlert['kind'] = 'newhost'): WeatherAlert => ({ kind, label: 'weather alert', text, sub: 'sub' });
 
   /** A stand-in for the corner Poe: one line at a time, none while busy. */
   function fakePoe() {
@@ -194,18 +202,35 @@ describe('Poe says the alerts', () => {
     vi.setSystemTime(0);
     poe = fakePoe();
     desk = createAlertDesk(window, poe.speak);
+    // past the quiet start (its own test below)
+    vi.advanceTimersByTime(QUIET_START_MS);
   });
   const advance = (ms: number) => vi.advanceTimersByTime(ms);
 
-  it('says one at a time, a minute apart at least, with a face for each', () => {
+  it('keeps quiet for the first 25 seconds on a page, then says what came up', () => {
+    expect(QUIET_START_MS).toBe(25_000);
+    const page = createAlertDesk(window, poe.speak);
+    advance(5000);
+    page.push(alert('storm', 'storm'));
+    expect(poe.showing).toBeNull();
+    advance(QUIET_START_MS - 5000 - 50);
+    expect(poe.showing).toBeNull();
+    advance(50);
+    expect(poe.showing).toBe('storm');
+  });
+
+  it('says one at a time, minutes apart at least, with a face for each', () => {
+    expect(GAP_MS).toBeGreaterThanOrEqual(3 * 60_000);
     desk.push(alert('tangled.sh just blew in'));
     expect(poe.showing).toBe('tangled.sh just blew in');
-    expect(poe.said[0]).toMatchObject({ label: 'weather alert', sub: 'sub', face: 'kawaii', ms: ALERT_MS });
-    desk.push(alert('teal.fm just blew in'));
+    expect(poe.said[0]).toMatchObject({ label: 'weather alert', sub: 'sub', face: 'happy', ms: ALERT_MS });
     advance(ALERT_MS);
     poe.done();
     expect(poe.showing).toBeNull();
-    advance(GAP_MS - ALERT_MS - 50);
+    advance(GAP_MS - ALERT_MS - 30_000);
+    desk.push(alert('teal.fm just blew in'));
+    expect(poe.showing).toBeNull();
+    advance(30_000 - 50);
     expect(poe.showing).toBeNull();
     advance(50);
     expect(poe.showing).toBe('teal.fm just blew in');
@@ -213,28 +238,33 @@ describe('Poe says the alerts', () => {
 
   it('keeps the most important ones when lots happen at once', () => {
     desk.push(alert('first'));
+    poe.done();
     advance(GAP_MS - 20_000);
     desk.push(alert('a.app'));
     desk.push(alert('b.app'));
     desk.push(alert('storm', 'storm'));
-    for (let i = 0; i < 3; i++) {
-      poe.done();
-      advance(GAP_MS);
-    }
-    expect(poe.said.map((l) => l.text)).toEqual(['first', 'storm', 'b.app']);
+    advance(20_000);
+    expect(poe.showing).toBe('storm');
     expect(poe.said[1]!.face).toBe('wow');
+    poe.done();
+    // among equals, the newest are kept and the older of them said first
+    advance(GAP_MS - 20_000);
+    desk.push(alert('c.app'));
+    desk.push(alert('d.app'));
+    desk.push(alert('e.app'));
+    advance(20_000);
+    expect(poe.said.map((l) => l.text)).toEqual(['first', 'storm', 'd.app']);
   });
 
   it('lets go of what has waited too long to still be news', () => {
     desk.push(alert('first'));
     desk.push(alert('a.app'));
+    poe.done();
+    // a.app would be minutes late by its turn
+    advance(GAP_MS);
+    expect(poe.showing).toBeNull();
     desk.push(alert('b.app'));
-    for (let i = 0; i < 3; i++) {
-      poe.done();
-      advance(GAP_MS);
-    }
-    // b.app would be two minutes late by its turn
-    expect(poe.said.map((l) => l.text)).toEqual(['first', 'a.app']);
+    expect(poe.said.map((l) => l.text)).toEqual(['first', 'b.app']);
   });
 
   it('a storm or a more mixed sky only once every so often', () => {
@@ -248,6 +278,18 @@ describe('Poe says the alerts', () => {
     advance(COOLDOWN_MS);
     desk.push(alert('a real new storm', 'storm'));
     expect(poe.said.map((l) => l.text)).toEqual(['storm', 'mixed', 'a real new storm']);
+  });
+
+  it('an app blowing in only once every so often too', () => {
+    desk.push(alert('titlegraph.org just blew in', 'arrival'));
+    expect(poe.said[0]!.face).toBe('kawaii');
+    poe.done();
+    advance(GAP_MS);
+    desk.push(alert('vmx.cx just blew in', 'arrival'));
+    expect(poe.showing).toBeNull();
+    advance(COOLDOWN_MS);
+    desk.push(alert('afrilingua.ai just blew in', 'arrival'));
+    expect(poe.said.map((l) => l.text)).toEqual(['titlegraph.org just blew in', 'afrilingua.ai just blew in']);
   });
 
   it('a brand new app gets leaves and a happy Poe', () => {
