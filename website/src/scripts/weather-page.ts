@@ -50,7 +50,7 @@
  */
 
 import { renderStation } from './weather-station';
-import { alertsFor, createAlertDesk, newAppAlert, recordAlert, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
+import { alertsFor, createAlertDesk, newAppAlert, recordAlert, REPORT_ARRIVAL_MIN, watchHosts, type AlertDesk, type Watch } from './weather-alerts';
 import { clock, initAlmanac, readerTimeZone, recordHigh, type Almanac } from './weather-almanac';
 import { initLensDock, unitAloneOn } from './weather-dock';
 import { initHostPanel } from './weather-host-panel';
@@ -1269,7 +1269,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
         rainbowAt = Date.now();
         showRainbow(hero);
       }
-      const next = alertsFor(watch, reading);
+      const next = alertsFor(watch, reading, REPORT_ARRIVAL_MIN);
       watch = next.watch;
       for (const a of next.alerts) desk.push(a);
       const beaten = recordAlert(record, reading);
