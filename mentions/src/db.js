@@ -319,6 +319,71 @@ try {
   db.exec('UPDATE memory_docs SET published_at = NULL');
 } catch { /* column already present */ }
 
+// --- guidance ----------------------------------------------------------------
+// Standing guidance from the people who run the potato, in one place: the
+// lessons an admin's "remember:" post teaches (published as records), the
+// private "style:" voice notes from a DM, and rules for one arena ("dispatch:"
+// and the like, or saved by the agent when the operator asks it to remember
+// what changed in a round of edits). Each names the arenas it applies to; the
+// agent reads them all through POST /memory and gives each turn the ones for
+// its arena (bot/agent/instructions/guidance.ts). See src/guidance.js.
+//
+// Until 2026-11-02 lessons and style notes were two tables sent only with
+// Bluesky replies. Both are copied in once, lessons keeping their ids (so their
+// published records and `npm run lessons -- remove <id>` still line up); the
+// old tables stay, unwritten, as they were.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS guidance (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind        TEXT NOT NULL CHECK (kind IN ('lesson', 'style', 'rule')),
+    text        TEXT NOT NULL,
+    arenas      TEXT NOT NULL,             -- comma-separated, from GUIDANCE_ARENAS
+    author_did  TEXT,                      -- null when added from the command line
+    source_uri  TEXT,                      -- the post or DM it came from, if any
+    added_at    TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    removed_at  TEXT,
+    rkey        TEXT,                      -- a lesson's record key once published
+    legacy      TEXT UNIQUE                -- 'lessons:<id>' / 'style:<id>' when copied in
+  );
+`);
+
+/** Where guidance can apply: the agent's arenas (bot/agent/lib/memory-access.ts). */
+export const GUIDANCE_ARENAS = ['bluesky', 'website', 'weather', 'dispatch', 'operator-dm'];
+/** Everywhere Poe speaks in public. Lessons and style notes apply here unless narrowed. */
+export const PUBLIC_ARENAS = ['bluesky', 'website', 'weather', 'dispatch'];
+
+/** Copy lessons and style notes in, once each. Runs at startup; safe to run again. */
+export function migrateGuidance() {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(`
+      INSERT INTO guidance (id, kind, text, arenas, author_did, source_uri, added_at, updated_at, removed_at, rkey, legacy)
+      SELECT l.id, 'lesson', l.text, ?, l.author_did, l.source_uri, l.added_at, COALESCE(l.removed_at, l.added_at),
+             l.removed_at, l.rkey, 'lessons:' || l.id
+      FROM lessons l
+      WHERE NOT EXISTS (SELECT 1 FROM guidance g WHERE g.legacy = 'lessons:' || l.id)
+        AND NOT EXISTS (SELECT 1 FROM guidance g WHERE g.id = l.id)
+    `).run(PUBLIC_ARENAS.join(','));
+    const styleTable = db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'style_feedback'`).get();
+    if (styleTable) {
+      db.prepare(`
+        INSERT INTO guidance (kind, text, arenas, author_did, source_uri, added_at, updated_at, removed_at, legacy)
+        SELECT 'style', s.text, ?, s.author_did, s.source_uri, s.added_at, COALESCE(s.removed_at, s.added_at),
+               s.removed_at, 'style:' || s.id
+        FROM style_feedback s
+        WHERE NOT EXISTS (SELECT 1 FROM guidance g WHERE g.legacy = 'style:' || s.id)
+        ORDER BY s.id
+      `).run(PUBLIC_ARENAS.join(','));
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+migrateGuidance();
+
 export const nowIso = () => new Date().toISOString();
 
 // --- cursor ---------------------------------------------------------------
@@ -515,37 +580,41 @@ export function setBackoff(did, untilIso, reason) {
 }
 
 // --- lessons --------------------------------------------------------------
+// Lessons are the guidance rows of kind 'lesson': taught by an admin's post,
+// published as records. Same fields as the old lessons table.
 /** How many go to the agent at once. Past this, fold the old ones into the skill. */
 export const MAX_LESSONS = 30;
 
 export function addLesson(text, authorDid = null, sourceUri = null) {
+  const now = nowIso();
   const res = db.prepare(
-    `INSERT INTO lessons (text, author_did, source_uri, added_at) VALUES (?,?,?,?)`
-  ).run(String(text).slice(0, 500), authorDid, sourceUri, nowIso());
+    `INSERT INTO guidance (kind, text, arenas, author_did, source_uri, added_at, updated_at) VALUES ('lesson',?,?,?,?,?,?)`
+  ).run(String(text).slice(0, 500), PUBLIC_ARENAS.join(','), authorDid, sourceUri, now, now);
   return Number(res.lastInsertRowid);
 }
 /** Active lessons, oldest first, the newest MAX_LESSONS of them. */
 export function activeLessons() {
   return db.prepare(
-    `SELECT id, text, author_did, source_uri, added_at, rkey FROM lessons
-     WHERE removed_at IS NULL ORDER BY id DESC LIMIT ?`
+    `SELECT id, text, author_did, source_uri, added_at, rkey FROM guidance
+     WHERE kind = 'lesson' AND removed_at IS NULL ORDER BY id DESC LIMIT ?`
   ).all(MAX_LESSONS).reverse();
 }
 export function removeLesson(id) {
-  return db.prepare(`UPDATE lessons SET removed_at = ? WHERE id = ? AND removed_at IS NULL`)
-    .run(nowIso(), id).changes > 0;
+  const now = nowIso();
+  return db.prepare(`UPDATE guidance SET removed_at = ?, updated_at = ? WHERE id = ? AND kind = 'lesson' AND removed_at IS NULL`)
+    .run(now, now, id).changes > 0;
 }
 export function getLesson(id) {
-  return db.prepare(`SELECT * FROM lessons WHERE id = ?`).get(id);
+  return db.prepare(`SELECT * FROM guidance WHERE id = ? AND kind = 'lesson'`).get(id);
 }
 export function setLessonRkey(id, rkey) {
-  db.prepare(`UPDATE lessons SET rkey = ? WHERE id = ?`).run(rkey, id);
+  db.prepare(`UPDATE guidance SET rkey = ? WHERE id = ? AND kind = 'lesson'`).run(rkey, id);
 }
 /** Active lessons not yet in the repo, and retired ones still in it. */
 export function lessonsOutOfStep() {
   return {
-    unpublished: db.prepare(`SELECT * FROM lessons WHERE removed_at IS NULL AND rkey IS NULL`).all(),
-    lingering: db.prepare(`SELECT * FROM lessons WHERE removed_at IS NOT NULL AND rkey IS NOT NULL`).all(),
+    unpublished: db.prepare(`SELECT * FROM guidance WHERE kind = 'lesson' AND removed_at IS NULL AND rkey IS NULL`).all(),
+    lingering: db.prepare(`SELECT * FROM guidance WHERE kind = 'lesson' AND removed_at IS NOT NULL AND rkey IS NOT NULL`).all(),
   };
 }
 
@@ -582,7 +651,7 @@ export function unpublishedMemoryDocs() {
 /** The lesson a given post taught, so a retry of its turn still says so. */
 export function lessonFromPost(uri) {
   const row = db.prepare(
-    `SELECT text FROM lessons WHERE source_uri = ? AND removed_at IS NULL ORDER BY id DESC LIMIT 1`
+    `SELECT text FROM guidance WHERE kind = 'lesson' AND source_uri = ? AND removed_at IS NULL ORDER BY id DESC LIMIT 1`
   ).get(uri);
   return row ? row.text : null;
 }

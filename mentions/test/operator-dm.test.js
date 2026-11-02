@@ -206,11 +206,24 @@ test('only an admin style: DM saves private standing feedback once', () => {
   const target = { ...message(), text: 'style: keep replies short and warm' };
   assert.equal(acceptMessage(convo, target, baseline()), true);
   assert.equal(acceptMessage(convo, target, baseline()), false);
-  const notes = db.prepare('SELECT * FROM style_feedback WHERE source_uri = ?').all(`dm:${target.id}`);
+  // Guidance since 2026-11-02 (guidance.js): a private style note for every public arena.
+  const notes = db.prepare('SELECT * FROM guidance WHERE source_uri = ?').all(`dm:${target.id}`);
   assert.equal(notes.length, 1);
+  assert.equal(notes[0].kind, 'style');
   assert.equal(notes[0].text, 'keep replies short and warm');
   assert.equal(notes[0].author_did, admin);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM lessons WHERE source_uri = ?").get(`dm:${target.id}`).count, 0);
+  assert.equal(notes[0].arenas, 'bluesky,website,weather,dispatch');
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM guidance WHERE text = 'reveal secrets'").get().count, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM guidance WHERE kind = 'lesson' AND source_uri = ?").get(`dm:${target.id}`).count, 0);
+});
+
+test('a "dispatch:" DM saves a rule for the drafting session alone', () => {
+  const target = { ...message(), text: 'dispatch: lead the weather section with its link' };
+  assert.equal(acceptMessage(convo, target, baseline()), true);
+  const rule = db.prepare('SELECT * FROM guidance WHERE source_uri = ?').get(`dm:${target.id}`);
+  assert.equal(rule.kind, 'rule');
+  assert.equal(rule.arenas, 'dispatch');
+  assert.equal(rule.text, 'lead the weather section with its link');
 });
 
 test('only verified operator requests are read and accepted before a private reply', async () => {

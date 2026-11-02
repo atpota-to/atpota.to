@@ -10,6 +10,7 @@ import { PETS_NSID } from '../src/scripts/pet-sync.js';
 import { OVERLAY_NSID } from '../src/overlay/config.js';
 import { SCENE_NSID } from '../src/overlay/scenes.js';
 import { POE_FORGET_LXM } from '../src/scripts/settings.js';
+import { POE_ADMIN_LXM } from '../src/scripts/admin.js';
 import {
   authorityDomain,
   includedSets,
@@ -40,7 +41,7 @@ describe('the lexicons in the repo', () => {
     expect(grants(PETS_NSID)).toEqual(['create', 'update']);
     expect(grants(OVERLAY_NSID)).toEqual(['create', 'update']);
     expect(grants(SCENE_NSID)).toEqual(['create', 'update', 'delete']);
-    expect(AUTH_FULL.permissions.filter((p) => p.resource === 'rpc')).toEqual([{ type: 'permission', resource: 'rpc', lxm: [POE_LXM, POE_FORGET_LXM], aud: '*' }]);
+    expect(AUTH_FULL.permissions.filter((p) => p.resource === 'rpc')).toEqual([{ type: 'permission', resource: 'rpc', lxm: [POE_LXM, POE_FORGET_LXM, POE_ADMIN_LXM], aud: '*' }]);
     expect(AUTH_FULL.permissions).toHaveLength(7);
   });
 

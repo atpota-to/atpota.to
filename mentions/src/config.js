@@ -330,6 +330,21 @@ function parseDispatchDrafts() {
   };
 }
 
+// --- the memory digest -------------------------------------------------------
+// Once a week, a DM to the first ADMIN_DIDS operator saying what Poe remembered
+// and forgot, from the backup log (memory-digest.js). On unless MEMORY_DIGEST=off.
+// Needs OPERATOR_DM_ENABLED and stage 4, like every DM the droplet starts.
+function parseMemoryDigest() {
+  const mode = opt('MEMORY_DIGEST', 'on').toLowerCase();
+  if (!['off', 'on'].includes(mode)) throw new Error(`MEMORY_DIGEST must be on or off, got ${mode}`);
+  const dayName = opt('MEMORY_DIGEST_DAY', 'sunday').toLowerCase();
+  const day = /^[0-6]$/.test(dayName) ? Number(dayName) : DAYS.indexOf(dayName);
+  if (day < 0) throw new Error(`MEMORY_DIGEST_DAY must be a day of the week, got ${dayName}`);
+  const hour = num('MEMORY_DIGEST_HOUR_UTC', 18);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error(`MEMORY_DIGEST_HOUR_UTC must be 0 to 23, got ${hour}`);
+  return { enabled: mode === 'on', day, hour };
+}
+
 // --- weather posts ---------------------------------------------------------
 // Poe posting the Atmosphere's weather on its own account (weather-posts.js).
 //   post   gated drafts are posted (the default, chosen by the operator on
@@ -431,6 +446,10 @@ export const config = {
   // signed record, which a post cannot fake by saying who it is from.
   // Comma-separated; empty means nobody.
   adminDids: opt('ADMIN_DIDS', '').split(',').map((s) => s.trim()).filter((s) => s.startsWith('did:')),
+  // The website's admin proxy (website/server/admin.ts) presents this on /admin/.
+  // Never the same as DROPLET_SHARED_SECRET; unset, /admin/ answers 503.
+  adminSecret: opt('ADMIN_SHARED_SECRET', ''),
+  memoryDigest: parseMemoryDigest(),
 
   dispatch: parseDispatch(),
   weather: parseWeatherPosts(),

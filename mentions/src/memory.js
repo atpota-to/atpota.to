@@ -22,6 +22,7 @@
 import { logger } from './logger.js';
 import * as db from './db.js';
 import { detectLinks, graphemeLength } from './richtext.js';
+import { logMemoryVersion } from './memory-log.js';
 import { MEMORY_COLLECTION, LESSON_COLLECTION } from './atproto.js';
 
 export { MEMORY_COLLECTION, LESSON_COLLECTION };
@@ -89,6 +90,8 @@ export function storeMemory(did, content) {
   }
   const shown = notes.filter(publishable);
   db.saveMemoryDoc(did, content, shown, notes.length - shown.length, notedAt(notes, existing));
+  // The backup log keeps every version for the admin page's history and undo.
+  logMemoryVersion({ slot: 'person', scope: did, content, source: 'poe' });
   return { ok: true, needsPublish: true };
 }
 

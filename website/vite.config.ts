@@ -42,6 +42,7 @@ export default defineConfig({
         overlay: r('./overlay/index.html'),
         overlaySetup: r('./overlay/setup.html'),
         settings: r('./settings/index.html'),
+        admin: r('./admin/index.html'),
         about: r('./about/index.html'),
         // Filled per request by api/blog.ts (server/blog/shell.ts); not a page of its own.
         blog: r('./shells/blog.html'),

@@ -254,8 +254,10 @@ truth for them.
 | `POE_RATE_LIMIT_ID`, `POE_UPSTREAM_TIMEOUT_MS` | An optional Vercel Firewall rate limit, and the per-turn timeout |
 | `BLOG_*` | Which publication `/blog` shows, and kill switches for comments and email sign-up |
 | `DISPATCH_PREVIEW_ORIGIN` | Where `/blog/preview/<token>` reads Poe's dispatch drafts. Default `https://hook.atpota.to` |
+| `ADMIN_DIDS`, `ADMIN_SHARED_SECRET` | The admin page (`/admin`): who may open it besides Poe, and the secret its proxy shares with the bot and the droplet. Never the chat secret |
+| `DROPLET_ADMIN_ORIGIN` | Where the admin page reaches the droplet. Default `https://hook.atpota.to` |
 
-The chat and identity variables are in [`server/config.ts`](website/server/config.ts),
+The admin page's are in [`server/admin.ts`](website/server/admin.ts), the chat and identity variables are in [`server/config.ts`](website/server/config.ts),
 and the `BLOG_*` ones are in [`server/blog/config.ts`](website/server/blog/config.ts).
 
 ### deploying
@@ -338,4 +340,5 @@ npx eve deploy
 sending a fake mention through the real Bluesky route. The model is set by
 `AGENT_MODEL` and `AGENT_REASONING` (see [`agent/lib/model.ts`](bot/agent/lib/model.ts)).
 The droplet is reached through `DROPLET_SHARED_SECRET` and `DROPLET_CALLBACK_URL`,
-and the website through `WEBSITE_SHARED_SECRET`.
+the website through `WEBSITE_SHARED_SECRET`, and the website's admin page through
+`ADMIN_SHARED_SECRET` (`agent/channels/memory.ts`), which must differ from both.

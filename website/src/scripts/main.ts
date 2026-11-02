@@ -35,6 +35,7 @@ const PAGE_MODULES: Record<string, () => Promise<PageModule>> = {
   garden: () => import('./garden-page'),
   weather: () => import('./weather-page'),
   settings: () => import('./settings'),
+  admin: () => import('./admin'),
   about: () => import('./about'),
   'overlay-setup': () => import('../overlay/setup'),
 };

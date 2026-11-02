@@ -5,7 +5,7 @@
     "main": {
       "type": "permission-set",
       "title": "atpotato",
-      "detail": "Plant and tend flowers in the gardens on atpota.to, keep a garden of your own, save how many times you've petted Poe, save how Poe's stream overlay and its scenes are set up, and let Poe know it's you (or forget you, when you ask).",
+      "detail": "Plant and tend flowers in the gardens on atpota.to, keep a garden of your own, save how many times you've petted Poe, save how Poe's stream overlay and its scenes are set up, and let Poe know it's you (or forget you, when you ask). If you help run Poe, it also lets you open Poe's admin page.",
       "permissions": [
         {
           "type": "permission",
@@ -46,7 +46,7 @@
         {
           "type": "permission",
           "resource": "rpc",
-          "lxm": ["to.atpota.poe.chat", "to.atpota.poe.forget"],
+          "lxm": ["to.atpota.poe.chat", "to.atpota.poe.forget", "to.atpota.poe.admin"],
           "aud": "*"
         }
       ]

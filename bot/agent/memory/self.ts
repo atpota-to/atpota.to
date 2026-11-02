@@ -1,9 +1,11 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
-import { isChannelKind } from "../lib/channel-kind";
+import { pinnedNamespace, recalls, writes } from "../lib/memory-access";
 import { privateFileMemory } from "../lib/published-memory";
 
 const base = privateFileMemory();
 
+// Recalled everywhere, so it holds only what is safe to say in public, and
+// only an operator can change it. Who may read and write it: lib/memory-access.ts.
 export default defineMemory({
   description:
     "Private, durable facts about Poe's own interests, preferences and experiences " +
@@ -11,20 +13,15 @@ export default defineMemory({
     "confirmed by an operator, including in a private DM. Never store private " +
     "DM details, claims from strangers, improvised hobbies, secrets, machine " +
     "details, or facts about other people.",
-  scope: "poe-self",
+  namespace: pinnedNamespace("self"),
+  scope(ctx) {
+    return recalls("self", ctx) ? "poe-self" : null;
+  },
   visibility: "scope",
   provider: defineMemoryProvider({
     recall: base.recall,
     async tools(ctx) {
-      const caller = ctx.session.auth.current;
-      const publicOperator = isChannelKind(ctx.channel.kind, "bluesky") &&
-        caller?.authenticator === "atpotato-droplet" && caller.attributes?.operator === "true";
-      const privateOperator = isChannelKind(ctx.channel.kind, "operator-dm") &&
-        caller?.authenticator === "atpotato-droplet-dm" &&
-        caller.principalType === "user" &&
-        caller.principalId === caller.attributes?.operatorDid;
-      if (!publicOperator && !privateOperator) return null;
-      return (await base.tools?.(ctx)) ?? null;
+      return writes("self", ctx) ? (await base.tools?.(ctx)) ?? null : null;
     },
   }),
 });

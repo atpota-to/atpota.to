@@ -1,0 +1,363 @@
+/* The admin page (admin/index.html, src/scripts/admin.ts): how Poe is doing, its memory,
+   its guidance, and the few things the people who run it change from here. Built only on
+   the site's tokens, so it follows the theme. */
+
+.admin-page {
+  padding: 24px var(--gutter, 16px) 64px;
+}
+
+.admin-page:focus {
+  outline: none;
+}
+
+.admin {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.admin [hidden] {
+  display: none !important;
+}
+
+.admin-head {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.admin-head__title {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.05;
+}
+
+.admin-head__lede {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.admin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-card {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-card__title,
+.admin-slot__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.admin-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 18px;
+  margin: 0;
+}
+
+.admin-facts dt {
+  font-weight: 700;
+}
+
+.admin-facts dd {
+  margin: 0;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.admin-input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.admin-row .admin-input {
+  flex: 1 1 260px;
+  width: auto;
+}
+
+.admin-input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.admin-status:empty {
+  display: none;
+}
+
+.admin-status {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.admin-status--page {
+  position: sticky;
+  bottom: 12px;
+  justify-self: center;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--soil);
+  color: var(--on-soil);
+}
+
+.admin-muted {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.admin-link {
+  overflow-wrap: anywhere;
+}
+
+/* ---------- tabs ---------- */
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-tab {
+  padding: 8px 16px;
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-tab[aria-pressed='true'] {
+  border-color: var(--leaf);
+  background: var(--leaf-tint);
+}
+
+.admin-tab:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- memory ---------- */
+
+.admin-slot {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-notes,
+.admin-versions,
+.admin-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-note:last-child {
+  border-bottom: 0;
+}
+
+.admin-note__index {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.admin-note__text {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.admin-note__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.admin-note > .admin-input {
+  grid-column: 2 / -1;
+}
+
+/* An archived note: its text and one button, no number. */
+.admin-note--plain {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* On a phone the buttons go under the note, so the note keeps the width. */
+@media (max-width: 560px) {
+  .admin-note {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .admin-note__actions {
+    grid-column: 2;
+  }
+
+  .admin-note--plain {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .admin-facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+.admin-add {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.admin-archive > summary,
+.admin-version summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-month {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-left: 12px;
+  border-left: 3px solid var(--line-strong);
+}
+
+.admin-month h4 {
+  margin: 0;
+}
+
+.admin-summary {
+  margin: 0;
+  font-style: italic;
+  color: var(--text-soft);
+}
+
+.admin-history {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.admin-version {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--dash);
+}
+
+.admin-pre {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--inset);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.admin-pre:empty {
+  display: none;
+}
+
+/* ---------- guidance, people, replies ---------- */
+
+.admin-guidance,
+.admin-person,
+.admin-reply {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-guidance__meta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.admin-guidance__text,
+.admin-reply__asked,
+.admin-reply__said {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.admin-reply__said {
+  padding-left: 12px;
+  border-left: 3px solid var(--leaf-pill);
+}
+
+.admin-arenas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-arenas legend {
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+.admin-check {
+  white-space: nowrap;
+}
