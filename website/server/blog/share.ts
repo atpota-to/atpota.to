@@ -1,7 +1,8 @@
 /**
- * "share this issue" at the bottom of a post: one button that opens a menu of apps, each a
- * compose-intent link that opens that app's composer with the issue's title and address
- * already written, so a reader can post about it.
+ * "share this issue" in a post's comments header (or at the bottom of the post when comments
+ * are off, pages.ts): one button that opens a menu of apps, each a compose-intent link that
+ * opens that app's composer with the issue's title and address already written, so a reader
+ * can post about it.
  *
  * The apps are Aturi's waypoints (aturi.to/api/waypoints?capability=compose): atmosphere
  * apps known to answer /intent/compose?text=, Bluesky first. The menu is a <details>, so it
@@ -119,7 +120,7 @@ export function composeUrl(app: ShareApp, text: string): string {
 }
 
 /**
- * The share menu for the bottom of a post. Every link opens in a new tab, so the issue
+ * The share menu. Every link opens in a new tab, so the issue
  * stays open. With only Bluesky to offer, it's a plain "share on bluesky" link instead.
  */
 export function shareHtml(apps: readonly ShareApp[], text: string): string {

@@ -1,6 +1,6 @@
 /**
- * "share this issue" at the bottom of a post (server/blog/share.ts renders it): a <details>
- * menu of apps to post about the issue from, which opens and works without this module.
+ * "share this issue" in a post's comments header (server/blog/share.ts renders it): a
+ * <details> menu of apps to post about the issue from, which works without this module.
  * This makes it behave like a menu: a click outside or Escape closes it, picking an app
  * closes it, and it opens upward when there isn't room below. It also remembers the app a
  * reader picks and lists that one first next time, on every issue.

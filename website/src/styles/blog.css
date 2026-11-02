@@ -1022,7 +1022,13 @@ html[data-theme="dark"] .post__body h2::after {
 
 /* ---------- share this issue (server/blog/share.ts, src/blog/share.ts) ---------- */
 
-/* The bottom of the post: one button, and a menu of apps under it (or over it, data-up). */
+/* One button and a menu of apps under it (or over it, data-up): at the right of the
+   comments' header, or at the bottom of the post when comments are off. */
+.post-talk__share {
+  align-self: center;
+  margin-left: auto;
+}
+
 .post__share {
   display: flex;
   margin-top: 44px;
@@ -1068,9 +1074,21 @@ html[data-theme="dark"] .post__body h2::after {
   padding: 10px;
   border-radius: 24px;
   background: var(--card);
+  border: 2px solid var(--line);
   box-shadow: var(--shadow-pop);
   animation: post-share-in var(--dur) var(--ease-spring);
   transform-origin: 24px 0;
+}
+
+/* at the right of the comments' header, the menu opens from the button's right edge */
+.post-talk__share .post-share__menu {
+  right: 0;
+  left: auto;
+  transform-origin: calc(100% - 24px) 0;
+}
+
+.post-talk__share .post-share[data-up] .post-share__menu {
+  transform-origin: calc(100% - 24px) 100%;
 }
 
 .post-share[data-up] .post-share__menu {
