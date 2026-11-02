@@ -24,7 +24,6 @@ import {
   createHistoryFeed,
   fetchHistory,
   formatRate,
-  leftOutWords,
   levelOf,
   ratesOf,
   renderHosts,
@@ -310,13 +309,6 @@ describe('trends', () => {
     expect(await fetchHistory('hour', answer({ error: 'unavailable' }, 503))).toBeNull();
     const withApps = await fetchHistory('hour', answer({ ...HISTORY, apps: [{ domain: 'ok.app', creates: 1, minutes: 1, collections: [] }, { domain: '<x>', creates: 1, minutes: 1, collections: [] }] }));
     expect(withApps!.apps).toEqual([{ domain: 'ok.app', creates: 1, minutes: 1, collections: [] }]);
-    // the apps too few accounts wrote to, checked the same way
-    const leftOut = { minAccounts: 89, apps: [{ domain: 'layers.pub', creates: 14_250_038, accounts: 31 }, { domain: '<x>', creates: 1, accounts: 1 }, { domain: 'odd.app', creates: -1, accounts: 1 }] };
-    const withFloor = await fetchHistory('hour', answer({ ...HISTORY, apps: [], appsLeftOut: leftOut }));
-    expect(withFloor!.appsLeftOut).toEqual({ minAccounts: 89, apps: [{ domain: 'layers.pub', creates: 14_250_038, accounts: 31 }] });
-    expect((await fetchHistory('hour', answer({ ...HISTORY, apps: [], appsLeftOut: { minAccounts: 'lots', apps: [] } })))!.appsLeftOut).toBeUndefined();
-    // no list, nothing it left out
-    expect((await fetchHistory('hour', answer({ ...HISTORY, appsLeftOut: leftOut })))!.appsLeftOut).toBeUndefined();
   });
 
   it('chart helpers: round tops, and gaps where steps are missing', () => {
@@ -416,12 +408,14 @@ describe('records or accounts', () => {
     const labels = () => [...report.querySelectorAll('[data-r-apps] .weather-bars__label')].map((l) => l.textContent);
     expect(labels()).toEqual(['whtwnd.com', 'tangled.sh']);
     expect(report.querySelector('[data-r-apps] .weather-bars__value')!.textContent).toBe('140');
+    // by records too: a few accounts can write far more than a crowd, so the list stays by accounts and says so
     renderReport(report, LIVE, lens({ measure: 'records' }));
-    expect(labels()).toEqual(['tangled.sh', 'whtwnd.com']);
+    expect(labels()).toEqual(['whtwnd.com', 'tangled.sh']);
+    const tag = report.querySelector<HTMLElement>('.weather-apps [data-tag]')!;
+    expect([tag.hidden, tag.textContent]).toEqual([false, 'by accounts']);
     // no accounts in a sampled reading: records, and the tile says so
     renderReport(report, READING, lens({ measure: 'accounts' }));
     expect(labels()).toEqual(['tangled.sh', 'whtwnd.com']);
-    const tag = report.querySelector<HTMLElement>('.weather-apps [data-tag]')!;
     expect(tag.hidden).toBe(false);
     expect(tag.textContent).toBe('by records');
   });
@@ -859,18 +853,14 @@ describe('in the lens', () => {
     expect(text('[data-r-level]')).toBe('moderate');
     expect(text('[data-r-acct-index]')).toBe('3.0% of 2,000,000 active accounts over the last 24 hours wrote outside bluesky.');
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
-    expect(bars('[data-r-apps]')).toEqual([
-      ['tangled.sh', '1'],
-      ['whtwnd.com', '0.1'],
-    ]);
+    // the apps go by accounts even on records
+    expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
     expect(report.querySelector('[data-r-apps] .weather-bars__change')!.getAttribute('data-trend')).toBe('up');
-    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the day before.');
-    expect(text('[data-r-apps-count]')).toBe('top 2');
+    expect(text('[data-r-apps-count]')).toBe('top 1');
 
     renderWindow(report, DAY, lens({ window: 'day', unit: 'total' }));
     expect(text('[data-r-records]')).toBe('38m');
     expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
-    expect(bars('[data-r-apps]')[0]).toEqual(['tangled.sh', '86,400']);
 
     renderWindow(report, DAY, lens({ window: 'day', measure: 'accounts' }));
     expect(text('[data-r-records]')).toBe('2m');
@@ -879,30 +869,25 @@ describe('in the lens', () => {
     expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
   });
 
-  it('by records, says how many accounts an app needed to make the list, and who was busier with fewer', () => {
-    const floored: History = { ...DAY, appsLeftOut: { minAccounts: 16, apps: [{ domain: 'vmx.cx', creates: 14_633, accounts: 1 }] } };
-    renderWindow(report, floored, lens({ window: 'day', unit: 'hour' }));
-    expect(bars('[data-r-apps]').map(([label]) => label)).toEqual(['tangled.sh', 'whtwnd.com']);
-    expect(text('[data-r-apps-note]')).toBe('new records an hour, from apps at least 16 accounts wrote to. busier, but by fewer accounts: vmx.cx (1). arrows compare with the day before.');
-    // by accounts there's no floor to speak of
-    renderWindow(report, floored, lens({ window: 'day', measure: 'accounts' }));
-    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
-    // every app heard had too few
-    renderWindow(report, { ...floored, apps: [] }, lens({ window: 'day' }));
-    expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(false);
-    expect(text('[data-r-apps-empty]')).toBe('no app outside bluesky had 16 accounts writing over the last 24 hours.');
-    renderWindow(report, { ...floored, apps: [], appsLeftOut: { minAccounts: 16, apps: [] } }, lens({ window: 'day' }));
-    expect(text('[data-r-apps-empty]')).toBe("the station hasn't heard any other apps over the last 24 hours yet.");
-  });
-
-  it('names two of the apps it left out, and counts the rest', () => {
-    const a = (domain: string, accounts: number) => ({ domain, creates: 1_000_000, accounts });
-    expect(leftOutWords({ minAccounts: 3, apps: [] })).toBe('from apps at least 3 accounts wrote to.');
-    expect(leftOutWords({ minAccounts: 89, apps: [a('layers.pub', 31)] })).toBe('from apps at least 89 accounts wrote to. busier, but by fewer accounts: layers.pub (31).');
-    expect(leftOutWords({ minAccounts: 89, apps: [a('layers.pub', 31), a('podping.at', 12)] })).toBe('from apps at least 89 accounts wrote to. busier, but by fewer accounts: layers.pub (31) and podping.at (12).');
-    expect(leftOutWords({ minAccounts: 1200, apps: [a('layers.pub', 31), a('podping.at', 12), a('sensorthings.dev', 12), a('vmx.cx', 2)] })).toBe(
-      'from apps at least 1,200 accounts wrote to. busier, but by fewer accounts: layers.pub (31), podping.at (12) and 2 more.',
-    );
+  it('lists the apps by accounts whatever the lens counts, and by records only without accounts', () => {
+    // a bot wrote far more than anyone, from one account: by records it would top the list
+    const bot: History = { ...DAY, apps: [{ domain: 'vmx.cx', creates: 14_633_000, prevCreates: 14_000_000, collections: [] }, ...DAY.apps!] };
+    renderWindow(report, bot, lens({ window: 'day', unit: 'hour' }));
+    expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
+    const tag = report.querySelector<HTMLElement>('.weather-apps [data-tag]')!;
+    expect([tag.hidden, tag.textContent]).toEqual([false, 'by accounts']);
+    expect(text('[data-r-apps-note]')).toBe("active accounts, not records, so a handful of accounts writing millions of records can't top it. arrows compare with the day before.");
+    renderWindow(report, bot, lens({ window: 'day', measure: 'accounts' }));
+    expect(tag.hidden).toBe(true);
+    // live, from the station's top apps by accounts
+    renderReport(report, LIVE, lens());
+    expect(bars('[data-r-apps]')).toEqual([['whtwnd.com', '140']]);
+    expect(text('[data-r-apps-note]')).toMatch(/^active accounts, not records/);
+    // no account counts for the window: records, and the tag says so on accounts
+    renderWindow(report, { ...bot, accounts: undefined }, lens({ window: 'day', measure: 'accounts' }));
+    expect(bars('[data-r-apps]').map(([label]) => label)).toEqual(['vmx.cx', 'tangled.sh', 'whtwnd.com']);
+    expect([tag.hidden, tag.textContent]).toEqual([false, 'by records']);
+    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the day before.');
   });
 
   it('says how much of a window the station has heard, and when there are no account counts for it', () => {

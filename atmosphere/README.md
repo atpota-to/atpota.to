@@ -107,15 +107,21 @@ thousand records a minute is a thousand records and one account.
   what came from the archive (before 2026-10-20T16:50Z): it keeps about a fifth of the
   edits the station hears, so its hours read 0.29% of accounts elsewhere against the
   station's 0.48%, and would make every live hour look more mixed than usual.
-- **The busiest apps by records** go by them too (since 2026-11-02). Over the 30 days to
-  then, layers.pub wrote 14.2M records from 31 accounts and podping.at 3.9M from 12 (3.7M
-  of it in one day, from 2), and they topped "elsewhere in the atmosphere" and the share
-  card over standard.site's 989k from 7,184. So the trends' `apps` only list apps that at
-  least 1 in 500 of the accounts writing outside Bluesky over the range wrote to, and never
-  fewer than 3 (`busiestApps` in `website/server/weather-history.ts`): 89 for those 30
-  days, 16 for a day, usually 3 for an hour. `appsLeftOut` says which busier apps that left
-  out, and the page names them. The live 60 seconds aren't filtered: the station only sends
-  the top 10 apps' accounts, and most apps have one or two writers in a minute.
+- **Lists of apps** go by them too (since 2026-11-02): "elsewhere in the atmosphere" on
+  every window and both lenses, and the share card's "busiest elsewhere". By records
+  they were led by a few accounts writing in bulk. Over the 30 days to then, layers.pub
+  topped them with 14.2M records from 31 accounts, podping.at came second with 3.9M from
+  12 (3.7M of it in one day, from 2), and standard.site's 989k from 7,184 came fourth. A
+  records-per-account cutoff doesn't separate them well: a bot on a timer writes in
+  proportion to the window (vmx.cx: 556 records in an hour and 14.6k in a day from one
+  account, 370k in 30 days from two) while people don't, and an average can't tell one
+  account writing a million records among a thousand quiet ones from a thousand writing
+  a thousand each. Ranked by accounts, a small group can't place however much it writes.
+  The trends' records list (`apps` from `/api/weather-history`, which Poe's weather tool
+  reads) is still by records, but only of apps at least 1 in 500 of the accounts writing
+  outside Bluesky over the range wrote to, and never fewer than 3 (`busiestApps` in
+  `website/server/weather-history.ts`); `appsLeftOut` says which busier ones that left
+  out.
 - **Stored:** see "Minute rows" below and
   [`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql). The website merges
   and counts the stored sketches itself (`website/server/hll.ts`,

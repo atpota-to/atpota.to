@@ -282,8 +282,6 @@ export interface Sky {
   apps: SkyApp[];
   /** The apps by active accounts (perSecond and count are both accounts), or null when there are no account counts. */
   appsByAccounts: SkyApp[] | null;
-  /** For a window: the accounts an app needed to make `apps`, and the busier ones it left out (server/weather-history.ts busiestApps). */
-  appsLeftOut?: AppsLeftOut;
   bluesky: Array<{ nsid: string; perSecond: number; count: number }>;
   /** What the apps' arrows compare with, for a window. */
   earlier: string | null;
@@ -351,7 +349,6 @@ export function skyOfHistory(h: History, now: number = Date.now()): Sky {
         ? (h.apps ?? []).map((x) => ({ domain: x.domain, collections: x.collections, perSecond: x.creates / secs, count: x.creates, change: appChange(x, h.compare, info.earlier) ?? undefined }))
         : [],
     appsByAccounts: a ? a.apps.map((x) => ({ domain: x.domain, collections: x.collections, perSecond: x.active, count: x.active, change: accountChange(x, a, info.earlier) ?? undefined })) : null,
-    ...(h.appsLeftOut ? { appsLeftOut: h.appsLeftOut } : {}),
     bluesky:
       secs > 0
         ? HISTORY_BLUESKY.flatMap(([key, nsid]) => {
@@ -523,20 +520,16 @@ function renderMix(report: HTMLElement, sky: Sky, lens: LensState): void {
 }
 
 /**
- * What the records' list of apps left out, after what it counts: "from apps at least 89
- * accounts wrote to. busier, but by fewer accounts: layers.pub (31), podping.at (12) and 3 more."
+ * Elsewhere in the atmosphere: the apps outside Bluesky the most accounts wrote with,
+ * whatever the lens counts. By records a few accounts writing in bulk led it: over the 30
+ * days to 2026-11-02, layers.pub topped it with 14.2M records from 31 accounts, and
+ * podping.at came second with 3.9M from 12. So it goes by accounts, as the diversity index
+ * does, and its tag says so when the lens is on records. Only without account counts (the website's own
+ * sample, or a window the station kept no sketches for) does it fall back to records.
  */
-export function leftOutWords(l: AppsLeftOut): string {
-  const named = l.apps.slice(0, 2).map((a) => `${a.domain} (${formatCount(a.accounts)})`);
-  const more = l.apps.length - named.length;
-  const list = more > 0 ? `${named.join(', ')} and ${more} more` : named.join(' and ');
-  return `from apps at least ${formatCount(l.minAccounts)} accounts wrote to.${list ? ` busier, but by fewer accounts: ${list}.` : ''}`;
-}
-
-/** Elsewhere in the atmosphere: the busiest apps outside Bluesky, by records or by accounts. */
 function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   const tile = $(report, '.weather-apps');
-  const byAcct = lens.measure === 'accounts' && sky.appsByAccounts !== null;
+  const byAcct = sky.appsByAccounts !== null;
   tag(tile, byAcct ? 'accounts' : 'records', lens);
   const bars = topBars(
     byAcct
@@ -548,18 +541,20 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   const shown = bars.length;
   const empty = $(report, '[data-r-apps-empty]');
   const n = sky.appsHeard;
-  // by records, an app needs enough accounts to make the list (server/weather-history.ts busiestApps)
-  const floor = byAcct ? undefined : sky.appsLeftOut;
   if (empty) {
     empty.hidden = shown > 0;
-    const words = WINDOW_INFO[sky.window].words;
-    empty.textContent =
-      sky.window === 'now' ? ((n ?? 0) > 0 ? APPS_TRICKLE : APPS_EMPTY) : floor?.apps.length ? `no app outside bluesky had ${formatCount(floor.minAccounts)} accounts writing over ${words}.` : `the station hasn't heard any other apps over ${words} yet.`;
+    empty.textContent = sky.window !== 'now' ? `the station hasn't heard any other apps over ${WINDOW_INFO[sky.window].words} yet.` : (n ?? 0) > 0 ? APPS_TRICKLE : APPS_EMPTY;
   }
   roll(report, '[data-r-apps-count]', n === null ? (shown ? `top ${shown}` : '') : n === 0 ? '' : `${n} app${n === 1 ? '' : 's'} heard${n > shown ? `, top ${shown}` : ''}`);
-  const what = byAcct ? 'active accounts' : lens.unit === 'total' ? 'new records in all' : recordsPer(lens.unit);
+  const what = !byAcct
+    ? lens.unit === 'total'
+      ? 'new records in all.'
+      : `${recordsPer(lens.unit)}.`
+    : lens.measure === 'records'
+      ? 'active accounts, not records, so a handful of accounts writing millions of records can\'t top it.'
+      : 'active accounts.';
   const arrows = !shown || !sky.earlier ? '' : bars.some((b) => b.change) ? ` arrows compare with ${sky.earlier}.` : ` once the station has heard ${sky.earlier}, arrows show who's rising and falling.`;
-  setText(report, '[data-r-apps-note]', shown ? `${what}${floor ? `, ${leftOutWords(floor)}` : '.'}${arrows}` : '');
+  setText(report, '[data-r-apps-note]', shown ? `${what}${arrows}` : '');
 }
 
 /** Every tile that follows the lens, from one sky. */
@@ -875,8 +870,6 @@ export interface History {
   total: HistoryPoint;
   /** The busiest apps outside Bluesky over the range, when the server could get them. */
   apps?: HistoryApp[];
-  /** How many accounts an app needed to be in `apps`, and the busier ones that had fewer, when the server counted them. */
-  appsLeftOut?: AppsLeftOut;
   /** How much of the range, and of the earlier window the apps are compared with, the station heard. */
   compare?: { seconds: number; prevSeconds: number; lagMs: number };
   /** Apps outside Bluesky heard each minute, hour, day or month. */
@@ -885,11 +878,6 @@ export interface History {
   accounts?: HistoryAccounts;
   /** The PDS hosts over the range, from the station's censuses (server/weather-hosts.ts). */
   hosts?: HostHistory;
-}
-
-export interface AppsLeftOut {
-  minAccounts: number;
-  apps: Array<{ domain: string; creates: number; accounts: number }>;
 }
 
 export interface AccountCounts {
@@ -954,23 +942,11 @@ export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch
   try {
     const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
-    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; appsLeftOut?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown; hosts?: unknown };
+    const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown; hosts?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
     const history: History = { range, points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
     const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
-    const l = body.appsLeftOut as Record<string, unknown> | undefined;
-    if (history.apps && l && typeof l === 'object' && n(l.minAccounts) && Array.isArray(l.apps)) {
-      history.appsLeftOut = {
-        minAccounts: l.minAccounts,
-        apps: l.apps
-          .filter((a): a is AppsLeftOut['apps'][number] => {
-            const v = a as Record<string, unknown>;
-            return typeof v === 'object' && v !== null && typeof v.domain === 'string' && APP_NAME_RE.test(v.domain) && n(v.creates) && n(v.accounts);
-          })
-          .map((a) => ({ domain: a.domain, creates: a.creates, accounts: a.accounts })),
-      };
-    }
     const c = body.compare as Record<string, unknown> | undefined;
     if (c && n(c.seconds) && n(c.prevSeconds) && n(c.lagMs)) history.compare = { seconds: c.seconds, prevSeconds: c.prevSeconds, lagMs: c.lagMs };
     const o = body.appsOverTime as Record<string, unknown> | undefined;

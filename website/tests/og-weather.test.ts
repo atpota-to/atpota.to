@@ -75,7 +75,16 @@ const STATION = {
   ],
   bluesky: [{ nsid: 'app.bsky.feed.like', perSecond: 241, count: 14459 }],
   events: { creates: 362, updates: 2.3, deletes: 14, identity: 0.3, account: 0.4 },
-  accounts: { active: 10648, bluesky: 10619, elsewhere: 56, index: 0.53, apps: [] },
+  accounts: {
+    active: 10648,
+    bluesky: 10619,
+    elsewhere: 56,
+    index: 0.53,
+    apps: [
+      { domain: 'sprk.so', accounts: 21, collections: ['so.sprk.feed.post'] },
+      { domain: 'grain.social', accounts: 4, collections: ['social.grain.photo'] },
+    ],
+  },
 };
 
 function points(hours = 24) {
@@ -147,6 +156,17 @@ function data(over: Partial<CardData> = {}): CardData {
         { domain: 'teal.fm', creates: 15527, prevCreates: 0, collections: [] },
         { domain: 'standard.site', creates: 13070, prevCreates: 0, collections: [] },
       ],
+      accounts: {
+        seconds: 86_400,
+        prevSeconds: 86_400,
+        total: { active: 1_271_439, bluesky: 1_266_000, elsewhere: 7600, share: 0.6, spread: 16.2, index: 2.41 },
+        points: [],
+        apps: [
+          { domain: 'sprk.so', active: 2222, prevActive: 2452, collections: [] },
+          { domain: 'standard.site', active: 2048, prevActive: 1832, collections: [] },
+          { domain: 'tangled.org', active: 964, prevActive: 1176, collections: [] },
+        ],
+      },
       hosts: hostHistory(),
     },
     almanac: {
@@ -285,7 +305,10 @@ describe('og weather: the cards', () => {
     expect(texts(drawCard('forecast', withHosts, art))).toEqual(expect.arrayContaining(["98.5% of accounts on bluesky pdses · 1.5% independent"]));
     // without a usual yet, the condition's own words
     expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a quiet spell, right now']));
-    expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'rocksky.app', '16,836', 'low']));
+    // the apps by accounts: rocksky.app wrote the most records, from fewer accounts
+    const mix = texts(drawCard('mix', data(), art));
+    expect(mix).toEqual(expect.arrayContaining(['1.9', 'sprk.so', '2,222', 'active accounts, the last 24 hours', 'low']));
+    expect(mix).not.toContain('rocksky.app');
     expect(texts(drawCard('today', data(), art))).toEqual(expect.arrayContaining([
       'the last hour', 'much busier than usual', '+25%', 'today in numbers', '212', '446', 'new records', '11.4 million', 'from other apps',
     ]));
@@ -391,14 +414,14 @@ describe('og weather: the cards', () => {
     // nothing for the right-hand panel: the last hour has the card to itself
     expect(texts(drawCard('today', data({ almanac: { ...data().almanac, today: undefined, newApps: undefined } }), art))).not.toContain('today in numbers');
     // the apps of the last minute when the day's aren't in
-    expect(texts(drawCard('mix', data({ day: null }), art))).toEqual(expect.arrayContaining(['grain.social', 'new records, the last minute']));
+    expect(texts(drawCard('mix', data({ day: null }), art))).toEqual(expect.arrayContaining(['sprk.so', '21', 'active accounts, the last minute']));
   });
 
   it("draws other people's names as shapes, never markup, and long ones don't break it", async () => {
     const hostile = '</svg><script>alert(1)</script>&amp;"';
     const long = `${'a'.repeat(63)}.${'b'.repeat(63)}`;
     const d = data();
-    d.day!.apps = [{ domain: hostile, creates: 99, prevCreates: 0, collections: [] }, { domain: long, creates: 98, prevCreates: 0, collections: [] }, ...d.day!.apps!];
+    d.day!.accounts!.apps = [{ domain: hostile, active: 99_999, prevActive: 0, collections: [] }, { domain: long, active: 99_998, prevActive: 0, collections: [] }, ...d.day!.accounts!.apps];
     const card = drawCard('mix', d, await cardArt())!;
     const svg = await renderSvg(card);
     expect(svg).not.toContain('<script');

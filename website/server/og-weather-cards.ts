@@ -686,9 +686,10 @@ function scale(index: number, width: number): El {
 function mixCard(d: CardData, art: Art): El | null {
   const mix = mixOf(d);
   if (!mix) return null;
-  const daily = (d.day?.apps ?? []).filter((a) => a.creates > 0).slice(0, 5);
-  const live = (d.now?.apps ?? []).filter((a) => a.count > 0).slice(0, 5);
-  const apps = daily.length >= 3 ? daily.map((a) => ({ domain: a.domain, n: a.creates })) : live.map((a) => ({ domain: a.domain, n: a.count }));
+  // by accounts, as on the page: by records a few accounts writing in bulk top it with millions
+  const daily = (d.day?.accounts?.apps ?? []).filter((a) => a.active > 0).slice(0, 5).map((a) => ({ domain: a.domain, n: a.active }));
+  const live = (d.now?.accounts?.apps ?? []).filter((a) => a.accounts > 0).slice(0, 5).map((a) => ({ domain: a.domain, n: a.accounts }));
+  const apps = daily.length >= 3 ? daily : live;
   const appsSpan = daily.length >= 3 ? 'the last 24 hours' : 'the last minute';
   const top = Math.max(1, ...apps.map((a) => a.n));
   const who =
@@ -714,7 +715,7 @@ function mixCard(d: CardData, art: Art): El | null {
       ? tile(
           { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
           h({ fontSize: 30, fontWeight: 700, color: C.leaf }, 'busiest elsewhere'),
-          h({ fontSize: 22, color: C.soft, marginTop: 4 }, `new records, ${appsSpan}`),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, `active accounts, ${appsSpan}`),
           h(
             { flexDirection: 'column', gap: 18, marginTop: 'auto' },
             ...apps.map((a) =>
