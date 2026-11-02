@@ -41,7 +41,8 @@ export interface ShareApp {
 export const BLUESKY_APP: ShareApp = { id: 'bluesky', name: 'bluesky', template: `https://bsky.app/intent/compose?text=${TEXT_SLOT}` };
 
 export const SHARE_COPY = {
-  button: 'share this issue',
+  /** The button: "share this issue", just "share" on a phone (the rest is .post-share__long). */
+  button: ['share', ' this issue'],
   single: (name: string) => `share on ${name}`,
   label: 'share on',
   fine: 'apps from',
@@ -133,7 +134,7 @@ export function shareHtml(apps: readonly ShareApp[], text: string): string {
   }
   return (
     `<details class="post-share" data-blog-share>` +
-    `<summary class="btn btn--outline btn--sm post-share__toggle">${SHARE_ICON}${escapeHtml(SHARE_COPY.button)}<span class="post-share__chevron">${CHEVRON}</span></summary>` +
+    `<summary class="btn btn--outline btn--sm post-share__toggle">${SHARE_ICON}<span>${escapeHtml(SHARE_COPY.button[0])}<span class="post-share__long">${escapeHtml(SHARE_COPY.button[1])}</span></span><span class="post-share__chevron">${CHEVRON}</span></summary>` +
     `<div class="post-share__menu">` +
     `<p class="post-share__label" id="post-share-label">${escapeHtml(SHARE_COPY.label)}</p>` +
     `<ul class="post-share__list" role="list" aria-labelledby="post-share-label" data-share-list>` +

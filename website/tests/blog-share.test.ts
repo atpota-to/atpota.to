@@ -111,6 +111,8 @@ describe('the menu', () => {
     document.body.innerHTML = shareHtml(shareApps(AT_URI_WAYPOINTS), `"<b>"\n\n${url}`);
     const menu = document.querySelector('details[data-blog-share]')!;
     expect(menu.querySelector('summary')!.textContent).toBe('share this issue');
+    // a phone shows just "share" (blog.css hides the rest)
+    expect(menu.querySelector('summary .post-share__long')!.textContent).toBe(' this issue');
     const links = [...menu.querySelectorAll<HTMLAnchorElement>('a[data-share-app]')];
     expect(links.map((a) => a.textContent)).toEqual(['bluesky', 'anisota', 'deer']);
     expect(links[0]!.getAttribute('href')).toBe(`https://bsky.app/intent/compose?text=${encodeURIComponent(`"<b>"\n\n${url}`)}`);

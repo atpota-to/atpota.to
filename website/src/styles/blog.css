@@ -1166,6 +1166,28 @@ html[data-theme="dark"] .post__body h2::after {
   }
 }
 
+/* On a phone: just "share", on its own line under the comments' title, at the left. */
+@media (max-width: 640px) {
+  .post-share__long {
+    display: none;
+  }
+
+  .post-talk__share {
+    flex-basis: 100%;
+    margin: 6px 0 0;
+  }
+
+  .post-talk__share .post-share__menu {
+    right: auto;
+    left: 0;
+    transform-origin: 24px 0;
+  }
+
+  .post-talk__share .post-share[data-up] .post-share__menu {
+    transform-origin: 24px 100%;
+  }
+}
+
 @media print {
   .post__share {
     display: none;
