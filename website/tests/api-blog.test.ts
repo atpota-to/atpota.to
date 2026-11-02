@@ -439,7 +439,9 @@ describe('/api/blog dispatch draft preview', () => {
     expect(seen.urls).toContain(`https://hook.atpota.to/dispatch/preview/${TOKEN}`);
     const d = html(await res.text());
     expect(d.querySelector('h1')!.textContent).toBe('spaces near beta');
-    expect(d.querySelector('.post__subtitle')!.textContent).toBe('a quieter week');
+    // The first paragraph summarizes the issue, so the description isn't repeated under the title.
+    expect(d.querySelector('.post__subtitle')).toBeNull();
+    expect(d.querySelector('.post__header')!.textContent).not.toContain('a quieter week');
     expect(d.querySelector('.post-preview')!.textContent).toMatch(/^draft previewversion 3, saved .* · waiting for review\. this isn't published/);
     expect(d.querySelector('.post__body strong')!.textContent).toBe('spaces');
     expect(d.querySelector('.post__body')!.textContent).toContain('a post worth reading');

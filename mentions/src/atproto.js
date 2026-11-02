@@ -9,6 +9,7 @@ import { config } from './config.js';
 import { logger } from './logger.js';
 import { isNapping } from './nap.js';
 import { killSwitchEngaged } from './config.js';
+import { linkFacets } from './richtext.js';
 
 let session = null;          // { accessJwt, refreshJwt, did, handle }
 let sessionPromise = null;
@@ -601,10 +602,17 @@ export const acceptDmConvo = (convoId) => chatRequest('chat.bsky.convo.acceptCon
 export const getDmMessages = (convoId, cursor) => chatRequest('chat.bsky.convo.getMessages', {
   params: { convoId, cursor, limit: 100 },
 });
-/** A messageId makes it a reply to that message; null sends it plain. */
-export const sendDmMessage = (convoId, messageId, text) => chatRequest('chat.bsky.convo.sendMessage', {
-  body: { convoId, message: { text, ...(messageId ? { replyTo: { messageId } } : {}) } },
-});
+/**
+ * A messageId makes it a reply to that message; null sends it plain. Links get
+ * link facets, as a post's do: the app doesn't find links in a DM's text by
+ * itself, so without them a URL arrives as words you can't tap.
+ */
+export function sendDmMessage(convoId, messageId, text) {
+  const facets = linkFacets(text);
+  return chatRequest('chat.bsky.convo.sendMessage', {
+    body: { convoId, message: { text, ...(facets.length ? { facets } : {}), ...(messageId ? { replyTo: { messageId } } : {}) } },
+  });
+}
 /** The one-to-one conversation with these members, found or started: { convo }. */
 export const getDmConvoForMembers = (members) => chatRequest('chat.bsky.convo.getConvoForMembers', {
   params: { members },

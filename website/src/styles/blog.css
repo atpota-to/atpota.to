@@ -416,14 +416,6 @@
   letter-spacing: -0.025em;
 }
 
-.post__subtitle {
-  max-width: 30em;
-  margin: 0 0 20px;
-  font-size: 21px;
-  line-height: 1.35;
-  color: var(--text-soft);
-}
-
 .post__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1109,11 +1101,6 @@ html[data-theme="dark"] .post__body h2::after {
 @media (max-width: 640px) {
   .post-layout {
     padding-top: 22px;
-  }
-
-  .post__subtitle {
-    margin-bottom: 18px;
-    font-size: 18px;
   }
 
   .post__body {
