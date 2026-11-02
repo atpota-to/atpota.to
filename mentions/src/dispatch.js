@@ -19,7 +19,7 @@ import { config, isAdmin, killSwitchEngaged, DISPATCH_PAGE_BASES } from './confi
 import { db, nowIso } from './db.js';
 import { logger } from './logger.js';
 import * as atproto from './atproto.js';
-import { detectLinks, detectHandles, graphemeLength, byteLength } from './richtext.js';
+import { detectLinks, detectHandles, mentionFacets, graphemeLength, byteLength } from './richtext.js';
 import { isNapping } from './nap.js';
 
 db.exec(`
@@ -80,6 +80,10 @@ db.exec(`
     created_at    TEXT NOT NULL
   );
 `);
+// The accounts an announcement tags, as resolved when Poe proposed it and the
+// operator saw it: JSON [{ handle, did, displayName }], or null for none.
+try { db.exec('ALTER TABLE dispatch_proposal ADD COLUMN mentions TEXT'); } catch { /* already there */ }
+try { db.exec('ALTER TABLE dispatch_command ADD COLUMN mentions TEXT'); } catch { /* already there */ }
 
 export const POST_MAX_GRAPHEMES = 300;
 const POST_MAX_BYTES = 3000;
@@ -220,17 +224,20 @@ export function pageUrls(rkey) {
 }
 
 /**
- * The announcement post. The link to the issue is its only facet: featured
- * people are not pinged, and nothing else in the text becomes clickable.
+ * The announcement post. The issue's own pages are the only links, and the
+ * accounts in `mentions` ([{ handle, did }], the ones the operator saw it tag)
+ * the only mentions: any other link or @handle in the text stays plain text.
  */
-export function buildAnnouncement({ text, pageUrl, associatedRefs = null, alsoLinks = [], title, description, thumb = null }) {
+export function buildAnnouncement({ text, pageUrl, associatedRefs = null, alsoLinks = [], mentions = [], title, description, thumb = null }) {
   const linkable = new Set([pageUrl, ...alsoLinks]);
   const facets = detectLinks(text)
     .filter((l) => linkable.has(l.uri.replace(/\/+$/, '')))
     .map((l) => ({
       index: { byteStart: l.byteStart, byteEnd: l.byteEnd },
       features: [{ $type: 'app.bsky.richtext.facet#link', uri: l.uri }],
-    }));
+    }))
+    .concat(mentionFacets(text, mentions))
+    .sort((a, b) => a.index.byteStart - b.index.byteStart);
   const record = {
     $type: 'app.bsky.feed.post',
     text,
@@ -476,6 +483,7 @@ export const defaultDeps = {
   publisherConfigured: () => atproto.publisherConfigured(),
   fetchPage,
   fetchImage,
+  resolveMentions: (handles) => atproto.profilesByHandle(handles),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
@@ -539,7 +547,7 @@ async function linkDocument(documentUri, rkey, doc, post, deps) {
 }
 
 /** Post under a key stored first, or find the post an earlier run made under it. */
-async function postOnce(documentUri, text, page, pageUrl, alsoLinks, doc, deps) {
+async function postOnce(documentUri, text, mentions, page, pageUrl, alsoLinks, doc, deps) {
   const claimed = db.prepare(`UPDATE dispatch_document SET post_rkey = ?, updated_at = ?
     WHERE document_uri = ? AND post_rkey IS NULL`).run(nextTid(), nowIso(), documentUri).changes > 0;
   const row = getDocumentRow(documentUri);
@@ -556,7 +564,7 @@ async function postOnce(documentUri, text, page, pageUrl, alsoLinks, doc, deps) 
   const card = await cardRefs(doc, pageUrl, deps);
   const { thumb, note } = await cardThumb(page.html, pageUrl, deps);
   const record = buildAnnouncement({
-    text, pageUrl, alsoLinks, associatedRefs: card.associatedRefs,
+    text, pageUrl, alsoLinks, mentions, associatedRefs: card.associatedRefs,
     title: String(doc.value.title ?? ''),
     description: String(doc.value.description ?? ''),
     thumb,
@@ -572,8 +580,12 @@ async function postOnce(documentUri, text, page, pageUrl, alsoLinks, doc, deps) 
 /**
  * Announce an issue that is already published. Returns the reply for the
  * operator. Throws only on a failure before anything was posted.
+ *
+ * `mentions` are the accounts the post tags, as the operator approved them
+ * (a proposal's). Without them, the @handles in the operator's own text are
+ * looked up here, and a handle that isn't an account stops the post.
  */
-export async function announce({ rkey, text = null }, deps = defaultDeps) {
+export async function announce({ rkey, text = null, mentions = null }, deps = defaultDeps) {
   if (text != null) {
     const problem = operatorTextProblem(text);
     if (problem) return problem;
@@ -608,6 +620,16 @@ export async function announce({ rkey, text = null }, deps = defaultDeps) {
   if (killSwitchEngaged()) return 'the kill switch is on, so i didn\'t post.';
   if (isNapping()) return "i'm napping, so i didn't post. wake me and send the command again.";
 
+  // Who the post tags is settled before the wait for the page, so a handle that
+  // isn't an account is said straight away rather than minutes later.
+  const postText = text ?? defaultPostText(String(doc.value.title ?? ''), String(doc.value.description ?? ''));
+  let tagged = mentions;
+  if (!tagged) {
+    const checked = await checkMentions(postText, deps);
+    if (checked.problem) return `${checked.problem}, so i didn't post. fix the handle, or leave off the @, and send it again.`;
+    tagged = checked.mentions;
+  }
+
   const [pageUrl, ...alsoLinks] = pageUrls(rkey);
   const page = await waitForPage(pageUrl, documentUri, deps);
   if (!page.ok) {
@@ -618,8 +640,7 @@ export async function announce({ rkey, text = null }, deps = defaultDeps) {
   }
   event(documentUri, 'page_ok', pageUrl);
 
-  const postText = text ?? defaultPostText(String(doc.value.title ?? ''), String(doc.value.description ?? ''));
-  const post = await postOnce(documentUri, postText, page, pageUrl, alsoLinks, doc, deps);
+  const post = await postOnce(documentUri, postText, tagged, page, pageUrl, alsoLinks, doc, deps);
   const note = await linkDocument(documentUri, rkey, doc, post, deps);
   return [
     `announced ⸜(｡˃ ᵕ ˂ )⸝ ${postUrl(post.uri)}`,
@@ -634,9 +655,10 @@ export async function announce({ rkey, text = null }, deps = defaultDeps) {
 /** Store a parsed command against its DM so a restart can finish it. */
 export function recordCommand(messageId, operatorDid, command) {
   db.prepare(`INSERT OR IGNORE INTO dispatch_command
-    (message_id, operator_did, kind, document_rkey, post_text, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'running', ?, ?)`).run(messageId, operatorDid,
-    command.latest ? 'announce_latest' : command.kind, command.rkey ?? null, command.text ?? null, nowIso(), nowIso());
+    (message_id, operator_did, kind, document_rkey, post_text, mentions, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)`).run(messageId, operatorDid,
+    command.latest ? 'announce_latest' : command.kind, command.rkey ?? null, command.text ?? null,
+    command.mentions ?? null, nowIso(), nowIso());
 }
 
 // One document at a time, so two commands for the same issue cannot interleave.
@@ -673,7 +695,8 @@ export async function runCommand(messageId, deps = defaultDeps) {
       }
       if (rkey) {
         documentUri = `at://${config.dispatch.publisherDid}/site.standard.document/${rkey}`;
-        reply = await serial(documentUri, () => announce({ rkey, text: cmd.post_text }, deps));
+        const mentions = cmd.mentions ? JSON.parse(cmd.mentions) : null;
+        reply = await serial(documentUri, () => announce({ rkey, text: cmd.post_text, mentions }, deps));
         if (cmd.kind === 'announce_latest') {
           const title = getDocumentRow(documentUri)?.title;
           if (title) reply = `the latest issue is "${title}".\n\n${reply}`;
@@ -723,19 +746,64 @@ export function parseConfirmation(text) {
   return null;
 }
 
-/** Why Poe's announcement text cannot go out as is, or null. */
+/**
+ * Why Poe's announcement text cannot go out as is, or null. @handles are
+ * allowed: checkMentions looks them up, and the operator sees who is tagged.
+ */
 export function proposalTextProblem(text, rkey) {
   if (!text.trim()) return 'the post text is empty';
   const n = graphemeLength(text);
   if (n > POST_MAX_GRAPHEMES) return `the post is ${n} graphemes and a post holds ${POST_MAX_GRAPHEMES}`;
   if (byteLength(text) > POST_MAX_BYTES) return `the post is over ${POST_MAX_BYTES} bytes`;
-  if (detectHandles(text).length) return 'the post @-mentions someone; name people without the @, nobody is pinged by an announcement';
   const allowed = new Set(pageUrls(rkey));
   const stray = detectLinks(text).map((l) => l.uri.replace(/\/+$/, '')).filter((u) => !allowed.has(u));
   if (stray.length) return `the post links ${stray[0]}; the only link allowed is the issue's own page, and the card already links it`;
   if (/\*\*|__|\[[^\]]+\]\([^)]+\)|^#{1,6}\s/m.test(text)) return 'the post uses markdown, which Bluesky shows literally';
   return null;
 }
+
+// --- tagging ------------------------------------------------------------------------
+// An announcement can tag the accounts behind what the issue features: Poe
+// writes their @handles, each is resolved here when the post is proposed, and
+// the operator's confirmation names every account that will get a notification.
+// The post tags exactly those DIDs, so what they approved is who is tagged.
+
+export const MAX_MENTIONS = 6;
+
+/**
+ * The accounts `text` tags: { mentions: [{ handle, did, displayName }] }, or
+ * { problem } saying why it can't tag them (too many, not an account, or the
+ * lookup failed). Text with no @handles needs no lookup.
+ */
+export async function checkMentions(text, deps = defaultDeps) {
+  const handles = [...new Set(detectHandles(text))];
+  if (!handles.length) return { mentions: [] };
+  if (handles.length > MAX_MENTIONS) {
+    return { problem: `the post tags ${handles.length} accounts, and an announcement tags ${MAX_MENTIONS} at most` };
+  }
+  let found;
+  try {
+    found = await deps.resolveMentions(handles);
+  } catch (err) {
+    return { problem: `i couldn't look up ${handles.map((h) => `@${h}`).join(', ')} just now (${err.message})` };
+  }
+  const missing = handles.filter((h) => !found.has(h));
+  if (missing.length) {
+    return { problem: `${missing.map((h) => `@${h}`).join(', ')} ${missing.length === 1 ? "isn't a bluesky account" : "aren't bluesky accounts"} i can find` };
+  }
+  return { mentions: handles.map((h) => ({ handle: h, did: found.get(h).did, displayName: found.get(h).displayName ?? null })) };
+}
+
+/** The confirmation's line naming who the post tags, or null for nobody. */
+export function taggedLine(mentions) {
+  if (!mentions?.length) return null;
+  const names = mentions.map((m) => (m.displayName ? `@${m.handle} (${m.displayName})` : `@${m.handle}`));
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return `it tags ${list}, so ${names.length === 1 ? 'they get' : 'each gets'} a notification.`;
+}
+
+/** What Poe is told about the accounts a proposal tags. */
+export const mentionSummary = (mentions) => mentions.map((m) => ({ handle: m.handle, displayName: m.displayName }));
 
 function excerptOf(textContent) {
   const text = String(textContent ?? '').trim();
@@ -801,14 +869,20 @@ export async function handleAnnounceProposal(body, deps = defaultDeps) {
   const text = body.text.trim();
   const problem = proposalTextProblem(text, rkey);
   if (problem) return { status: 200, body: { accepted: false, reason: problem, issue } };
+  const tagged = await checkMentions(text, deps);
+  if (tagged.problem) {
+    return { status: 200, body: { accepted: false, issue,
+      reason: `${tagged.problem}. check the handle with resolve_identity, or name them without the @` } };
+  }
+  const mentions = tagged.mentions.length ? JSON.stringify(tagged.mentions) : null;
 
   db.exec('BEGIN IMMEDIATE');
   try {
     // One live proposal at a time: this one replaces every earlier one.
     db.prepare(`UPDATE dispatch_proposal SET status = 'superseded', decided_at = ?
       WHERE status IN ('proposed', 'attached')`).run(nowIso());
-    db.prepare(`INSERT INTO dispatch_proposal (dm_message_id, operator_did, document_rkey, title, page_url, text, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(body.dmId, body.operatorDid, rkey, issue.title, issue.url, text, nowIso());
+    db.prepare(`INSERT INTO dispatch_proposal (dm_message_id, operator_did, document_rkey, title, page_url, text, mentions, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(body.dmId, body.operatorDid, rkey, issue.title, issue.url, text, mentions, nowIso());
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
@@ -817,17 +891,20 @@ export async function handleAnnounceProposal(body, deps = defaultDeps) {
   event(documentUri, 'proposed', { dmId: body.dmId });
   return { status: 200, body: {
     accepted: true, issue, text,
+    ...(tagged.mentions.length ? { mentions: mentionSummary(tagged.mentions) } : {}),
     note: 'proposed, not posted. the operator sees this exact post under your reply and it goes out only if they answer yes.',
   } };
 }
 
 /** The block added under Poe's reply. */
 export function confirmationBlock(proposal) {
+  const tags = taggedLine(proposal.mentions ? JSON.parse(proposal.mentions) : null);
   return [
     `here's the post, with a card for "${proposal.title}" (${proposal.page_url}):`,
     '',
     proposal.text,
     '',
+    ...(tags ? [tags, ''] : []),
     'reply "yes" to post it from poe, or "no" to drop it.',
   ].join('\n');
 }

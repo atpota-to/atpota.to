@@ -69,10 +69,10 @@ test('only a whole-message yes or no is an answer', () => {
   }
 });
 
-test('proposal text: no @handles, no links but the issue, no markdown, fits a post', () => {
+test('proposal text: no links but the issue, no markdown, fits a post; @handles are looked up separately', () => {
   assert.equal(proposalTextProblem(`issue one is up https://poe.leaflet.pub/${RKEY}`, RKEY), null);
   assert.equal(proposalTextProblem(`issue one is up https://atpota.to/blog/${RKEY}/`, RKEY), null);
-  assert.match(proposalTextProblem('thanks @alice.example for the tip', RKEY), /@-mentions/);
+  assert.equal(proposalTextProblem('thanks @alice.example for the tip', RKEY), null);
   assert.match(proposalTextProblem('read it at https://example.com/fake', RKEY), /links https:\/\/example\.com\/fake/);
   assert.match(proposalTextProblem(`https://poe.leaflet.pub/${RKEY}/../other`, RKEY), /links/);
   assert.match(proposalTextProblem('**big news** this week', RKEY), /markdown/);
@@ -152,7 +152,7 @@ test('ask in plain words, see the exact post, say yes, and that exact post goes 
   assert.equal(c.toAgent[0].text, ask.text);
 
   const text = 'the first dispatch is out ⸜(｡˃ ᵕ ˂ )⸝ attie grew into a site builder, spaces got close to beta, and there is a cow.';
-  const bad = await propose(ask.id, { text: `${text} thanks @dame.is` }, deps);
+  const bad = await propose(ask.id, { text: `${text} **thanks**` }, deps);
   assert.equal(bad.body.accepted, false);   // Poe fixes it and tries again in the same turn
   const res = await propose(ask.id, { text }, deps);
   assert.equal(res.body.accepted, true);
@@ -163,6 +163,7 @@ test('ask in plain words, see the exact post, say yes, and that exact post goes 
   assert.ok(shown.startsWith("ooh yes! here's what i'd say:\n\nhere's the post, with a card for \"attie sites"));
   assert.ok(shown.includes(`(https://atpota.to/blog/${RKEY}):\n\n${text}\n\n`));
   assert.match(shown, /reply "yes" to post it from poe, or "no" to drop it\.$/);
+  assert.doesNotMatch(shown, /it tags/, 'a post that tags nobody says nothing about it');
   assert.equal(s.created.length, 0, 'nothing posts on a proposal');
 
   const yes = dm('Yes!');
@@ -289,3 +290,60 @@ test('the proposal is only shown under the reply to the DM it was made for', asy
   assert.equal(db.prepare('SELECT status FROM dispatch_proposal WHERE dm_message_id = ?').get(one.id).status, 'attached');
   assert.ok(docUri(k));
 });
+
+// --- tagging ---------------------------------------------------------------------
+
+test('an announcement can tag accounts: each is looked up, the operator sees who, and yes tags exactly them', async () => {
+  const k = 'issuetagged01';
+  const { s, deps } = network(k);
+  const c = conversation(deps);
+  const ask = dm('announce it, and tag tangled and mu.social for the costumes');
+  await c.say(ask);
+  const text = 'issue two is out! tangled moved house (hi @tangled.org) and a pixel costume parade from @mu.social (◕‿◕)';
+  const res = await propose(ask.id, { issue: k, text }, deps);
+  assert.equal(res.body.accepted, true);
+  assert.deepEqual(res.body.mentions, [{ handle: 'tangled.org', displayName: 'Tangled' }, { handle: 'mu.social', displayName: 'mu' }]);
+  assert.deepEqual(s.lookups, [['tangled.org', 'mu.social']]);
+  await c.reply(ask.id, "here's my try:");
+  const shown = c.sent.at(-1).text;
+  assert.ok(shown.includes(`${text}\n\nit tags @tangled.org (Tangled) and @mu.social (mu), so each gets a notification.\n\nreply "yes"`), shown);
+
+  // Who an account is can't change between the operator's look and the post.
+  delete deps.resolveMentions;
+  await c.say(dm('yes'));
+  assert.equal(s.created.length, 1);
+  const { record } = s.created[0];
+  assert.equal(record.text, text);
+  const tagged = record.facets.filter((f) => f.features[0].$type === 'app.bsky.richtext.facet#mention');
+  assert.deepEqual(tagged.map((f) => [Buffer.from(text).subarray(f.index.byteStart, f.index.byteEnd).toString(), f.features[0].did]), [
+    ['@tangled.org', 'did:plc:wshs7t2adsemcrrd4snkeqli'],
+    ['@mu.social', 'did:plc:fivmz34azxgjafrk6ogns7k5'],
+  ]);
+  assert.match(c.sent.at(-1).text, /^announced/);
+});
+
+test('a handle that is not an account, too many tags, or a failed lookup is a reason for Poe to fix', async () => {
+  const k = 'issuetagged02';
+  const { s, deps } = network(k);
+  const c = conversation(deps);
+  const ask = dm('announce it with some tags');
+  await c.say(ask);
+  const missing = await propose(ask.id, { issue: k, text: 'thanks @tangled.org and @tangled.example' }, deps);
+  assert.equal(missing.body.accepted, false);
+  assert.equal(missing.body.reason, "@tangled.example isn't a bluesky account i can find. check the handle with resolve_identity, or name them without the @");
+  const many = await propose(ask.id, { issue: k, text: [1, 2, 3, 4, 5, 6, 7].map((n) => `@a${n}.example`).join(' ') }, deps);
+  assert.match(many.body.reason, /tags 7 accounts, and an announcement tags 6 at most/);
+  s.failLookup = 'the appview answered 502';
+  const failed = await propose(ask.id, { issue: k, text: 'thanks @tangled.org' }, deps);
+  assert.match(failed.body.reason, /couldn't look up @tangled\.org just now \(the appview answered 502\)/);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM dispatch_proposal WHERE dm_message_id = ?').get(ask.id).n, 0);
+
+  // One with no display name is shown by handle alone, and a handle twice is one tag.
+  s.failLookup = null;
+  const ok = await propose(ask.id, { issue: k, text: '@nameless.example made a thing, go see @nameless.example' }, deps);
+  assert.deepEqual(ok.body.mentions, [{ handle: 'nameless.example', displayName: null }]);
+  await c.reply(ask.id, 'ok!');
+  assert.match(c.sent.at(-1).text, /\n\nit tags @nameless\.example, so they get a notification\.\n\n/);
+  await c.say(dm('no'));
+});
+

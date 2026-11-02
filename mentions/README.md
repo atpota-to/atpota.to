@@ -433,7 +433,9 @@ and logs an error rather than silently reverting to something more permissive.
 `@handle` in a draft therefore notifies nobody even if the gate somehow missed
 it, which closes the mass-tagging hole at the record level rather than only at
 the check. The gate still rejects third-party handles, because it still *reads*
-as tagging.
+as tagging. The one post that can tag anyone is a dispatch announcement, which
+the operator approves by hand after seeing who it tags (see
+[Tagging](#tagging-in-an-announcement)).
 
 **Opt-out phrases are matched as demands, not as words.** A denylisting is
 permanent with no appeal flow, so a false positive silently and forever stops
@@ -679,10 +681,11 @@ DM goes to Poe like any other. Poe calls the agent tool
 The droplet accepts it only while that DM is `dispatched` to the agent, from an
 `ADMIN_DIDS` sender, at most ten calls per DM. Without `text` it only looks the
 issue up and returns its title, description and opening for Poe to write from.
-With `text` it checks the post (300 graphemes, no @handles, no link but the
-issue's own page, no markdown) and answers `accepted: false` with the reason
-when one fails, so Poe can fix it in the same turn. An accepted proposal goes
-in `dispatch_proposal` and replaces any earlier one.
+With `text` it checks the post (300 graphemes, no link but the issue's own
+page, no markdown, and every @handle a real account, as below) and answers
+`accepted: false` with the reason when one fails, so Poe can fix it in the same
+turn. An accepted proposal goes in `dispatch_proposal` and replaces any earlier
+one.
 
 When Poe's reply arrives on `/dm-draft`, the exact post is added under it with
 "reply yes to post it, or no to drop it". The reply is cut to make room; the
@@ -695,6 +698,22 @@ under six hours old. Otherwise "yes" is ordinary conversation and goes to Poe.
 `announce` followed by a link is still the direct command. `announce` followed
 by plain words ("announce that one please") goes to Poe instead of getting the
 usage.
+
+#### Tagging in an announcement
+
+An announcement can tag the accounts behind what the issue features ("tangled
+moved house, hi @tangled.org"). Each `@handle` in Poe's proposed post is looked
+up when it is proposed, in one call to the public AppView
+(`app.bsky.actor.getProfiles`), and the proposal is refused with the reason if a
+handle isn't an account, the lookup fails, or it tags more than six. The DIDs
+found are stored with the proposal (`dispatch_proposal.mentions`,
+`dispatch_publish.mentions`), and the operator's confirmation names every one,
+with its display name: "it tags @tangled.org (Tangled) and @mu.social (mu), so
+each gets a notification." The yes posts mention facets for exactly those DIDs,
+with no second lookup, so a handle that moved in between can't change who is
+tagged. Any other `@handle` in the text stays plain text. The operator's own
+`announce <link>` text is looked up the same way when it runs, and a handle that
+isn't an account stops the post.
 
 ### Any post, in plain words: `propose_post`
 
@@ -714,7 +733,7 @@ blog's own card) or `none`. The proposal comes on the callback URL, told apart b
 It is accepted only while that DM is `dispatched` to the agent, from an `ADMIN_DIDS`
 sender, at most ten calls per DM, and the text is checked (300 graphemes, no
 @handles, no link since the card carries it, no markdown), with the reason back to
-Poe when it fails. The exact post and its card go under Poe's reply, and a whole-message
+Poe when it fails. Only a dispatch announcement tags anyone. The exact post and its card go under Poe's reply, and a whole-message
 yes to that message posts it; the rules for what counts as that yes are the dispatch
 announcement's above. The card must load, or nothing is posted and the reply says
 why: a weather card is fetched by its own address, as weather posts do.
@@ -778,7 +797,9 @@ operator: "yes" ──► create the document in atpota.to's repo ──► anno
    per draft, at most 40 from a drafting turn and 15 calls per DM.
 5. **Making it live.** When the operator says so, Poe calls
    `propose_dispatch_publish` with the version it read and an announcement post
-   (checked like any post: 300 graphemes, no @handles, no links, no markdown).
+   (checked like any post: 300 graphemes, no links, no markdown; its @handles are
+   looked up and shown as an announcement's are, under
+   [Tagging](#tagging-in-an-announcement)).
    The steps go under its reply: the issue goes up on poe.leaflet.pub and
    atpota.to/blog, Leaflet emails every subscriber, and the exact announcement.
    A whole-message yes to that message, by the same rules as an announcement's,

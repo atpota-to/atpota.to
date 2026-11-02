@@ -562,6 +562,30 @@ export async function resolveHandleForDid(did, { timeoutMs = 8000 } = {}) {
   return handle;
 }
 
+/**
+ * The Bluesky accounts behind some handles, for tagging them in an announcement:
+ * Map(handle -> { did, handle, displayName }). One public AppView call for up to
+ * 25. A handle that doesn't resolve, or whose account no longer verifies it
+ * (handle.invalid), is left out. Throws only when the AppView can't be read.
+ * Never cached: each proposal is checked against the network as it is.
+ */
+export async function profilesByHandle(handles, { timeoutMs = 8000 } = {}) {
+  const out = new Map();
+  if (!handles.length) return out;
+  const url = new URL('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfiles');
+  for (const h of handles.slice(0, 25)) url.searchParams.append('actors', h);
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`the appview answered ${res.status}`);
+  const body = await res.json();
+  for (const p of Array.isArray(body?.profiles) ? body.profiles : []) {
+    const handle = typeof p?.handle === 'string' ? p.handle.toLowerCase() : null;
+    if (!handle || handle === 'handle.invalid' || typeof p.did !== 'string' || !/^did:(plc|web):/.test(p.did)) continue;
+    const name = typeof p.displayName === 'string' ? p.displayName.replace(/\s+/g, ' ').trim().slice(0, 64) : '';
+    out.set(handle, { did: p.did, handle, displayName: name || null });
+  }
+  return out;
+}
+
 // Chat is a separate service; the PDS signs/proxies these requests with the
 // service DID. The app password remains on the droplet, never in the agent.
 async function chatRequest(nsid, { params, body } = {}) {
