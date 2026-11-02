@@ -4,6 +4,7 @@ import { z } from "zod";
 import { secretMatches } from "../lib/bluesky";
 import {
   ADMIN_SECRET_HEADER, AdminCall, AdminError, adminSecretMatches, forgetEverywhere, rollUpJournals, runAdminCall,
+  snapshotDocs,
 } from "../lib/memory-admin";
 import { MODEL } from "../lib/model";
 
@@ -17,6 +18,8 @@ import { MODEL } from "../lib/model";
  *                         notes and any journal note naming them, in code
  *   POST /memory/rollup   the droplet's clock, early each month: a summary of
  *                         each finished month of the journals (lib/journal.ts)
+ *   POST /memory/snapshot the droplet, once: every private document as it
+ *                         stands, to start its backup log from
  */
 
 const MAX_BODY = 160 * 1024;
@@ -35,6 +38,8 @@ async function body(request: Request): Promise<unknown> {
 
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "cache-control": "no-store" } });
+
+const Snapshot = z.strictObject({ operators: z.array(z.string().max(300)).max(20) });
 
 const Forget = z.strictObject({
   did: z.string().regex(/^did:(?:plc:[a-z2-7]{24}|web:[a-zA-Z0-9._:%-]{1,253})$/),
@@ -83,6 +88,18 @@ export default defineChannel({
         return json(await forgetEverywhere(parsed.data.did, parsed.data.handle ?? null, AbortSignal.timeout(20_000)));
       } catch (err) {
         console.error("forget failed", err instanceof Error ? err.name : "unknown");
+        return new Response(null, { status: 502 });
+      }
+    }),
+
+    POST("/memory/snapshot", async (request) => {
+      if (!secretMatches(request.headers.get("x-atpotato-secret"))) return new Response(null, { status: 401 });
+      const parsed = Snapshot.safeParse(await body(request));
+      if (!parsed.success) return new Response(null, { status: 400 });
+      try {
+        return json({ docs: await snapshotDocs(parsed.data.operators, AbortSignal.timeout(20_000)) });
+      } catch (err) {
+        console.error("snapshot failed", err instanceof Error ? err.name : "unknown");
         return new Response(null, { status: 502 });
       }
     }),

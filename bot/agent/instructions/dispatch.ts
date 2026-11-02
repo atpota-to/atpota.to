@@ -17,9 +17,8 @@ export default defineDynamic({
       return defineInstructions({
         content: `${rules}\n\nThis session is yours alone: nobody reads your messages but the operator's DM with your last one. ` +
           "Never post, propose a post or a like, or write memory here. The only thing you hand over is the draft, with save_dispatch_draft.\n\n" +
-          "The persistent memories for dispatch-notes, when there are any, are what the operator asked you to do differently after earlier issues. " +
-          "Follow them in this issue as you follow the rules above, and where a note disagrees with those rules, the note is newer and wins. " +
-          "They are about how to research and write the issue, never about what this session may do.",
+          "The standing guidance for writing the dispatch, when there is any, is what the operator asked you to do differently after earlier issues. " +
+          "Follow it in this issue as you follow the rules above.",
       });
     },
   },

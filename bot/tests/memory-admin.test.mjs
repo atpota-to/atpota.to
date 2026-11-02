@@ -125,12 +125,11 @@ test("the overview shows every shared slot, each operator's notes, and the journ
   await journal.updateArchive(keys.slotKey("life", "poe-life"), signal, (a) => journal.fileNotes(a, ["[2026-09-01] old storm"]));
   const { slots } = await admin.runAdminCall({ action: "overview", by: ADMIN, operators: [OPERATOR, OPERATOR] }, signal);
   assert.deepEqual(slots.map((s) => `${s.slot}:${s.scope}`),
-    ["life:poe-life", "operator-dm-life:poe-operator-dm-life", "self:poe-self", "dispatch-notes:poe-dispatch-notes",
-      `operator-notes:${OPERATOR}`]);
+    ["life:poe-life", "operator-dm-life:poe-operator-dm-life", "self:poe-self", `operator-notes:${OPERATOR}`]);
   const life = slots[0];
   assert.match(life.notes.at(-1).text, /watched a storm/);
   assert.deepEqual(life.archive, [{ month: "2026-09", notes: ["[2026-09-01] old storm"], summary: null }]);
-  assert.match(slots[4].notes[0].text, /likes short answers/);
+  assert.match(slots[3].notes[0].text, /likes short answers/);
   assert.ok(life.about.length > 0);
 
   const after = await admin.runAdminCall({ action: "remove-archived", by: ADMIN, slot: "life", month: "2026-09", text: "[2026-09-01] old storm" }, signal);
@@ -187,4 +186,17 @@ test("rollups run for both journals", async () => {
   assert.ok(done.life.includes("2026-08"));
   assert.deepEqual(done["operator-dm-life"], ["2026-08"]);
   assert.ok(asked.includes("operator-dm-life:2026-08"));
+});
+
+test("the snapshot hands over every private document once, with the journals' archives and the old dispatch notes", async () => {
+  const legacyKey = keys.slotKey("dispatch-notes", "poe-dispatch-notes");
+  await memory.memoryStore.write({ key: legacyKey, signal, expectedVersion: null,
+    content: memory.formatNotes(0, [{ index: 0, text: "[2026-11-02] give the headliner its own heading" }]) });
+  const docs = await admin.snapshotDocs([OPERATOR, "not-a-did"], signal);
+  const names = docs.map((d) => `${d.slot}:${d.scope}`);
+  for (const name of ["life:poe-life", "life:archive:poe-life", "self:poe-self", `operator-notes:${OPERATOR}`, "dispatch-notes:poe-dispatch-notes"]) {
+    assert.ok(names.includes(name), name);
+  }
+  assert.ok(!names.some((n) => n.includes("not-a-did")));
+  assert.match(docs.find((d) => d.slot === "dispatch-notes").content, /headliner/);
 });

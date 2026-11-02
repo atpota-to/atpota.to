@@ -47,12 +47,17 @@ const SHARED_SCOPES = {
   life: "poe-life",
   "operator-dm-life": "poe-operator-dm-life",
   self: "poe-self",
-  "dispatch-notes": "poe-dispatch-notes",
 } as const;
+/**
+ * The dispatch notes slot of 2026-11-02 morning, before guidance: no longer a
+ * slot, but its document is handed over once in the snapshot, and the droplet
+ * copies its notes into guidance (mentions/src/memory-digest.js seedMemoryLog).
+ */
+const LEGACY_DISPATCH_NOTES = { slot: "dispatch-notes", scope: "poe-dispatch-notes" } as const;
 const JOURNALS = new Set<string>(["life", "operator-dm-life"]);
 
 const Did = z.string().regex(/^did:(?:plc:[a-z2-7]{24}|web:[a-zA-Z0-9._:%-]{1,253})$/);
-const Slot = z.enum(["life", "operator-dm-life", "self", "dispatch-notes", "operator-notes", "person"]);
+const Slot = z.enum(["life", "operator-dm-life", "self", "operator-notes", "person"]);
 type SlotName = z.infer<typeof Slot>;
 const Where = { slot: Slot, did: Did.optional(), by: Did };
 const NoteText = z.string().trim().min(1).max(2000);
@@ -275,6 +280,29 @@ export async function forgetEverywhere(did: string, handle: string | null, signa
     removed += fromArchive;
   }
   return { ...notes, journalNotesRemoved: removed };
+}
+
+/**
+ * Every private document as it stands, for the droplet to seed its backup log
+ * with once: the shared slots, the journals' archives, each operator's notes,
+ * and the old dispatch notes. Person notes the droplet already has.
+ */
+export async function snapshotDocs(operators: readonly string[], signal: AbortSignal): Promise<{ slot: string; scope: string; content: string }[]> {
+  const docs: { slot: string; scope: string; content: string }[] = [];
+  const places = [
+    ...(Object.keys(SHARED_SCOPES) as SlotName[]).map((slot) => placeOf(slot, undefined)),
+    ...[...new Set(operators)].filter((did) => Did.safeParse(did).success).map((did) => placeOf("operator-notes", did)),
+    { slot: LEGACY_DISPATCH_NOTES.slot, key: slotKey(LEGACY_DISPATCH_NOTES.slot, LEGACY_DISPATCH_NOTES.scope), label: LEGACY_DISPATCH_NOTES.scope, did: null },
+  ];
+  for (const place of places) {
+    const doc = await memoryStore.read({ key: place.key, signal });
+    if (doc) docs.push({ slot: place.slot, scope: place.label, content: doc.content });
+    if (JOURNALS.has(place.slot)) {
+      const archive = await memoryStore.read({ key: archiveKey(place.key), signal });
+      if (archive) docs.push({ slot: `${place.slot}:archive`, scope: place.label, content: archive.content });
+    }
+  }
+  return docs;
 }
 
 /** Sum up each finished month of both journals that needs it. */

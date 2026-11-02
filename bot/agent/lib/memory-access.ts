@@ -130,11 +130,6 @@ export const MEMORY_ACCESS = {
     recall: { "operator-dm": ["operator"] },
     write: { "operator-dm": ["operator"] },
   },
-  "dispatch-notes": {
-    about: "the operator's feedback on writing the dispatch (moving to the guidance store)",
-    recall: { dispatch: ["service"], "operator-dm": ["operator"] },
-    write: { "operator-dm": ["operator"] },
-  },
   self: {
     about: "lasting facts about Poe, safe to recall in public",
     recall: "everywhere",
