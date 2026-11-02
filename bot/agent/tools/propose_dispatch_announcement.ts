@@ -10,14 +10,15 @@ export default defineTool({
   description:
     "Only in a private DM with the operator, when they ask you to announce, share or post about an " +
     "issue of poe's atmosphere dispatch. Call it first with just the issue to read its title, " +
-    "description and opening, then again with the post you would write. This proposes; it never posts. " +
-    "The operator sees your exact post under your reply and it goes out only if they answer yes. " +
-    "If it returns a reason, fix the post and call again.",
+    "description and opening, then again with the post you would write. The post may tag up to six accounts " +
+    "the issue features, by their full @handle (@tangled.org); tag only an account you've checked is theirs, " +
+    "never a guessed handle. This proposes; it never posts. The operator sees your exact post, and who it tags, " +
+    "under your reply and it goes out only if they answer yes. If it returns a reason, fix the post and call again.",
   inputSchema: z.object({
     issue: z.string().min(1).max(600)
       .describe('"latest" for the newest issue, or the issue link or record key the operator gave'),
     text: z.string().max(3000).optional()
-      .describe("The announcement post, under 280 characters, no @handles and no link (the card links the issue). Leave out to look the issue up."),
+      .describe("The announcement post, under 280 characters, no link (the card links the issue), @handles only for accounts you checked. Leave out to look the issue up."),
   }),
   async execute(input, ctx) {
     const caller = ctx.session.auth.current;
@@ -40,6 +41,7 @@ export default defineTool({
       const body = await res.json().catch(() => null) as {
         accepted?: boolean; reason?: string; note?: string; post?: string; text?: string;
         issue?: { title: string; description: string; url: string; publishedAt: string | null; excerpt: string };
+        mentions?: { handle: string; displayName: string | null }[];
       } | null;
       if (res.status === 429) return { proposed: false, reason: "too many tries for this message; tell the operator what went wrong" };
       if (!res.ok || !body) return { proposed: false, reason: "service unavailable" };
@@ -50,6 +52,7 @@ export default defineTool({
         ...(body.post ? { announcedPost: body.post } : {}),
         ...(body.issue ? { issue: body.issue } : {}),
         ...(body.accepted === true ? { text: body.text } : {}),
+        ...(body.accepted === true && body.mentions?.length ? { mentions: body.mentions } : {}),
       };
     } catch {
       return { proposed: false, reason: "service unavailable" };

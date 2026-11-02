@@ -98,6 +98,29 @@ test('handles are detected, email addresses are not', () => {
   assert.deepEqual(detectHandles('(@wrapped.bsky.social)'), ['wrapped.bsky.social']);
 });
 
+import { findHandles, mentionFacets } from '../src/richtext.js';
+
+test('a mention facet covers the @ and the handle as written, in bytes, after emoji', () => {
+  const text = '🥔 big week (◕‿◕) thanks @Tangled.org. and @mu.social!';
+  const slice = (f) => Buffer.from(text).subarray(f.index.byteStart, f.index.byteEnd).toString();
+  assert.deepEqual(findHandles(text).map((h) => h.handle), ['tangled.org', 'mu.social']);
+  const facets = mentionFacets(text, [
+    { handle: 'tangled.org', did: 'did:plc:tangled' },
+    { handle: 'MU.social', did: 'did:plc:mu' },
+  ]);
+  assert.deepEqual(facets.map((f) => [slice(f), f.features]), [
+    ['@Tangled.org', [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:tangled' }]],
+    ['@mu.social', [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:mu' }]],
+  ]);
+});
+
+test('only the handles named get a mention facet; the rest stay text', () => {
+  assert.deepEqual(mentionFacets('hi @a.example and @b.example', [{ handle: 'b.example', did: 'did:plc:b' }])
+    .map((f) => f.index), [{ byteStart: 18, byteEnd: 28 }]);
+  assert.deepEqual(mentionFacets('hi @a.example', []), []);
+  assert.deepEqual(mentionFacets('hi @a.example', null), []);
+});
+
 // --- expandLinks: the agent gets the URL, not the display form -----------------
 
 import { expandLinks, shortenLinks } from '../src/richtext.js';

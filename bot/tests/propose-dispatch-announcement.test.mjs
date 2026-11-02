@@ -42,6 +42,15 @@ test("proposes for the authenticated DM, never for a model-supplied one", async 
   } finally { f.restore(); }
 });
 
+test("the accounts a proposal tags come back so Poe can check them", async () => {
+  const mentions = [{ handle: "tangled.org", displayName: "Tangled" }];
+  const f = withFetch(() => Response.json({ accepted: true, issue, text: "hi @tangled.org", mentions, note: "proposed" }));
+  try {
+    const result = await tool.execute({ issue: "latest", text: "hi @tangled.org" }, ctx(dmCaller));
+    assert.deepEqual(result, { proposed: true, note: "proposed", issue, text: "hi @tangled.org", mentions });
+  } finally { f.restore(); }
+});
+
 test("without text it only looks the issue up", async () => {
   const f = withFetch(() => Response.json({ accepted: false, reason: "nothing proposed yet", issue }));
   try {

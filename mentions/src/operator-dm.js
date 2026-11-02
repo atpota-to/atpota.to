@@ -437,7 +437,7 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
       if (proposal && decideProposal(proposal.id, answer, row.message_id)) {
         if (answer === 'yes') {
           recordCommand(row.message_id, row.operator_did,
-            { kind: 'announce', rkey: proposal.document_rkey, text: proposal.text });
+            { kind: 'announce', rkey: proposal.document_rkey, text: proposal.text, mentions: proposal.mentions });
           db.prepare(`UPDATE operator_dm SET status = 'command', draft_text = NULL, shared_text = NULL, updated_at = ?
             WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
           startCommand(row.message_id, api, dispatchDeps);

@@ -97,18 +97,48 @@ export function linkFacets(text) {
   }));
 }
 
-// @handle-shaped tokens in a draft. The poster never builds mention facets, so
-// one of these notifies nobody — but it still reads as a tag, and a draft that
-// tags a third party is the ugliest thing a prompt injection can talk the model
-// into. The outbound gate rejects on this.
+// @handle-shaped tokens in a draft. The reply poster never builds mention
+// facets, so one of these in a reply notifies nobody — but it still reads as a
+// tag, and a reply that tags a third party is the ugliest thing a prompt
+// injection can talk the model into. The outbound gate rejects on this.
+//
+// The one place a tag is real is a dispatch announcement, which the operator
+// approves by hand: the droplet resolves each handle when Poe proposes it, the
+// operator is shown who gets tagged, and only those accounts get a mention
+// facet (mentionFacets, dispatch.js checkMentions).
 const HANDLE_RE = /(^|[\s(\[{<"'])@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)/gi;
 
-export function detectHandles(text) {
+/**
+ * Every @handle in `text` and where it is: [{ handle, index, byteStart, byteEnd }].
+ * `handle` is lowercased and has no @; the span covers the @ and the handle as
+ * written, in UTF-8 bytes like a facet's.
+ */
+export function findHandles(text) {
   const out = [];
   HANDLE_RE.lastIndex = 0;
   let m;
-  while ((m = HANDLE_RE.exec(text)) !== null) out.push(m[2].toLowerCase());
+  while ((m = HANDLE_RE.exec(text)) !== null) {
+    const index = m.index + m[1].length;
+    const byteStart = utf8Offset(text, index);
+    out.push({ handle: m[2].toLowerCase(), index, byteStart, byteEnd: byteStart + byteLength(`@${m[2]}`) });
+  }
   return out;
+}
+
+export function detectHandles(text) {
+  return findHandles(text).map((h) => h.handle);
+}
+
+/**
+ * Mention facets for the @handles in `text` that `mentions` ([{ handle, did }])
+ * names, at the DID each was resolved to. Any other @handle stays plain text.
+ */
+export function mentionFacets(text, mentions) {
+  const dids = new Map((mentions ?? []).map((m) => [String(m.handle).toLowerCase(), m.did]));
+  return findHandles(text).filter((h) => dids.has(h.handle)).map((h) => ({
+    index: { byteStart: h.byteStart, byteEnd: h.byteEnd },
+    features: [{ $type: 'app.bsky.richtext.facet#mention', did: dids.get(h.handle) }],
+  }));
 }
 
 /**
