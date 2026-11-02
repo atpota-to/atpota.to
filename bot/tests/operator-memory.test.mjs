@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 
+const OUT = new URL("../.eve/channel-kind-test/", import.meta.url);
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig", "agent/lib/channel-kind.ts",
-  "agent/lib/person-scope.ts", "agent/lib/website.ts", "agent/lib/dispatch-draft.ts",
-  "--outDir", ".eve/channel-kind-test", "--module", "esnext", "--moduleResolution", "bundler",
+  "agent/lib/person-scope.ts", "agent/lib/website.ts", "agent/lib/dispatch-draft.ts", "agent/lib/memory-access.ts",
+  "--outDir", ".eve/channel-kind-test", "--rootDir", "agent/lib", "--module", "esnext", "--moduleResolution", "bundler",
   "--target", "es2022", "--skipLibCheck", "--types", "node"],
   { cwd: new URL("..", import.meta.url) });
-const channelKind = await import("../.eve/channel-kind-test/channel-kind.js");
-const personScope = await import("../.eve/channel-kind-test/person-scope.js");
-const website = await import("../.eve/channel-kind-test/website.js");
-const dispatchDraft = await import("../.eve/channel-kind-test/dispatch-draft.js");
+// Bundler-style imports ("./channel-kind") need their extension under plain node.
+for (const file of readdirSync(OUT).filter((f) => f.endsWith(".js"))) {
+  const path = new URL(file, OUT);
+  writeFileSync(path, readFileSync(path, "utf8").replaceAll(/from "(\.\/[^"]+?)(?<!\.js)"/g, 'from "$1.js"'));
+}
+const channelKind = await import(new URL("channel-kind.js", OUT));
+const personScope = await import(new URL("person-scope.js", OUT));
+const website = await import(new URL("website.js", OUT));
+const dispatchDraft = await import(new URL("dispatch-draft.js", OUT));
+const memoryAccess = await import(new URL("memory-access.js", OUT));
 
 // Exercise each authored memory definition with a small stand-in for eve's
 // memory lifecycle. No Vercel credentials, PDS, or DM transport are involved.
@@ -40,6 +47,8 @@ function loadSlot(file) {
         privateFileMemory: provider,
         publishedFileMemory: provider,
       };
+      if (name === "../lib/journal") return { journalMemory: provider };
+      if (name === "../lib/memory-access") return memoryAccess;
       if (name === "../lib/channel-kind") return channelKind;
       if (name === "../lib/person-scope") return personScope;
       if (name === "../lib/website") return website;
@@ -93,7 +102,8 @@ test("private DM journal can save an ordinary DM but cannot be opened publicly",
 test("stable self notes require an operator; public life journal is read-only in DMs", async () => {
   const self = loadSlot("self");
   const life = loadSlot("life");
-  assert.equal(self.scope, "poe-self");
+  assert.equal(self.scope(dm()), "poe-self");
+  assert.equal(self.scope(publicTurn(false)), "poe-self");
   assert.equal((await self.provider.tools(dm())).save_memory, true);
   assert.equal((await self.provider.tools(publicTurn(true))).save_memory, true);
   assert.equal(await self.provider.tools(publicTurn(false)), null);
@@ -167,7 +177,7 @@ test("an anonymous website visitor gets no memory beyond public-safe self and jo
     assert.equal(loadSlot("life").scope(visitor), "poe-life");
     assert.equal(await loadSlot("life").provider.tools(visitor), null);
     const self = loadSlot("self");
-    assert.equal(self.scope, "poe-self");
+    assert.equal(self.scope(visitor), "poe-self");
     assert.equal(await self.provider.tools(visitor), null);
   }
 });
@@ -232,5 +242,78 @@ test("each slot opens for its own channel under either kind spelling, and never 
     assert.equal(loadSlot("life").scope(publicTurn(false, kind)), null, kind);
     assert.equal(loadSlot("person").scope(publicTurn(false, kind)), null, kind);
     assert.equal(await loadSlot("self").provider.tools(publicTurn(true, kind)), null, kind);
+  }
+});
+
+// Every arena and every kind of caller in it, as each channel authenticates them.
+const plcDid = "did:plc:abcdefghijklmnopqrstuvwx";
+const CALLERS = {
+  "bluesky/stranger": { channel: { kind: "channel:bluesky" }, session: { auth: { current: {
+    authenticator: "atpotato-droplet", principalType: "user", principalId: plcDid, attributes: { operator: "false" } } } } },
+  "bluesky/person": publicTurn(false),
+  "bluesky/operator": publicTurn(true),
+  "website/stranger": { channel: { kind: "channel:website" }, session: { auth: { current: {
+    authenticator: "atpotato-website", principalType: "anonymous", principalId: "website-visitor",
+    attributes: { conversationId: "c".repeat(43), path: "/" } } } } },
+  "website/person": signedIn(),
+  "operator-dm/operator": dm(),
+  "dispatch/service": drafting(),
+  "weather/service": { channel: { kind: "channel:weather" }, session: { auth: { current: {
+    authenticator: "atpotato-droplet-weather", principalType: "service", principalId: "atpotato-weather-watch",
+    attributes: { momentId: "m1", kind: "storm" } } } } },
+  // Nobody: a forged DM, another channel's authenticator, an unknown channel.
+  "none/forged-dm": (() => { const ctx = dm(); ctx.session.auth.current.attributes.operatorDid = otherDid; return ctx; })(),
+  "none/wrong-authenticator": drafting("channel:dispatch", "atpotato-droplet-dm"),
+  "none/unknown": { channel: { kind: "unknown" }, session: { auth: { current: null } } },
+};
+
+test("callerOf names the arena and trust each channel vouched for", () => {
+  for (const [name, ctx] of Object.entries(CALLERS)) {
+    const [arena, trust] = name.split("/");
+    const caller = memoryAccess.callerOf(ctx);
+    if (arena === "none") {
+      assert.deepEqual(caller, { arena: null, trust: "stranger", did: null }, name);
+    } else {
+      assert.equal(caller.arena, arena, name);
+      assert.equal(caller.trust, trust, name);
+    }
+  }
+});
+
+function allowed(rule, name) {
+  if (rule === "nowhere") return false;
+  if (rule === "everywhere") return true;
+  const [arena, trust] = name.split("/");
+  return rule[arena]?.includes(trust) ?? false;
+}
+
+test("every memory slot opens exactly where its row in MEMORY_ACCESS says, for exactly those callers", async () => {
+  const files = readdirSync(new URL("../agent/memory/", import.meta.url)).map((f) => f.replace(/\.ts$/, ""))
+    .filter((f) => f !== "presence");
+  assert.deepEqual(files.sort(), Object.keys(memoryAccess.MEMORY_ACCESS).sort(),
+    "each memory file has a row, and each row a file (presence is recall-only and has neither)");
+  for (const [slotName, access] of Object.entries(memoryAccess.MEMORY_ACCESS)) {
+    const slot = loadSlot(slotName);
+    for (const [name, ctx] of Object.entries(CALLERS)) {
+      const recalled = slot.scope(ctx) !== null;
+      const written = (await slot.provider.tools(ctx)) !== null;
+      assert.equal(recalled, allowed(access.recall, name), `${slotName} recall for ${name}`);
+      assert.equal(written, recalled && allowed(access.write, name), `${slotName} write for ${name}`);
+    }
+  }
+});
+
+test("each slot's storage name is pinned to the name it has today, so its key is eve's own", async () => {
+  const { defaultNamespace } = await import("eve/memory");
+  for (const slotName of Object.keys(memoryAccess.MEMORY_ACCESS)) {
+    const source = readFileSync(new URL(`../agent/memory/${slotName}.ts`, import.meta.url), "utf8");
+    assert.match(source, new RegExp(`namespace: pinnedNamespace\\("${slotName}"\\)`), `${slotName} pins its own name`);
+    for (const env of [{ appRoot: "/var/task", node: "__root__" }, { appRoot: "/x", node: "child" }]) {
+      assert.equal(memoryAccess.pinnedNamespace(slotName)({ ...env, slot: slotName }),
+        defaultNamespace({ ...env, slot: slotName }));
+      // A renamed file would arrive under another name and still land on the old key.
+      assert.equal(memoryAccess.pinnedNamespace(slotName)({ ...env, slot: "renamed" }),
+        defaultNamespace({ ...env, slot: slotName }));
+    }
   }
 });
