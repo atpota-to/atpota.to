@@ -16,7 +16,7 @@
 
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { config, killSwitchEngaged } from './config.js';
+import { config, isAdmin, killSwitchEngaged } from './config.js';
 import { logger } from './logger.js';
 import * as db from './db.js';
 import { postReply } from './poster.js';
@@ -30,6 +30,9 @@ import { receiveLikeProposal } from './likes.js';
 import { receiveWeatherDraft, handleWeatherDraft } from './weather-posts.js';
 import { handlePostProposal } from './operator-posts.js';
 import { handleDraftCall, receiveDraftDone, previewFor, sendOutbox } from './dispatch-drafts.js';
+import { handleAdmin } from './admin.js';
+import { GuidanceError, addGuidance, getGuidance, guidanceForAgent, retireGuidance } from './guidance.js';
+import { logMemoryVersion, validateLog } from './memory-log.js';
 
 // A whole issue of the dispatch, as markdown, is the biggest thing sent here.
 const MAX_BODY_BYTES = 256 * 1024;
@@ -257,6 +260,15 @@ async function handleMemory(req, res) {
   } catch (err) {
     return send(res, err.tooLarge ? 413 : 400, { error: 'BadRequest' });
   }
+  // A version of a private memory for the backup log (memory-log.js).
+  if (parsed && typeof parsed === 'object' && 'log' in parsed) {
+    const log = validateLog(parsed.log);
+    if (!log.ok) return send(res, 400, { error: 'BadRequest', detail: log.detail });
+    logMemoryVersion(log.value);
+    return send(res, 202, { ok: true });
+  }
+  // Guidance: read by every turn, written by Poe in an operator DM (guidance.js).
+  if (parsed && typeof parsed === 'object' && 'guidance' in parsed) return handleGuidance(parsed, res);
   const v = validateMemory(parsed);
   if (!v.ok) return send(res, 400, { error: 'BadRequest', detail: v.detail });
 
@@ -269,6 +281,41 @@ async function handleMemory(req, res) {
     publishMemory(v.value.did, { api, didResolves: async (did) => !!(await api.resolveHandleForDid(did)) })
       .catch((err) => logger.error('memory publish threw', { did: v.value.did, err }));
   }
+}
+
+/**
+ * { guidance: "list" } answers every active item for the agent to sort by
+ * arena. { guidance: "add" | "remove" } comes from Poe in a DM it is answering
+ * right now (dmId and operatorDid, checked like the draft desk's), when the
+ * operator asked it to remember or drop a rule. Poe can't take down a lesson:
+ * those are an admin's, and public.
+ */
+function handleGuidance(body, res) {
+  if (body.guidance === 'list') return send(res, 200, { items: guidanceForAgent() });
+  const dm = typeof body.dmId === 'string' && body.dmId.length <= 300
+    ? db.db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(body.dmId) : null;
+  if (!dm || dm.operator_did !== body.operatorDid || !isAdmin(dm.operator_did) || dm.status !== 'dispatched') {
+    return send(res, 409, { error: 'NotAnsweringThatDm' });
+  }
+  try {
+    if (body.guidance === 'add') {
+      const { id, added } = addGuidance({
+        kind: 'rule', text: body.text, arenas: body.arenas, authorDid: dm.operator_did, sourceUri: `dm:${dm.message_id}`,
+      });
+      return send(res, 200, { id, added, item: getGuidance(id) });
+    }
+    if (body.guidance === 'remove') {
+      const item = getGuidance(Number(body.id));
+      if (!item || item.removedAt) return send(res, 404, { error: 'NotFound' });
+      if (item.kind === 'lesson') return send(res, 403, { error: 'LessonsAreAnAdminsToRetire' });
+      retireGuidance(item.id);
+      return send(res, 200, { id: item.id, removed: true });
+    }
+  } catch (err) {
+    if (err instanceof GuidanceError) return send(res, 400, { error: 'BadRequest', detail: err.message });
+    throw err;
+  }
+  return send(res, 400, { error: 'BadRequest', detail: 'guidance must be list, add or remove' });
 }
 
 export function startCallbackServer({ stats }) {
@@ -301,6 +348,13 @@ export function startCallbackServer({ stats }) {
         'cache-control': 'no-store', 'x-robots-tag': 'noindex',
       });
       return res.end(payload);
+    }
+    // The admin page's API (admin.js): its own secret and the admin's DID, never this one.
+    if (req.url?.startsWith('/admin/')) {
+      return handleAdmin(req, res).catch((err) => {
+        logger.error('admin handler threw', { err: err.message });
+        if (!res.headersSent) send(res, 500, { error: 'Internal' });
+      });
     }
     if (req.method !== 'POST') return send(res, 405, { error: 'MethodNotAllowed' });
 

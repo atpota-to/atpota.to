@@ -13,20 +13,15 @@ import {
 import {
   attachPostProposal, livePostProposalFor, decidePostProposal, publishPostProposal,
 } from './operator-posts.js';
+import { addGuidance, isGuidanceDm, parseGuidanceDm } from './guidance.js';
 import {
   attachDraftReply, currentDraft, decideCorrection, decidePublish, liveCorrectionFor, livePublishFor, parseDraftCommand,
   runConfirmed, runDraftCommand,
 } from './dispatch-drafts.js';
 
+// "style:" DMs were kept in a style_feedback table until 2026-11-02; they are
+// guidance now (guidance.js), and db.js copied the old rows in.
 db.exec(`
-  CREATE TABLE IF NOT EXISTS style_feedback (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    text TEXT NOT NULL,
-    author_did TEXT NOT NULL,
-    source_uri TEXT NOT NULL UNIQUE,
-    added_at TEXT NOT NULL,
-    removed_at TEXT
-  );
   CREATE TABLE IF NOT EXISTS operator_dm_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     started_at TEXT NOT NULL
@@ -175,10 +170,16 @@ export function acceptMessage(convo, message, cutoff) {
       message.id, convo.id, message.sender.did, message.sentAt, convo.status === 'request' ? 'request' : null, nowIso(),
     ).changes > 0;
   if (inserted) {
-    const match = /^style:\s*(\S[\s\S]*)$/i.exec(message.text.trim());
-    if (match) db.prepare(`INSERT INTO style_feedback (text, author_did, source_uri, added_at)
-      VALUES (?, ?, ?, ?)`).run(match[1].slice(0, 600), message.sender.did,
-        `dm:${message.id}`, nowIso());
+    // "style: ...", "dispatch: ..." and the like are standing guidance, saved
+    // here, in code, before the agent ever reads the DM.
+    const guidance = parseGuidanceDm(message.text);
+    if (guidance) {
+      try {
+        addGuidance({ ...guidance, authorDid: message.sender.did, sourceUri: `dm:${message.id}`, oncePerSource: true });
+      } catch (err) {
+        logger.warn('guidance DM not saved', { error: err.message });
+      }
+    }
   }
   return inserted;
 }
@@ -314,7 +315,7 @@ async function dispatchDm(row, fetcher = fetch) {
     body: JSON.stringify({
       dmId: row.message_id, operatorDid: row.operator_did,
       text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
-      guidance: /^(?:remember|style):\s*\S/i.test(row.text),
+      guidance: isGuidanceDm(row.text),
       ...drafts,
     }),
     signal: ac,
