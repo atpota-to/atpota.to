@@ -282,6 +282,8 @@ describe('/api/atmosphere', () => {
     const res = await pending;
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE_OK);
+    // aturi.to's explorer reads it from the browser
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const body = (await res.json()) as { perSecond: Record<string, number>; condition: string };
     expect(Object.keys(body.perSecond).sort()).toEqual(['follows', 'likes', 'posts', 'reposts']);
     expect(body.condition).toBe('calm');
@@ -303,6 +305,7 @@ describe('/api/atmosphere', () => {
     const res = await bad;
     expect(res.status).toBe(503);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('only takes GET and HEAD', async () => {
