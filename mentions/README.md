@@ -469,9 +469,14 @@ within one session, so the oldest turn still waiting gets the next draft. This
 is inference from the agent's behaviour rather than a guarantee from the
 contract; a postUri in the callback would make it exact.
 
-**`forget me` cannot wipe agent memory yet.** The denylist half works and is
-tested. The memory half logs a warning recording the obligation, because agent
-memory does not exist yet.
+**`forget me` wipes agent memory in code, but journals are matched by name.**
+The droplet denylists the author, deletes the public record and its own copy,
+then calls the agent's `/memory/forget`, which empties the person's notes and
+removes every journal note (archived ones too) that names their DID or handle,
+and finally drops every backup-log version that does. A journal note that
+describes someone without naming them is not found; Poe's instructions keep
+people out of the journals, and the farewell turn still asks the model to clear
+anything left.
 
 **The agent contract is implemented from the brief, not read from the source.**
 `bot/agent/channels/bluesky.ts` and `bot/agent/lib/bluesky.ts` are not on this
@@ -586,10 +591,11 @@ A chat message holds 1000 graphemes and 10000 bytes. A longer reply is sent as u
 the fourth the reply ends with an ellipsis. `parts_sent` records how far a reply got: a part
 that fails leaves the row in `sending` for review, like a single send, and is never resent.
 An operator-confirmed fact about Poe may go into shared self memory only if it
-is safe to recall in public conversation. Prefix `style:` to store a private,
-standing voice note in droplet SQLite; future public Bluesky turns receive up
-to 30 active notes. The notes are never published as PDS records. Private
-memory uses the bot's Vercel Blob store; Eve also keeps DM session history.
+is safe to recall in public conversation. A DM starting `style:`, `dispatch:`,
+`weather:`, `website:` or `bluesky:` is saved as standing guidance, in code,
+before Poe reads it (see [Poe's memory](#poes-memory-guidance-the-backup-log-the-digest-and-the-admin-page)).
+Private memory uses the bot's Vercel Blob store, with a backup of every version
+here; Eve also keeps DM session history.
 Inbound message text and drafts are held in local SQLite. Anyone with access
 to those stores can read them. The DM bridge does not log message text; review
 Vercel and Eve telemetry separately before sending sensitive material.
@@ -795,13 +801,11 @@ operator: "yes" ──► create the document in atpota.to's repo ──► anno
 
 **What Poe learns from the edits.** Feedback in a DM on how issues should be
 written ("lead the weather with the link", "check the code before framing an
-argument") goes in the agent's `dispatch-notes` memory slot
-(`bot/agent/memory/dispatch-notes.ts`), when the operator asks Poe to remember it.
-Every drafting session recalls those notes, and so do operator DMs. Only a
-verified operator's DM can change them. They live in the agent's Vercel Blob
-store, not here, and are never published. When a few pile up, fold them into
-`bot/agent/skills/dispatch-issue.md` (or `dispatch-weather.md`) and ask Poe to
-remove them.
+argument") becomes standing guidance for the `dispatch` arena: Poe saves it with
+`save_guidance` when the operator asks it to remember, or the operator DMs
+`dispatch: ...` directly. Every drafting session follows it. When a few pile up,
+fold them into `bot/agent/skills/dispatch-issue.md` (or `dispatch-weather.md`)
+and retire them on the admin page.
 
 Publishing needs `DISPATCH_PUBLISHER_APP_PASSWORD`. Without it the drafts are
 still written and reviewed, and Poe tells the operator it can't publish. The kill
@@ -979,6 +983,41 @@ and `systemctl restart atpotato-mentions`; `PROFILE_LOOK=dry-run` keeps working
 each look out and logging it without writing anything. The kill switch stops it
 at once, without a restart.
 
+## Poe's memory: guidance, the backup log, the digest and the admin page
+
+Poe's memory lives in the agent (`bot/agent/memory/`, in Vercel Blob); who may
+read and write each slot, in which arena, is one table,
+`bot/agent/lib/memory-access.ts`. The droplet keeps four things beside it:
+
+- **Guidance** (`src/guidance.js`, the `guidance` table): standing rules for
+  Poe, each naming the arenas it applies to (`bluesky`, `website`, `weather`,
+  `dispatch`, `operator-dm`). Lessons from an admin's `remember:` post (public,
+  published as `to.atpota.poe.lesson` records, `npm run lessons`), private
+  `style:` voice notes, and rules: a DM starting `dispatch:`, `weather:`,
+  `website:` or `bluesky:`, one Poe saved with `save_guidance` when the operator
+  asked it to remember, or one added on the admin page. The agent reads them
+  all through `POST /memory` (`{ guidance: "list" }`) and gives every turn the
+  ones for its arena, as instructions. Until 2026-11-02 lessons and style notes
+  were two tables sent only with Bluesky replies; both were copied in.
+- **The backup log** (`src/memory-log.js`, `memory_versions`): every version
+  of every private memory, handed over by the agent on each write
+  (`POST /memory`, `{ log: ... }`), and of person notes from `storeMemory`.
+  Kept 180 days, always keeping each document's newest. Forgetting someone
+  drops every version that names them. It was seeded once from the agent's
+  `/memory/snapshot`, which also moved the old dispatch-notes slot into guidance.
+- **The weekly digest** (`src/memory-digest.js`): at `MEMORY_DIGEST_DAY` and
+  `MEMORY_DIGEST_HOUR_UTC` (Sunday 18:00 UTC by default), a DM to the first
+  `ADMIN_DIDS` operator saying what Poe remembered and forgot that week.
+  `MEMORY_DIGEST=off` stops it. The same tick prunes the log daily and, on the
+  first three days of a month, asks the agent's `/memory/rollup` to sum up the
+  journals' last month.
+- **The admin API** (`src/admin.js`, `/admin/` on the callback server): the
+  website's admin page (`website/server/admin.ts`) reads state, guidance,
+  people and the backup log, changes guidance, and naps or wakes Poe. Every
+  request needs `ADMIN_SHARED_SECRET` (never `DROPLET_SHARED_SECRET`; unset, it
+  answers 503) and `x-atpotato-admin-did` naming an `ADMIN_DIDS` admin or Poe.
+  Memory itself is edited through the agent's `/admin/memory`.
+
 ## nginx
 
 `/etc/nginx/sites-available/hook.atpota.to` forwards only exact paths to this
@@ -988,7 +1027,8 @@ its own `location =` block, or the agent's call fails without reaching here:
 `/dispatch/announce-proposal`, `/internal/bluesky-search`,
 `/internal/scan-budget/claim`, `/internal/list-records-budget/claim` and
 `/internal/scan-approval/request`. The dispatch's draft previews need a prefix
-block, since each has its own token: `location ^~ /dispatch/preview/`. Everything
+block, since each has its own token: `location ^~ /dispatch/preview/`. So does the
+admin page's API (from the website, not the agent): `location ^~ /admin/`. Everything
 else the drafts use comes on `/callback`. `/like-proposal` and the four `/internal/`
 routes were missing until 2026-10-19, so Poe's Bluesky search, list_records,
 collection scans and like proposals all failed in production before then.

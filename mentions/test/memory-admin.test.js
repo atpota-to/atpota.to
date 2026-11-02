@@ -246,11 +246,18 @@ test('the log is seeded once from the agent\'s snapshot and the droplet\'s perso
     snapshot: async (operators) => {
       asked++;
       assert.deepEqual(operators, [ADMIN]);
-      return { ok: true, body: { docs: [{ slot: 'operator-dm-life', scope: 'poe-operator-dm-life', content: doc(0, 'seeded note') }] } };
+      return { ok: true, body: { docs: [
+        { slot: 'operator-dm-life', scope: 'poe-operator-dm-life', content: doc(0, 'seeded note') },
+        { slot: 'dispatch-notes', scope: 'poe-dispatch-notes', content: doc(1, '[2026-11-02] give the headliner its own heading', '[2026-11-02] check the code first') },
+      ] } };
     },
   };
   assert.equal(await digest.seedMemoryLog(deps), true);
   assert.equal(await digest.seedMemoryLog(deps), false);
   assert.equal(asked, 1);
   assert.equal(log.memoryHistory('operator-dm-life', 'poe-operator-dm-life')[0].source, 'snapshot');
+  // The morning's dispatch notes are dispatch guidance now, without their dates.
+  const rules = db.db.prepare(`SELECT text, arenas FROM guidance WHERE source_uri LIKE 'legacy:dispatch-notes#%' ORDER BY id`).all();
+  assert.deepEqual(rules.map((r) => [r.text, r.arenas]), [
+    ['give the headliner its own heading', 'dispatch'], ['check the code first', 'dispatch']]);
 });

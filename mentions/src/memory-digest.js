@@ -19,8 +19,8 @@ import { nowIso } from './db.js';
 import * as atproto from './atproto.js';
 import { splitDmText } from './operator-dm.js';
 import { weeklySlot } from './dispatch-drafts.js';
-import { guidanceChangedSince } from './guidance.js';
-import { logMemoryVersion, memoryChangesSince, pruneMemoryVersions } from './memory-log.js';
+import { addGuidance, guidanceChangedSince } from './guidance.js';
+import { logMemoryVersion, memoryChangesSince, notesIn, pruneMemoryVersions } from './memory-log.js';
 import { rollUpOnAgent, snapshotFromAgent } from './agent-memory.js';
 
 db.db.exec(`
@@ -112,16 +112,28 @@ export async function seedMemoryLog(deps = defaultDeps) {
     return false;
   }
   let logged = 0;
+  let imported = 0;
   for (const doc of res.body.docs) {
-    if (typeof doc?.slot === 'string' && typeof doc.scope === 'string' && typeof doc.content === 'string' &&
-        logMemoryVersion({ slot: doc.slot, scope: doc.scope, content: doc.content, source: 'snapshot' })) logged++;
+    if (typeof doc?.slot !== 'string' || typeof doc.scope !== 'string' || typeof doc.content !== 'string') continue;
+    if (logMemoryVersion({ slot: doc.slot, scope: doc.scope, content: doc.content, source: 'snapshot' })) logged++;
+    // The dispatch notes memory of 2026-11-02 became guidance the same day.
+    if (doc.slot === 'dispatch-notes') {
+      notesIn(doc.content).forEach((note, i) => {
+        const text = note.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, '');
+        try {
+          if (addGuidance({ kind: 'rule', text, arenas: ['dispatch'], sourceUri: `legacy:dispatch-notes#${i}`, oncePerSource: true }).added) imported++;
+        } catch (err) {
+          logger.warn('a dispatch note was not copied into guidance', { error: err.message });
+        }
+      });
+    }
   }
   // Person notes already sit in memory_docs.
   for (const row of db.memoryDocs()) {
     if (logMemoryVersion({ slot: 'person', scope: row.did, content: row.content, source: 'snapshot' })) logged++;
   }
-  markChore('snapshot', `${logged} documents`);
-  logger.info('memory log seeded', { logged });
+  markChore('snapshot', `${logged} documents, ${imported} dispatch notes into guidance`);
+  logger.info('memory log seeded', { logged, imported });
   return true;
 }
 

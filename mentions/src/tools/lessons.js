@@ -7,7 +7,8 @@
 //
 // From Bluesky, an account on ADMIN_DIDS adds one by opening a post with
 // "remember:" or "lesson:". Lessons are quick fixes: when a few pile up, fold
-// them into skills/bluesky-reply.md and retire them here.
+// them into skills/bluesky-reply.md and retire them here. They are one kind of
+// guidance (src/guidance.js); the admin page on atpota.to lists and edits all of it.
 
 import * as db from '../db.js';
 import { publishLesson, retireLesson, LESSON_COLLECTION } from '../memory.js';
