@@ -21,7 +21,8 @@
  * so a new post shows up within about five minutes without a deploy. Records, identities
  * and the shell are also cached briefly in the function instance. A post also carries its
  * comments and recommend count (discussion.ts), on the same cache; the reader's own new
- * comment shows at once because the browser adds it (src/blog/).
+ * comment shows at once because the browser adds it (src/blog/). And the apps it can be
+ * shared from, Aturi's compose waypoints (share.ts), read about once an hour.
  */
 
 import type { Env } from '../config.js';
@@ -42,6 +43,7 @@ import {
   type Page,
 } from './pages.js';
 import { documentPath, findDocument, findPublication, listDocuments, toDocument, type BlogDocument, type Publication } from './records.js';
+import { loadShareApps } from './share.js';
 import { bareDocument, fetchShell, fillShell, type Shell } from './shell.js';
 import { EMAIL_RETURN_COOKIE_CLEARED, emailReturnLocation } from './subscribe.js';
 
@@ -262,9 +264,10 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
 
     const index = data.docs.indexOf(doc);
     const pages = leafletPages(doc.content);
-    const [embeds, discussion] = await Promise.all([
+    const [embeds, discussion, shareApps] = await Promise.all([
       loadEmbeds(doFetch, embedTargets(pages)),
       config.commentsEnabled ? loadDiscussion(doFetch, { document: doc.uri, owner: data.identity, hidden: config.hiddenComments }) : null,
+      loadShareApps(doFetch),
     ]);
     if (discussion?.status === 'unavailable') log({ event: 'discussion_error' });
     return page(request, e, 200, CACHE_OK, (shell) =>
@@ -283,6 +286,7 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
         assets: shell.assets,
         coverCid: doc.coverCid,
         discussion,
+        shareApps,
       }),
     );
   }

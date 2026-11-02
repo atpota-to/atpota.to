@@ -1020,6 +1020,140 @@ html[data-theme="dark"] .post__body h2::after {
   text-decoration: none;
 }
 
+/* ---------- share this issue (server/blog/share.ts, src/blog/share.ts) ---------- */
+
+/* The bottom of the post: one button, and a menu of apps under it (or over it, data-up). */
+.post__share {
+  display: flex;
+  margin-top: 44px;
+  padding-top: 24px;
+  border-top: 2px dashed var(--dash);
+}
+
+.post-share {
+  position: relative;
+}
+
+.post-share__toggle {
+  list-style: none;
+  user-select: none;
+}
+
+.post-share__toggle::-webkit-details-marker {
+  display: none;
+}
+
+.post-share__chevron {
+  display: inline-flex;
+  margin: 0 -6px 0 -2px;
+  transition: transform var(--dur-fast) ease;
+}
+
+.post-share[open] .post-share__chevron {
+  transform: rotate(180deg);
+}
+
+.post-share[open] > .post-share__toggle {
+  background: color-mix(in srgb, var(--brown) 10%, transparent);
+}
+
+.post-share__menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: var(--z-menu);
+  width: max-content;
+  min-width: 220px;
+  max-width: calc(100vw - 32px);
+  padding: 10px;
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  animation: post-share-in var(--dur) var(--ease-spring);
+  transform-origin: 24px 0;
+}
+
+.post-share[data-up] .post-share__menu {
+  top: auto;
+  bottom: calc(100% + 10px);
+  transform-origin: 24px 100%;
+}
+
+@keyframes post-share-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+}
+
+.post-share__label {
+  margin: 4px 12px 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.post-share__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-share__app {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 14px;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.post-share__app:hover,
+.post-share__app:focus-visible {
+  background: var(--line);
+}
+
+.post-share__app svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+.post-share__fine {
+  margin: 6px 12px 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.post-share__fine a {
+  color: inherit;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-share__menu {
+    animation: none;
+  }
+
+  .post-share__chevron {
+    transition: none;
+  }
+}
+
+@media print {
+  .post__share {
+    display: none;
+  }
+}
+
 /* ---------- after the post ---------- */
 
 .post-end {

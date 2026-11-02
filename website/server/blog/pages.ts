@@ -23,6 +23,7 @@ import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
+import { BLUESKY_APP, shareHtml, shareText, type ShareApp } from './share.js';
 import { altLinksHtml, blueskySubscribeHtml, emailFormHtml, feedLinkHtml, type EmailSignup } from './subscribe.js';
 
 export const WORDS_PER_MINUTE = 200;
@@ -301,6 +302,8 @@ export interface PostInput {
   coverCid?: string | null;
   /** Comments and recommends; null when comments are switched off (BLOG_COMMENTS_DISABLED). */
   discussion?: Discussion | null;
+  /** Apps for "share this issue" (share.ts), Bluesky first; Bluesky alone when left out. */
+  shareApps?: readonly ShareApp[];
   /**
    * A draft of the dispatch (/blog/preview/<token>): the same page, kept out of search
    * and unfurls, with a note that it isn't published and nothing for readers to do.
@@ -405,6 +408,8 @@ export function postPage(input: PostInput): Page {
     `</header>` +
     cover +
     `<div class="post__body">${body}</div>` +
+    // a draft isn't out yet, so there's nothing to share
+    (preview ? '' : `<footer class="post__share">${shareHtml(input.shareApps ?? [BLUESKY_APP], shareText(site.name, doc.title, here))}</footer>`) +
     `</article>`;
   if (preview) {
     return {
