@@ -14,6 +14,9 @@
  *    the page is idle: it's decoration, and the home page and the weather report have
  *    their own reading to share with it by then
  *
+ * With ?taplog in the address, ./tap-log.ts starts before all of these: a readout of what
+ * each tap on the page did, for chasing taps a phone drops.
+ *
  * Page CSS is linked from each page's <head>, not imported here, so it never flashes.
  */
 
@@ -24,6 +27,7 @@ import { paintMoons } from './moon';
 import { initNav } from './nav';
 import { initTabTitle } from './tab';
 import { initTagline } from './tagline';
+import { initTapLog } from './tap-log';
 import { initTheme } from './theme';
 
 type PageModule = { init?: () => void | Promise<void> };
@@ -59,6 +63,8 @@ async function initPage(): Promise<void> {
   }
 }
 
+// first, so it sees every listener the rest add (only with ?taplog in the address)
+safely('tap log', () => initTapLog());
 safely('theme', initTheme);
 safely('moon', () => paintMoons());
 safely('nav', () => initNav());
