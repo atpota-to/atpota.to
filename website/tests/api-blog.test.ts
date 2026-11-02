@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as api from '../api/blog.js';
 import { POE_DID } from '../server/blog/config.js';
 import { resetEmbedCaches } from '../server/blog/embeds.js';
+import { resetShareCache } from '../server/blog/share.js';
 import { CACHE_MISSING, CACHE_OK, CACHE_PREVIEW, createBlogHandlers, type BlogDeps } from '../server/blog/handler.js';
 import { EMAIL_RETURN_COOKIE, LEAFLET_RETURN_PATH } from '../server/blog/subscribe.js';
 import { pageTitle } from '../server/routes.js';
@@ -27,6 +28,8 @@ interface Net {
   plcDown?: boolean;
   shellStatus?: number;
   posts?: unknown[];
+  /** Aturi's compose waypoints (server/blog/share.ts); left out, Aturi doesn't answer. */
+  waypoints?: unknown;
   /** The droplet's dispatch drafts, by token: what GET /dispatch/preview/<token> answers. */
   previews?: Record<string, { status: number; body?: unknown }>;
 }
@@ -60,6 +63,7 @@ function fakeFetch(net: Net, seen: Seen): typeof fetch {
       }
     }
     if (url.origin === 'https://public.api.bsky.app') return json({ posts: net.posts ?? [] });
+    if (url.origin === 'https://aturi.to' && url.pathname === '/api/waypoints' && net.waypoints) return json(net.waypoints);
     if (url.origin === 'https://hook.atpota.to' && url.pathname.startsWith('/dispatch/preview/')) {
       const hit = net.previews?.[decodeURIComponent(url.pathname.slice('/dispatch/preview/'.length))];
       return hit ? json(hit.body ?? {}, hit.status) : json({ error: 'NotFound' }, 404);
@@ -136,7 +140,10 @@ function html(text: string) {
   return new JSDOM(text).window.document;
 }
 
-beforeEach(() => resetEmbedCaches());
+beforeEach(() => {
+  resetEmbedCaches();
+  resetShareCache();
+});
 
 describe('/api/blog index', () => {
   it('lists this publication\'s posts newest first, skipping future, foreign and invalid records', async () => {
@@ -285,6 +292,45 @@ describe('/api/blog post', () => {
     expect(d.querySelector('.post-end a[href^="https://bsky.app/profile/did:plc:6qw63oash3jfnpykvpbwnq5z/post/3ann"]')).not.toBeNull();
     expect(d.querySelector('.post-pager__link--older')!.getAttribute('href')).toBe('/blog/3old');
     expect(d.querySelector('.post-pager__link--newer')).toBeNull();
+  });
+
+  it("has a menu in the comments to share it on aturi's apps that take a compose link", async () => {
+    const net = defaultNet();
+    net.waypoints = {
+      waypoints: [
+        { id: 'deer', name: 'Deer', composeIntent: { urlTemplate: 'https://deer.social/intent/compose?text={text}', prefillsText: true } },
+        { id: 'bluesky', name: 'Bluesky', composeIntent: { urlTemplate: 'https://bsky.app/intent/compose?text={text}', prefillsText: true } },
+        { id: 'impro', name: 'Impro', composeIntent: { urlTemplate: 'https://impro.social/intent/compose', prefillsText: false } },
+      ],
+    };
+    const { h } = setup(net);
+    const d = html(await (await h.GET(get('view=post&path=issue-2'))).text());
+    const menu = d.querySelector('#comments .post-talk__head .post-talk__share details[data-blog-share]')!;
+    const links = [...menu.querySelectorAll<HTMLAnchorElement>('a[data-share-app]')];
+    expect(links.map((a) => a.dataset.shareApp)).toEqual(['bluesky', 'deer']);
+    const text = 'The Weekly Spud: Issue 2: </script><script>alert(1)</script>\n\nhttps://atpota.to/blog/issue-2';
+    expect(links[0]!.getAttribute('href')).toBe(`https://bsky.app/intent/compose?text=${encodeURIComponent(text)}`);
+    expect(links[1]!.getAttribute('href')).toBe(`https://deer.social/intent/compose?text=${encodeURIComponent(text)}`);
+    // only there: not in the subscribe card, nor at the bottom of the post
+    expect(d.querySelectorAll('[data-blog-share]')).toHaveLength(1);
+    expect(d.querySelector('.post-end__card [data-share-app]')).toBeNull();
+    expect(d.querySelector('.post__share')).toBeNull();
+  });
+
+  it('puts the menu at the bottom of the post when comments are off', async () => {
+    const { h } = setup(defaultNet(), { ...UNPINNED, BLOG_COMMENTS_DISABLED: '1' });
+    const d = html(await (await h.GET(get('view=post&path=issue-2'))).text());
+    expect(d.querySelector('#comments')).toBeNull();
+    expect(d.querySelector('article.post > footer.post__share a[data-share-app="bluesky"]')).not.toBeNull();
+  });
+
+  it('still shares on bluesky when aturi does not answer', async () => {
+    const { h } = setup();
+    const res = await h.GET(get('view=post&path=issue-2'));
+    expect(res.status).toBe(200);
+    const d = html(await res.text());
+    expect(d.querySelector('.post-talk__share details')).toBeNull();
+    expect(d.querySelector('.post-talk__share a[data-share-app="bluesky"]')!.getAttribute('href')).toMatch(/^https:\/\/bsky\.app\/intent\/compose\?text=The%20Weekly%20Spud/);
   });
 
   it('renders a document without Leaflet content from its textContent', async () => {
@@ -450,6 +496,8 @@ describe('/api/blog dispatch draft preview', () => {
     expect(d.querySelector('link[rel="site.standard.document"]')).toBeNull();
     expect(d.querySelector('meta[name="atproto:uri"]')).toBeNull();
     expect(d.querySelector('.post-end')).toBeNull();
+    // nothing to share yet
+    expect(d.querySelector('.post__share')).toBeNull();
     expect(d.title).toBe('draft: spaces near beta - The Weekly Spud');
   });
 

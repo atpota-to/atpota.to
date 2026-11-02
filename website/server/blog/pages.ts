@@ -23,6 +23,7 @@ import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
+import { BLUESKY_APP, shareHtml, shareText, type ShareApp } from './share.js';
 import { altLinksHtml, blueskySubscribeHtml, emailFormHtml, feedLinkHtml, type EmailSignup } from './subscribe.js';
 
 export const WORDS_PER_MINUTE = 200;
@@ -301,6 +302,8 @@ export interface PostInput {
   coverCid?: string | null;
   /** Comments and recommends; null when comments are switched off (BLOG_COMMENTS_DISABLED). */
   discussion?: Discussion | null;
+  /** Apps for "share this issue" (share.ts), Bluesky first; Bluesky alone when left out. */
+  shareApps?: readonly ShareApp[];
   /**
    * A draft of the dispatch (/blog/preview/<token>): the same page, kept out of search
    * and unfurls, with a note that it isn't published and nothing for readers to do.
@@ -391,6 +394,9 @@ export function postPage(input: PostInput): Page {
 
   const discussion = input.discussion ?? null;
   const preview = input.preview ?? null;
+  // "share this issue" (share.ts) sits in the comments' header; with comments switched off,
+  // at the bottom of the post. A draft isn't out yet, so there's nothing to share.
+  const share = preview ? '' : shareHtml(input.shareApps ?? [BLUESKY_APP], shareText(site.name, doc.title, here));
   const article =
     `<article class="post" data-poe-askable aria-labelledby="post-title">` +
     `<header class="post__header">` +
@@ -405,6 +411,7 @@ export function postPage(input: PostInput): Page {
     `</header>` +
     cover +
     `<div class="post__body">${body}</div>` +
+    (share && !discussion ? `<footer class="post__share">${share}</footer>` : '') +
     `</article>`;
   if (preview) {
     return {
@@ -435,7 +442,7 @@ export function postPage(input: PostInput): Page {
     `</div>` +
     NOTICE_LINE +
     `</div>` +
-    (discussion ? discussionHtml(site, doc, discussion) : '') +
+    (discussion ? discussionHtml(site, doc, discussion, share) : '') +
     nav +
     (record
       ? `<p class="post-end__record">this post is a <code>site.standard.document</code> record on ${escapeHtml(bylineName(site.owner))}'s pds. <a href="${escapeAttr(record)}">open the record</a></p>`
@@ -529,8 +536,8 @@ export function commentCountLabel(n: number): string {
   return n === 1 ? '1 comment' : `${n} comments`;
 }
 
-/** The comments section under a post. */
-export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion): string {
+/** The comments section under a post, with the share menu (share.ts) in its header. */
+export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion, share = ''): string {
   const ok = d.status === 'ok';
   const elsewhere = docUrl(site, doc);
   const leaflet = !elsewhere.startsWith(`${SITE_ORIGIN}/`) ? elsewhere : null;
@@ -546,7 +553,9 @@ export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion)
   return (
     `<section class="tile post-talk" id="comments" aria-labelledby="comments-title" data-blog-comments${ok ? '' : ' data-comments-unavailable'}>` +
     `<div class="post-talk__head"><h2 class="post-talk__title" id="comments-title">comments</h2>` +
-    `<span class="post-talk__count" data-comment-count="${d.count}"${d.count ? '' : ' hidden'}>${escapeHtml(commentCountLabel(d.count))}</span></div>` +
+    `<span class="post-talk__count" data-comment-count="${d.count}"${d.count ? '' : ' hidden'}>${escapeHtml(commentCountLabel(d.count))}</span>` +
+    (share ? `<div class="post-talk__share">${share}</div>` : '') +
+    `</div>` +
     `<div class="post-talk__compose" data-comment-compose hidden></div>` +
     `<ol class="comment-list" role="list" data-comment-list${d.comments.length ? '' : ' hidden'}>${d.comments.map((c) => commentHtml(c)).join('')}</ol>` +
     note +
