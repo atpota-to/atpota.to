@@ -25,10 +25,11 @@
  *
  * Each part is asked for at once and left out if it fails; only all of them failing is a
  * 503. `tz` is an IANA zone name (the page sends the reader's own); anything else is a 400.
- * Cached at the CDN for a minute per zone.
+ * Cached at the CDN for a minute per zone, and readable from any origin (atmosphere.ts
+ * CROSS_ORIGIN).
  */
 
-import { diversityOf } from './atmosphere.js';
+import { CROSS_ORIGIN, diversityOf } from './atmosphere.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
 import { getAll } from './weather-accounts.js';
 
@@ -280,7 +281,7 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
 
   async function GET(request: Request): Promise<Response> {
     const tz = timeZone(new URL(request.url).searchParams.get('tz'));
-    if (!tz) return json(request, 400, { error: 'tz must be an IANA time zone, like Europe/London' }, 'no-store');
+    if (!tz) return json(request, 400, { error: 'tz must be an IANA time zone, like Europe/London' }, 'no-store', CROSS_ORIGIN);
     const db = supabase(env(), fetchImpl);
     const at = now();
     const part = async <T>(what: string, run: () => Promise<T | null>): Promise<T | undefined> => {
@@ -308,8 +309,8 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
       part('heatmap', async () => toHeatmap(await db.rpc('atmosphere_heatmap', { tz, since: new Date(at - HEATMAP_MS).toISOString() }))),
       part('records', () => readRecords(db)),
     ]);
-    if (!today && !normal && !newApps && !heatmap && !records) return json(request, 503, { error: 'unavailable' }, 'no-store');
-    return json(request, 200, { tz, today, normal, newApps, heatmap, records }, CACHE);
+    if (!today && !normal && !newApps && !heatmap && !records) return json(request, 503, { error: 'unavailable' }, 'no-store', CROSS_ORIGIN);
+    return json(request, 200, { tz, today, normal, newApps, heatmap, records }, CACHE, CROSS_ORIGIN);
   }
 
   return { GET, HEAD: GET, methodNotAllowed: async (request: Request) => methodNotAllowed(request) };

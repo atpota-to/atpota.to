@@ -56,6 +56,8 @@ describe('weather almanac', () => {
     const res = await get(h);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE);
+    // aturi.to's explorer reads it from the browser
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const body = (await res.json()) as Record<string, any>;
     expect(body.tz).toBe('America/New_York');
     expect(body.today.high).toEqual({ minute: '2026-11-03T15:14:00.000Z', perSecond: 642.2 });
@@ -88,6 +90,7 @@ describe('weather almanac', () => {
     const res = await get(down);
     expect(res.status).toBe(503);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('refuses a bad zone before asking anyone', async () => {
