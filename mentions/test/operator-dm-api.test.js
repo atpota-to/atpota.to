@@ -30,3 +30,28 @@ test('chat endpoints use the PDS proxy, credential and DM reply target, not repo
     });
   } finally { global.fetch = original; }
 });
+
+test('a DM link goes out with a link facet, so it can be tapped', async () => {
+  const original = global.fetch;
+  const bodies = [];
+  global.fetch = async (url, options = {}) => {
+    const nsid = String(url).split('/xrpc/')[1].split('?')[0];
+    if (nsid === 'chat.bsky.convo.sendMessage') bodies.push(JSON.parse(options.body));
+    return new Response(JSON.stringify(nsid === 'com.atproto.server.createSession'
+      ? { did: config.botDid, handle: 'poe.atpota.to', accessJwt: 'test-token', refreshJwt: 'refresh' }
+      : { id: 'sent-id', sender: { did: config.botDid } }), { status: 200 });
+  };
+  try {
+    const url = 'https://atpota.to/blog/preview/abc123';
+    const text = `done! ✿ preview (version 2): ${url}.`;
+    await sendDmMessage('convo', null, text);
+    const start = Buffer.byteLength('done! ✿ preview (version 2): ');
+    assert.deepEqual(bodies[0].message, {
+      text,
+      facets: [{
+        index: { byteStart: start, byteEnd: start + Buffer.byteLength(url) },
+        features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }],
+      }],
+    });
+  } finally { global.fetch = original; }
+});

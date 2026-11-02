@@ -397,7 +397,6 @@ export function postPage(input: PostInput): Page {
     (preview ? previewNote(preview) : '') +
     `<nav class="post__crumbs" aria-label="breadcrumb"><ol class="post__crumbs-list" role="list"><li><a href="${BLOG_PATH}">${escapeHtml(site.name)}</a></li><li aria-current="page"><time datetime="${escapeAttr(doc.publishedAt)}">${escapeHtml(formatDate(doc.publishedAt))}</time></li></ol></nav>` +
     `<h1 class="post__title" id="post-title">${escapeHtml(doc.title)}</h1>` +
-    (doc.description ? `<p class="post__subtitle">${escapeHtml(doc.description)}</p>` : '') +
     `<p class="post__meta"><span>${minutes} min read</span><span aria-hidden="true">·</span><span>by <a href="${escapeAttr(profileUrl(site.handle))}">${escapeHtml(bylineName(site.handle))}</a></span>` +
     (doc.updatedAt && doc.updatedAt.slice(0, 10) !== doc.publishedAt.slice(0, 10)
       ? `<span aria-hidden="true">·</span><span>updated <time datetime="${escapeAttr(doc.updatedAt)}">${escapeHtml(formatDate(doc.updatedAt))}</time></span>`
