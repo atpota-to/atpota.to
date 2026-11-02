@@ -33,6 +33,11 @@ export const POE_LXM = 'to.atpota.poe.chat';
  * chat token, which the widget sends with every message, can never be used to wipe notes.
  */
 export const POE_FORGET_LXM = 'to.atpota.poe.forget';
+/**
+ * The method an admin page token must be scoped to (server/admin.ts). Its own method again:
+ * neither a chat nor a forget token opens the admin page, and an admin token does neither.
+ */
+export const POE_ADMIN_LXM = 'to.atpota.poe.admin';
 export const MAX_TOKEN_LENGTH = 4096;
 export const MAX_LIFETIME_S = 3600;
 export const CLOCK_SKEW_S = 60;
@@ -52,7 +57,7 @@ export interface IdentifyDeps {
   fetch?: Fetch;
   now?: () => number;
   /** The method the token must name. Default POE_LXM. */
-  lxm?: typeof POE_LXM | typeof POE_FORGET_LXM;
+  lxm?: typeof POE_LXM | typeof POE_FORGET_LXM | typeof POE_ADMIN_LXM;
 }
 
 const DID_RE = /^did:(?:plc:[a-z2-7]{24}|web:[a-zA-Z0-9.-]{1,253})$/;

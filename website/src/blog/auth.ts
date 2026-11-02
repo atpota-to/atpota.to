@@ -21,7 +21,9 @@
  *                 remember them (src/poe/identity.ts, server/identity.ts), and
  *                 rpc:to.atpota.poe.forget, the same for the settings page's "forget me"
  *                 (src/scripts/settings.ts, server/forget.ts), so the chat token sent with
- *                 every message can never wipe anything. New to.atpota
+ *                 every message can never wipe anything, and rpc:to.atpota.poe.admin for
+ *                 the admin page (src/scripts/admin.ts, server/admin.ts), which only opens
+ *                 for an admin's DID. New to.atpota
  *                 records go in the set, not here: authorization servers re-read a set
  *                 when sessions refresh, so readers don't have to sign in again for them.
  *                 A reader who signed in before the set has a session without it, and is
