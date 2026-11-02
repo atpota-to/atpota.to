@@ -33,26 +33,30 @@ with no `change`. Leave it out rather than guess at it.
 
 ## What goes in
 
-Keep it short. Most weeks the weather is two or three sentences, and that's fine:
-readers came for the rest of the issue. Go into detail only when something actually
-stood out, and then give the one number that makes it interesting. No lists of
-routine numbers.
+Keep it short: two short paragraphs at most, under the weather page's link card.
+Readers came for the rest of the issue, and the full report is a tap away. Go into
+detail only when something actually stood out, and then give the one number that
+makes it interesting. No lists of routine numbers. The parts below are what you may
+draw from, not a paragraph each: the headline and the one or two things that stood
+out most, and leave the rest to the report.
 
-1. **The headline**, always: the week's condition and new records a second against
+1. **The weather page's link**, first, right under the heading: exactly as `page`
+   returned it, on a line of its own, so it turns into a link card in Leaflet.
+2. **The headline**, always: the week's condition and new records a second against
    the week before (`weekBefore.changePercent`), and the diversity index with its
    level (and `weekBefore.mix`, how mixed a sky it was against the week before, when
    it's there). Round the way a person would: "about 450 new records a second", "an
    index of 1.7". A bare index means nothing to most readers, so give its range
    whenever you give it: it works like the uv index, low under 3 and extreme at 11
    or more.
-2. **What stood out**, only if something did, in a sentence or two: a storm and what
+3. **What stood out**, only if something did, in a sentence or two: a storm and what
    drove it, an app that blew in or is way up (`apps`, `change`), a sky much more or
    less mixed than usual, a week well above or below usual. The busiest and
    quietest hours are news only when they break the usual daily rhythm. A burst
    (`bursts`: one app writing a flood of records in a minute, a bulk import) is left
    out of the weather, so it's never the busiest hour or a forecast, but a big one can
    be the thing that stood out: name the app, how many records, and how fast.
-3. **Where the atmosphere lives**, only if something there stood out
+4. **Where the atmosphere lives**, only if something there stood out
    (`whereTheAtmosphereLives`): a week when the migration wind blew hard out of
    Bluesky (`thisWeek.movingHouse`), a burst of new independent hosts or one growing
    fast, or the hosting diversity moving (`overTheWeek`). One sentence, one number.
@@ -62,9 +66,9 @@ routine numbers.
    hosts nobody relays) is dust, not the network's weather: mention it only if it
    changed a lot, and never name a host as spam. For more than the week has, call
    read_weather with `report: "hosts"`.
-4. **The outlook**, only when it says something worth knowing. See below.
-5. **The weather page's link**, exactly as `page` returned it, on a line of its own,
-   so it turns into a link card in Leaflet.
+5. **The outlook**, only when it says something worth knowing. See below.
+6. **Point to the full report**, at the end, in a few words of your own: the hours,
+   the apps and the rest of the week are on the weather page up top.
 
 The first issue with a weather section explains it in a sentence: the station on
 atpota.to counts every new record in the firehose, Bluesky's and every other app's,

@@ -1,4 +1,4 @@
-import { defineMemoryProvider, type MemoryProvider, type MemoryScope } from "eve/memory";
+import { defineMemoryProvider, type MemoryProvider, type MemoryScope, type MemoryToolDefinition, type MemoryToolSet } from "eve/memory";
 import { fileMemory, inMemory, MemoryDocumentConflictError, type MemoryDocumentBackend } from "eve/memory/file";
 import { vercelBlob } from "eve/memory/file/vercel";
 import { PERSON_SLOT, personNotesKey } from "./memory-key";
@@ -199,16 +199,74 @@ export function privateFileMemory(options: { maxCharacters?: number } = {}): Mem
     async tools(ctx) {
       const tools = await base.tools?.(ctx);
       if (!tools?.save_memory) return tools ?? null;
-      const save = tools.save_memory;
-      return {
-        ...tools,
-        save_memory: {
-          ...save,
-          execute: (input: { text: string }, context) => save.execute({ ...input, text: datedNote(input.text) } as never, context),
-        },
-      };
+      return confirmingTools(tools, ctx.memory.scope.key, (text) => datedNote(text));
     },
   });
+}
+
+type ToolContext = Parameters<MemoryToolDefinition["execute"]>[1];
+
+/** The notes stored under one key, each with the index Poe recalls and removes it by. */
+async function storedNotes(key: string, signal: AbortSignal): Promise<{ index: number; text: string }[]> {
+  const doc = await store.read({ key, signal });
+  const header = doc ? HEADER.exec(doc.content) : null;
+  if (!doc || !header) return [];
+  return doc.content.slice(header[0].length).split("\n").flatMap((line) => {
+    const entry = /^(\d+): (.+)$/.exec(line);
+    return entry ? [{ index: Number(entry[1]), text: entry[2] }] : [];
+  });
+}
+
+const stored = (count: number) => `${count} note${count === 1 ? "" : "s"} stored here now.`;
+
+/**
+ * eve's save_memory and remove_memory return nothing when they work and throw
+ * when they don't. On 2026-11-02 that silence had Poe tell the operator it was
+ * only "assuming" a round of dispatch notes stuck. These read the notes back
+ * after writing (eve's Blob backend reads past the cache, so the read sees the
+ * write) and answer with what is stored now, or fail when it isn't so.
+ * `asSaved` is the note as it goes to eve, so the read-back looks for that.
+ */
+export function confirmingTools(tools: MemoryToolSet, key: string, asSaved = (text: string) => text): MemoryToolSet {
+  const { save_memory: save, remove_memory: remove } = tools;
+  return {
+    ...tools,
+    ...(save ? {
+      save_memory: {
+        ...save,
+        async execute(input: { text: string }, context: ToolContext) {
+          const text = asSaved(input.text);
+          await save.execute({ ...input, text } as never, context);
+          // eve stores a note trimmed, with each run of whitespace made one space.
+          const note = text.trim().replaceAll(/\s+/g, " ");
+          const notes = await storedNotes(key, context.abortSignal);
+          const saved = notes.find((n) => n.text === note);
+          if (!saved) {
+            throw new Error("Not saved: the save gave no error, but the note isn't there when read back. " +
+              "Try once more, and if this happens again, say it didn't save.");
+          }
+          return `Saved as note ${saved.index}. ${stored(notes.length)}`;
+        },
+      },
+    } : {}),
+    ...(remove ? {
+      remove_memory: {
+        ...remove,
+        async execute(input: { index: number }, context: ToolContext) {
+          const before = await storedNotes(key, context.abortSignal);
+          if (!before.some((n) => n.index === input.index)) {
+            return `There is no note ${input.index}, so nothing was removed. ${stored(before.length)}`;
+          }
+          await remove.execute(input as never, context);
+          const after = await storedNotes(key, context.abortSignal);
+          if (after.some((n) => n.index === input.index)) {
+            throw new Error(`Not removed: note ${input.index} is still there when read back.`);
+          }
+          return `Removed note ${input.index}. ${stored(after.length)}`;
+        },
+      },
+    } : {}),
+  };
 }
 
 type Recalled = Awaited<ReturnType<MemoryProvider["recall"]["turn.started"]>>;
@@ -262,7 +320,7 @@ export function publishedFileMemory(): MemoryProvider {
       const tools = await fileMemory({ backend: publishing }).tools?.(ctx);
       if (!tools?.save_memory) return tools ?? null;
       const save = tools.save_memory;
-      return {
+      return confirmingTools({
         ...tools,
         save_memory: {
           ...save,
@@ -272,7 +330,7 @@ export function publishedFileMemory(): MemoryProvider {
             return save.execute(input as never, context);
           },
         },
-      };
+      }, ctx.memory.scope.key);
     },
   });
 }

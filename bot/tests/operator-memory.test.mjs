@@ -5,13 +5,14 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 execFileSync("node", ["node_modules/typescript/bin/tsc", "--ignoreConfig", "agent/lib/channel-kind.ts",
-  "agent/lib/person-scope.ts", "agent/lib/website.ts",
+  "agent/lib/person-scope.ts", "agent/lib/website.ts", "agent/lib/dispatch-draft.ts",
   "--outDir", ".eve/channel-kind-test", "--module", "esnext", "--moduleResolution", "bundler",
   "--target", "es2022", "--skipLibCheck", "--types", "node"],
   { cwd: new URL("..", import.meta.url) });
 const channelKind = await import("../.eve/channel-kind-test/channel-kind.js");
 const personScope = await import("../.eve/channel-kind-test/person-scope.js");
 const website = await import("../.eve/channel-kind-test/website.js");
+const dispatchDraft = await import("../.eve/channel-kind-test/dispatch-draft.js");
 
 // Exercise each authored memory definition with a small stand-in for eve's
 // memory lifecycle. No Vercel credentials, PDS, or DM transport are involved.
@@ -42,6 +43,7 @@ function loadSlot(file) {
       if (name === "../lib/channel-kind") return channelKind;
       if (name === "../lib/person-scope") return personScope;
       if (name === "../lib/website") return website;
+      if (name === "../lib/dispatch-draft") return dispatchDraft;
       throw new Error(`unexpected memory dependency ${name}`);
     },
   });
@@ -101,6 +103,51 @@ test("stable self notes require an operator; public life journal is read-only in
   assert.equal((await life.provider.tools(publicTurn(false))).save_memory, true);
 });
 
+// The droplet's drafting session, as channels/dispatch.ts authenticates it.
+const drafting = (kind = "channel:dispatch", authenticator = "atpotato-droplet-dispatch") => ({
+  channel: { kind },
+  session: { auth: { current: {
+    authenticator, principalType: "service", principalId: "atpotato-dispatch-drafts",
+    attributes: { draftId: "draft-1" },
+  } } },
+});
+
+test("dispatch notes reach the drafting session, and only a verified operator's DM can change them", async () => {
+  const slot = loadSlot("dispatch-notes");
+  for (const kind of ["channel:dispatch", "dispatch"]) {
+    assert.equal(slot.scope(drafting(kind)), "poe-dispatch-notes", kind);
+    assert.equal(await slot.provider.tools(drafting(kind)), null, "the drafting session reads, never writes");
+  }
+  // One shared slot for the publication, whichever operator is editing.
+  assert.equal(slot.scope(dm()), "poe-dispatch-notes");
+  assert.equal(slot.scope(dm(otherDid)), "poe-dispatch-notes");
+  assert.equal((await slot.provider.tools(dm())).save_memory, true);
+
+  const forged = dm();
+  forged.session.auth.current.attributes.operatorDid = otherDid;
+  const wrongAuthenticator = dm();
+  wrongAuthenticator.session.auth.current.authenticator = "atpotato-droplet";
+  const notADid = dm("operator");
+  for (const ctx of [forged, wrongAuthenticator, publicTurn(true), publicTurn(false)]) {
+    assert.equal(slot.scope(ctx), null);
+    assert.equal(await slot.provider.tools(ctx), null);
+  }
+  assert.equal(await slot.provider.tools(notADid), null);
+  // Another channel's authenticator on the dispatch route, or the dispatch
+  // authenticator anywhere else, opens nothing.
+  for (const ctx of [drafting("channel:dispatch", "atpotato-droplet-dm"), drafting("channel:bluesky"),
+    drafting("channel:website"), drafting("unknown")]) {
+    assert.equal(slot.scope(ctx), null);
+  }
+  assert.equal(dispatchDraft.DISPATCH_AUTHENTICATOR, "atpotato-droplet-dispatch");
+});
+
+test("the drafting session sees no operator notes or DM journal", () => {
+  for (const file of ["operator-notes", "operator-dm-life", "person"]) {
+    assert.equal(loadSlot(file).scope(drafting()), null, file);
+  }
+});
+
 test("public person notes remain unavailable to operator DMs", () => {
   const slot = loadSlot("person");
   assert.equal(slot.scope(dm()), null);
@@ -113,7 +160,7 @@ test("an anonymous website visitor gets no memory beyond public-safe self and jo
       authenticator: "atpotato-website", principalType: "anonymous", principalId: "website-visitor",
       attributes: { conversationId: "c".repeat(43), path: "/" },
     } } } };
-    for (const file of ["person", "operator-dm-life", "operator-notes"]) {
+    for (const file of ["person", "operator-dm-life", "operator-notes", "dispatch-notes"]) {
       assert.equal(loadSlot(file).scope(visitor), null, `${file} on ${kind}`);
     }
     // One journal wherever Poe is: recalled here, never written by a stranger.
@@ -145,7 +192,7 @@ test("a signed-in website visitor gets the very notes Poe keeps for their DID on
     assert.equal(loadSlot("life").scope(signedIn({}, kind)), "poe-life");
     assert.equal((await loadSlot("life").provider.tools(signedIn({}, kind))).save_memory, true);
     // Signing in on the website never reaches operator memory or self notes.
-    for (const file of ["operator-dm-life", "operator-notes"]) {
+    for (const file of ["operator-dm-life", "operator-notes", "dispatch-notes"]) {
       assert.equal(loadSlot(file).scope(signedIn({}, kind)), null, `${file} on ${kind}`);
     }
     assert.equal(await loadSlot("self").provider.tools(signedIn({}, kind)), null);

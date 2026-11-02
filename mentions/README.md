@@ -793,6 +793,16 @@ operator: "yes" ──► create the document in atpota.to's repo ──► anno
    above, with the link held back until Leaflet has seen the create. Asking again
    is always safe: it never makes a second issue or a second post.
 
+**What Poe learns from the edits.** Feedback in a DM on how issues should be
+written ("lead the weather with the link", "check the code before framing an
+argument") goes in the agent's `dispatch-notes` memory slot
+(`bot/agent/memory/dispatch-notes.ts`), when the operator asks Poe to remember it.
+Every drafting session recalls those notes, and so do operator DMs. Only a
+verified operator's DM can change them. They live in the agent's Vercel Blob
+store, not here, and are never published. When a few pile up, fold them into
+`bot/agent/skills/dispatch-issue.md` (or `dispatch-weather.md`) and ask Poe to
+remove them.
+
 Publishing needs `DISPATCH_PUBLISHER_APP_PASSWORD`. Without it the drafts are
 still written and reviewed, and Poe tells the operator it can't publish. The kill
 switch, a nap and `STAGE` below 4 stop publishing; a nap also stops the weekly

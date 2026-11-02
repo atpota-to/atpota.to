@@ -10,7 +10,9 @@ import { DISPATCH_AUTHENTICATOR, DispatchDraftRequest, buildDispatchPrompt, post
  */
 export default defineChannel({
   turnPolicy: "queue",
-  // What it writes is published once the operator says yes, so nothing private is recalled here.
+  // What it writes is published once the operator says yes, so nothing private is recalled here:
+  // only the operator's feedback on the dispatch itself (memory/dispatch-notes.ts), Poe's
+  // public-safe self notes, and its public presence.
   audience: () => "public",
   state: { note: "" },
   context(state) {
