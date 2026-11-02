@@ -126,7 +126,13 @@ function everyoneOf(rows: unknown[], apps: Map<string, Registers>): AccountCount
   return { seconds, ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: [...apps.values()].map(countSketch) }) };
 }
 
-export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Accounts> {
+/** A range's accounts, and every app's accounts over it, not only the top ones' (weather-history.ts busiestApps). */
+export interface AccountsRead {
+  accounts: Accounts;
+  everyApp: Map<string, number>;
+}
+
+export async function readAccounts(db: Supabase, w: AccountWindow): Promise<AccountsRead> {
   const { since, until, prev_since, prev_until, period } = w;
   const [main, appRows] = await Promise.all([
     getAll(db, `atmosphere_account_sketch?select=t,seconds,dids,dids_bluesky,dids_elsewhere,bluesky,elsewhere&period=eq.${period}&${range(since, until)}&order=t.asc`),
@@ -157,6 +163,7 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
   }
   const appSketches = mergeApps(appRows);
   const apps = [...appSketches].map(([domain, s]) => ({ domain, active: countSketch(s) }));
+  const everyApp = new Map(apps.map((a) => [a.domain, a.active]));
   const { seconds: _, ...total } = everyoneOf(kept, appSketches);
 
   const top = apps
@@ -185,14 +192,17 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
   const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
 
   return {
-    seconds,
-    prevSeconds,
-    total,
-    ...(prevTotal.seconds > 0 && Date.parse(prev_since) >= (w.liveSince ?? -Infinity) ? { prev: prevTotal } : {}),
-    points,
-    apps: top.map((a, i) => {
-      const p = prev.get(a.domain);
-      return { ...a, prevActive: p ? countSketch(p) : 0, collections: collections[i] ?? [] };
-    }),
+    accounts: {
+      seconds,
+      prevSeconds,
+      total,
+      ...(prevTotal.seconds > 0 && Date.parse(prev_since) >= (w.liveSince ?? -Infinity) ? { prev: prevTotal } : {}),
+      points,
+      apps: top.map((a, i) => {
+        const p = prev.get(a.domain);
+        return { ...a, prevActive: p ? countSketch(p) : 0, collections: collections[i] ?? [] };
+      }),
+    },
+    everyApp,
   };
 }

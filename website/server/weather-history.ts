@@ -9,7 +9,7 @@
  *                                ?range=week   the last 7 days, a point an hour
  *                                ?range=month  the last 30 days, a point a day
  *                                ?range=year   the last 12 months, a point a month
- *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts?, hosts?, bursts? }
+ *   ->  { range, points: Point[], total: Point, apps?, appsLeftOut?, compare?, appsOverTime?, accounts?, hosts?, bursts? }
  *
  * Points are raw counts with the seconds they cover, never rates: a rate is
  * count / seconds, worked out in the page, so summing points (into months, or into the
@@ -20,7 +20,8 @@
  *   apps          the busiest apps outside Bluesky over the range, each with its count in
  *                 an earlier window of the same length (atmosphere_app_trends): the same
  *                 hour yesterday, the day before, the week before, the 30 days before,
- *                 the year before
+ *                 the year before. Only apps enough different accounts wrote to (busiestApps)
+ *   appsLeftOut   how many accounts that took, and the apps busier by records that had fewer
  *   compare       how much of the range and of that earlier window the station heard, so
  *                 the page compares rates, not counts
  *   appsOverTime  how many apps outside Bluesky were heard each minute, hour, day or
@@ -45,7 +46,7 @@
  * read doesn't leave a chart blank for as long as the range's cache lasts.
  */
 
-import { readAccounts } from './weather-accounts.js';
+import { readAccounts, type AccountsRead } from './weather-accounts.js';
 import { LIVE_SINCE } from './weather-almanac.js';
 import { askedHost, readHost, readHosts } from './weather-hosts.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
@@ -63,6 +64,13 @@ export interface App {
   /** Its records in the earlier window. */
   prevCreates: number;
   collections: string[];
+}
+
+/** An app busy enough by records to make the list, left out for being written by too few accounts. */
+export interface LeftOutApp {
+  domain: string;
+  creates: number;
+  accounts: number;
 }
 
 export interface Burst {
@@ -84,6 +92,12 @@ export interface Compare {
 export type Bucket = 'minute' | 'hour' | 'day' | 'month';
 
 export const TOP_APPS = 10;
+/** Apps asked for by records, so that TOP_APPS are left once those with too few accounts are out (atmosphere_app_trends takes 50 at most). */
+export const APP_CANDIDATES = 50;
+/** An app makes the busiest list with at least 1 in this many of the accounts that wrote outside Bluesky over the range... */
+export const ACCOUNTS_PER_LISTED_APP = 500;
+/** ...and never fewer than this many. */
+export const MIN_APP_ACCOUNTS = 3;
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 /** An hour is a burst once its records run this far past its steady count (as a share of it). */
@@ -130,7 +144,42 @@ export function queryUrl(base: string, range: Range, now: number): string {
 export function trendArgs(range: Range, now: number) {
   const { spanMs, lagMs } = RANGES[range];
   const at = (ms: number) => new Date(ms).toISOString();
-  return { since: at(now - spanMs), until: at(now), prev_since: at(now - spanMs - lagMs), prev_until: at(now - lagMs), max_apps: TOP_APPS };
+  return { since: at(now - spanMs), until: at(now), prev_since: at(now - spanMs - lagMs), prev_until: at(now - lagMs), max_apps: APP_CANDIDATES };
+}
+
+/** How many different accounts an app needs over a range to make the busiest list, given how many wrote outside Bluesky. */
+export function accountFloor(elsewhere: number): number {
+  return Math.max(MIN_APP_ACCOUNTS, Math.ceil(elsewhere / ACCOUNTS_PER_LISTED_APP));
+}
+
+/**
+ * The busiest apps by records, among those enough different accounts wrote to (accountFloor).
+ * A bot, or a few accounts importing in bulk, can write millions of records: over the 30 days
+ * to 2026-11-02, layers.pub wrote 14.2M records from 31 accounts and podping.at 3.9M from 12
+ * (3.7M of it in one day, from 2), against standard.site's 989k from 7,184. They topped the
+ * list though hardly anyone was writing with them. With a floor of 1 in 500 of the accounts
+ * writing outside Bluesky, that month's was 89: rocksky.app (166), teal.fm (222) and
+ * currents.is (181) stayed in. The day's was 16, and the hour's the minimum, 3, which leaves
+ * out the apps one or two accounts write to on a timer (vmx.cx, 14k records a day from one).
+ *
+ * `leftOut.apps` are the ones that would have made the top TOP_APPS without the floor, so the
+ * page can say who they were. Without account counts (they didn't come, or the station heard
+ * none over the range) nothing is left out, and there's no `leftOut`.
+ */
+export function busiestApps(candidates: App[], counted: AccountsRead | undefined): { apps: App[]; leftOut?: { minAccounts: number; apps: LeftOutApp[] } } {
+  if (!counted || counted.accounts.seconds <= 0 || counted.everyApp.size === 0) return { apps: candidates.slice(0, TOP_APPS) };
+  const minAccounts = accountFloor(counted.accounts.total.elsewhere);
+  const accountsOf = (a: App) => counted.everyApp.get(a.domain) ?? 0;
+  return {
+    apps: candidates.filter((a) => accountsOf(a) >= minAccounts).slice(0, TOP_APPS),
+    leftOut: {
+      minAccounts,
+      apps: candidates
+        .slice(0, TOP_APPS)
+        .filter((a) => accountsOf(a) < minAccounts)
+        .map((a) => ({ domain: a.domain, creates: a.creates, accounts: accountsOf(a) })),
+    },
+  };
 }
 
 /** A row as a Point, or null if anything is off. Views sum to numeric, which may arrive as strings. */
@@ -244,7 +293,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at));
       const c = counts(body, ['seconds', 'prevSeconds'] as const);
       if (!c || !isRecord(body) || !Array.isArray(body.apps)) throw new Error('apps did not check out');
-      const apps = body.apps.map(toApp).filter((a): a is App => a !== null).slice(0, TOP_APPS);
+      const apps = body.apps.map(toApp).filter((a): a is App => a !== null).slice(0, APP_CANDIDATES);
       return { apps, compare: { seconds: c.seconds, prevSeconds: c.prevSeconds, lagMs } satisfies Compare };
     });
     const appsOverTime = extra('apps_over_time', async () => {
@@ -273,11 +322,23 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const points = (rows as unknown[]).map((r) => toPoint(r, column)).filter((p): p is Point => p !== null);
     const shaped = range === 'year' ? byMonth(points) : points;
     const bursts = listBursts ? extra('bursts', () => Promise.all(burstHours(points).map((b) => withBurstApp(db, b)))) : undefined;
-    const [t, overTime, acct, hostList, burstList] = await Promise.all([trends, appsOverTime, accounts, hosts, bursts]);
+    const [t, overTime, counted, hostList, burstList] = await Promise.all([trends, appsOverTime, accounts, hosts, bursts]);
+    const busiest = t ? busiestApps(t.apps, counted) : undefined;
     return json(
       request,
       200,
-      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: overTime, accounts: acct, hosts: hostList, bursts: burstList },
+      {
+        range,
+        points: shaped,
+        total: sumPoints(points, new Date(at).toISOString()),
+        apps: busiest?.apps,
+        appsLeftOut: busiest?.leftOut,
+        compare: t?.compare,
+        appsOverTime: overTime,
+        accounts: counted?.accounts,
+        hosts: hostList,
+        bursts: burstList,
+      },
       partial ? PARTIAL_CACHE : cache,
     );
   }

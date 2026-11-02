@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../api/weather-history.js';
-import { burstHours, byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, toApp, toPoint, trendArgs, type App, type Burst, type Point } from '../server/weather-history.js';
+import { accountFloor, APP_CANDIDATES, burstHours, busiestApps, byMonth, createHistoryHandlers, PARTIAL_CACHE, queryUrl, RANGES, SUPABASE_URL, sumPoints, TOP_APPS, toApp, toPoint, trendArgs, type App, type Burst, type Point } from '../server/weather-history.js';
+import type { AccountsRead } from '../server/weather-accounts.js';
 import * as hosts from '../server/weather-hosts.js';
 
 // /api/weather-history against a scripted Supabase.
@@ -172,7 +173,8 @@ describe('weather history', () => {
       until: '2026-10-20T17:00:00.000Z',
       prev_since: '2026-10-19T16:00:00.000Z',
       prev_until: '2026-10-19T17:00:00.000Z',
-      max_apps: 10,
+      // more than it lists, so there are still enough once apps with too few accounts are out
+      max_apps: APP_CANDIDATES,
     });
     expect(db.bodies.atmosphere_apps_over_time).toEqual({ since: '2026-10-20T16:00:00.000Z', bucket: 'minute' });
   });
@@ -505,5 +507,95 @@ describe('new accounts made in bulk', () => {
     const d = hosts.toIdentityDay(found, new Set(['goodmkt.id']))!;
     expect(d.createdBulk).toBe(74);
     expect(d.bulk.map((h) => h.hostname)).toEqual(['pds.1095.me']);
+  });
+});
+
+describe('the busiest apps by records, among those enough accounts wrote to', () => {
+  const app = (domain: string, creates: number): App => ({ domain, creates, prevCreates: 0, collections: [] });
+  const read = (elsewhere: number, everyApp: Record<string, number>, seconds = 86_400): AccountsRead => ({
+    accounts: { seconds, prevSeconds: 0, total: { active: elsewhere * 100, bluesky: elsewhere * 99, elsewhere, share: 1, spread: 1, index: 1 }, points: [], apps: [] },
+    everyApp: new Map(Object.entries(everyApp)),
+  });
+
+  it('needs 1 in 500 of the accounts that wrote outside bluesky, and never fewer than 3', () => {
+    expect(accountFloor(44_191)).toBe(89); // the 30 days to 2026-11-02
+    expect(accountFloor(7600)).toBe(16); // a day
+    expect(accountFloor(929)).toBe(3); // an hour
+    expect(accountFloor(0)).toBe(3);
+  });
+
+  it('leaves out apps a handful of accounts wrote millions of records with, and says which', () => {
+    // the 30 days to 2026-11-02, as the station counted them
+    const month = [
+      app('layers.pub', 14_250_038),
+      app('podping.at', 3_912_903),
+      app('sensorthings.dev', 2_121_955),
+      app('standard.site', 989_324),
+      app('rocksky.app', 889_765),
+      app('teal.fm', 394_958),
+      app('vmx.cx', 370_278),
+      app('currents.is', 312_156),
+    ];
+    const accounts = { 'layers.pub': 31, 'podping.at': 12, 'sensorthings.dev': 12, 'standard.site': 7184, 'rocksky.app': 166, 'teal.fm': 222, 'vmx.cx': 2, 'currents.is': 181 };
+    const { apps, leftOut } = busiestApps(month, read(44_191, accounts));
+    expect(apps.map((a) => a.domain)).toEqual(['standard.site', 'rocksky.app', 'teal.fm', 'currents.is']);
+    expect(apps[0]).toBe(month[3]); // the app as it came, its earlier count and collections too
+    expect(leftOut).toEqual({
+      minAccounts: 89,
+      apps: [
+        { domain: 'layers.pub', creates: 14_250_038, accounts: 31 },
+        { domain: 'podping.at', creates: 3_912_903, accounts: 12 },
+        { domain: 'sensorthings.dev', creates: 2_121_955, accounts: 12 },
+        { domain: 'vmx.cx', creates: 370_278, accounts: 2 },
+      ],
+    });
+  });
+
+  it('still lists TOP_APPS from further down, and only names those that would have made it', () => {
+    const candidates = Array.from({ length: 30 }, (_, i) => app(`app${i}.example`, 1000 - i));
+    // the first two and the 20th have one account each
+    const accounts = Object.fromEntries(candidates.map((a, i) => [a.domain, i < 2 || i === 19 ? 1 : 50]));
+    const { apps, leftOut } = busiestApps(candidates, read(100, accounts));
+    expect(apps).toHaveLength(TOP_APPS);
+    expect(apps.map((a) => a.domain)).toEqual(Array.from({ length: TOP_APPS }, (_, i) => `app${i + 2}.example`));
+    expect(leftOut!.apps.map((a) => a.domain)).toEqual(['app0.example', 'app1.example']);
+    // an app with no account sketch at all had no accounts
+    expect(busiestApps([app('ghost.example', 9), app('real.example', 1)], read(100, { 'real.example': 3 })).apps.map((a) => a.domain)).toEqual(['real.example']);
+  });
+
+  it('leaves nothing out without account counts to go by', () => {
+    const candidates = Array.from({ length: 12 }, (_, i) => app(`app${i}.example`, 100 - i));
+    for (const counted of [undefined, read(100, { 'app0.example': 1 }, 0), read(100, {})]) {
+      const { apps, leftOut } = busiestApps(candidates, counted);
+      expect(apps).toEqual(candidates.slice(0, TOP_APPS));
+      expect(leftOut).toBeUndefined();
+    }
+  });
+
+  it('answers with the apps that made it and the ones that did not', async () => {
+    const fetch = (async (input: string, init?: RequestInit) => {
+      const url = new URL(input);
+      const table = url.pathname.split('/').pop();
+      if (table === 'atmosphere_app_trends') {
+        expect(JSON.parse(String(init?.body)).max_apps).toBe(APP_CANDIDATES);
+        return Response.json({ seconds: 3600, prevSeconds: 3600, apps: [{ domain: 'busy.bot', creates: 9000, prevCreates: 0, collections: [] }, { domain: 'people.app', creates: 40, prevCreates: 30, collections: ['app.people.post'] }] });
+      }
+      if (url.pathname.includes('/rpc/')) return new Response('no', { status: 404 });
+      if (table === 'atmosphere_account_sketch' && (url.searchParams.get('t') ?? '').startsWith('gte.2026-10-20'))
+        return Response.json([{ t: '2026-10-20T16:59:00+00:00', seconds: 60, dids: 9, dids_bluesky: 4, dids_elsewhere: 5, bluesky: sk(1, 2, 3, 4), elsewhere: sk(5, 6, 7, 8, 9) }]);
+      if (table === 'atmosphere_account_app_sketch' && (url.searchParams.get('t') ?? '').startsWith('gte.2026-10-20'))
+        return Response.json([
+          { t: '2026-10-20T16:59:00+00:00', domain: 'busy.bot', dids: 1, sketch: sk(5) },
+          { t: '2026-10-20T16:59:00+00:00', domain: 'people.app', dids: 4, sketch: sk(6, 7, 8, 9) },
+        ]);
+      if (table === 'atmosphere_minute') return Response.json([row('2026-10-20T16:59:00+00:00')]);
+      return Response.json([]);
+    }) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { apps: App[]; appsLeftOut: unknown; accounts: { apps: unknown[] } };
+    expect(body.apps.map((a) => a.domain)).toEqual(['people.app']);
+    expect(body.appsLeftOut).toEqual({ minAccounts: 3, apps: [{ domain: 'busy.bot', creates: 9000, accounts: 1 }] });
+    // the accounts' own list is as it was: everyone, by accounts
+    expect(body.accounts.apps).toHaveLength(2);
   });
 });

@@ -107,6 +107,15 @@ thousand records a minute is a thousand records and one account.
   what came from the archive (before 2026-10-20T16:50Z): it keeps about a fifth of the
   edits the station hears, so its hours read 0.29% of accounts elsewhere against the
   station's 0.48%, and would make every live hour look more mixed than usual.
+- **The busiest apps by records** go by them too (since 2026-11-02). Over the 30 days to
+  then, layers.pub wrote 14.2M records from 31 accounts and podping.at 3.9M from 12 (3.7M
+  of it in one day, from 2), and they topped "elsewhere in the atmosphere" and the share
+  card over standard.site's 989k from 7,184. So the trends' `apps` only list apps that at
+  least 1 in 500 of the accounts writing outside Bluesky over the range wrote to, and never
+  fewer than 3 (`busiestApps` in `website/server/weather-history.ts`): 89 for those 30
+  days, 16 for a day, usually 3 for an hour. `appsLeftOut` says which busier apps that left
+  out, and the page names them. The live 60 seconds aren't filtered: the station only sends
+  the top 10 apps' accounts, and most apps have one or two writers in a minute.
 - **Stored:** see "Minute rows" below and
   [`sql/atmosphere_accounts.sql`](sql/atmosphere_accounts.sql). The website merges
   and counts the stored sketches itself (`website/server/hll.ts`,

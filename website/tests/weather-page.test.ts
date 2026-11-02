@@ -24,6 +24,7 @@ import {
   createHistoryFeed,
   fetchHistory,
   formatRate,
+  leftOutWords,
   levelOf,
   ratesOf,
   renderHosts,
@@ -309,6 +310,13 @@ describe('trends', () => {
     expect(await fetchHistory('hour', answer({ error: 'unavailable' }, 503))).toBeNull();
     const withApps = await fetchHistory('hour', answer({ ...HISTORY, apps: [{ domain: 'ok.app', creates: 1, minutes: 1, collections: [] }, { domain: '<x>', creates: 1, minutes: 1, collections: [] }] }));
     expect(withApps!.apps).toEqual([{ domain: 'ok.app', creates: 1, minutes: 1, collections: [] }]);
+    // the apps too few accounts wrote to, checked the same way
+    const leftOut = { minAccounts: 89, apps: [{ domain: 'layers.pub', creates: 14_250_038, accounts: 31 }, { domain: '<x>', creates: 1, accounts: 1 }, { domain: 'odd.app', creates: -1, accounts: 1 }] };
+    const withFloor = await fetchHistory('hour', answer({ ...HISTORY, apps: [], appsLeftOut: leftOut }));
+    expect(withFloor!.appsLeftOut).toEqual({ minAccounts: 89, apps: [{ domain: 'layers.pub', creates: 14_250_038, accounts: 31 }] });
+    expect((await fetchHistory('hour', answer({ ...HISTORY, apps: [], appsLeftOut: { minAccounts: 'lots', apps: [] } })))!.appsLeftOut).toBeUndefined();
+    // no list, nothing it left out
+    expect((await fetchHistory('hour', answer({ ...HISTORY, appsLeftOut: leftOut })))!.appsLeftOut).toBeUndefined();
   });
 
   it('chart helpers: round tops, and gaps where steps are missing', () => {
@@ -869,6 +877,32 @@ describe('in the lens', () => {
     expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
     expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
+  });
+
+  it('by records, says how many accounts an app needed to make the list, and who was busier with fewer', () => {
+    const floored: History = { ...DAY, appsLeftOut: { minAccounts: 16, apps: [{ domain: 'vmx.cx', creates: 14_633, accounts: 1 }] } };
+    renderWindow(report, floored, lens({ window: 'day', unit: 'hour' }));
+    expect(bars('[data-r-apps]').map(([label]) => label)).toEqual(['tangled.sh', 'whtwnd.com']);
+    expect(text('[data-r-apps-note]')).toBe('new records an hour, from apps at least 16 accounts wrote to. busier, but by fewer accounts: vmx.cx (1). arrows compare with the day before.');
+    // by accounts there's no floor to speak of
+    renderWindow(report, floored, lens({ window: 'day', measure: 'accounts' }));
+    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
+    // every app heard had too few
+    renderWindow(report, { ...floored, apps: [] }, lens({ window: 'day' }));
+    expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(false);
+    expect(text('[data-r-apps-empty]')).toBe('no app outside bluesky had 16 accounts writing over the last 24 hours.');
+    renderWindow(report, { ...floored, apps: [], appsLeftOut: { minAccounts: 16, apps: [] } }, lens({ window: 'day' }));
+    expect(text('[data-r-apps-empty]')).toBe("the station hasn't heard any other apps over the last 24 hours yet.");
+  });
+
+  it('names two of the apps it left out, and counts the rest', () => {
+    const a = (domain: string, accounts: number) => ({ domain, creates: 1_000_000, accounts });
+    expect(leftOutWords({ minAccounts: 3, apps: [] })).toBe('from apps at least 3 accounts wrote to.');
+    expect(leftOutWords({ minAccounts: 89, apps: [a('layers.pub', 31)] })).toBe('from apps at least 89 accounts wrote to. busier, but by fewer accounts: layers.pub (31).');
+    expect(leftOutWords({ minAccounts: 89, apps: [a('layers.pub', 31), a('podping.at', 12)] })).toBe('from apps at least 89 accounts wrote to. busier, but by fewer accounts: layers.pub (31) and podping.at (12).');
+    expect(leftOutWords({ minAccounts: 1200, apps: [a('layers.pub', 31), a('podping.at', 12), a('sensorthings.dev', 12), a('vmx.cx', 2)] })).toBe(
+      'from apps at least 1,200 accounts wrote to. busier, but by fewer accounts: layers.pub (31), podping.at (12) and 2 more.',
+    );
   });
 
   it('says how much of a window the station has heard, and when there are no account counts for it', () => {
