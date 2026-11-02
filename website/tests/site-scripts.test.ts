@@ -174,4 +174,39 @@ describe('nav menu', () => {
     ask.click();
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
+
+  it('shuts the closed sheet (no box on a phone), and opens it again', async () => {
+    document.body.innerHTML = `
+      <header data-site-header>
+        <button data-nav-toggle aria-expanded="false" aria-controls="site-menu">menu</button>
+        <div id="site-menu" data-nav-menu><a href="/">home</a></div>
+      </header>
+      <div data-nav-scrim hidden></div>`;
+    initNav();
+    const toggle = document.querySelector<HTMLButtonElement>('[data-nav-toggle]')!;
+    const menu = document.querySelector<HTMLElement>('[data-nav-menu]')!;
+    // shut from the start, even when the markup doesn't say so
+    expect(menu.hasAttribute('data-shut')).toBe(true);
+
+    toggle.click();
+    expect(menu.hasAttribute('data-shut')).toBe(false);
+
+    toggle.click();
+    // shut once it has faded out (jsdom runs no transitions, so straight after)
+    await vi.waitFor(() => expect(menu.hasAttribute('data-shut')).toBe(true));
+
+    // opened again before it shut: it stays open
+    toggle.click();
+    toggle.click();
+    toggle.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(menu.hasAttribute('data-shut')).toBe(false);
+  });
+
+  it('the phone sheet has no box while shut', () => {
+    const css = read('../src/styles/components.css');
+    expect(css).toMatch(/html\.js \.site-menu\[data-shut\] \{\s*display: none;/);
+    expect(read('../src/partials/header.html')).toMatch(/<div class="site-menu"[^>]* data-nav-menu data-shut>/);
+  });
 });

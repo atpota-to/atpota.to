@@ -13,7 +13,8 @@
     <svg class="icon-close" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     <span class="visually-hidden">menu</span>
   </button>
-  <div class="site-menu" id="site-menu" data-nav-menu>
+  <!-- data-shut: closed, with no box on a phone until it opens (src/scripts/nav.ts) -->
+  <div class="site-menu" id="site-menu" data-nav-menu data-shut>
     <nav class="site-nav" aria-label="main">
       <ul class="site-nav__list" role="list">
         <li><a class="site-nav__link" href="/#projects" data-nav="projects">projects</a></li>

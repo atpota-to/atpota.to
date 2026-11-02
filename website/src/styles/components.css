@@ -962,6 +962,13 @@ html[data-theme="dark"] {
       visibility 0s;
   }
 
+  /* Shut (closed, and done fading out: nav.ts), the sheet has no box at all. Hidden and
+     untappable wasn't enough for iOS Safari: on a weather topic's page the closed sheet
+     sits right over the report's pages, and tapping one of them did nothing. */
+  html.js .site-menu[data-shut] {
+    display: none;
+  }
+
   html.js .site-nav__list {
     flex-direction: column;
     align-items: stretch;

@@ -7,6 +7,10 @@
  * link, Tab is trapped inside the toggle + sheet, Esc or the scrim closes it and
  * focus returns to the toggle, choosing a link or "ask poe" closes it.
  *
+ * Closed, once it has faded out, the sheet is shut ([data-shut]): no box at all on a phone,
+ * so it can't come between a tap and the page under it (on iOS Safari, hidden and
+ * pointer-events: none weren't enough).
+ *
  * On desktop, one hover pill slides between the nav links (components.css draws it
  * as the list's ::before from --pill-x / --pill-w).
  */
@@ -23,6 +27,16 @@ export function initNav(root: Document = document): void {
   header.dataset.navReady = 'true';
 
   let open = false;
+
+  const shut = () => {
+    if (!open) menu.dataset.shut = '';
+  };
+  // after the sheet's own fade, when there is one (none under reduced motion, or on a desktop)
+  const shutOnceFaded = () => {
+    const fading = menu.getAnimations?.() ?? [];
+    void Promise.allSettled(fading.map((a) => a.finished)).then(shut);
+  };
+  shut();
 
   const focusables = (): HTMLElement[] => [toggle, ...menu.querySelectorAll<HTMLElement>(FOCUSABLE)];
 
@@ -51,6 +65,11 @@ export function initNav(root: Document = document): void {
   function setOpen(next: boolean, restoreFocus: boolean): void {
     if (next === open) return;
     open = next;
+    if (next) {
+      // a box again, still closed, so the sheet has somewhere to ease open from
+      delete menu!.dataset.shut;
+      void menu!.offsetWidth;
+    }
     toggle!.setAttribute('aria-expanded', String(next));
     header!.classList.toggle('is-menu-open', next);
     if (scrim) scrim.hidden = !next;
@@ -62,6 +81,7 @@ export function initNav(root: Document = document): void {
     } else {
       root.removeEventListener('keydown', onKeydown);
       if (restoreFocus) toggle!.focus();
+      shutOnceFaded();
     }
   }
 
