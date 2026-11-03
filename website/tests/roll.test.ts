@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cellsOf, rollText, steps } from '../src/scripts/roll.js';
+
+// A variable (not a literal) keeps Vite from treating new URL(..., import.meta.url) as an asset.
+const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 
 // Rolling numbers (src/scripts/roll.ts): reels for the eye, plain text for everything else.
 
@@ -66,5 +71,10 @@ describe('rolling numbers', () => {
     rollText(el, '43');
     expect(el.textContent).toBe('43');
     expect(el.querySelectorAll('.roll')).toHaveLength(1);
+  });
+
+  it("a reel takes no taps (its mask hides it, but doesn't stop a tap reaching it)", () => {
+    const reel = /\.roll__c--d::after \{([^}]*)\}/.exec(read('../src/styles/components.css'))?.[1] ?? '';
+    expect(reel).toMatch(/pointer-events: none;/);
   });
 });

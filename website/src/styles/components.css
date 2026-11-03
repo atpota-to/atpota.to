@@ -1899,6 +1899,11 @@ html[data-theme="dark"] .site-footer__sprout {
   text-align: center;
   white-space: pre;
   transform: translateY(calc(var(--n, 10) * -100% / 30));
+  /* The mask hides the reel above and below its cell, but a mask doesn't stop taps: in
+     Safari the unseen reel took taps far from its number (a big digit's reaches a page
+     up and down), so the weather report's pages nav, just above the diversity index,
+     took several tries. The cell itself still takes a tap on its digit. */
+  pointer-events: none;
   /* a gentle spring: it settles with a hint of give (roll.ts ROLL_MS) */
   transition: transform 0.8s var(--ease-out);
   transition: transform 0.8s linear(0, 0.017 2%, 0.061 4%, 0.162 7%, 0.285 10%, 0.457 14%, 0.616 18%, 0.78 23%, 0.898 28%, 0.985 34%, 1.026 40%, 1.038 47%, 1.031 55%, 1.015 65%, 1.002 78%, 1);
