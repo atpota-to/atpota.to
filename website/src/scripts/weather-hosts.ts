@@ -518,67 +518,6 @@ export function oddsWords(days: IdentityDay[]): string {
   return `over the last ${week.length} days: 1 in ${formatCount(Math.max(1, Math.round(listed / indep)))} started outside bluesky.`;
 }
 
-/** How long runs lasted: "40 seconds", "a minute", "32 minutes", "3.6 hours". */
-export function lastedWords(seconds: number): string {
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} second${Math.round(seconds) === 1 ? '' : 's'}`;
-  if (seconds < 90) return 'a minute';
-  if (seconds < 5400) return `${Math.round(seconds / 60)} minutes`;
-  return `${Number((seconds / 3600).toFixed(1))} hours`;
-}
-
-/**
- * "plus 5,101 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. ...",
- * the ones the trends' rules call scripted, and the identities with no handle: what the numbers
- * above leave out and why, or '' when nothing was.
- */
-export function bulkWords(d: IdentityDay): string {
-  const parts = [madeInBulkWords(d)].filter(Boolean);
-  const scripted = scriptedWords(d, parts.length > 0);
-  if (scripted) parts.push(scripted);
-  if (d.createdUnnamed > 0) {
-    const unnamed = `${plural(d.createdUnnamed, 'new identity', 'new identities')} with no handle, left out ${parts.length ? 'too' : 'above'}: nobody signs in to one (a git server makes them for its repositories, say).`;
-    parts.push(parts.length ? `and ${unnamed}` : `plus ${unnamed}`);
-  }
-  return parts.join(' ');
-}
-
-/** Why a host's sign-ups count as a script's, by the trends' rules. */
-const SCRIPTED_WHY = { bulk: 'made accounts in bulk in the last 30 days', stopped: 'all in one day, then nobody for three days' } as const;
-
-/**
- * "and 603 more on goodmkt.id, left out too: it made accounts in bulk in the last 30 days, so its
- * other sign-ups count as a script's.", or '' with none. `after`: it follows another sentence.
- */
-function scriptedWords(d: IdentityDay, after: boolean): string {
-  if (d.createdScripted === 0 || d.scripted.length === 0) return '';
-  const lead = after ? 'and' : 'plus';
-  const where = after ? 'left out too' : 'left out above';
-  const [first, second] = d.scripted;
-  if (d.scripted.length === 1) {
-    return first!.why === 'bulk'
-      ? `${lead} ${formatCount(d.createdScripted)}${after ? ' more' : ''} on ${first!.hostname}, ${where}: it made accounts in bulk in the last 30 days, so its other sign-ups count as a script's.`
-      : `${lead} ${formatCount(d.createdScripted)} on ${first!.hostname}, ${where}: they all came in one day, then nobody for three days. a crowd keeps coming; a script stops dead.`;
-  }
-  const on = (h: ScriptedHost) => `${formatCount(h.accounts)} on ${h.hostname} (${SCRIPTED_WHY[h.why]})`;
-  const rest = d.scripted.slice(2);
-  const list = rest.length === 0 ? `${on(first!)} and ${on(second!)}` : `${on(first!)}, ${on(second!)} and ${formatCount(rest.reduce((t, h) => t + h.accounts, 0))} on ${rest.length === 1 ? 'one other host' : `${rest.length} other hosts`}`;
-  return `${lead} ${formatCount(d.createdScripted)}${after ? ' more' : ''} a script made, by the shape of the hosts' days, ${where}: ${list}.`;
-}
-
-function madeInBulkWords(d: IdentityDay): string {
-  if (d.createdBulk === 0 || d.bulk.length === 0) return '';
-  const why = 'they came the way scripts make accounts, at a steady pace switched on and off, or in floods out of nowhere again and again. people signing up build up and trail off.';
-  const [first, second] = d.bulk;
-  if (d.bulk.length === 1) {
-    const runs = first!.bursts === 1 ? `one burst, ${lastedWords(first!.seconds)}` : `${formatCount(first!.bursts)} bursts, ${lastedWords(first!.seconds)} in all`;
-    return `plus ${formatCount(d.createdBulk)} made in bulk on ${first!.hostname} (${runs}), left out above. ${why}`;
-  }
-  const on = (h: BulkHost) => `${formatCount(h.accounts)} on ${h.hostname}`;
-  const rest = d.bulk.slice(2);
-  const where = rest.length === 0 ? `${on(first!)} and ${on(second!)}` : `${on(first!)}, ${on(second!)} and ${formatCount(rest.reduce((t, h) => t + h.accounts, 0))} on ${rest.length === 1 ? 'one other host' : `${rest.length} other hosts`}`;
-  return `plus ${formatCount(d.createdBulk)} made in bulk, left out above: ${where}. ${why}`;
-}
-
 /** Where movers went over the given days, busiest first, adding up each day's top destinations. */
 export function destinationsOf(days: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
   return mergeHosts(days.map((d) => d.destinations));
@@ -616,12 +555,6 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
       ? `${formatIndex((indep / listed) * 100)}% started outside bluesky, and ${formatCount(d.createdCustomHandle)} with a handle on their own domain.`
       : 'nobody has signed up yet.',
   );
-  const bulk = bulkWords(d);
-  const bulkLine = $(report, '[data-p-bulk]');
-  if (bulkLine) {
-    bulkLine.hidden = !bulk;
-    bulkLine.textContent = bulk;
-  }
   const card = $(report, '[data-p-arrivals-card]');
   const chart = $(report, '[data-p-chart="arrivals"]');
   if (card) card.hidden = days.length < 2;

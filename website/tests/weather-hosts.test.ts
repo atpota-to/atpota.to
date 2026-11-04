@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, bulkWords, destinationsOf, growingWords, hostBars, independentOf, identityView, identityViewWords, lastedWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, destinationsOf, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -224,46 +224,27 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(report.querySelector<HTMLElement>('[data-p-odds]')!.hidden).toBe(false);
   });
 
-  it('counts new accounts made in bulk apart, naming the host and how they came', () => {
+  it('counts new accounts made in bulk apart, out of the numbers and without a line of their own', () => {
     const goodmkt = { hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 };
     const batch = idDay('2026-10-29', { createdBluesky: 9905, createdIndependent: 5561, createdCustomHandle: 50, createdBulk: 4615, bulk: [goodmkt] });
     renderIdentities(report, [idDay('2026-10-28', { createdBluesky: 18395, createdIndependent: 840 }), batch], NOW);
     expect(text('[data-p-signups]')).toBe('10,851');
     expect(text('[data-p-indep]')).toBe('946');
     expect(text('[data-p-own]')).toBe('8.7% started outside bluesky, and 50 with a handle on their own domain.');
-    const line = report.querySelector<HTMLElement>('[data-p-bulk]')!;
-    expect(line.hidden).toBe(false);
-    expect(line.textContent).toBe('plus 4,615 made in bulk on goodmkt.id (2 bursts, 32 minutes in all), left out above. they came the way scripts make accounts, at a steady pace switched on and off, or in floods out of nowhere again and again. people signing up build up and trail off.');
+    // the tile doesn't spell out what it left out
+    expect(report.querySelector('[data-p-arrivals]')!.textContent).not.toMatch(/made in bulk|left out/);
     // the week's odds leave them out too
     expect(text('[data-p-odds]')).toBe('over the last 2 days: 1 in 17 started outside bluesky.');
     // the air quality is against every sign-up, the bulk ones included
     expect(text('[data-p-smog-words]')).toContain('of all 166,311 sign-ups');
-    // a day without any hides the line again
-    renderIdentities(report, [idDay('2026-10-29')], NOW);
-    expect(line.hidden).toBe(true);
 
-    const oneBurst = { hostname: 'pds.1095.me', accounts: 38, bursts: 1, seconds: 37 };
-    expect(bulkWords({ ...batch, createdBulk: 38, bulk: [oneBurst] })).toMatch(/^plus 38 made in bulk on pds\.1095\.me \(one burst, 37 seconds\), left out above\./);
-    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4541 }, { ...oneBurst, accounts: 74, bursts: 2 }] })).toMatch(/^plus 4,615 made in bulk, left out above: 4,541 on goodmkt\.id and 74 on pds\.1095\.me\. they came the way scripts/);
-    expect(bulkWords({ ...batch, bulk: [{ ...goodmkt, accounts: 4500 }, { ...oneBurst, accounts: 76 }, { ...oneBurst, hostname: 'a.example', accounts: 30 }, { ...oneBurst, hostname: 'b.example', accounts: 9 }] })).toMatch(/: 4,500 on goodmkt\.id, 76 on pds\.1095\.me and 39 on 2 other hosts\./);
-    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [] })).toBe('');
-    // identities with no handle are left out too, and said so
-    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdUnnamed: 1 })).toBe('plus 1 new identity with no handle, left out above: nobody signs in to one (a git server makes them for its repositories, say).');
-    expect(bulkWords({ ...batch, createdUnnamed: 340 })).toMatch(/people signing up build up and trail off\. and 340 new identities with no handle, left out too: nobody signs in to one/);
+    // identities with no handle are left out too, and the ones the trends call scripted
     expect(independentOf({ ...batch, createdUnnamed: 340 })).toBe(5561 - 4615 - 340);
-    // and the ones the trends call scripted, by host and why
     expect(independentOf({ ...batch, createdUnnamed: 340, createdScripted: 600 })).toBe(5561 - 4615 - 340 - 600);
-    const leftover = { hostname: 'goodmkt.id', accounts: 603, why: 'bulk' as const };
-    const stopped = { hostname: 'refpds.oyster.cafe', accounts: 1062, why: 'stopped' as const };
-    expect(bulkWords({ ...batch, createdScripted: 603, scripted: [leftover] })).toMatch(/trail off\. and 603 more on goodmkt\.id, left out too: it made accounts in bulk in the last 30 days, so its other sign-ups count as a script's\.$/);
-    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdScripted: 1062, scripted: [stopped] })).toBe("plus 1,062 on refpds.oyster.cafe, left out above: they all came in one day, then nobody for three days. a crowd keeps coming; a script stops dead.");
-    expect(bulkWords({ ...batch, createdBulk: 0, bulk: [], createdScripted: 1665, scripted: [stopped, leftover], createdUnnamed: 2 })).toBe(
-      'plus 1,665 a script made, by the shape of the hosts\' days, left out above: 1,062 on refpds.oyster.cafe (all in one day, then nobody for three days) and 603 on goodmkt.id (made accounts in bulk in the last 30 days). and 2 new identities with no handle, left out too: nobody signs in to one (a git server makes them for its repositories, say).',
-    );
     // over days, each host's add up
+    const leftover = { hostname: 'goodmkt.id', accounts: 603, why: 'bulk' as const };
     const two = sumDays([{ ...batch, createdScripted: 603, scripted: [leftover] }, { ...idDay('2026-10-28'), createdScripted: 527, scripted: [{ ...leftover, accounts: 527 }] }])!;
     expect([two.createdScripted, two.scripted]).toEqual([1130, [{ hostname: 'goodmkt.id', accounts: 1130, why: 'bulk' }]]);
-    expect([lastedWords(1), lastedWords(75), lastedWords(1929), lastedWords(13_080)]).toEqual(['1 second', 'a minute', '32 minutes', '3.6 hours']);
     // over a week, each day's runs add up by host
     const week = sumDays([batch, idDay('2026-10-28', { createdBulk: 3903, bulk: [{ hostname: 'goodmkt.id', accounts: 3903, bursts: 2, seconds: 13_080 }] })])!;
     expect([week.createdBulk, week.bulk]).toEqual([8518, [{ hostname: 'goodmkt.id', accounts: 8518, bursts: 4, seconds: 15_009 }]]);
