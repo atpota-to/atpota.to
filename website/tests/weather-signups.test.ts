@@ -168,8 +168,6 @@ describe('sign-ups over time: the tile', () => {
     const rows = [...tile.querySelectorAll('[data-sh-weeks] tbody tr')].map((r) => [...r.children].map((c) => c.textContent));
     expect(rows[0]).toEqual(['oct 28 to nov 3', '8,120', '↑ 10%up 10% on the 7 days before', '420', '↑ 20%up 20% on the 7 days before']);
     expect(rows.at(-1)).toEqual(['oct 8 to oct 13 (6 days)', '6,300', '–', '300', '–']);
-    expect(text('[data-sh-note]')).toMatch(/^days are utc, .* i started counting on oct 8\.$/);
-    expect(text('[data-sh-note]')).not.toMatch(/[A-Z—]/);
   });
 
   it('says week by week in the chart titles once it goes that way', () => {

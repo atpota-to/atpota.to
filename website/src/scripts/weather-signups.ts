@@ -381,12 +381,6 @@ export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf
   if (wrap) wrap.hidden = weeks.length === 0;
   const table = $<HTMLTableElement>(tile, '[data-sh-weeks]');
   if (table) renderWeeks(table, weeks);
-  const began = startOf(first) > asOf - 365 * DAY ? ` i started counting on ${shortDay(first)}.` : '';
-  setText(
-    tile,
-    '[data-sh-note]',
-    `days are utc, and the numbers are whole days: today's only in the charts, dashed out to where it's on pace to end up. new accounts count as they do in new arrivals: on hosts the relay carries, less the ones a script made and identities with no handle.${began}`,
-  );
 }
 
 /** Loads the tile, and again every SIGNUPS_REFRESH_MS while the tab is visible; a failed refresh keeps what's shown. */
