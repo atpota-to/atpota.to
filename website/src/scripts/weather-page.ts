@@ -56,6 +56,7 @@ import { initLensDock, unitAloneOn } from './weather-dock';
 import { initHostPanel } from './weather-host-panel';
 import { initForecast } from './weather-forecast';
 import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts';
+import { initSignupHistory } from './weather-signups';
 import { bindPageLinks, bindShare } from './weather-share';
 import { topicOf } from './weather-topics';
 import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
@@ -763,6 +764,19 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "sign-ups to hosts the relay doesn't carry don't count here. they go in the air quality instead (◕‿◕)",
     ].join('\n'),
   },
+  signups: {
+    question: 'how are sign-ups doing over time?',
+    answer: [
+      "it's every day of new accounts i've counted from the plc directory, the same way as new arrivals: on hosts the relay carries, less the ones a script made and identities with no handle.",
+      '',
+      "- the numbers are whole utc days, so today isn't in them yet. yesterday is set against the day before, the last 7 days against the 7 before, and the last 30 against the 30 before, once i've kept that long",
+      "- the charts go day by day, with today as a dashed line out to where it's on pace to end up. once i've kept more than four months, they go week by week",
+      '- the table goes back 7 days at a time from yesterday, each set against the 7 before',
+      '- independent means people signing up on hosts outside bluesky',
+      '',
+      "it doesn't follow the window you pick: it's always the whole history i've kept, up to a year (◕‿◕)",
+    ].join('\n'),
+  },
   winds: {
     question: 'what are migration winds?',
     answer: [
@@ -1335,6 +1349,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
   const trends = $(report, '[data-r-trends]');
   if (trends) initTrends(trends, feed, lens);
   initHostTrends(report, feed, lens, (list, bars) => renderBars(list, bars, undefined), watchHosts(desk));
+  initSignupHistory(report, fetchImpl);
   const newApps = watchNewApps(desk);
   initAlmanac(
     report,

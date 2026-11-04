@@ -566,6 +566,47 @@
                 </figure>
             </section>
 
+            <!-- new accounts over the whole history kept, and against the stretch before, from atmosphere_plc_day; keeps its own times, not the lens's (src/scripts/weather-signups.ts) -->
+            <section class="tile weather-tile weather-pds weather-signups" aria-labelledby="weather-signups-title" data-p-history hidden data-topics="migration">
+                <div class="weather-tile__head">
+                    <div class="weather-tile__titled">
+                        <h2 class="weather-tile__title" id="weather-signups-title">sign-ups over time</h2>
+                        <button type="button" class="weather-info" data-poe-explain="signups" aria-haspopup="dialog" aria-label="how are sign-ups doing over time? ask poe" title="what's this?">
+                            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
+                        </button>
+                    </div>
+                    <p class="weather-tile__aside" data-sh-since></p>
+                </div>
+                <p class="weather-pds__line weather-pds__lede" data-sh-headline></p>
+                <dl class="weather-pds__stats weather-pds__stats--three">
+                    <div><dt data-sh-label="day">yesterday</dt><dd data-sh-value="day">&ndash;</dd><dd class="weather-change" data-sh-change="day"></dd></div>
+                    <div><dt data-sh-label="week">last 7 days</dt><dd data-sh-value="week">&ndash;</dd><dd class="weather-change" data-sh-change="week"></dd></div>
+                    <div><dt data-sh-label="month">last 30 days</dt><dd data-sh-value="month">&ndash;</dd><dd class="weather-change" data-sh-change="month"></dd></div>
+                </dl>
+                <p class="weather-pds__line" data-sh-share hidden></p>
+                <div class="weather-trends__charts">
+                    <figure class="weather-chart-card">
+                        <figcaption class="weather-chart-card__title" data-sh-chart-title="all">new accounts each day</figcaption>
+                        <div class="weather-chart" data-sh-chart="all"></div>
+                    </figure>
+                    <figure class="weather-chart-card">
+                        <figcaption class="weather-chart-card__title" data-sh-chart-title="independent">new accounts on independent hosts each day</figcaption>
+                        <div class="weather-chart" data-sh-chart="independent"></div>
+                    </figure>
+                </div>
+                <div class="weather-hosts__days" data-sh-weeks-wrap hidden>
+                    <h3 class="weather-hosts__subtitle">week by week</h3>
+                    <div class="weather-hosts__scroll">
+                        <table class="weather-hosts__table" data-sh-weeks>
+                            <caption class="visually-hidden">new accounts each 7 days back from yesterday (utc), on independent hosts too, and each against the 7 days before</caption>
+                            <thead><tr><th scope="col">7 days</th><th scope="col">new accounts</th><th scope="col">change</th><th scope="col">independent</th><th scope="col">change</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <p class="weather-tile__note" data-sh-note></p>
+            </section>
+
             <!-- the independent hosts by size, from the live census (weather-page.ts renderHosts) -->
             <section class="tile weather-tile weather-pds weather-sizes" aria-labelledby="weather-sizes-title" data-p-sizes hidden data-topics="hosts">
                 <div class="weather-tile__titled">
