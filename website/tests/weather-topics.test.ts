@@ -47,10 +47,10 @@ describe('the topics', () => {
       expect(tiles.filter((x) => x.dataset.topics!.split(' ').includes(t.slug)).length, t.slug).toBeGreaterThan(0);
       expect(CSS).toContain(`html[data-weather-topic="${t.slug}"] .weather > [data-topics]:not([data-topics~="${t.slug}"])`);
     }
-    // the pds hosts page is the hosts; moving house is the moves and the sign-ups
+    // the pds hosts page is the hosts; moving house is the moves and the sign-ups, today's and over time
     const on = (slug: string) => tiles.filter((x) => x.dataset.topics!.split(' ').includes(slug)).map((x) => x.getAttribute('aria-labelledby'));
     expect(on('hosts')).toEqual(['weather-hosts-title', 'weather-sizes-title', 'weather-census-title']);
-    expect(on('migration')).toEqual(['weather-arrivals-title', 'weather-winds-title']);
+    expect(on('migration')).toEqual(['weather-arrivals-title', 'weather-winds-title', 'weather-signups-title']);
     // the header, the dock, the nav and how i measure it are on every page
     for (const sel of ['[data-weather-hero]', '[data-weather-dock]', '.weather-topics', '.weather-how']) expect(doc.querySelector(sel)!.hasAttribute('data-topics'), sel).toBe(false);
   });
