@@ -555,10 +555,10 @@ describe('the garden page', () => {
     expect(groups[COPY.people.visitors(true)]).toEqual(['@mo.example', '@bo.example']);
     expect(groups[COPY.people.helpers(true)]).toEqual(['@mo.example', '@bo.example']);
     expect(groups[COPY.people.helped(true)]).toEqual(['@bo.example']);
-    // every kind there is: the pressed daisy found (the tulip has bloomed, but you haven't
-    // taken a look yet), the rest dark with where they come from
-    expect(text('[data-guide-count]')).toBe(`1 of ${KINDS.length} found`);
-    expect([...document.querySelectorAll('.garden-guide__kind.is-found .garden-guide__name')].map((n) => n.textContent)).toEqual(['daisy']);
+    // every kind there is: the pressed daisy and the tulip that has bloomed found, the rest
+    // dark with where they come from
+    expect(text('[data-guide-count]')).toBe(`2 of ${KINDS.length} found`);
+    expect([...document.querySelectorAll('.garden-guide__kind.is-found .garden-guide__name')].map((n) => n.textContent).sort()).toEqual(['daisy', 'tulip']);
     const storm = [...document.querySelectorAll('.garden-guide__kind')][KINDS.indexOf('storm-lily')]!;
     expect(storm.querySelector('.garden-guide__note')!.textContent).toBe(KIND_INFO['storm-lily'].origin);
     expect(storm.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe(COPY.guideMissing(KIND_INFO['storm-lily'].origin));
@@ -575,39 +575,72 @@ describe('the garden page', () => {
     expect(document.activeElement).toBe($('[data-featured-title]'));
   });
 
-  it('on the day it blooms, the bud waits for you to take a look', async () => {
+  it('on the day it blooms, it opens up close by itself, once', async () => {
     const bloomed = flowerOf(ME, { daysOld: 7.5, care: 1 });
-    await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [bloomed], garden: true } } }).run();
-    expect(text('[data-featured-title]')).toBe(COPY.waiting);
-    expect(text('.garden-flower__name')).toBe(COPY.somethingBlooming);
-    $('[data-reveal]').click();
+    const people = { [ME]: { flowers: [bloomed], garden: true } };
     const v = flowerVariant(bloomed);
+    await rig({ signedIn: true, path: '/garden/me.test/flowers', people }).run();
+    // no button to press: it's in bloom, with its ribbon, everywhere on the page
+    expect(document.querySelector('[data-reveal]')).toBeNull();
     expect(text('[data-featured-title]')).toBe(describeBloom('violet', v));
+    expect($('[data-featured-bed]').classList.contains('is-revealing')).toBe(true);
     expect(document.querySelector('.garden-hero__ribbon')).not.toBeNull();
     expect(text('[data-featured-status]')).toBe(COPY.bloomed('violet', describeBloom('violet', v)));
     expect(seenBloom(createStore(() => window.localStorage), bloomed.uri)).toBe(true);
     expect(text('.garden-flower__name')).toBe(describeBloom('violet', v));
+    expect(text('[data-guide-count]')).toBe(`1 of ${KINDS.length} found`);
+    // the next visit it's simply in bloom: no second flourish
+    await rig({ signedIn: true, path: '/garden/me.test/flowers', people }).run();
+    expect(text('[data-featured-title]')).toBe(describeBloom('violet', v));
+    expect($('[data-featured-bed]').classList.contains('is-revealing')).toBe(false);
+    expect(document.querySelector('.garden-hero__ribbon')).toBeNull();
+    expect(text('[data-featured-status]')).toBe('');
   });
 
-  it('a seed stays a seed until the garden says what it grew into; then it waits for you to take a look', async () => {
+  it("a bloom keeps its flourish for when you open your flowers", async () => {
+    const bloomed = flowerOf(ME, { daysOld: 7.5, care: 1 });
+    await rig({ signedIn: true, path: '/garden/me.test', people: { [ME]: { flowers: [bloomed], garden: true } } }).run();
+    expect(seenBloom(createStore(() => window.localStorage), bloomed.uri)).toBe(false);
+    $('[data-level-link="flowers"]').click();
+    expect(shown('[data-level="flowers"]')).toBe(true);
+    expect(seenBloom(createStore(() => window.localStorage), bloomed.uri)).toBe(true);
+    expect(document.querySelector('.garden-hero__ribbon')).not.toBeNull();
+    // two that bloomed the same day: the first opens by itself, the second when you bring it up close
+    localStorage.clear();
+    const tulip = flowerOf(ME, { rkey: '3ktulip', kind: 'tulip', daysOld: 7.2, plot: 5 });
+    await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [bloomed, tulip], garden: true } } }).run();
+    expect(text('[data-featured-title]')).toBe(describeBloom('violet', flowerVariant(bloomed)));
+    expect(seenBloom(createStore(() => window.localStorage), tulip.uri)).toBe(false);
+    [...document.querySelectorAll<HTMLButtonElement>('.garden-flower__name')].find((b) => b.textContent === describeBloom('tulip', flowerVariant(tulip)))!.click();
+    expect(text('[data-featured-title]')).toBe(describeBloom('tulip', flowerVariant(tulip)));
+    expect(document.querySelector('.garden-hero__ribbon')).not.toBeNull();
+    expect(seenBloom(createStore(() => window.localStorage), tulip.uri)).toBe(true);
+    // a visitor to your page never uses it up
+    localStorage.clear();
+    await rig({ path: '/garden/me.test/flowers', people: { [ME]: { flowers: [bloomed], garden: true } } }).run();
+    expect(text('[data-featured-title]')).toBe(describeBloom('violet', flowerVariant(bloomed)));
+    expect(document.querySelector('.garden-hero__ribbon')).toBeNull();
+    expect(seenBloom(createStore(() => window.localStorage), bloomed.uri)).toBe(false);
+  });
+
+  it('a seed stays a seed until the garden says what it grew into; then it opens by itself', async () => {
     const budding = { ...flowerOf(ME, { rkey: '3kseed1', kind: 'seed', daysOld: 3 }), family: 'leafy' as const };
     const opening = { ...flowerOf(ME, { rkey: '3kseed2', kind: 'seed', daysOld: 7.5, plot: 2 }), tends: [] };
     await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [opening, budding], garden: true } } }).run();
-    // the one in bloom isn't known yet: no reveal, just "it's opening"
+    // the one in bloom isn't known yet: no flourish, just "it's opening"
     expect(text('[data-featured-title]')).toBe(COPY.opening);
-    expect(document.querySelector('[data-reveal]')).toBeNull();
+    expect(document.querySelector('.garden-hero__ribbon')).toBeNull();
+    expect(seenBloom(createStore(() => window.localStorage), opening.uri)).toBe(false);
     const names = [...document.querySelectorAll('.garden-flower__name')].map((n) => n.textContent);
     expect(names).toEqual([COPY.somethingBlooming, COPY.growing('a', 'seed', 'bud')]);
     // nothing about a seed counts in the field guide or as a rare find until it's known
     expect(text('[data-guide-count]')).toBe(`0 of ${KINDS.length} found`);
 
-    // once the garden has settled it, it's a bloom like any other, waiting to be seen
+    // once the garden has settled it, it's a bloom like any other, and opens by itself
     const known = { ...opening, kind: 'lotus' as const, family: 'flower' as const, weather: { planted: { wind: 0, mix: 1 }, grew: { wind: 1, mix: 1, apps: [] } } };
     await rig({ signedIn: true, path: '/garden/me.test/flowers', people: { [ME]: { flowers: [known], garden: true } } }).run();
-    expect(text('[data-featured-title]')).toBe(COPY.waiting);
-    expect(text('[data-guide-count]')).toBe(`0 of ${KINDS.length} found`);
-    $('[data-reveal]').click();
     expect(text('[data-featured-title]')).toBe(describeBloom('lotus', flowerVariant(known)));
+    expect(document.querySelector('.garden-hero__ribbon')).not.toBeNull();
     expect(text('[data-featured-lede]')).toContain('planted in a calm minute, grew in a light week under a usual sky.');
     expect(text('[data-guide-count]')).toBe(`1 of ${KINDS.length} found`);
   });
