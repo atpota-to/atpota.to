@@ -134,6 +134,8 @@ export function createLayout(doc: Document = document): Layout {
 
   const box = (el: HTMLElement, zoom: number, w: number | null, h: number | null) => {
     el.style.setProperty('zoom', String(zoom));
+    // zoom scales the corners too: overlay.css divides the frame's radius by it
+    el.style.setProperty('--ov-zoom', String(zoom));
     el.style.width = w === null ? '' : `${Math.round((w / zoom) * 100) / 100}px`;
     el.style.height = h === null ? '' : `${Math.round((h / zoom) * 100) / 100}px`;
   };
@@ -151,7 +153,9 @@ export function createLayout(doc: Document = document): Layout {
       const natural = (el: HTMLElement, strip: boolean) => {
         box(el, 1, null, null);
         if (strip) el.style.width = 'max-content';
-        const size = { w: el.offsetWidth, h: el.offsetHeight };
+        // rounded up, with a pixel spare: a tile a hair narrower than its text wraps it
+        const rect = el.getBoundingClientRect();
+        const size = { w: Math.ceil(rect.width) + 1, h: Math.ceil(rect.height) };
         el.style.width = '';
         return size;
       };

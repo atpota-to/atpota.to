@@ -1435,10 +1435,11 @@ body[data-side="left"] .ov-bubble {
   justify-content: center;
 }
 
-/* every tile on the frame has the frame's corners, pills and Anisota's squares too */
+/* every tile on the frame has the frame's corners, pills and Anisota's squares too, the
+   same on screen however far layout.ts zooms it (--ov-zoom) */
 .ovsc .ovsc__slot > [data-ov-widget] {
   overflow: hidden;
-  border-radius: var(--ovsc-radius);
+  border-radius: calc(var(--ovsc-radius) / var(--ov-zoom, 1));
 }
 
 /* the sky's widgets would melt into a sky backdrop: on the frame they're solid paper */
