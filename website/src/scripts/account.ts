@@ -238,7 +238,13 @@ export function mountAccount(opts: AccountOptions = {}): void {
     verified ??= (async () => {
       const result = await auth!.start().catch(() => null);
       if (result?.session) await show(result.session);
-      else forget();
+      // Couldn't check in time (another tab holding on to the session): not signed out, so a
+      // remembered avatar stays, and the next check asks again.
+      else if (result?.stalled) {
+        verified = null;
+        if (view.kind !== 'signed-in') forget();
+        return;
+      } else forget();
       if (onBlog || !result?.session) return;
       const pending = readPending(store, now());
       if (!pending || !PENDING_HERE.has(pending.kind) || pending.returnTo !== here()) return;

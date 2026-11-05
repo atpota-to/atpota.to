@@ -30,6 +30,7 @@ export const SIGNIN_EVENT = 'account:signin';
 export const SETTINGS_COPY = {
   lede: (who: string) => `signed in as ${who}.`,
   checkingLede: 'checking who you are…',
+  stalledLede: "couldn't check who you are just now. another atpota.to tab may be holding on to your sign-in: close it and reload this page.",
   signedOutLede: "you're not signed in.",
   unavailableTitle: 'settings',
   unavailableLede: 'settings need a bluesky sign-in, which only works on atpota.to itself.',
@@ -119,7 +120,7 @@ export interface SettingsOptions {
   now?: () => number;
 }
 
-type State = 'checking' | 'unavailable' | 'signed-out' | 'signed-in';
+type State = 'checking' | 'stalled' | 'unavailable' | 'signed-out' | 'signed-in';
 
 export async function init(opts: SettingsOptions = {}): Promise<void> {
   const doc = opts.doc ?? document;
@@ -163,6 +164,7 @@ export async function init(opts: SettingsOptions = {}): Promise<void> {
       lede.textContent = SETTINGS_COPY.unavailableLede;
     } else if (state === 'signed-out') lede.textContent = SETTINGS_COPY.signedOutLede;
     else if (state === 'checking') lede.textContent = SETTINGS_COPY.checkingLede;
+    else if (state === 'stalled') lede.textContent = SETTINGS_COPY.stalledLede;
     else if (me) {
       const who = me.handle.startsWith('did:') ? me.handle : `@${me.handle}`;
       lede.textContent = SETTINGS_COPY.lede(who);
@@ -213,6 +215,7 @@ export async function init(opts: SettingsOptions = {}): Promise<void> {
   if (!auth.eager) return setState('signed-out');
   setState('checking');
   const result = await auth.start().catch(() => null);
+  if (result?.stalled) return setState('stalled');
   if (!result?.session) return setState('signed-out');
   session = result.session;
   const me = await loadMe(fetchImpl, session.did);

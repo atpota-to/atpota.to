@@ -123,6 +123,7 @@ export const COPY = {
   otherHost: 'gardens work on atpota.to.',
   missing: { title: 'no garden here', lede: (actor: string) => `we couldn't find ${actor.startsWith('did:') ? actor : `@${actor}`} on bluesky.` },
   loadFailed: "this garden didn't load just now. try again in a moment?",
+  stalled: "couldn't check your sign-in just now, so this is the visitor's view. another atpota.to tab may be holding on to it: close it and reload.",
   eyebrow: (owner: boolean) => (owner ? 'your garden' : 'a garden on atpota.to'),
   lede: (handle: string, owner: boolean) =>
     owner ? `@${handle} · your page: your garden, and every flower you've planted.` : `@${handle} · their garden, and every flower they've planted.`,
@@ -448,11 +449,30 @@ function face(doc: Document, p: { did: string; handle: string; avatar?: string |
   return span;
 }
 
-/** Makes an Auth whose start() runs once, however many parts of the page ask. */
+/**
+ * Makes an Auth whose start() runs once, however many parts of the page ask. An answer that
+ * stalled (the session couldn't be checked in time) isn't kept, so the next ask tries again.
+ */
 function startOnce(auth: Auth | null): Auth | null {
   if (!auth) return null;
   let started: ReturnType<Auth['start']> | null = null;
-  return { ...auth, start: () => (started ??= auth.start()) };
+  return {
+    ...auth,
+    start: () => {
+      if (started) return started;
+      const p = auth.start();
+      started = p;
+      void p.then(
+        (r) => {
+          if (r.stalled && started === p) started = null;
+        },
+        () => {
+          if (started === p) started = null;
+        },
+      );
+      return p;
+    },
+  };
 }
 
 /* ---------- the page ---------- */
@@ -1431,8 +1451,14 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   // garden below (TEND_KEY), which the garden waters itself once it loads.
   if (pending?.kind === 'tend' && safeReturnTo(win.location.pathname) === pending.returnTo && !store.get(TEND_KEY)) clearPending(store);
 
+  // The garden doesn't wait on the session to start loading: checking it can take a while
+  // (and, with another tab holding on to it, gives up after RESTORE_TIMEOUT_MS).
+  const asked = route ? (route.actor ?? GARDEN_SUBJECT) : null;
+  const gardener = asked ? fetchGardener(asked, fetchImpl) : null;
+  let stalled = false;
   if (auth?.eager) {
     const result = await auth.start();
+    stalled = Boolean(result.stalled);
     if (result.session) {
       session = result.session;
       me = await loadMe(fetchImpl, session.did);
@@ -1440,7 +1466,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     }
   }
 
-  if (!route) {
+  if (!route || !asked || !gardener) {
     root.dataset.state = 'missing';
     if (headStats) headStats.hidden = true;
     setText(headTitle, COPY.missing.title);
@@ -1450,8 +1476,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   }
 
   // /garden is the community garden, signed in or not: atpotato's page, at this address.
-  const asked = route.actor ?? GARDEN_SUBJECT;
-  const loaded = await fetchGardener(asked, fetchImpl);
+  const loaded = await gardener;
   if (loaded === 'missing' || loaded === null) {
     root.dataset.state = loaded === 'missing' ? 'missing' : 'error';
     if (headStats) headStats.hidden = true;
@@ -1466,6 +1491,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   root.dataset.state = 'ready';
   root.classList.toggle('is-own', owner);
   renderHead();
+  if (stalled) setText(headStatus, COPY.stalled);
   // The community garden's "flowers" and "tending" would be atpotato's own, so it's just the
   // garden (unless that's the address asked for).
   if (levelsNav) levelsNav.hidden = isCommunity() && route.level === 'garden';

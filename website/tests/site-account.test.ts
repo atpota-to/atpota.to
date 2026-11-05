@@ -29,10 +29,10 @@ function fakeSession(): Session {
   return { did: DID, pds: 'https://pds.example', fetch: vi.fn(), signOut: vi.fn(async () => undefined) };
 }
 
-function setup(opts: { session?: Session | null; eager?: boolean; page?: string; callback?: boolean } = {}) {
+function setup(opts: { session?: Session | null; eager?: boolean; page?: string; callback?: boolean; stalled?: boolean } = {}) {
   document.body.innerHTML = `<header data-site-header><div data-site-account></div></header>${dialogMarkup()}`;
   document.body.dataset.page = opts.page ?? 'home';
-  const result: StartResult = { session: opts.session ?? null, callback: opts.callback ?? false, error: null };
+  const result: StartResult = { session: opts.session ?? null, callback: opts.callback ?? false, error: null, ...(opts.stalled ? { stalled: true as const } : {}) };
   const start = vi.fn(async () => result);
   const go = vi.fn();
   const ready: Prepared = { url: 'https://bsky.social/oauth/authorize?x=1', host: 'bsky.social', account: { did: DID, handle: 'someone.example' }, at: NOW };
@@ -95,6 +95,19 @@ describe('header account', () => {
     await vi.waitFor(() => expect(h.slot().querySelector('.site-account__signin')).not.toBeNull());
     // The sign-in had expired: the greeting goes too.
     expect(localStorage.getItem(READER_KEY)).toBeNull();
+  });
+
+  it("keeps a remembered reader when the session can't be checked in time, and asks again later", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    localStorage.setItem(READER_KEY, 'someone.example');
+    const h = setup({ eager: true, session: null, stalled: true });
+    h.mount();
+    vi.advanceTimersByTime(VERIFY_DELAY_MS);
+    await vi.waitFor(() => expect(h.start).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.slot().querySelector('.site-account__signin')).toBeNull();
+    expect(h.slot().querySelector('.site-account__toggle')).not.toBeNull();
+    expect(localStorage.getItem(READER_KEY)).toBe('someone.example');
   });
 
   it("answers the settings page's sign-in button with a plain sign-in that comes back to /settings", async () => {

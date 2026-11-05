@@ -107,7 +107,21 @@ export interface StartResult {
   callback: boolean;
   /** Set when a sign-in came back refused, cancelled or broken. */
   error: string | null;
+  /**
+   * The remembered session couldn't be checked in time (RESTORE_TIMEOUT_MS), so `session`
+   * is null without meaning signed out. Usually another atpota.to tab is holding the
+   * library's lock on the account. Pages go on without it; a later start() asks again.
+   */
+  stalled?: true;
 }
+
+/**
+ * How long a page waits for a remembered session before going on without it. The library
+ * reads a session under a Web Lock that every atpota.to tab shares, and a tab that never
+ * lets go of it (a refresh that never answers, a frozen tab) would otherwise leave every
+ * page that asks waiting forever, with nothing in its console or network panel.
+ */
+export const RESTORE_TIMEOUT_MS = 8_000;
 
 /** A sign-in that is ready to go: the reader has not left the page yet. */
 export interface Prepared {
@@ -191,6 +205,7 @@ export function createAuth(win: Window = window, now: () => number = () => Date.
   };
   const callback = isCallback(win.location);
   let started: Promise<StartResult> | null = null;
+  let settled = false;
 
   return {
     mode,
@@ -204,9 +219,20 @@ export function createAuth(win: Window = window, now: () => number = () => Date.
         } catch (error) {
           // An expired or revoked session lands here too; the library has already forgotten it.
           return { session: null, callback, error: callback ? errorText(error) : null };
+        } finally {
+          settled = true;
         }
       })();
-      return started;
+      // A sign-in coming back is left to finish however long it takes: giving up on it
+      // would read as a failed sign-in. A restore that's stuck is waited on for a while,
+      // then the page goes on; the restore keeps going, and later callers get its answer
+      // once it has one.
+      if (settled || callback) return started;
+      let timer: number | undefined;
+      const stalled = new Promise<StartResult>((resolve) => {
+        timer = win.setTimeout(() => resolve({ session: null, callback, error: null, stalled: true }), RESTORE_TIMEOUT_MS);
+      });
+      return Promise.race([started, stalled]).finally(() => win.clearTimeout(timer));
     },
     warm() {
       void load().catch(() => undefined);

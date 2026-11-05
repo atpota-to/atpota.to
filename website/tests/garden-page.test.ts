@@ -111,7 +111,7 @@ interface Rig {
 }
 
 /** A network where each person may keep a garden (rkey "self"), and the reader may sign in as ME. */
-function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Record<string, PersonOpts>; gardenerDown?: boolean; leaders?: Record<string, unknown> | 'down' } = {}): Rig {
+function rig(opts: { signedIn?: boolean; stalled?: boolean; auth?: null; path?: string; people?: Record<string, PersonOpts>; gardenerDown?: boolean; leaders?: Record<string, unknown> | 'down' } = {}): Rig {
   document.body.innerHTML = MAIN + DIALOG;
   window.history.replaceState(null, '', opts.path ?? '/garden');
   const calls: Rig['calls'] = [];
@@ -146,8 +146,8 @@ function rig(opts: { signedIn?: boolean; auth?: null; path?: string; people?: Re
   };
   const auth: Auth = {
     mode: 'site',
-    eager: Boolean(opts.signedIn),
-    start: async () => ({ session: opts.signedIn ? session : null, callback: false, error: null }),
+    eager: Boolean(opts.signedIn || opts.stalled),
+    start: async () => (opts.stalled ? { session: null, callback: false, error: null, stalled: true } : { session: opts.signedIn ? session : null, callback: false, error: null }),
     warm: () => undefined,
     prepare: async () => ({ url: 'https://bsky.social/oauth/authorize?x', host: 'bsky.social', account: { did: ME, handle: 'me.test' }, at: Date.now() }),
     go: (p) => went.push(p),
@@ -331,6 +331,15 @@ describe('the garden page', () => {
     await rig({ signedIn: true, path: '/garden/me.test' }).run();
     expect(text('[data-head-eyebrow]')).toBe(COPY.eyebrow(true));
     expect(document.title).toBe(COPY.docTitle(null));
+  });
+
+  it("still grows when the sign-in can't be checked (another tab holding on to it): the visitor's view, and why", async () => {
+    const r = rig({ stalled: true });
+    await r.run();
+    expect($('[data-garden-page]').dataset.state).toBe('ready');
+    expect(r.asked).toEqual([GARDEN_SUBJECT]);
+    expect(text('[data-head-title]')).toBe(COPY.community.title);
+    expect(text('[data-head-status]')).toBe(COPY.stalled);
   });
 
   it('the community garden has the leaderboards: one board at a time, ranked, with ties', async () => {

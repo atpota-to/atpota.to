@@ -82,6 +82,16 @@ describe('settings page', () => {
     expect(asked).toHaveBeenCalledOnce();
   });
 
+  it("says so when the sign-in can't be checked, rather than asking to sign in again", async () => {
+    const a = auth(null);
+    vi.mocked(a.start).mockResolvedValue({ session: null, callback: false, error: null, stalled: true });
+    const { root, $ } = await mount(a);
+    expect(root.dataset.state).toBe('stalled');
+    expect($('[data-settings-lede]').textContent).toBe(SETTINGS_COPY.stalledLede);
+    expect($('[data-settings-signin]').hidden).toBe(true);
+    expect($('[data-settings-memory]').hidden).toBe(true);
+  });
+
   it('names a signed-in reader and offers to forget them, asking first', async () => {
     const { root, $ } = await mount(auth(fakeSession()));
     expect(root.dataset.state).toBe('signed-in');
