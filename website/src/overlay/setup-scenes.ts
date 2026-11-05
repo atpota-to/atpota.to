@@ -50,6 +50,7 @@ function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, attrs:
 
 /** The screen share's widget rows, by group: on or off, where on the frame, how it looks, how big at most. */
 export function buildFrameRows(host: HTMLElement): void {
+  // size: how much of its tile a widget fills, 100% filling it
   const doc = host.ownerDocument;
   const rows: HTMLElement[] = [];
   for (const [group, kinds] of Object.entries(WIDGET_GROUPS) as Array<[keyof typeof WIDGET_GROUPS, readonly WidgetKind[]]>) {
@@ -72,7 +73,7 @@ export function buildFrameRows(host: HTMLElement): void {
         look.append(pick);
       }
       const size = el(doc, 'label', { class: 'ovs-field ovs-field--row ovs-widget__size' }, 'size');
-      size.append(el(doc, 'input', { type: 'range', name: `fscale-${kind}`, min: '50', max: '200', step: '10', value: '100' }), el(doc, 'output', { name: `fscaleOut-${kind}` }, '100%'));
+      size.append(el(doc, 'input', { type: 'range', name: `fscale-${kind}`, min: '50', max: '100', step: '10', value: '100' }), el(doc, 'output', { name: `fscaleOut-${kind}` }, '100%'));
       row.append(check, where, ...(look ? [look] : []), size);
       rows.push(row);
     }

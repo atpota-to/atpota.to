@@ -15,8 +15,9 @@
  *               the camera), and win over the layout's when both want the same widget.
  *               There they're tiles that fill their room: below the screen a row as tall
  *               as the room and reaching the screen's edges (tileRow); under the camera a
- *               stack exactly as wide as the camera, short of Poe (squeezeStack). They
- *               shrink to fit, never past the size the streamer asked for
+ *               stack exactly as wide as the camera, short of Poe (squeezeStack). Their
+ *               content grows to fill its tile (up to FILL_MAX), or less with a smaller
+ *               size, and shrinks when they don't all fit
  *
  * The widgets stay in the page all along; a widget that isn't in the config is hidden.
  */
@@ -37,11 +38,11 @@ export interface Layout {
 }
 
 export interface Tile {
-  /** Its size at zoom 1 (its own width, or as wide as it takes). */
+  /** Its size at zoom 1 (its own width, or as wide as its content for the strip). */
   w: number;
   h: number;
-  /** The most it may be (the streamer's size), as a zoom. */
-  max: number;
+  /** How much of its tile it fills (the streamer's size): 1 fills it. */
+  size: number;
   /** It stretches along the row (the strip): it takes what's left over. */
   flex?: boolean;
 }
@@ -53,22 +54,26 @@ export interface Placed {
   h: number;
 }
 
+/** The most a widget on the frame grows to fill its tile. */
+export const FILL_MAX = 2;
+
 /**
- * The row under the screen as tiles: every widget as tall as the room, each zoomed to fit
- * that height (never past its size), and all of them across the room's width, short of the
- * bar's least (`barMin`, 0 without the bar). What's left over goes to the bar, or the
- * strip, or else to the widgets, each by its share, so the row reaches the screen's edges.
+ * The row under the screen as tiles: every widget as tall as the room, its content zoomed
+ * to fill that height (up to FILL_MAX, times its size), and all of them across the room's
+ * width, short of the bar's least (`barMin`, 0 without the bar). Too wide, and they all
+ * shrink alike. What's left over goes to the bar, or the strip, or else to the widgets,
+ * each by its share, so the row reaches the screen's edges.
  */
 export function tileRow(items: readonly Tile[], room: { w: number; h: number }, barMin = 0, gap = FRAME_GAP): Placed[] {
-  if (!items.length || room.w <= 0 || room.h <= 0) return items.map((i) => ({ zoom: i.max, w: i.w * i.max, h: i.h * i.max }));
-  const zooms = items.map((i) => (i.h > 0 ? Math.min(i.max, room.h / i.h) : i.max));
+  if (!items.length || room.w <= 0 || room.h <= 0) return items.map((i) => ({ zoom: i.size, w: i.w * i.size, h: i.h * i.size }));
+  const zooms = items.map((i) => (i.h > 0 ? Math.min(FILL_MAX, room.h / i.h) : 1) * Math.min(1, i.size));
   let widths = items.map((i, n) => (i.flex ? 0 : i.w * zooms[n]!));
   const space = Math.max(0, room.w - (barMin > 0 ? barMin + gap : 0) - gap * (items.length - 1));
   const sum = widths.reduce((a, b) => a + b, 0);
   if (sum > space && sum > 0) {
     const g = space / sum;
     items.forEach((i, n) => {
-      if (!i.flex) zooms[n]! *= g;
+      if (!i.flex) zooms[n] = zooms[n]! * g;
     });
     widths = widths.map((w) => w * g);
   }
@@ -76,12 +81,21 @@ export function tileRow(items: readonly Tile[], room: { w: number; h: number }, 
   const left = Math.max(0, space - used);
   const flexes = items.filter((i) => i.flex).length;
   if (flexes) {
-    // the strip shares what's left with the bar, when there is one
+    // the strip shares what's left with the bar, when there is one, and its content fits in it
     const share = left / (flexes + (barMin > 0 ? 1 : 0));
-    widths = widths.map((w, n) => (items[n]!.flex ? share : w));
+    items.forEach((i, n) => {
+      if (!i.flex) return;
+      widths[n] = share;
+      if (i.w > 0) zooms[n] = Math.min(zooms[n]!, share / i.w);
+    });
   } else if (barMin === 0 && used > 0) widths = widths.map((w) => w + (left * w) / used);
   const r = (x: number) => Math.round(x * 1000) / 1000;
   return items.map((_, n) => ({ zoom: r(Math.max(0.1, zooms[n]!)), w: Math.round(widths[n]!), h: room.h }));
+}
+
+/** A widget's zoom in the column: its content as wide as the column (up to FILL_MAX), times its size. */
+export function columnZoom(item: Pick<Tile, 'w' | 'size'>, width: number): number {
+  return (item.w > 0 ? Math.min(FILL_MAX, width / item.w) : 1) * Math.min(1, item.size);
 }
 
 /** How much a stack of `heights` (with gaps) has to shrink to stand in `room` (1 if it fits). */
@@ -129,21 +143,26 @@ export function createLayout(doc: Document = document): Layout {
     for (const [place, slot] of frameSlots) {
       const here = framed.filter((f) => f.w.place === place && f.el.parentElement === slot);
       if (slot.hidden || !here.length) continue;
+      // the strip's own width is its content's, not the slot's
+      const natural = (el: HTMLElement, strip: boolean) => {
+        box(el, 1, null, null);
+        if (strip) el.style.width = 'max-content';
+        const size = { w: el.offsetWidth, h: el.offsetHeight };
+        el.style.width = '';
+        return size;
+      };
       if (place === 'below') {
         const room = slot.parentElement!;
         const bar = room.querySelector<HTMLElement>('[data-ovsc-bar]');
-        const tiles = here.map(({ el, w }) => {
-          box(el, 1, null, null);
-          return { w: el.offsetWidth, h: el.offsetHeight, max: w.scale / 100, flex: w.kind === 'strip' };
-        });
+        const tiles = here.map(({ el, w }) => ({ ...natural(el, w.kind === 'strip'), size: w.scale / 100, flex: w.kind === 'strip' }));
         const placed = tileRow(tiles, { w: room.clientWidth, h: room.clientHeight }, bar && !bar.hidden ? BAR_MIN : 0);
         here.forEach(({ el }, n) => box(el, placed[n]!.zoom, placed[n]!.w, placed[n]!.h));
         continue;
       }
       const width = slot.clientWidth;
       const room = slot.clientHeight - (body.dataset.poe === 'on' ? poeHeight(doc) : 0);
-      const zooms = here.map(({ w }) => w.scale / 100);
-      // a narrower zoom makes a widget wider in its own pixels, so shorter: measure again
+      const zooms = here.map(({ el, w }) => columnZoom({ w: natural(el, w.kind === 'strip').w, size: w.scale / 100 }, width));
+      // a smaller zoom makes a widget wider in its own pixels, so shorter: measure again
       for (let round = 0; round < 3; round++) {
         const heights = here.map(({ el }, n) => {
           box(el, 1, width / zooms[n]!, null);

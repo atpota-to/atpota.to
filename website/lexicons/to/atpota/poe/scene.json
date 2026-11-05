@@ -34,7 +34,7 @@
         "widgets": {
           "type": "array",
           "maxLength": 16,
-          "description": "The overlay's widgets on the frame, each once. They shrink to fit their place.",
+          "description": "The overlay's widgets on the frame, each once, each a tile that fills its place.",
           "items": { "type": "ref", "ref": "#frameWidget" }
         }
       }
@@ -45,7 +45,7 @@
       "properties": {
         "kind": { "type": "string", "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse", "moon", "mark", "loader", "tid", "flushes", "status", "music", "chat"], "description": "Which widget, as in to.atpota.poe.overlay." },
         "place": { "type": "string", "knownValues": ["below", "beside"], "description": "Under the screen, or in the column beside it, under the camera." },
-        "scale": { "type": "integer", "minimum": 50, "maximum": 200, "description": "Percent of its usual size, at most." },
+        "scale": { "type": "integer", "minimum": 50, "maximum": 100, "description": "How much of its tile on the frame it fills, in percent: 100 fills it." },
         "style": { "type": "string", "maxLength": 32, "description": "How it looks, for a widget with styles, as in to.atpota.poe.overlay." }
       }
     },

@@ -53,7 +53,7 @@ export type FramePlace = (typeof FRAME_PLACES)[number];
 export interface FrameWidget {
   kind: WidgetKind;
   place: FramePlace;
-  /** Percent of its usual size, at most: it shrinks to fit its place. */
+  /** Percent of its tile it fills (FRAME_SIZE_MIN to 100): 100 fills it. */
   scale: number;
   style?: string;
 }
@@ -195,7 +195,7 @@ export function cleanFrameWidgets(list: unknown): FrameWidget[] {
     if (!obj(w) || !isWidgetKind(w.kind) || seen.has(w.kind)) continue;
     seen.add(w.kind);
     const style = styleFor(w.kind, w.style);
-    out.push({ kind: w.kind, place: w.place === 'below' ? 'below' : 'beside', scale: clampScale(w.scale), ...(style ? { style } : {}) });
+    out.push({ kind: w.kind, place: w.place === 'below' ? 'below' : 'beside', scale: Math.min(100, clampScale(w.scale)), ...(style ? { style } : {}) });
   }
   return out;
 }

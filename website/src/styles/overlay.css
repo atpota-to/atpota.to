@@ -1006,6 +1006,8 @@ body[data-side="left"] .ov-bubble {
   z-index: -1;
   overflow: hidden;
   font-family: var(--font-sans);
+  /* every corner on the screen share's frame: the windows' rims, the bar, the tiles */
+  --ovsc-radius: 38px;
   --ovsc-sky: #B3DDF0;
   --ovsc-sky-deep: #8CCBEA;
   --ovsc-ink: #2C3A3E;
@@ -1353,7 +1355,7 @@ body[data-side="left"] .ov-bubble {
   box-sizing: content-box;
   margin: -10px 0 0 -10px;
   border: 10px solid var(--paper);
-  border-radius: 38px;
+  border-radius: var(--ovsc-radius);
   box-shadow: 0 16px 40px rgba(35, 26, 15, 0.25);
 }
 
@@ -1379,7 +1381,7 @@ body[data-side="left"] .ov-bubble {
   gap: 28px;
   min-width: 0;
   padding: 0 34px;
-  border-radius: 36px;
+  border-radius: var(--ovsc-radius);
   background: var(--paper);
   color: var(--text);
   box-shadow: var(--shadow-soft);
@@ -1433,10 +1435,24 @@ body[data-side="left"] .ov-bubble {
   justify-content: center;
 }
 
-/* a pill stretched into a tile would be a blob: the frame's pills take the tiles' corners */
-.ovsc__slot > .ov-badge,
-.ovsc__slot > .ov-strip {
-  border-radius: var(--radius-tile);
+/* every tile on the frame has the frame's corners, pills and Anisota's squares too */
+.ovsc .ovsc__slot > [data-ov-widget] {
+  overflow: hidden;
+  border-radius: var(--ovsc-radius);
+}
+
+/* the sky's widgets would melt into a sky backdrop: on the frame they're solid paper */
+.ovsc .ovsc__slot > .ov-weather,
+.ovsc .ovsc__slot > .ov-strip,
+.ovsc .ovsc__slot > .ov-badge {
+  --ov-sky-text: var(--text);
+  --ov-sky-mono: var(--text-soft);
+  --ov-cell: var(--inset);
+  background: var(--paper);
+}
+
+.ovsc__slot .weather-sky {
+  display: none;
 }
 
 .ovsc__slot > .ov-badge {

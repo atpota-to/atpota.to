@@ -23,7 +23,7 @@ import {
 } from '../src/overlay/scenes.js';
 import { fillSceneForm, holeLines, localInput, sceneFrom } from '../src/overlay/setup-scenes.js';
 import { DEFAULT_CONFIG } from '../src/overlay/config.js';
-import { createLayout, squeezeStack, tileRow } from '../src/overlay/layout.js';
+import { columnZoom, createLayout, FILL_MAX, squeezeStack, tileRow } from '../src/overlay/layout.js';
 import { readFrameWidgets, SCREEN_SIZES, SCREENS, writeFrameWidgets } from '../src/overlay/scenes.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
@@ -122,7 +122,7 @@ describe('scenes', () => {
     expect(withSceneOverrides(SCENE_DEFAULTS.screenshare, readSceneParams(`?${sceneSearch(s)}`).overrides)).toEqual(s);
     // what doesn't check out: unknown kinds, twice the same, a place that isn't one, sizes out of bounds
     const messy = fromSceneRecord('screenshare', { frame: { size: 'huge', words: 'yes', widgets: [{ kind: 'nope' }, { kind: 'pulse', place: 'up', scale: 900 }, { kind: 'pulse', place: 'below' }, { kind: 'music', place: 'below', style: 'loud' }] } });
-    expect(messy.frame).toEqual({ size: 'big', words: true, widgets: [{ kind: 'pulse', place: 'beside', scale: 200 }, { kind: 'music', place: 'below', scale: 100, style: 'now' }] });
+    expect(messy.frame).toEqual({ size: 'big', words: true, widgets: [{ kind: 'pulse', place: 'beside', scale: 100 }, { kind: 'music', place: 'below', scale: 100, style: 'now' }] });
     expect(fromSceneRecord('screenshare', { frame: { widgets: [] } }).frame.widgets).toEqual([]);
     expect(readFrameWidgets('none')).toEqual([]);
     expect(readFrameWidgets(writeFrameWidgets(s.frame.widgets))).toEqual(s.frame.widgets);
@@ -131,24 +131,27 @@ describe('scenes', () => {
     expect(brb.showMark).toBe(false);
   });
 
-  it('lay widgets on the frame out as tiles that fill their room, never past the size asked for', () => {
-    // no bar: a 400-tall card shrinks to the room's height, the badge keeps its size, and the
-    // two of them share the width left over by their own widths, so the row meets the screen's edges
-    const row = tileRow([{ w: 400, h: 400, max: 1 }, { w: 300, h: 60, max: 1 }], { w: 1458, h: 160 });
-    expect(row.map((t) => t.zoom)).toEqual([0.4, 1]);
+  it('lay widgets on the frame out as tiles their content fills, never wider than the room', () => {
+    // no bar: each fills the room's height (a 60-tall badge grows, but no more than FILL_MAX),
+    // and they share the width left over by their own, so the row meets the screen's edges
+    const row = tileRow([{ w: 400, h: 400, size: 1 }, { w: 300, h: 60, size: 1 }], { w: 1458, h: 160 });
+    expect(row.map((t) => t.zoom)).toEqual([0.4, FILL_MAX]);
     expect(row.every((t) => t.h === 160)).toBe(true);
     expect(row[0]!.w + row[1]!.w + 18).toBe(1458);
-    expect(row[1]!.w / row[0]!.w).toBeCloseTo(300 / 160, 1);
-    // with the bar, the widgets keep their own widths and the bar has the rest
-    expect(tileRow([{ w: 300, h: 60, max: 1 }], { w: 1440, h: 160 }, 480).map((t) => t.w)).toEqual([300]);
-    // too wide all together: they shrink by the same amount
-    const tight = tileRow([{ w: 600, h: 100, max: 1 }, { w: 600, h: 100, max: 1 }], { w: 618, h: 160 });
+    expect(row[1]!.w / row[0]!.w).toBeCloseTo(600 / 160, 1);
+    // a smaller size leaves it some air
+    expect(tileRow([{ w: 300, h: 80, size: 0.5 }], { w: 1440, h: 160 }, 480)[0]).toEqual({ zoom: 1, w: 300, h: 160 });
+    // too wide all together: they shrink alike
+    const tight = tileRow([{ w: 600, h: 160, size: 1 }, { w: 600, h: 160, size: 1 }], { w: 618, h: 160 });
     expect(tight[0]!.zoom).toBeCloseTo(0.5);
     expect(tight[0]!.w).toBe(300);
-    // the strip takes what's left: all of it on its own, half beside the bar
-    expect(tileRow([{ w: 1400, h: 64, max: 1.5, flex: true }], { w: 900, h: 160 })).toEqual([{ zoom: 1.5, w: 900, h: 160 }]);
-    expect(tileRow([{ w: 1400, h: 64, max: 1, flex: true }], { w: 1440, h: 160 }, 480)[0]!.w).toBe(471);
+    // the strip takes what's left: all of it on its own, half beside the bar, its content fitting
+    expect(tileRow([{ w: 900, h: 64, size: 1, flex: true }], { w: 1800, h: 160 })).toEqual([{ zoom: 2, w: 1800, h: 160 }]);
+    expect(tileRow([{ w: 1400, h: 64, size: 1, flex: true }], { w: 1440, h: 160 }, 480)[0]).toEqual({ zoom: 0.336, w: 471, h: 160 });
     expect(tileRow([], { w: 0, h: 0 })).toEqual([]);
+    // in the column, content as wide as the column
+    expect(columnZoom({ w: 400, size: 1 }, 360)).toBe(0.9);
+    expect(columnZoom({ w: 100, size: 0.5 }, 360)).toBe(1);
     // a stack under the camera shrinks only when it's too tall for the room
     expect(squeezeStack([100, 100], 300)).toBe(1);
     expect(squeezeStack([300, 300], 318)).toBe(0.5);
@@ -287,7 +290,7 @@ describe('the scenes on the setup page', () => {
     const framed: Scene = {
       ...SCENE_DEFAULTS.screenshare,
       showMark: false,
-      frame: { size: 'small', words: false, widgets: [{ kind: 'strip', place: 'below', scale: 120 }, { kind: 'tid', place: 'beside', scale: 100, style: 'mini' }] },
+      frame: { size: 'small', words: false, widgets: [{ kind: 'strip', place: 'below', scale: 90 }, { kind: 'tid', place: 'beside', scale: 100, style: 'mini' }] },
     };
     fillSceneForm(form, framed);
     expect(sceneFrom(form, framed)).toEqual(framed);
