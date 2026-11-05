@@ -25,7 +25,33 @@
             "description": "Where to find the streamer, on the end screen (\"bsky.app/profile/dame.is\").",
             "items": { "type": "string", "maxLength": 300, "maxGraphemes": 60 }
           },
-          "camera": { "type": "ref", "ref": "#camera" },
+          "frame": {
+      "type": "object",
+      "description": "The rest of the screen share's frame: how big the screen is, whether the bar with the title shows under it, and which widgets go round it. Without it, a big screen, the bar, and the weather badge under the camera.",
+      "properties": {
+        "size": { "type": "string", "knownValues": ["big", "medium", "small"], "description": "The screen's size on the 1920x1080 canvas: 1440x810, 1280x720 or 1120x630." },
+        "words": { "type": "boolean", "description": "Whether the bar with the title and the line under it shows under the screen." },
+        "widgets": {
+          "type": "array",
+          "maxLength": 16,
+          "description": "The overlay's widgets on the frame, each once, each a tile that fills its place.",
+          "items": { "type": "ref", "ref": "#frameWidget" }
+        }
+      }
+    },
+    "frameWidget": {
+      "type": "object",
+      "required": ["kind", "place"],
+      "properties": {
+        "kind": { "type": "string", "knownValues": ["card", "strip", "badge", "apps", "forecast", "pulse", "moon", "mark", "loader", "tid", "flushes", "status", "music", "chat"], "description": "Which widget, as in to.atpota.poe.overlay." },
+        "place": { "type": "string", "knownValues": ["below", "beside"], "description": "Under the screen, or in the column beside it, under the camera." },
+        "scale": { "type": "integer", "minimum": 50, "maximum": 100, "description": "How much of its tile on the frame it fills, in percent: 100 fills it." },
+        "style": { "type": "string", "maxLength": 32, "description": "How it looks, for a widget with styles, as in to.atpota.poe.overlay." }
+      }
+    },
+    "camera": { "type": "ref", "ref": "#camera" },
+          "showMark": { "type": "boolean", "description": "Whether the atpotato wordmark shows beside the words (on the panel, and in the screen share's bar). Without it, true." },
+          "frame": { "type": "ref", "ref": "#frame" },
           "createdAt": { "type": "string", "format": "datetime" },
           "updatedAt": { "type": "string", "format": "datetime" }
         }

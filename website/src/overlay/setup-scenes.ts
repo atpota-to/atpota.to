@@ -2,7 +2,7 @@
  * The setup page's screen editor (overlay/setup.html, data-ovs-scenes): one form for the
  * screen the studio opened (setup.ts, from its card), a preview of the overlay with that
  * screen, its URL, and for a screen share where its windows are, so the screen capture and
- * camera can go exactly under them in OBS. A change is saved to to.atpota.poe.scene/<id>
+ * camera can go exactly under them in OBS, and the widgets on its frame (buildFrameRows). A change is saved to to.atpota.poe.scene/<id>
  * SCENE_SAVE_DELAY_MS after the last one, the same way a layout is.
  *
  * The screens are the ones everyone starts with (starting, brb, ending, screenshare,
@@ -10,9 +10,9 @@
  * their repo in one listRecords (screensFrom).
  */
 
-import type { OverlayConfig } from './config';
+import { styleFor, WIDGET_GROUPS, WIDGET_HINTS, WIDGET_KINDS, WIDGET_NAMES, WIDGET_STYLES, type OverlayConfig, type WidgetKind } from './config';
 import { toSearch } from './params';
-import { cleanText, copyScene, frameHoles, GROUNDS, isSceneKind, LINK_MAX, MAX_LINKS, MAX_SCREENS, NAME_MAX, SCENE_DEFAULTS, SCENE_KINDS, SCENE_NAMES, sceneSearch, type Ground, type Scene } from './scenes';
+import { cleanFrameWidgets, cleanText, copyScene, frameHoles, GROUNDS, isSceneKind, LINK_MAX, MAX_LINKS, MAX_SCREENS, NAME_MAX, SCENE_DEFAULTS, SCENE_KINDS, SCENE_NAMES, sceneSearch, SCREEN_SIZES, type FramePlace, type Ground, type Scene, type ScreenSize } from './scenes';
 import type { SavedScreen } from './store';
 
 export const SCENE_SAVE_DELAY_MS = 1200;
@@ -37,6 +37,62 @@ export const SCENE_COPY = {
   added: "added. it's saved to your repo, with its own URL below.",
 } as const;
 
+/** Where a frame widget can go, as the form says it. */
+export const PLACE_NAMES: Record<FramePlace, string> = { below: 'under the screen', beside: 'in the column beside the screen' };
+const GROUP_NAMES: Record<keyof typeof WIDGET_GROUPS, string> = { weather: 'the weather', anisota: 'anisota', clock: 'the TID clock', records: 'your records', chat: 'chat on screen' };
+
+function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] {
+  const node = doc.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/** The screen share's widget rows, by group: on or off, where on the frame, how it looks, how big at most. */
+export function buildFrameRows(host: HTMLElement): void {
+  // size: how much of its tile a widget fills, 100% filling it
+  const doc = host.ownerDocument;
+  const rows: HTMLElement[] = [];
+  for (const [group, kinds] of Object.entries(WIDGET_GROUPS) as Array<[keyof typeof WIDGET_GROUPS, readonly WidgetKind[]]>) {
+    rows.push(el(doc, 'p', { class: 'ovs-widgets__head' }, GROUP_NAMES[group]));
+    for (const kind of kinds) {
+      const row = el(doc, 'div', { class: 'ovs-widget', 'data-kind': kind });
+      const check = el(doc, 'label', { class: 'ovs-check' });
+      const words = el(doc, 'span', {}, WIDGET_NAMES[kind]);
+      words.append(' ', el(doc, 'em', {}, WIDGET_HINTS[kind]));
+      check.append(el(doc, 'input', { type: 'checkbox', name: `fw-${kind}` }), words);
+      const where = el(doc, 'label', { class: 'ovs-field ovs-field--row ovs-widget__where' }, 'where');
+      const select = el(doc, 'select', { name: `fplace-${kind}` });
+      for (const [value, name] of Object.entries(PLACE_NAMES)) select.append(el(doc, 'option', { value }, name));
+      where.append(select);
+      const styles = WIDGET_STYLES[kind];
+      const look = styles ? el(doc, 'label', { class: 'ovs-field ovs-field--row ovs-widget__style' }, 'style') : null;
+      if (look && styles) {
+        const pick = el(doc, 'select', { name: `fstyle-${kind}` });
+        for (const [id, name] of Object.entries(styles)) pick.append(el(doc, 'option', { value: id }, name));
+        look.append(pick);
+      }
+      const size = el(doc, 'label', { class: 'ovs-field ovs-field--row ovs-widget__size' }, 'size');
+      size.append(el(doc, 'input', { type: 'range', name: `fscale-${kind}`, min: '50', max: '100', step: '10', value: '100' }), el(doc, 'output', { name: `fscaleOut-${kind}` }, '100%'));
+      row.append(check, where, ...(look ? [look] : []), size);
+      rows.push(row);
+    }
+  }
+  host.replaceChildren(...rows);
+}
+
+/** Shows each frame widget's size beside it, greys out the ones that are off, and counts what's on. */
+export function reflectFrame(form: HTMLFormElement, s: Scene): void {
+  for (const kind of WIDGET_KINDS) {
+    form.querySelector(`.ovs-widget[data-kind="${kind}"]`)?.classList.toggle('is-off', !s.frame.widgets.some((w) => w.kind === kind));
+    const out = form.querySelector<HTMLOutputElement>(`output[name="fscaleOut-${kind}"]`);
+    const range = form.elements.namedItem(`fscale-${kind}`) as HTMLInputElement | null;
+    if (out && range) out.value = `${range.value}%`;
+  }
+  const count = form.ownerDocument.querySelector<HTMLElement>('[data-ovs-frame-count]');
+  if (count) count.textContent = s.frame.widgets.length ? `${s.frame.widgets.length} on` : '';
+}
+
 /** A datetime-local value ("2026-10-22T18:30") for an ISO time, in this device's zone. */
 export function localInput(iso: string | null): string {
   if (!iso) return '';
@@ -59,6 +115,7 @@ export function sceneFrom(form: HTMLFormElement, was: Scene): Scene {
   if ((GROUNDS as readonly string[]).includes(ground)) s.ground = ground as Ground;
   s.showPoe = data.has('showPoe');
   s.showWidgets = data.has('showWidgets');
+  if (s.kind !== 'loading') s.showMark = data.has('showMark');
   if (s.kind === 'starting') {
     const mode = text('countdown');
     const at = text('at') ? new Date(text('at')) : null;
@@ -79,6 +136,14 @@ export function sceneFrom(form: HTMLFormElement, was: Scene): Scene {
     const side = text('camSide');
     const shape = text('camShape');
     s.camera = { side: side === 'left' || side === 'none' ? side : 'right', shape: shape === 'circle' || shape === 'wide' ? shape : 'rounded' };
+    const size = text('frameSize');
+    s.frame = {
+      size: (SCREEN_SIZES as readonly string[]).includes(size) ? (size as ScreenSize) : 'big',
+      words: data.has('frameWords'),
+      widgets: cleanFrameWidgets(
+        WIDGET_KINDS.filter((kind) => data.has(`fw-${kind}`)).map((kind) => ({ kind, place: text(`fplace-${kind}`), scale: Number(text(`fscale-${kind}`)) || 100, style: text(`fstyle-${kind}`) || undefined })),
+      ),
+    };
   }
   return s;
 }
@@ -90,6 +155,8 @@ export function fillSceneForm(form: HTMLFormElement, s: Scene): void {
     const r = form.querySelector<HTMLInputElement>(`input[name="${name}"][value="${value}"]`);
     if (r) r.checked = true;
   };
+  const rows = form.querySelector<HTMLElement>('[data-ovs-frame-widgets]');
+  if (rows && !rows.childElementCount) buildFrameRows(rows);
   field('name').value = s.name;
   field('title').value = s.title;
   field('subtitle').value = s.subtitle;
@@ -97,6 +164,20 @@ export function fillSceneForm(form: HTMLFormElement, s: Scene): void {
   field('ground').value = s.ground;
   (field('showPoe') as HTMLInputElement).checked = s.showPoe;
   (field('showWidgets') as HTMLInputElement).checked = s.showWidgets;
+  (field('showMark') as HTMLInputElement).checked = s.showMark;
+  (field('frameWords') as HTMLInputElement).checked = s.frame.words;
+  radio('frameSize', s.frame.size);
+  for (const kind of WIDGET_KINDS) {
+    const w = s.frame.widgets.find((x) => x.kind === kind);
+    const box = form.elements.namedItem(`fw-${kind}`) as HTMLInputElement | null;
+    if (!box) continue;
+    box.checked = Boolean(w);
+    (form.elements.namedItem(`fplace-${kind}`) as HTMLSelectElement).value = w?.place ?? (kind === 'strip' ? 'below' : 'beside');
+    (form.elements.namedItem(`fscale-${kind}`) as HTMLInputElement).value = String(w?.scale ?? 100);
+    const pick = form.elements.namedItem(`fstyle-${kind}`) as HTMLSelectElement | null;
+    if (pick) pick.value = styleFor(kind, w?.style) ?? '';
+  }
+  reflectFrame(form, s);
   radio('countdown', s.countdown.mode);
   const minutes = field('minutes') as HTMLSelectElement;
   minutes.value = [...minutes.options].some((o) => o.value === String(s.countdown.minutes)) ? String(s.countdown.minutes) : '5';
@@ -109,7 +190,7 @@ export function fillSceneForm(form: HTMLFormElement, s: Scene): void {
 
 /** "screen capture: x 40, y 40, 1440 × 810", and the camera's, for the screen share. */
 export function holeLines(s: Scene): string[] {
-  const h = frameHoles(s.camera);
+  const h = frameHoles(s.camera, s.frame.size);
   const line = (name: string, r: { x: number; y: number; w: number; h: number }) => `${name}: x ${r.x}, y ${r.y}, ${r.w} × ${r.h}`;
   return [line('screen capture', h.screen), ...(h.camera ? [line(`camera${s.camera.shape === 'circle' ? ' (it shows as a circle)' : ''}`, h.camera)] : [])];
 }
@@ -233,6 +314,7 @@ export function mountScreenEditor(root: HTMLElement, opts: ScreenEditorOptions):
     const entry = current;
     if (!entry) return;
     entry.scene = sceneFrom(form, entry.scene);
+    reflectFrame(form, entry.scene);
     show();
     opts.changed?.(entry);
     win.clearTimeout(saveTimer);

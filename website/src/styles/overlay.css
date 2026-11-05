@@ -1006,6 +1006,8 @@ body[data-side="left"] .ov-bubble {
   z-index: -1;
   overflow: hidden;
   font-family: var(--font-sans);
+  /* every corner on the screen share's frame: the windows' rims, the bar, the tiles */
+  --ovsc-radius: 38px;
   --ovsc-sky: #B3DDF0;
   --ovsc-sky-deep: #8CCBEA;
   --ovsc-ink: #2C3A3E;
@@ -1050,8 +1052,8 @@ body[data-side="left"] .ov-bubble {
 }
 
 .ovsc__panel,
-.ovsc__bar,
-.ovsc__weather,
+.ovsc__below,
+.ovsc__slot,
 .ovsc__holes {
   z-index: 1;
 }
@@ -1353,7 +1355,7 @@ body[data-side="left"] .ov-bubble {
   box-sizing: content-box;
   margin: -10px 0 0 -10px;
   border: 10px solid var(--paper);
-  border-radius: 38px;
+  border-radius: var(--ovsc-radius);
   box-shadow: 0 16px 40px rgba(35, 26, 15, 0.25);
 }
 
@@ -1361,16 +1363,119 @@ body[data-side="left"] .ov-bubble {
   border-radius: 50%;
 }
 
-.ovsc__bar {
+/* the room under the screen: the bar (when it shows) takes what the widgets leave */
+.ovsc__below {
   position: absolute;
   display: flex;
   align-items: center;
+  gap: 20px; /* scenes.ts FRAME_GAP */
+}
+
+/* as tall as the room under the big screen, however much room a smaller one leaves;
+   beside widgets, as tall as they are: the whole room */
+.ovsc__bar {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  height: min(100%, 170px);
   gap: 28px;
+  min-width: 0;
   padding: 0 34px;
-  border-radius: 36px;
+  border-radius: var(--ovsc-radius);
   background: var(--paper);
   color: var(--text);
   box-shadow: var(--shadow-soft);
+}
+
+/* the frame's widget slots (layout.ts places the scene's widgets in them and fits them) */
+.ovsc__slot {
+  display: flex;
+  gap: 20px; /* scenes.ts FRAME_GAP */
+  min-width: 0;
+}
+
+.ovsc__slot > [hidden] {
+  display: none;
+}
+
+.ovsc__slot--below {
+  flex: 0 1 auto;
+  align-items: center;
+}
+
+/* without the bar the widgets have the whole room, and the strip runs along it */
+.ovsc__bar[hidden] + .ovsc__slot--below {
+  flex: 1 1 0;
+}
+
+.ovsc__below:has(> .ovsc__slot--below:not([hidden])) > .ovsc__bar {
+  height: 100%;
+}
+
+/* layout.ts sizes each widget on the frame as a tile; its own content sits in the middle */
+.ovsc__slot > * {
+  flex: none;
+  margin: 0;
+}
+
+.ovsc__slot > .ov-weather,
+.ovsc__slot > .ov-strip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ovsc__slot > .ov-panel,
+.ovsc__slot > .ov-chat {
+  align-content: center;
+}
+
+.ovsc__slot > .ov-badge,
+.ovsc__slot > .ov-anisota {
+  justify-content: center;
+}
+
+/* every tile on the frame has the frame's corners, pills and Anisota's squares too, the
+   same on screen however far layout.ts zooms it (--ov-zoom) */
+.ovsc .ovsc__slot > [data-ov-widget] {
+  overflow: hidden;
+  border-radius: calc(var(--ovsc-radius) / var(--ov-zoom, 1));
+}
+
+/* the sky's widgets would melt into a sky backdrop: on the frame they're solid paper */
+.ovsc .ovsc__slot > .ov-weather,
+.ovsc .ovsc__slot > .ov-strip,
+.ovsc .ovsc__slot > .ov-badge {
+  --ov-sky-text: var(--text);
+  --ov-sky-mono: var(--text-soft);
+  --ov-cell: var(--inset);
+  background: var(--paper);
+}
+
+.ovsc__slot .weather-sky {
+  display: none;
+}
+
+.ovsc__slot > .ov-badge {
+  padding: 8px 22px;
+}
+
+.ovsc__slot--beside {
+  position: absolute;
+  flex-direction: column;
+  align-items: center;
+}
+
+
+/* the atpotato wordmark, unless the scene leaves it off */
+.ovsc[data-mark="off"] .ovsc__wordmark,
+.ovsc[data-mark="off"] .ovsc__bar-mark {
+  display: none;
+}
+
+.ovsc[data-mark="off"] .ovsc__bar-words {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .ovsc__bar-mark {
@@ -1407,18 +1512,10 @@ body[data-side="left"] .ov-bubble {
   white-space: nowrap;
 }
 
-.ovsc__weather {
-  position: absolute;
-  justify-content: center;
-}
-
-/* Poe stands in the column beside the screen (layout follows the camera's side) */
+/* Poe stands under the column beside the screen, in the middle of it (scene-view.ts) */
 body[data-scene="screenshare"] .ov-poe {
-  right: 40px;
-}
-
-body[data-scene="screenshare"][data-side="left"] .ov-poe {
-  left: 40px;
+  right: auto;
+  left: calc(var(--ovsc-column-mid, 1700px) - var(--ov-poe-width) / 2);
 }
 
 @media (prefers-reduced-motion: reduce) {

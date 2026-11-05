@@ -285,6 +285,8 @@
                                 <label class="ovs-field" data-ovs-for="ending">where to find you <em>up to four, one per line</em>
                                     <textarea name="links" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
                                 </label>
+                                <label class="ovs-check" data-ovs-for="screenshare"><input type="checkbox" name="frameWords" checked><span>a bar under the screen <em>with your title and line</em></span></label>
+                                <label class="ovs-check" data-ovs-for="starting brb ending screenshare clock"><input type="checkbox" name="showMark" checked><span>the atpotato wordmark <em>beside your words</em></span></label>
                             </div>
                         </details>
 
@@ -312,9 +314,15 @@
                         </details>
 
                         <details class="ovs-group" open data-ovs-for="screenshare">
-                            <summary>camera</summary>
+                            <summary>screen and camera</summary>
                             <fieldset class="ovs-group__body ovs-set">
-                                <legend class="ovs-sr">camera</legend>
+                                <legend class="ovs-sr">screen and camera</legend>
+                                <p class="ovs-hint">a smaller screen leaves more room round it for widgets.</p>
+                                <div class="ovs-set--row">
+                                    <label class="ovs-check"><input type="radio" name="frameSize" value="big" checked><span>big screen</span></label>
+                                    <label class="ovs-check"><input type="radio" name="frameSize" value="medium"><span>medium</span></label>
+                                    <label class="ovs-check"><input type="radio" name="frameSize" value="small"><span>small</span></label>
+                                </div>
                                 <div class="ovs-set--row">
                                     <label class="ovs-check"><input type="radio" name="camSide" value="right" checked><span>on the right</span></label>
                                     <label class="ovs-check"><input type="radio" name="camSide" value="left"><span>on the left</span></label>
@@ -326,6 +334,15 @@
                                     <label class="ovs-check"><input type="radio" name="camShape" value="wide"><span>wide</span></label>
                                 </div>
                             </fieldset>
+                        </details>
+
+                        <details class="ovs-group" data-ovs-for="screenshare">
+                            <summary>widgets on the frame <span class="ovs-group__count" data-ovs-frame-count></span></summary>
+                            <div class="ovs-group__body">
+                                <p class="ovs-hint">put any of them under the screen, beside the bar or instead of it, or in the column beside it, under your camera. each fills its own tile there: a smaller size leaves it some air.</p>
+                                <!-- one row per widget (src/overlay/setup-scenes.ts builds them): on or off, where, how big -->
+                                <div class="ovs-widgets" data-ovs-frame-widgets></div>
+                            </div>
                         </details>
 
                         <details class="ovs-group" open data-ovs-for="starting brb ending screenshare">
@@ -354,7 +371,7 @@
                             <summary>on top</summary>
                             <div class="ovs-group__body">
                                 <label class="ovs-check"><input type="checkbox" name="showPoe" checked><span>poe <em>and its chat</em></span></label>
-                                <label class="ovs-check"><input type="checkbox" name="showWidgets"><span>the widgets <em>from your main layout</em></span></label>
+                                <label class="ovs-check"><input type="checkbox" name="showWidgets"><span>the widgets <em>from your main layout, in their corners</em></span></label>
                             </div>
                         </details>
                     </form>
