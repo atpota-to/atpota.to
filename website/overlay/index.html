@@ -67,23 +67,24 @@
             <ul class="ovsc__links" data-ovsc-links hidden></ul>
         </section>
 
-        <div class="ovsc__bar" data-ovsc-bar hidden>
-            <!-- @svg wordmark.svg class="ovsc__bar-mark" -->
-            <div class="ovsc__bar-words">
-                <p class="ovsc__bar-title" data-ovsc-bar-title></p>
-                <p class="ovsc__bar-sub" data-ovsc-bar-sub></p>
+        <!-- the screen share's room under the screen: the bar with the title (or not), then any
+             widgets the scene puts there; and the column under the camera, for more (layout.ts) -->
+        <div class="ovsc__below" data-ovsc-below hidden>
+            <div class="ovsc__bar" data-ovsc-bar hidden>
+                <!-- @svg wordmark.svg class="ovsc__bar-mark" -->
+                <div class="ovsc__bar-words">
+                    <p class="ovsc__bar-title" data-ovsc-bar-title></p>
+                    <p class="ovsc__bar-sub" data-ovsc-bar-sub></p>
+                </div>
             </div>
+            <div class="ovsc__slot ovsc__slot--below" data-ov-frame-slot="below" hidden></div>
         </div>
+        <div class="ovsc__slot ovsc__slot--beside" data-ov-frame-slot="beside" hidden></div>
         <!-- the loading screen: Anisota's mark (src/overlay/anisota.ts) on black -->
         <section class="ovsc__splash" data-ovsc-splash aria-live="polite" hidden>
             <div class="ovsc__splash-mark" data-ov-anisota="loader"></div>
             <p class="ovsc__splash-line" data-ovsc-splash-line></p>
             <p class="ovsc__splash-sub" data-ovsc-splash-sub hidden></p>
-        </section>
-        <section class="ov-badge ovsc__weather" data-ovsc-weather data-state="loading" aria-label="atmospheric conditions" hidden>
-            <!-- @svg weather-sun.svg class="ov-badge__sun weather-sun" -->
-            <p class="ov-badge__big"><span data-weather-records>&ndash;</span> <span class="ov-badge__unit">rec/sec</span></p>
-            <p class="ov-badge__word" data-ov-cond-word></p>
         </section>
     </div>
 

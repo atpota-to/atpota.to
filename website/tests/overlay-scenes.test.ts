@@ -23,6 +23,8 @@ import {
 } from '../src/overlay/scenes.js';
 import { fillSceneForm, holeLines, localInput, sceneFrom } from '../src/overlay/setup-scenes.js';
 import { DEFAULT_CONFIG } from '../src/overlay/config.js';
+import { createLayout, fitSlot } from '../src/overlay/layout.js';
+import { readFrameWidgets, SCREEN_SIZES, SCREENS, writeFrameWidgets } from '../src/overlay/scenes.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const STREAMER = 'did:plc:gq4fo3u6tqzzdkjlwzpb23tj';
@@ -72,11 +74,13 @@ describe('scenes', () => {
   });
 
   it("put the screen share's windows on the canvas, beside each other, inside it", () => {
+    for (const size of SCREEN_SIZES)
     for (const side of ['right', 'left', 'none'] as const) {
       for (const shape of ['rounded', 'circle', 'wide'] as const) {
-        const h = frameHoles({ side, shape });
+        const h = frameHoles({ side, shape }, size);
+        expect(h.screen).toMatchObject(SCREENS[size]);
         expect(h.screen.w / h.screen.h).toBeCloseTo(16 / 9);
-        for (const r of [h.screen, h.camera, h.bar].filter(Boolean)) {
+        for (const r of [h.screen, h.camera, h.below, h.column].filter(Boolean)) {
           expect(r!.x).toBeGreaterThanOrEqual(0);
           expect(r!.y).toBeGreaterThanOrEqual(0);
           expect(r!.x + r!.w).toBeLessThanOrEqual(CANVAS.w);
@@ -85,16 +89,58 @@ describe('scenes', () => {
         if (h.camera) {
           const apart = h.camera.x >= h.screen.x + h.screen.w || h.camera.x + h.camera.w <= h.screen.x;
           expect(apart).toBe(true);
+          expect(h.column.y).toBeGreaterThan(h.camera.y + h.camera.h);
           expect(h.camera.w / h.camera.h).toBeCloseTo(shape === 'wide' ? 16 / 9 : 1, 1);
         } else expect(side).toBe('none');
       }
     }
-    expect(frameHoles({ side: 'right', shape: 'rounded' })).toMatchObject({ screen: { x: 40, y: 40, w: 1440, h: 810 }, camera: { x: 1520, y: 40, w: 360, h: 360 } });
+    expect(frameHoles({ side: 'right', shape: 'rounded' })).toMatchObject({ screen: { x: 40, y: 40, w: 1440, h: 810 }, camera: { x: 1520, y: 40, w: 360, h: 360 }, below: { x: 40, y: 880, w: 1440, h: 160 } });
+    // a smaller screen leaves a wider column; the camera stays a sensible size in the middle of it
+    expect(frameHoles({ side: 'right', shape: 'rounded' }, 'small')).toMatchObject({ screen: { w: 1120, h: 630 }, camera: { x: 1320, w: 440, h: 440 }, column: { x: 1200, w: 680 } });
     expect(frameHoles({ side: 'left', shape: 'rounded' }).camera!.x).toBe(40);
     const path = framePath(frameHoles({ side: 'right', shape: 'circle' }), 'circle');
     expect(path.startsWith('M0,0H1920V1080H0Z')).toBe(true);
     expect(path.match(/Z/g)).toHaveLength(3);
     expect(path).toContain('A180,180');
+  });
+
+  it("keep the screen share's frame: its size, its bar, the wordmark, and its own widgets", () => {
+    // a record from before the frame was a choice looks as it always did
+    const old = fromSceneRecord('screenshare', { kind: 'screenshare', title: 'hi', camera: { side: 'left', shape: 'circle' } });
+    expect(old.showMark).toBe(true);
+    expect(old.frame).toEqual({ size: 'big', words: true, widgets: [{ kind: 'badge', place: 'beside', scale: 100 }] });
+    const s: Scene = {
+      ...SCENE_DEFAULTS.screenshare,
+      showMark: false,
+      frame: { size: 'medium', words: false, widgets: [{ kind: 'strip', place: 'below', scale: 100 }, { kind: 'music', place: 'beside', scale: 80, style: 'history' }] },
+    };
+    const rec = toSceneRecord(s, '2026-10-01T00:00:00.000Z', new Date());
+    expect(rec).toMatchObject({ showMark: false, frame: { size: 'medium', words: false } });
+    expect(fromSceneRecord('screenshare', rec)).toEqual(s);
+    expect(withSceneOverrides(SCENE_DEFAULTS.screenshare, readSceneParams(`?${sceneSearch(s)}`).overrides)).toEqual(s);
+    // what doesn't check out: unknown kinds, twice the same, a place that isn't one, sizes out of bounds
+    const messy = fromSceneRecord('screenshare', { frame: { size: 'huge', words: 'yes', widgets: [{ kind: 'nope' }, { kind: 'pulse', place: 'up', scale: 900 }, { kind: 'pulse', place: 'below' }, { kind: 'music', place: 'below', style: 'loud' }] } });
+    expect(messy.frame).toEqual({ size: 'big', words: true, widgets: [{ kind: 'pulse', place: 'beside', scale: 200 }, { kind: 'music', place: 'below', scale: 100, style: 'now' }] });
+    expect(fromSceneRecord('screenshare', { frame: { widgets: [] } }).frame.widgets).toEqual([]);
+    expect(readFrameWidgets('none')).toEqual([]);
+    expect(readFrameWidgets(writeFrameWidgets(s.frame.widgets))).toEqual(s.frame.widgets);
+    // the wordmark goes on the other screens too
+    const brb = withSceneOverrides(SCENE_DEFAULTS.brb, readSceneParams(`?${sceneSearch({ ...SCENE_DEFAULTS.brb, showMark: false })}`).overrides);
+    expect(brb.showMark).toBe(false);
+  });
+
+  it('shrink widgets to fit their room on the frame, never past the size asked for', () => {
+    // a row 160 tall: a 400-tall card shrinks to fit, a 60-tall badge keeps its size
+    expect(fitSlot([{ w: 400, h: 400, max: 1 }, { w: 300, h: 60, max: 1 }], { w: 1440, h: 160 }, true)).toEqual([0.4, 1]);
+    // too wide all together: everything shrinks by the same amount
+    const z = fitSlot([{ w: 600, h: 100, max: 1 }, { w: 600, h: 100, max: 1 }], { w: 618, h: 160 }, true);
+    expect(z[0]).toBeCloseTo(0.5);
+    // the strip stretches along the row, so its width doesn't count
+    expect(fitSlot([{ w: 1400, h: 64, max: 1.5, flex: true }], { w: 900, h: 160 }, true)).toEqual([1.5]);
+    // a column: no wider than it, and the stack no taller
+    expect(fitSlot([{ w: 720, h: 200, max: 1 }], { w: 360, h: 1000 }, false)).toEqual([0.5]);
+    expect(fitSlot([{ w: 100, h: 300, max: 1 }, { w: 100, h: 300, max: 1 }], { w: 360, h: 318 }, false)).toEqual([0.5, 0.5]);
+    expect(fitSlot([], { w: 0, h: 0 }, true)).toEqual([]);
   });
 
   it('count down as people read clocks', () => {
@@ -167,6 +213,41 @@ describe('the scene on the overlay', () => {
     const camera = root.querySelector<HTMLElement>('[data-ovsc-hole="camera"]')!;
     expect(camera.style.left).toBe('40px');
     expect(camera.classList.contains('is-circle')).toBe(true);
+    expect(root.dataset.mark).toBe('on');
+    // the bar can go, the wordmark too; with no words left there's no bar
+    view.show({ ...SCENE_DEFAULTS.screenshare, title: 'hi', frame: { ...SCENE_DEFAULTS.screenshare.frame, words: false } });
+    expect(root.querySelector<HTMLElement>('[data-ovsc-bar]')!.hidden).toBe(true);
+    view.show({ ...SCENE_DEFAULTS.screenshare, title: '', subtitle: '', showMark: false });
+    expect(root.dataset.mark).toBe('off');
+    expect(root.querySelector<HTMLElement>('[data-ovsc-bar]')!.hidden).toBe(true);
+    view.show({ ...SCENE_DEFAULTS.screenshare, title: 'hi', showMark: false });
+    expect(root.querySelector<HTMLElement>('[data-ovsc-bar]')!.hidden).toBe(false);
+    // the column and the room under the screen follow the screen's size
+    view.show({ ...SCENE_DEFAULTS.screenshare, frame: { ...SCENE_DEFAULTS.screenshare.frame, size: 'small' } });
+    expect(root.querySelector<HTMLElement>('[data-ovsc-below]')!.style.height).toBe('340px');
+    expect(root.querySelector<HTMLElement>('[data-ov-frame-slot="beside"]')!.style.width).toBe('680px');
+  });
+
+  it("puts the screen share's own widgets on its frame, over the layout's", () => {
+    const root = page();
+    const view = mountScene(root);
+    const layout = createLayout(document);
+    const scene: Scene = { ...SCENE_DEFAULTS.screenshare, frame: { size: 'big', words: true, widgets: [{ kind: 'strip', place: 'below', scale: 100 }, { kind: 'card', place: 'beside', scale: 100 }] } };
+    view.show(scene);
+    const shown = layout.apply({ ...DEFAULT_CONFIG, widgets: [{ kind: 'card', slot: 'top-left', scale: 100 }, { kind: 'apps', slot: 'top-right', scale: 100 }] }, scene.frame.widgets);
+    expect([...shown].sort()).toEqual(['apps', 'card', 'strip']);
+    const below = root.querySelector<HTMLElement>('[data-ov-frame-slot="below"]')!;
+    const beside = root.querySelector<HTMLElement>('[data-ov-frame-slot="beside"]')!;
+    expect(below.querySelector('[data-ov-widget="strip"]')).not.toBeNull();
+    expect(beside.querySelector('[data-ov-widget="card"]')).not.toBeNull();
+    expect(below.hidden || beside.hidden).toBe(false);
+    expect(document.querySelector('[data-ov-slot="top-left"] [data-ov-widget="card"]')).toBeNull();
+    expect(document.querySelector('[data-ov-slot="top-right"] [data-ov-widget="apps"]')).not.toBeNull();
+    // off the screen share, the frame is empty and the layout has its card back
+    view.show(SCENE_DEFAULTS.brb);
+    layout.apply({ ...DEFAULT_CONFIG, widgets: [{ kind: 'card', slot: 'top-left', scale: 100 }] }, []);
+    expect(document.querySelector('[data-ov-slot="top-left"] [data-ov-widget="card"]')).not.toBeNull();
+    expect(below.hidden && beside.hidden).toBe(true);
   });
 });
 
@@ -192,11 +273,26 @@ describe('the scenes on the setup page', () => {
     const sh: Scene = { ...SCENE_DEFAULTS.screenshare, camera: { side: 'none', shape: 'wide' } };
     fillSceneForm(form, sh);
     expect(sceneFrom(form, sh)).toEqual(sh);
+    const framed: Scene = {
+      ...SCENE_DEFAULTS.screenshare,
+      showMark: false,
+      frame: { size: 'small', words: false, widgets: [{ kind: 'strip', place: 'below', scale: 120 }, { kind: 'tid', place: 'beside', scale: 100, style: 'mini' }] },
+    };
+    fillSceneForm(form, framed);
+    expect(sceneFrom(form, framed)).toEqual(framed);
+    expect(document.querySelector('[data-ovs-frame-count]')!.textContent).toBe('2 on');
+    // the bar's switch is the screen share's; the wordmark's is every screen's but the loading screen's
+    fillSceneForm(form, SCENE_DEFAULTS.brb);
+    expect(form.querySelector<HTMLInputElement>('input[name="frameWords"]')!.closest<HTMLElement>('[data-ovs-for]')!.hidden).toBe(true);
+    expect(form.querySelector<HTMLInputElement>('input[name="showMark"]')!.closest<HTMLElement>('[data-ovs-for]')!.hidden).toBe(false);
+    fillSceneForm(form, SCENE_DEFAULTS.loading);
+    expect(form.querySelector<HTMLInputElement>('input[name="showMark"]')!.closest<HTMLElement>('[data-ovs-for]')!.hidden).toBe(true);
     expect(localInput(null)).toBe('');
   });
 
   it("says where the screen share's windows are", () => {
     expect(holeLines({ ...SCENE_DEFAULTS.screenshare })).toEqual(['screen capture: x 40, y 40, 1440 × 810', 'camera: x 1520, y 40, 360 × 360']);
+    expect(holeLines({ ...SCENE_DEFAULTS.screenshare, frame: { ...SCENE_DEFAULTS.screenshare.frame, size: 'medium' } })[0]).toBe('screen capture: x 40, y 40, 1280 × 720');
     expect(holeLines({ ...SCENE_DEFAULTS.screenshare, camera: { side: 'none', shape: 'rounded' } })).toHaveLength(1);
   });
 

@@ -12,7 +12,11 @@
  *               runs out it says so, and onDone lets Poe cheer), on the end screen the
  *               streamer's links
  *   frame       the backdrop with frameHoles cut out (clip-path), a soft rim round each
- *               window, the title along the bottom, and the weather in the column
+ *               window, and the room left over: under the screen the bar with the title
+ *               (unless frame.words is off, or it would be empty) and a slot for widgets;
+ *               under the camera a column slot. layout.ts puts the scene's frame widgets
+ *               in those two slots (data-ov-frame-slot) and shrinks them to fit
+ *   mark        the atpotato wordmark on the panel and the bar, unless showMark is off
  *   clock       the panel with the TID clock (tid.ts ticks it) in place of a countdown, and
  *               a "waiting" line with dots that keep on going
  *   splash      Anisota's loading screen in place of the backdrop and panel: its mark
@@ -54,10 +58,11 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
   const sub = q('[data-ovsc-sub]');
   const count = q('[data-ovsc-count]');
   const links = q('[data-ovsc-links]');
+  const below = q('[data-ovsc-below]');
   const bar = q('[data-ovsc-bar]');
   const barTitle = q('[data-ovsc-bar-title]');
   const barSub = q('[data-ovsc-bar-sub]');
-  const weather = q('[data-ovsc-weather]');
+  const column = q('[data-ov-frame-slot="beside"]');
   const holes = q('[data-ovsc-holes]');
   const clouds = root.querySelector<HTMLElement>('[data-ovsc-clouds]');
   const splash = q('[data-ovsc-splash]');
@@ -105,6 +110,7 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
       root.dataset.background = scene.background;
       root.dataset.ground = scene.ground;
       root.dataset.kind = scene.kind;
+      root.dataset.mark = scene.showMark ? 'on' : 'off';
 
       const splashing = scene.kind === 'loading';
       splash.hidden = !splashing;
@@ -120,25 +126,25 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
       if (tid) tid.hidden = scene.kind !== 'clock';
       const framed = scene.kind === 'screenshare';
       panel.hidden = framed || splashing;
-      bar.hidden = !framed;
-      weather.hidden = !framed;
+      below.hidden = !framed;
       holes.hidden = !framed;
+      if (!framed) column.hidden = true;
       if (framed) {
-        const h = frameHoles(scene.camera);
+        const h = frameHoles(scene.camera, scene.frame.size);
         back.style.clipPath = `path(evenodd, '${framePath(h, scene.camera.shape)}')`;
         const [screenHole, cameraHole] = [q('[data-ovsc-hole="screen"]'), q('[data-ovsc-hole="camera"]')];
         place(screenHole, h.screen);
         cameraHole.hidden = !h.camera;
         if (h.camera) place(cameraHole, h.camera);
         cameraHole.classList.toggle('is-circle', scene.camera.shape === 'circle');
-        place(bar, h.bar);
-        weather.style.left = `${h.column.x}px`;
-        weather.style.top = `${h.column.y}px`;
-        weather.style.width = `${h.column.w}px`;
+        place(below, h.below);
+        place(column, h.column);
         barTitle.textContent = scene.title;
         barSub.textContent = scene.subtitle;
         barSub.hidden = !scene.subtitle;
+        bar.hidden = !scene.frame.words || (!scene.showMark && !scene.title && !scene.subtitle);
         root.dataset.camera = scene.camera.side;
+        root.dataset.size = scene.frame.size;
       } else {
         back.style.clipPath = '';
         title.textContent = scene.title;

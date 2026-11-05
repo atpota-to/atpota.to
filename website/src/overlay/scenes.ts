@@ -8,9 +8,11 @@
  *                or to a time
  *   brb          "be right back"
  *   ending       "thanks for watching", with where to find the streamer
- *   screenshare  an atpotato frame with a big window for a screen capture and a small one
- *                for a camera (frameHoles: where to put them in OBS), the stream's title
- *                along the bottom, and the weather beside the camera
+ *   screenshare  a frame with a big window for a screen capture and a small one for a
+ *                camera (frameHoles: where to put them in OBS). The screen comes in three
+ *                sizes; under it, the stream's title in a bar (or not), and any widgets
+ *                the streamer puts there; under the camera, more widgets (the weather
+ *                badge to start with). The frame's widgets are the scene's own (frame)
  *   loading      Anisota's loading screen: its brand mark on black, the moon running
  *                through its phases (anisota.ts), and the title under it, or Anisota's
  *                own loading lines in turn when there's no title. No backdrop or ground
@@ -20,13 +22,16 @@
  * The screens a streamer starts with have their kind as their id ("starting", "brb",
  * "ending", "screenshare", "loading", "clock"), so ?scene=brb works before anything is saved. Every screen has
  * a backdrop (the sky) and a ground under it: the home page's meadow, the about page's
- * grass, soil with sprouts, or none.
+ * grass, soil with sprouts, or none. The atpotato wordmark on the panel and the screen
+ * share's bar can be left off (showMark).
  *
  * Every scene sits under the rest of the overlay: Poe (unless showPoe is off), its chat,
  * and the weather widgets when showWidgets is on. Like config.ts, the same shape comes
  * from the record (fromSceneRecord checks every field), from the URL (readSceneParams, for
  * the setup page's preview), or from SCENE_DEFAULTS.
  */
+
+import { clampScale, styleFor, WIDGET_KINDS, type WidgetKind } from './config';
 
 export const SCENE_NSID = 'to.atpota.poe.scene';
 export const SCENE_KINDS = ['starting', 'brb', 'ending', 'screenshare', 'loading', 'clock'] as const;
@@ -38,6 +43,27 @@ export type Ground = (typeof GROUNDS)[number];
 export type CountdownMode = 'timer' | 'clock' | 'none';
 export type CameraSide = 'right' | 'left' | 'none';
 export type CameraShape = 'rounded' | 'circle' | 'wide';
+/** How big the screen share's screen is: the rest of the canvas is the frame, with room for widgets. */
+export const SCREEN_SIZES = ['big', 'medium', 'small'] as const;
+export type ScreenSize = (typeof SCREEN_SIZES)[number];
+/** Where a widget goes on the screen share's frame: under the screen, or in the column under the camera. */
+export const FRAME_PLACES = ['below', 'beside'] as const;
+export type FramePlace = (typeof FRAME_PLACES)[number];
+
+export interface FrameWidget {
+  kind: WidgetKind;
+  place: FramePlace;
+  /** Percent of its usual size, at most: it shrinks to fit its place. */
+  scale: number;
+  style?: string;
+}
+
+export interface Frame {
+  size: ScreenSize;
+  /** The bar with the title and the line under it, under the screen. */
+  words: boolean;
+  widgets: FrameWidget[];
+}
 
 export interface Scene {
   kind: SceneKind;
@@ -55,6 +81,10 @@ export interface Scene {
   links: string[];
   /** The screen share's camera window. */
   camera: { side: CameraSide; shape: CameraShape };
+  /** The atpotato wordmark, on the panel and the screen share's bar. */
+  showMark: boolean;
+  /** The rest of the screen share's frame. */
+  frame: Frame;
 }
 
 export const SCENE_NAMES: Record<SceneKind, string> = {
@@ -72,7 +102,20 @@ export const SUBTITLE_MAX = 200;
 export const LINK_MAX = 60;
 export const MAX_LINKS = 4;
 
-const base = { ground: 'meadow' as Ground, subtitle: '', showPoe: true, showWidgets: false, countdown: { mode: 'none' as CountdownMode, minutes: 5, at: null }, links: [], camera: { side: 'right' as CameraSide, shape: 'rounded' as CameraShape } };
+/** The screen share's frame as it always was: a big screen, the title bar, the weather badge under the camera. */
+export const FRAME_DEFAULT: Frame = { size: 'big', words: true, widgets: [{ kind: 'badge', place: 'beside', scale: 100 }] };
+
+const base = {
+  ground: 'meadow' as Ground,
+  subtitle: '',
+  showPoe: true,
+  showWidgets: false,
+  countdown: { mode: 'none' as CountdownMode, minutes: 5, at: null },
+  links: [],
+  camera: { side: 'right' as CameraSide, shape: 'rounded' as CameraShape },
+  showMark: true,
+  frame: FRAME_DEFAULT,
+};
 
 export const SCENE_DEFAULTS: Record<SceneKind, Scene> = {
   starting: { ...base, kind: 'starting', name: SCENE_NAMES.starting, title: 'starting soon', subtitle: 'grab a snack, poe is warming up the atmosphere', background: 'day', countdown: { mode: 'timer', minutes: 5, at: null } },
@@ -110,8 +153,12 @@ export function newScreenId(name: string, kind: SceneKind, taken: Iterable<strin
   for (let n = 2; ; n++) if (!used.has(`${slug}-${n}`)) return `${slug}-${n}`;
 }
 
+export function copyFrame(f: Frame): Frame {
+  return { ...f, widgets: f.widgets.map((w) => ({ ...w })) };
+}
+
 export function copyScene(s: Scene): Scene {
-  return { ...s, countdown: { ...s.countdown }, links: [...s.links], camera: { ...s.camera } };
+  return { ...s, countdown: { ...s.countdown }, links: [...s.links], camera: { ...s.camera }, frame: copyFrame(s.frame) };
 }
 
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -137,6 +184,31 @@ function cleanLinks(v: unknown): string[] {
     .slice(0, MAX_LINKS);
 }
 
+const isWidgetKind = (v: unknown): v is WidgetKind => typeof v === 'string' && (WIDGET_KINDS as readonly string[]).includes(v);
+
+/** The frame's widgets as the overlay draws them: known kinds, each once (the first wins), in a known place. */
+export function cleanFrameWidgets(list: unknown): FrameWidget[] {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<WidgetKind>();
+  const out: FrameWidget[] = [];
+  for (const w of list.slice(0, WIDGET_KINDS.length)) {
+    if (!obj(w) || !isWidgetKind(w.kind) || seen.has(w.kind)) continue;
+    seen.add(w.kind);
+    const style = styleFor(w.kind, w.style);
+    out.push({ kind: w.kind, place: w.place === 'below' ? 'below' : 'beside', scale: clampScale(w.scale), ...(style ? { style } : {}) });
+  }
+  return out;
+}
+
+function cleanFrame(v: unknown, d: Frame): Frame {
+  if (!obj(v)) return copyFrame(d);
+  return {
+    size: (SCREEN_SIZES as readonly string[]).includes(v.size as string) ? (v.size as ScreenSize) : d.size,
+    words: typeof v.words === 'boolean' ? v.words : d.words,
+    widgets: Array.isArray(v.widgets) ? cleanFrameWidgets(v.widgets) : copyFrame(d).widgets,
+  };
+}
+
 /** A scene record's value: what checks out, and its kind's defaults for the rest (`hint`'s, when it names no kind). */
 export function fromSceneRecord(hint: SceneKind, value: unknown): Scene {
   const kind = obj(value) && isSceneKind(value.kind) ? value.kind : hint;
@@ -158,6 +230,8 @@ export function fromSceneRecord(hint: SceneKind, value: unknown): Scene {
       side: camera.side === 'left' || camera.side === 'right' || camera.side === 'none' ? camera.side : d.camera.side,
       shape: camera.shape === 'rounded' || camera.shape === 'circle' || camera.shape === 'wide' ? camera.shape : d.camera.shape,
     },
+    showMark: typeof value.showMark === 'boolean' ? value.showMark : d.showMark,
+    frame: cleanFrame(value.frame, d.frame),
   };
 }
 
@@ -178,6 +252,8 @@ export function toSceneRecord(s: Scene, createdAt: string, now: Date): Record<st
     countdown,
     links: cleanLinks(s.links),
     camera: { ...s.camera },
+    showMark: s.showMark,
+    frame: { size: s.frame.size, words: s.frame.words, widgets: cleanFrameWidgets(s.frame.widgets) },
     createdAt,
     updatedAt: now.toISOString(),
   };
@@ -227,6 +303,13 @@ export function readSceneParams(search: string): { id: string | null; kind: Scen
     const [side, shape] = cam.split(':');
     o.camera = fromSceneRecord(kind, { camera: { side, shape } }).camera;
   }
+  if (off(q.get('mk'))) o.showMark = false;
+  else if (on(q.get('mk'))) o.showMark = true;
+  const [fz, fb, fw] = [q.get('fz'), q.get('fb'), q.get('fw')];
+  if (fz !== null || fb !== null || fw !== null) {
+    const d = SCENE_DEFAULTS[kind].frame;
+    o.frame = cleanFrame({ size: fz ?? d.size, words: on(fb) ? true : off(fb) ? false : d.words, widgets: fw === null ? d.widgets : readFrameWidgets(fw) }, d);
+  }
   return { id, kind: named, overrides: o };
 }
 
@@ -235,12 +318,33 @@ export function sceneSearch(s: Scene, id: string = s.kind): string {
   const q = new URLSearchParams({ scene: id, sk: s.kind, st: s.title, ss: s.subtitle, bg: s.background, gr: s.ground, sp: s.showPoe ? 'on' : 'off', sw: s.showWidgets ? 'on' : 'off' });
   if (s.kind === 'starting') q.set('cd', s.countdown.mode === 'timer' ? `timer:${s.countdown.minutes}` : s.countdown.mode === 'clock' && s.countdown.at ? `clock:${s.countdown.at}` : 'none');
   if (s.kind === 'ending') q.set('sl', s.links.join('|'));
-  if (s.kind === 'screenshare') q.set('cam', `${s.camera.side}:${s.camera.shape}`);
+  if (s.kind !== 'loading') q.set('mk', s.showMark ? 'on' : 'off');
+  if (s.kind === 'screenshare') {
+    q.set('cam', `${s.camera.side}:${s.camera.shape}`);
+    q.set('fz', s.frame.size);
+    q.set('fb', s.frame.words ? 'on' : 'off');
+    q.set('fw', writeFrameWidgets(s.frame.widgets));
+  }
   return q.toString();
 }
 
+/** "badge:beside:100,strip:below:80" as the frame's widgets ("none" for none). */
+export function readFrameWidgets(raw: string): FrameWidget[] {
+  if (/^\s*none\s*$/i.test(raw)) return [];
+  return cleanFrameWidgets(
+    raw
+      .split(',')
+      .map((part) => part.trim().toLowerCase().split(':'))
+      .map(([kind, place, scale, style]) => ({ kind, place, scale: scale ? Number(scale) : 100, style })),
+  );
+}
+
+export function writeFrameWidgets(widgets: FrameWidget[]): string {
+  return widgets.length ? widgets.map((w) => `${w.kind}:${w.place}:${w.scale}${w.style ? `:${w.style}` : ''}`).join(',') : 'none';
+}
+
 export function withSceneOverrides(s: Scene, o: Partial<Scene>): Scene {
-  return { ...copyScene(s), ...o, kind: o.kind ?? s.kind };
+  return copyScene({ ...s, ...o, kind: o.kind ?? s.kind });
 }
 
 // ---------- the screen share's windows ----------
@@ -254,27 +358,39 @@ export interface Rect {
 
 export const CANVAS = { w: 1920, h: 1080 } as const;
 const MARGIN = 40;
-const SCREEN = { w: 1440, h: 810 };
-const CAMERA = 360;
+const GAP = 30;
+/** The screen at each size, 16:9. */
+export const SCREENS: Record<ScreenSize, { w: number; h: number }> = {
+  big: { w: 1440, h: 810 },
+  medium: { w: 1280, h: 720 },
+  small: { w: 1120, h: 630 },
+};
+/** The camera's widest, so a smaller screen doesn't make it huge. */
+const CAMERA_MAX = 440;
 
 /**
  * Where the screen share's windows are on the 1920x1080 canvas, so the screen capture and
- * the camera can be put exactly under them in OBS. The screen takes the left (or right)
- * three quarters at 16:9; the camera sits at the top of the column beside it, square (a
- * rounded square or a circle) or 16:9 (wide). Without a camera the column keeps the weather
- * and Poe.
+ * the camera can be put exactly under them in OBS. The screen takes the top left (or right)
+ * at 16:9, its size from SCREENS; the camera sits at the top of the column beside it,
+ * square (a rounded square or a circle) or 16:9 (wide), centred in the column when it's
+ * wider than CAMERA_MAX. `below` is the room under the screen (the bar and its widgets),
+ * `column` the room under the camera (the widgets there, and Poe), to the canvas's foot.
  */
-export function frameHoles(camera: Scene['camera']): { screen: Rect; camera: Rect | null; bar: Rect; column: Rect } {
+export function frameHoles(camera: Scene['camera'], size: ScreenSize = 'big'): { screen: Rect; camera: Rect | null; below: Rect; column: Rect } {
   const left = camera.side === 'left';
-  const screen = { x: left ? CANVAS.w - MARGIN - SCREEN.w : MARGIN, y: MARGIN, ...SCREEN };
-  const columnX = left ? MARGIN : MARGIN + SCREEN.w + MARGIN;
-  const columnW = CANVAS.w - SCREEN.w - 3 * MARGIN;
-  const cam = camera.side === 'none' ? null : { x: columnX, y: MARGIN, w: columnW, h: camera.shape === 'wide' ? Math.round((columnW * 9) / 16) : columnW };
+  const s = SCREENS[size];
+  const screen = { x: left ? CANVAS.w - MARGIN - s.w : MARGIN, y: MARGIN, ...s };
+  const columnX = left ? MARGIN : MARGIN + s.w + MARGIN;
+  const columnW = CANVAS.w - s.w - 3 * MARGIN;
+  const camW = Math.min(columnW, CAMERA_MAX);
+  const cam = camera.side === 'none' ? null : { x: columnX + Math.round((columnW - camW) / 2), y: MARGIN, w: camW, h: camera.shape === 'wide' ? Math.round((camW * 9) / 16) : camW };
+  const belowY = screen.y + screen.h + GAP;
+  const columnY = cam ? cam.y + cam.h + GAP : MARGIN;
   return {
     screen,
     camera: cam,
-    bar: { x: screen.x, y: screen.y + screen.h + 30, w: screen.w, h: CANVAS.h - (screen.y + screen.h + 30) - MARGIN },
-    column: { x: columnX, y: cam ? cam.y + cam.h + 30 : MARGIN, w: columnW, h: 0 },
+    below: { x: screen.x, y: belowY, w: screen.w, h: CANVAS.h - belowY - MARGIN },
+    column: { x: columnX, y: columnY, w: columnW, h: CANVAS.h - columnY - MARGIN },
   };
 }
 
