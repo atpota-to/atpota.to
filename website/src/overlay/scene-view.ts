@@ -139,6 +139,8 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
         cameraHole.classList.toggle('is-circle', scene.camera.shape === 'circle');
         place(below, h.below);
         place(column, h.column);
+        // Poe stands under the column, in the middle of it (overlay.css)
+        doc.body.style.setProperty('--ovsc-column-mid', `${h.column.x + h.column.w / 2}px`);
         barTitle.textContent = scene.title;
         barSub.textContent = scene.subtitle;
         barSub.hidden = !scene.subtitle;

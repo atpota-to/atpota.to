@@ -374,7 +374,8 @@ const CAMERA_MAX = 440;
  * at 16:9, its size from SCREENS; the camera sits at the top of the column beside it,
  * square (a rounded square or a circle) or 16:9 (wide), centred in the column when it's
  * wider than CAMERA_MAX. `below` is the room under the screen (the bar and its widgets),
- * `column` the room under the camera (the widgets there, and Poe), to the canvas's foot.
+ * as wide as the screen; `column` the room under the camera (the widgets there, and Poe),
+ * as wide as the camera, to the canvas's foot.
  */
 export function frameHoles(camera: Scene['camera'], size: ScreenSize = 'big'): { screen: Rect; camera: Rect | null; below: Rect; column: Rect } {
   const left = camera.side === 'left';
@@ -390,7 +391,8 @@ export function frameHoles(camera: Scene['camera'], size: ScreenSize = 'big'): {
     screen,
     camera: cam,
     below: { x: screen.x, y: belowY, w: screen.w, h: CANVAS.h - belowY - MARGIN },
-    column: { x: columnX, y: columnY, w: columnW, h: CANVAS.h - columnY - MARGIN },
+    // the column's widgets line up with the camera's edges
+    column: { x: cam ? cam.x : columnX, y: columnY, w: cam ? cam.w : columnW, h: CANVAS.h - columnY - MARGIN },
   };
 }
 

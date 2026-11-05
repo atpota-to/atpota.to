@@ -1369,7 +1369,8 @@ body[data-side="left"] .ov-bubble {
   gap: 18px;
 }
 
-/* as tall as the room under the big screen, however much room a smaller one leaves */
+/* as tall as the room under the big screen, however much room a smaller one leaves;
+   beside widgets, as tall as they are: the whole room */
 .ovsc__bar {
   display: flex;
   flex: 1 1 0;
@@ -1405,13 +1406,41 @@ body[data-side="left"] .ov-bubble {
   flex: 1 1 0;
 }
 
-.ovsc__slot--below > * {
-  flex: none;
+.ovsc__below:has(> .ovsc__slot--below:not([hidden])) > .ovsc__bar {
+  height: 100%;
 }
 
-.ovsc__slot--below > .ov-strip {
-  flex: 1 1 auto;
-  min-width: 0;
+/* layout.ts sizes each widget on the frame as a tile; its own content sits in the middle */
+.ovsc__slot > * {
+  flex: none;
+  margin: 0;
+}
+
+.ovsc__slot > .ov-weather,
+.ovsc__slot > .ov-strip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ovsc__slot > .ov-panel,
+.ovsc__slot > .ov-chat {
+  align-content: center;
+}
+
+.ovsc__slot > .ov-badge,
+.ovsc__slot > .ov-anisota {
+  justify-content: center;
+}
+
+/* a pill stretched into a tile would be a blob: the frame's pills take the tiles' corners */
+.ovsc__slot > .ov-badge,
+.ovsc__slot > .ov-strip {
+  border-radius: var(--radius-tile);
+}
+
+.ovsc__slot > .ov-badge {
+  padding: 8px 22px;
 }
 
 .ovsc__slot--beside {
@@ -1420,11 +1449,6 @@ body[data-side="left"] .ov-bubble {
   align-items: center;
 }
 
-/* the badge spans the column, as it always has */
-.ovsc__slot--beside > .ov-badge {
-  align-self: stretch;
-  justify-content: center;
-}
 
 /* the atpotato wordmark, unless the scene leaves it off */
 .ovsc[data-mark="off"] .ovsc__wordmark,
@@ -1471,13 +1495,10 @@ body[data-side="left"] .ov-bubble {
   white-space: nowrap;
 }
 
-/* Poe stands in the column beside the screen (layout follows the camera's side) */
+/* Poe stands under the column beside the screen, in the middle of it (scene-view.ts) */
 body[data-scene="screenshare"] .ov-poe {
-  right: 40px;
-}
-
-body[data-scene="screenshare"][data-side="left"] .ov-poe {
-  left: 40px;
+  right: auto;
+  left: calc(var(--ovsc-column-mid, 1700px) - var(--ov-poe-width) / 2);
 }
 
 @media (prefers-reduced-motion: reduce) {
