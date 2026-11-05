@@ -358,24 +358,30 @@ export interface Rect {
 
 export const CANVAS = { w: 1920, h: 1080 } as const;
 const MARGIN = 40;
-const GAP = 30;
+/** The paper rim round each window (overlay.css .ovsc__hole), outside it. */
+export const RIM = 10;
+/** Between everything on the frame: rim and rim, rim and tile, tile and tile. */
+export const FRAME_GAP = 20;
+/** From the canvas's edge to the frame's outermost edges (the rims, the tiles). */
+const EDGE = MARGIN - RIM;
 /** The screen at each size, 16:9. */
 export const SCREENS: Record<ScreenSize, { w: number; h: number }> = {
   big: { w: 1440, h: 810 },
   medium: { w: 1280, h: 720 },
   small: { w: 1120, h: 630 },
 };
-/** The camera's widest, so a smaller screen doesn't make it huge. */
+/** A square or round camera's widest, so a smaller screen doesn't make it huge. */
 const CAMERA_MAX = 440;
 
 /**
  * Where the screen share's windows are on the 1920x1080 canvas, so the screen capture and
  * the camera can be put exactly under them in OBS. The screen takes the top left (or right)
  * at 16:9, its size from SCREENS; the camera sits at the top of the column beside it,
- * square (a rounded square or a circle) or 16:9 (wide), centred in the column when it's
- * wider than CAMERA_MAX. `below` is the room under the screen (the bar and its widgets),
- * as wide as the screen; `column` the room under the camera (the widgets there, and Poe),
- * as wide as the camera, to the canvas's foot.
+ * square (a rounded square or a circle) or 16:9 (wide). A wide one fills the column; a
+ * square or a circle stops at CAMERA_MAX and stands in the middle of a wider column. `below` is the room under the screen (the bar and its widgets),
+ * edge to edge with the screen's rim; `column` the room under the camera (the widgets
+ * there, and Poe), edge to edge with the camera's rim. Rims, tiles and the canvas's edge
+ * all stand FRAME_GAP (or EDGE) apart.
  */
 export function frameHoles(camera: Scene['camera'], size: ScreenSize = 'big'): { screen: Rect; camera: Rect | null; below: Rect; column: Rect } {
   const left = camera.side === 'left';
@@ -383,16 +389,17 @@ export function frameHoles(camera: Scene['camera'], size: ScreenSize = 'big'): {
   const screen = { x: left ? CANVAS.w - MARGIN - s.w : MARGIN, y: MARGIN, ...s };
   const columnX = left ? MARGIN : MARGIN + s.w + MARGIN;
   const columnW = CANVAS.w - s.w - 3 * MARGIN;
-  const camW = Math.min(columnW, CAMERA_MAX);
+  // a wide camera fills the column; a square or a circle that big would tower over the screen
+  const camW = camera.shape === 'wide' ? columnW : Math.min(columnW, CAMERA_MAX);
   const cam = camera.side === 'none' ? null : { x: columnX + Math.round((columnW - camW) / 2), y: MARGIN, w: camW, h: camera.shape === 'wide' ? Math.round((camW * 9) / 16) : camW };
-  const belowY = screen.y + screen.h + GAP;
-  const columnY = cam ? cam.y + cam.h + GAP : MARGIN;
+  // the tiles line up with the rims' outer edges, FRAME_GAP under them
+  const belowY = screen.y + screen.h + RIM + FRAME_GAP;
+  const columnY = cam ? cam.y + cam.h + RIM + FRAME_GAP : EDGE;
   return {
     screen,
     camera: cam,
-    below: { x: screen.x, y: belowY, w: screen.w, h: CANVAS.h - belowY - MARGIN },
-    // the column's widgets line up with the camera's edges
-    column: { x: cam ? cam.x : columnX, y: columnY, w: cam ? cam.w : columnW, h: CANVAS.h - columnY - MARGIN },
+    below: { x: screen.x - RIM, y: belowY, w: screen.w + 2 * RIM, h: CANVAS.h - belowY - EDGE },
+    column: { x: (cam ? cam.x : columnX) - RIM, y: columnY, w: (cam ? cam.w : columnW) + 2 * RIM, h: CANVAS.h - columnY - EDGE },
   };
 }
 

@@ -23,12 +23,10 @@
  */
 
 import { SLOTS, type OverlayConfig, type Slot, type WidgetKind } from './config';
-import type { FrameWidget, FramePlace } from './scenes';
+import { FRAME_GAP, type FrameWidget, type FramePlace } from './scenes';
 
 export const POE_WIDTH = 300;
 
-/** The gap between widgets in a frame slot (overlay.css .ovsc__slot). */
-export const FRAME_GAP = 18;
 /** The narrowest the bar keeps beside the widgets under the screen. */
 export const BAR_MIN = 480;
 
@@ -90,7 +88,13 @@ export function tileRow(items: readonly Tile[], room: { w: number; h: number }, 
     });
   } else if (barMin === 0 && used > 0) widths = widths.map((w) => w + (left * w) / used);
   const r = (x: number) => Math.round(x * 1000) / 1000;
-  return items.map((_, n) => ({ zoom: r(Math.max(0.1, zooms[n]!)), w: Math.round(widths[n]!), h: room.h }));
+  // whole pixels that still add up: each tile ends where the running total, rounded, does
+  let at = 0;
+  return items.map((_, n) => {
+    const w = Math.round(at + widths[n]!) - Math.round(at);
+    at += widths[n]!;
+    return { zoom: r(Math.max(0.1, zooms[n]!)), w, h: room.h };
+  });
 }
 
 /** A widget's zoom in the column: its content as wide as the column (up to FILL_MAX), times its size. */

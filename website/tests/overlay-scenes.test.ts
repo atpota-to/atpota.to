@@ -24,7 +24,7 @@ import {
 import { fillSceneForm, holeLines, localInput, sceneFrom } from '../src/overlay/setup-scenes.js';
 import { DEFAULT_CONFIG } from '../src/overlay/config.js';
 import { columnZoom, createLayout, FILL_MAX, squeezeStack, tileRow } from '../src/overlay/layout.js';
-import { readFrameWidgets, SCREEN_SIZES, SCREENS, writeFrameWidgets } from '../src/overlay/scenes.js';
+import { FRAME_GAP, readFrameWidgets, RIM, SCREEN_SIZES, SCREENS, writeFrameWidgets } from '../src/overlay/scenes.js';
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url).href), 'utf8');
 const STREAMER = 'did:plc:gq4fo3u6tqzzdkjlwzpb23tj';
@@ -94,11 +94,22 @@ describe('scenes', () => {
         } else expect(side).toBe('none');
       }
     }
-    expect(frameHoles({ side: 'right', shape: 'rounded' })).toMatchObject({ screen: { x: 40, y: 40, w: 1440, h: 810 }, camera: { x: 1520, y: 40, w: 360, h: 360 }, below: { x: 40, y: 880, w: 1440, h: 160 } });
+    expect(frameHoles({ side: 'right', shape: 'rounded' })).toMatchObject({ screen: { x: 40, y: 40, w: 1440, h: 810 }, camera: { x: 1520, y: 40, w: 360, h: 360 }, below: { x: 30, y: 880, w: 1460, h: 170 }, column: { x: 1510, y: 430, w: 380, h: 620 } });
     // a smaller screen leaves a wider column; the camera stays a sensible size in the middle of it
-    expect(frameHoles({ side: 'right', shape: 'rounded' }, 'small')).toMatchObject({ screen: { w: 1120, h: 630 }, camera: { x: 1320, w: 440, h: 440 }, column: { x: 1320, w: 440 } });
+    expect(frameHoles({ side: 'right', shape: 'rounded' }, 'small')).toMatchObject({ screen: { w: 1120, h: 630 }, camera: { x: 1320, w: 440, h: 440 }, column: { x: 1310, w: 460 } });
     // without a camera the column is the whole room beside the screen
-    expect(frameHoles({ side: 'none', shape: 'rounded' }, 'small').column).toMatchObject({ x: 1200, y: 40, w: 680 });
+    expect(frameHoles({ side: 'none', shape: 'rounded' }, 'small').column).toMatchObject({ x: 1190, y: 30, w: 700 });
+    // the tiles stand edge to edge with the rims, with the same gap everywhere (a square
+    // camera beside a smaller screen stands in the middle of its column instead)
+    for (const [size, shape] of [['big', 'rounded'], ['big', 'circle'], ...SCREEN_SIZES.map((z) => [z, 'wide'] as const)] as const) {
+      const h = frameHoles({ side: 'right', shape }, size);
+      expect(h.below.x).toBe(h.screen.x - RIM);
+      expect(h.below.x + h.below.w).toBe(h.screen.x + h.screen.w + RIM);
+      expect(h.below.y - (h.screen.y + h.screen.h + RIM)).toBe(FRAME_GAP);
+      expect(h.camera!.x - RIM - (h.screen.x + h.screen.w + RIM)).toBe(FRAME_GAP);
+      expect(h.column.x + h.column.w).toBe(h.camera!.x + h.camera!.w + RIM);
+      expect(CANVAS.h - (h.below.y + h.below.h)).toBe(h.screen.y - RIM);
+    }
     expect(frameHoles({ side: 'left', shape: 'rounded' }).camera!.x).toBe(40);
     const path = framePath(frameHoles({ side: 'right', shape: 'circle' }), 'circle');
     expect(path.startsWith('M0,0H1920V1080H0Z')).toBe(true);
@@ -137,24 +148,27 @@ describe('scenes', () => {
     const row = tileRow([{ w: 400, h: 400, size: 1 }, { w: 300, h: 60, size: 1 }], { w: 1458, h: 160 });
     expect(row.map((t) => t.zoom)).toEqual([0.4, FILL_MAX]);
     expect(row.every((t) => t.h === 160)).toBe(true);
-    expect(row[0]!.w + row[1]!.w + 18).toBe(1458);
+    expect(row[0]!.w + row[1]!.w + 20).toBe(1458);
     expect(row[1]!.w / row[0]!.w).toBeCloseTo(600 / 160, 1);
     // a smaller size leaves it some air
     expect(tileRow([{ w: 300, h: 80, size: 0.5 }], { w: 1440, h: 160 }, 480)[0]).toEqual({ zoom: 1, w: 300, h: 160 });
     // too wide all together: they shrink alike
-    const tight = tileRow([{ w: 600, h: 160, size: 1 }, { w: 600, h: 160, size: 1 }], { w: 618, h: 160 });
+    const tight = tileRow([{ w: 600, h: 160, size: 1 }, { w: 600, h: 160, size: 1 }], { w: 620, h: 160 });
     expect(tight[0]!.zoom).toBeCloseTo(0.5);
     expect(tight[0]!.w).toBe(300);
     // the strip takes what's left: all of it on its own, half beside the bar, its content fitting
     expect(tileRow([{ w: 900, h: 64, size: 1, flex: true }], { w: 1800, h: 160 })).toEqual([{ zoom: 2, w: 1800, h: 160 }]);
-    expect(tileRow([{ w: 1400, h: 64, size: 1, flex: true }], { w: 1440, h: 160 }, 480)[0]).toEqual({ zoom: 0.336, w: 471, h: 160 });
+    expect(tileRow([{ w: 1400, h: 64, size: 1, flex: true }], { w: 1440, h: 160 }, 480)[0]).toEqual({ zoom: 0.336, w: 470, h: 160 });
+    // whole pixels that add up to the room exactly, however they round
+    const thirds = tileRow([1, 2, 3].map(() => ({ w: 100, h: 160, size: 1 })), { w: 1000, h: 160 });
+    expect(thirds.reduce((a, t) => a + t.w, 0) + 2 * 20).toBe(1000);
     expect(tileRow([], { w: 0, h: 0 })).toEqual([]);
     // in the column, content as wide as the column
     expect(columnZoom({ w: 400, size: 1 }, 360)).toBe(0.9);
     expect(columnZoom({ w: 100, size: 0.5 }, 360)).toBe(1);
     // a stack under the camera shrinks only when it's too tall for the room
     expect(squeezeStack([100, 100], 300)).toBe(1);
-    expect(squeezeStack([300, 300], 318)).toBe(0.5);
+    expect(squeezeStack([300, 300], 320)).toBe(0.5);
   });
 
   it('count down as people read clocks', () => {
@@ -238,8 +252,8 @@ describe('the scene on the overlay', () => {
     expect(root.querySelector<HTMLElement>('[data-ovsc-bar]')!.hidden).toBe(false);
     // the column and the room under the screen follow the screen's size
     view.show({ ...SCENE_DEFAULTS.screenshare, frame: { ...SCENE_DEFAULTS.screenshare.frame, size: 'small' } });
-    expect(root.querySelector<HTMLElement>('[data-ovsc-below]')!.style.height).toBe('340px');
-    expect(root.querySelector<HTMLElement>('[data-ov-frame-slot="beside"]')!.style.width).toBe('440px');
+    expect(root.querySelector<HTMLElement>('[data-ovsc-below]')!.style.height).toBe('350px');
+    expect(root.querySelector<HTMLElement>('[data-ov-frame-slot="beside"]')!.style.width).toBe('460px');
   });
 
   it("puts the screen share's own widgets on its frame, over the layout's", () => {

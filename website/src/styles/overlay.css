@@ -1368,7 +1368,7 @@ body[data-side="left"] .ov-bubble {
   position: absolute;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 20px; /* scenes.ts FRAME_GAP */
 }
 
 /* as tall as the room under the big screen, however much room a smaller one leaves;
@@ -1377,7 +1377,7 @@ body[data-side="left"] .ov-bubble {
   display: flex;
   flex: 1 1 0;
   align-items: center;
-  height: min(100%, 160px);
+  height: min(100%, 170px);
   gap: 28px;
   min-width: 0;
   padding: 0 34px;
@@ -1390,7 +1390,7 @@ body[data-side="left"] .ov-bubble {
 /* the frame's widget slots (layout.ts places the scene's widgets in them and fits them) */
 .ovsc__slot {
   display: flex;
-  gap: 18px;
+  gap: 20px; /* scenes.ts FRAME_GAP */
   min-width: 0;
 }
 
