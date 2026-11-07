@@ -80,6 +80,63 @@ describe('weather almanac', () => {
     expect(toNewApps({ heard: 1, apps: [] }, NOW)).toMatchObject({ warmingUp: true, readyAt: null });
   });
 
+  it('says how many accounts wrote each new app, from its hour sketches merged, and none when it has no sketch yet', async () => {
+    // one account per register (as PostgREST answers bytea), so the counts are exact
+    const sk = (...registers: number[]) => `\\x020c${registers.map((i) => `${i.toString(16).padStart(4, '0')}01`).join('')}`;
+    const answers = {
+      ...ANSWERS,
+      atmosphere_new_apps: {
+        historyStart: '2026-10-20T16:50:00+00:00',
+        heard: 90,
+        apps: [
+          { domain: 'nibling.run', firstSeen: '2026-11-03T13:22:00+00:00', creates: 500, collections: ['run.nibling.graph.follow'] },
+          { domain: 'mu.social', firstSeen: '2026-11-03T12:46:00+00:00', creates: 400, collections: [] },
+          { domain: 'just.now', firstSeen: '2026-11-03T16:58:00+00:00', creates: 300, collections: [] },
+        ],
+      },
+    };
+    const asked: URL[] = [];
+    const rpc = supabase(answers);
+    const fetch = (async (url: string, init?: RequestInit) => {
+      if (!url.includes('/atmosphere_account_app_sketch')) return rpc.fetch(url, init);
+      const u = new URL(url);
+      // (the diversity against usual reads this table too, without naming apps)
+      if (u.searchParams.get('domain')) asked.push(u);
+      return Response.json(Number(u.searchParams.get('offset')) > 0 ? [] : [
+        // one account, every hour: still one
+        { domain: 'nibling.run', sketch: sk(7) },
+        { domain: 'nibling.run', sketch: sk(7) },
+        // five people over two hours, one of them both times
+        { domain: 'mu.social', sketch: sk(1, 2, 3) },
+        { domain: 'mu.social', sketch: sk(3, 4, 5) },
+        { domain: '<b>x</b>', sketch: sk(9) },
+      ]);
+    }) as typeof globalThis.fetch;
+    const h = createAlmanacHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await get(h)).json()) as Record<string, any>;
+    expect(body.newApps.apps.map((a: { domain: string; accounts?: number }) => [a.domain, a.accounts])).toEqual([
+      ['nibling.run', 1],
+      ['mu.social', 5],
+      ['just.now', undefined],
+    ]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.searchParams.get('period')).toBe('eq.hour');
+    expect(asked[0]!.searchParams.get('t')).toBe('gte.2026-11-02T17:00:00.000Z');
+    expect(asked[0]!.searchParams.get('domain')).toBe('in.(nibling.run,mu.social,just.now)');
+  });
+
+  it('still lists the new apps when their accounts can\'t be read', async () => {
+    const answers = { ...ANSWERS, atmosphere_new_apps: { ...(ANSWERS.atmosphere_new_apps as object), apps: [{ domain: 'mu.social', firstSeen: '2026-11-03T16:46:00+00:00', creates: 4, collections: [] }] } };
+    const rpc = supabase(answers);
+    const logged: string[] = [];
+    const fetch = (async (url: string, init?: RequestInit) =>
+      url.includes('/atmosphere_account_app_sketch') ? new Response('nope', { status: 500 }) : rpc.fetch(url, init)) as typeof globalThis.fetch;
+    const h = createAlmanacHandlers({ fetch, now: () => NOW, env: () => ({}), log: (f) => logged.push(f.event) });
+    const body = (await (await get(h)).json()) as Record<string, any>;
+    expect(body.newApps.apps).toEqual([{ domain: 'mu.social', firstSeen: '2026-11-03T16:46:00.000Z', creates: 4, collections: [] }]);
+    expect(logged).toContain('almanac_new_app_accounts_error');
+  });
+
   it('leaves out a part that fails, and is a 503 only when all of them do', async () => {
     const { atmosphere_heatmap: _drop, ...rest } = ANSWERS;
     const h = createAlmanacHandlers({ fetch: supabase(rest).fetch, now: () => NOW, env: () => ({}), log: () => undefined });

@@ -14,7 +14,10 @@
  *            of the same hour on those days and weeks (readDiversity)
  *   newApps  apps outside Bluesky heard in the last 24 hours that the station had never
  *            heard before (atmosphere_new_apps). Until the station has listened for
- *            WARMUP_MS, every app is new to it, so it says it's warming up instead
+ *            WARMUP_MS, every app is new to it, so it says it's warming up instead. Each
+ *            says how many different accounts wrote to it (`accounts`, from the station's
+ *            hour sketches, readNewAppAccounts), when those could be read: 500 records
+ *            from one account is somebody's import, not an app blowing in
  *   heatmap  every hour of the week in `tz` over the last HEATMAP_MS (atmosphere_heatmap),
  *            each with its steady count too: its records with any one-minute burst taken
  *            out (atmosphere/sql/atmosphere_steady.sql), which is what "usual" goes by
@@ -31,6 +34,7 @@
 
 import { CROSS_ORIGIN, diversityOf } from './atmosphere.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
+import { countSketch, fromBytea, mergeSketch, type Registers } from './hll.js';
 import { getAll } from './weather-accounts.js';
 
 export const CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
@@ -108,6 +112,8 @@ export interface NewApp {
   firstSeen: string;
   creates: number;
   collections: string[];
+  /** Different accounts that wrote to it since `since`, when the station's sketches have it. */
+  accounts?: number;
 }
 
 export interface NewApps {
@@ -184,6 +190,32 @@ export function toNewApps(body: unknown, now: number): NewApps | null {
         return [{ domain: a.domain, firstSeen, creates: c.creates, collections: collectionsOf(a.collections) }];
       });
   return { historyStart, readyAt, warmingUp, heard: heard.heard, apps: apps.slice(0, NEW_APPS) };
+}
+
+/**
+ * How many different accounts wrote to each new app since `since`: its hour sketches
+ * (atmosphere_account_app_sketch, rewritten every 5 minutes) merged, never summed, so
+ * someone writing every hour counts once. An app with no sketch yet (heard only in the
+ * last few minutes) is left without a count: unknown, not nobody.
+ */
+export async function readNewAppAccounts(db: Supabase, apps: NewApp[], since: number): Promise<NewApp[]> {
+  const domains = apps.map((a) => a.domain).filter((d) => DOMAIN_RE.test(d));
+  if (!domains.length) return apps;
+  const from = new Date(Math.floor(since / HOUR) * HOUR).toISOString();
+  const rows = await getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.hour&t=gte.${from}&domain=in.(${domains.join(',')})&order=t.asc,domain.asc`);
+  const merged = new Map<string, Registers>();
+  for (const r of rows) {
+    if (!isRecord(r) || typeof r.domain !== 'string' || !domains.includes(r.domain)) continue;
+    const sketch = fromBytea(r.sketch);
+    if (!sketch) continue;
+    const into = merged.get(r.domain);
+    if (into) mergeSketch(into, sketch);
+    else merged.set(r.domain, sketch);
+  }
+  return apps.map((a) => {
+    const s = merged.get(a.domain);
+    return s ? { ...a, accounts: countSketch(s) } : a;
+  });
 }
 
 export function toHeatmap(body: unknown): Heatmap | null {
@@ -305,7 +337,16 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
         const d = await diversity;
         return normal && d ? { ...normal, diversity: d } : normal;
       }),
-      part('new_apps', async () => toNewApps(await db.rpc('atmosphere_new_apps', { since: new Date(at - DAY).toISOString(), max_apps: 50 }), at)),
+      part('new_apps', async () => {
+        const fresh = toNewApps(await db.rpc('atmosphere_new_apps', { since: new Date(at - DAY).toISOString(), max_apps: 50 }), at);
+        if (!fresh?.apps.length) return fresh;
+        // the accounts are an extra: without them the new apps still come, just without a count
+        const apps = await readNewAppAccounts(db, fresh.apps, at - DAY).catch((error) => {
+          log({ event: 'almanac_new_app_accounts_error', tz, error: (error as Error)?.message ?? 'Error' });
+          return fresh.apps;
+        });
+        return { ...fresh, apps };
+      }),
       part('heatmap', async () => toHeatmap(await db.rpc('atmosphere_heatmap', { tz, since: new Date(at - HEATMAP_MS).toISOString() }))),
       part('records', () => readRecords(db)),
     ]);

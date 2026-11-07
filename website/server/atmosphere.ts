@@ -135,6 +135,11 @@ export interface App extends Rate {
   domain: string;
   /** Its busiest collections, busiest first (at most three). */
   collections: string[];
+  /**
+   * Different accounts that wrote to it, when the station counted them (a sample doesn't):
+   * forty records a second from one account is that account's batch, not a crowd.
+   */
+  accounts?: number;
 }
 
 export interface AccountApp {
@@ -631,6 +636,7 @@ export function fromStation(body: unknown): Reading | null {
       perSecond: a.perSecond as number,
       count: a.count as number,
       collections: (Array.isArray(a.collections) ? a.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
+      ...(isCount(a.accounts) ? { accounts: a.accounts as number } : {}),
     }));
   const bluesky = body.bluesky
     .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b.nsid === 'string' && isNsid(b.nsid) && isBluesky(b.nsid) && isCount(b.perSecond) && isCount(b.count))

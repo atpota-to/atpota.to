@@ -23,6 +23,10 @@ export default defineTool({
     "Its weather (records a second, conditions, busiest and quietest) leaves out bursts: one app writing " +
     "a flood of records in a minute, a bulk import. `bursts` lists those on their own, with the app when " +
     "one made it. " +
+    "Each app named with its records also says how many different accounts wrote them (`accounts`, or " +
+    "`accountsThatMinute` on a burst), when the station could count them. Thousands of records from one or " +
+    "two accounts is one person's batch (an import, a backfill, a bot, someone testing their own app), not " +
+    "a crowd: it's in the counts, but it isn't weather. " +
     "\"now\" and \"today\" also carry the page's last-hour readouts: feels like (new posts a second), " +
     "gusts (the busiest minute, records a second), humidity (edits and deletions as a share of everything " +
     "written) and visibility (apps outside Bluesky heard), each against the hour before. \"today\" adds " +

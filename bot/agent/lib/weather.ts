@@ -232,7 +232,10 @@ export function nowReport(body: unknown, span?: unknown) {
   const apps = list(body.apps).flatMap((a) => {
     const domain = isRecord(a) ? domainOf(a.domain) : null;
     const c = counts(a, ["perSecond", "count"] as const);
-    return domain && c && isRecord(a) ? [{ domain, perSecond: c.perSecond, records: c.count, collections: collectionsOf(a.collections) }] : [];
+    const accounts = isRecord(a) ? count(a.accounts) : null;
+    return domain && c && isRecord(a)
+      ? [{ domain, perSecond: c.perSecond, records: c.count, ...(accounts === null ? {} : { accounts }), collections: collectionsOf(a.collections) }]
+      : [];
   }).slice(0, TOP);
   const a = counts(body.accounts, ["active", "bluesky", "elsewhere", "index"] as const);
   const accounts = a && isRecord(body.accounts)
@@ -315,7 +318,7 @@ function toPoint(x: unknown): Point | null {
 }
 
 /** An hour that ran far past its steady count: one app's bulk import, mostly (website/server/weather-history.ts). */
-type Burst = { t: string; records: number; app?: { domain: string; minute: string; records: number; collections: string[] } };
+type Burst = { t: string; records: number; app?: { domain: string; minute: string; records: number; collections: string[]; accounts?: number } };
 
 function toBurst(x: unknown): Burst | null {
   const t = isRecord(x) ? iso(x.t) : null;
@@ -325,8 +328,9 @@ function toBurst(x: unknown): Burst | null {
   const domain = a ? domainOf(a.domain) : null;
   const minute = a ? iso(a.minute) : null;
   const appRecords = a ? count(a.records) : null;
+  const accounts = a ? count(a.accounts) : null;
   return domain && minute && appRecords !== null
-    ? { t, records, app: { domain, minute, records: appRecords, collections: collectionsOf(a!.collections) } }
+    ? { t, records, app: { domain, minute, records: appRecords, collections: collectionsOf(a!.collections), ...(accounts === null ? {} : { accounts }) } }
     : { t, records };
 }
 
@@ -338,7 +342,9 @@ export function parseHistory(body: unknown) {
     ? body.apps.flatMap((a) => {
       const domain = isRecord(a) ? domainOf(a.domain) : null;
       const c = counts(a, ["creates", "prevCreates"] as const);
-      return domain && c && isRecord(a) ? [{ domain, ...c, collections: collectionsOf(a.collections) }] : [];
+      // different accounts that wrote it over the range, when the station's sketches had it
+      const accounts = isRecord(a) ? count(a.accounts) : null;
+      return domain && c && isRecord(a) ? [{ domain, ...c, ...(accounts === null ? {} : { accounts }), collections: collectionsOf(a.collections) }] : [];
     }).slice(0, TOP)
     : null;
   const appsOverTime = isRecord(body.appsOverTime)
@@ -432,6 +438,8 @@ function appsOf(h: History, total: Point, earlier: string) {
     return {
       domain: a.domain,
       records: a.creates,
+      // how many different accounts wrote those records: thousands of records from one or two is somebody's batch, not a crowd
+      ...(a.accounts === undefined ? {} : { accounts: a.accounts }),
       // its share of everything written outside Bluesky
       sharePercent: total.elsewhere > 0 ? round1((100 * a.creates) / total.elsewhere) : 0,
       ...(change ? { change } : {}),
@@ -509,7 +517,11 @@ export function parseAlmanac(body: unknown) {
         const domain = isRecord(a) ? domainOf(a.domain) : null;
         const firstSeen = isRecord(a) ? iso(a.firstSeen) : null;
         const c = counts(a, ["creates"] as const);
-        return domain && firstSeen && c && isRecord(a) ? [{ domain, firstSeen, records: c.creates, collections: collectionsOf(a.collections) }] : [];
+        // different accounts that wrote to it, when the station's sketches had it
+        const accounts = isRecord(a) ? count(a.accounts) : null;
+        return domain && firstSeen && c && isRecord(a)
+          ? [{ domain, firstSeen, records: c.creates, ...(accounts === null ? {} : { accounts }), collections: collectionsOf(a.collections) }]
+          : [];
       }).slice(0, TOP),
     };
   })();
@@ -1064,7 +1076,14 @@ export function weekReport(parts: Parts, now: number, tz: string) {
       hour: hourAt(b.t, tz),
       records: b.records,
       ...(b.app
-        ? { app: b.app.domain, minute: hourAt(b.app.minute, tz), recordsThatMinute: b.app.records, perSecond: Math.round(b.app.records / 60), collections: b.app.collections }
+        ? {
+          app: b.app.domain,
+          minute: hourAt(b.app.minute, tz),
+          recordsThatMinute: b.app.records,
+          perSecond: Math.round(b.app.records / 60),
+          ...(b.app.accounts === undefined ? {} : { accountsThatMinute: b.app.accounts }),
+          collections: b.app.collections,
+        }
         : {}),
     }));
   }

@@ -20,7 +20,9 @@
  *   apps          the busiest apps outside Bluesky over the range, each with its count in
  *                 an earlier window of the same length (atmosphere_app_trends): the same
  *                 hour yesterday, the day before, the week before, the 30 days before,
- *                 the year before
+ *                 the year before. And, when the sketches could be read, how many different
+ *                 accounts wrote each one over the range (`accounts`), so thousands of
+ *                 records from one account read as that account's batch, not a crowd
  *   compare       how much of the range and of that earlier window the station heard, so
  *                 the page compares rates, not counts
  *   appsOverTime  how many apps outside Bluesky were heard each minute, hour, day or
@@ -33,7 +35,8 @@
  *                 independent hosts new or growing over the range (weather-hosts.ts)
  *   bursts        for a week: the hours that ran far past their steady count
  *                 (below), biggest first, each with the app whose busiest minute made it,
- *                 when one did (atmosphere_minute_app)
+ *                 when one did, and how many accounts wrote to it that minute
+ *                 (atmosphere_minute_app)
  *
  * Hours and days also carry `steady`: their new records with any burst taken out, where
  * no minute counts for more than 3 times its hour's median minute
@@ -63,6 +66,8 @@ export interface App {
   /** Its records in the earlier window. */
   prevCreates: number;
   collections: string[];
+  /** Different accounts that wrote to it over the range, when the station's sketches could be read. */
+  accounts?: number;
 }
 
 export interface Burst {
@@ -70,8 +75,8 @@ export interface Burst {
   t: string;
   /** Its records past the hour's steady count. */
   records: number;
-  /** The app whose busiest minute that hour holds most of it, when one does. */
-  app?: { domain: string; minute: string; records: number; collections: string[] };
+  /** The app whose busiest minute that hour holds most of it, when one does, and the different accounts that wrote to it that minute. */
+  app?: { domain: string; minute: string; records: number; collections: string[]; accounts?: number };
 }
 
 export interface Compare {
@@ -174,13 +179,25 @@ export function burstHours(points: Point[]): Burst[] {
 /** A burst with the app that made it: the busiest app-minute in its hour, if that holds most of the burst. */
 export async function withBurstApp(db: Supabase, burst: Burst): Promise<Burst> {
   const until = new Date(Date.parse(burst.t) + HOUR).toISOString();
-  const rows = await db.get(`atmosphere_minute_app?select=minute,domain,creates,collections&minute=gte.${burst.t}&minute=lt.${until}&order=creates.desc&limit=1`);
+  const rows = await db.get(`atmosphere_minute_app?select=minute,domain,creates,collections,dids&minute=gte.${burst.t}&minute=lt.${until}&order=creates.desc&limit=1`);
   if (!Array.isArray(rows)) throw new Error('burst apps did not check out');
   const r: unknown = rows[0];
   const minute = isRecord(r) ? iso(r.minute) : null;
   const c = counts(r, ['creates'] as const);
   if (!isRecord(r) || !minute || !c || typeof r.domain !== 'string' || !DOMAIN_RE.test(r.domain) || c.creates < BURST_APP_SHARE * burst.records) return burst;
-  return { ...burst, app: { domain: r.domain, minute, records: c.creates, collections: collectionsOf(r.collections) } };
+  return { ...burst, app: { domain: r.domain, minute, records: c.creates, collections: collectionsOf(r.collections), ...(isCount(r.dids) ? { accounts: num(r.dids) } : {}) } };
+}
+
+/**
+ * The busiest apps with how many accounts wrote each, where the sketches have it. One they
+ * don't (written in the last few minutes, before the hour's sketch was rewritten, or past
+ * the 2,000 apps the station names at a time) is left without: unknown, never zero.
+ */
+export function withAccounts(apps: App[], byApp: Map<string, number> | undefined): App[] {
+  return apps.map((a) => {
+    const n = byApp?.get(a.domain);
+    return n === undefined ? a : { ...a, accounts: n };
+  });
 }
 
 /** Days into calendar months (UTC), oldest first. */
@@ -274,10 +291,11 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const shaped = range === 'year' ? byMonth(points) : points;
     const bursts = listBursts ? extra('bursts', () => Promise.all(burstHours(points).map((b) => withBurstApp(db, b)))) : undefined;
     const [t, overTime, acct, hostList, burstList] = await Promise.all([trends, appsOverTime, accounts, hosts, bursts]);
+    const apps = t ? withAccounts(t.apps, acct?.byApp) : undefined;
     return json(
       request,
       200,
-      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: overTime, accounts: acct, hosts: hostList, bursts: burstList },
+      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps, compare: t?.compare, appsOverTime: overTime, accounts: acct?.accounts, hosts: hostList, bursts: burstList },
       partial ? PARTIAL_CACHE : cache,
     );
   }

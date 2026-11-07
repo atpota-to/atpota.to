@@ -126,7 +126,17 @@ function everyoneOf(rows: unknown[], apps: Map<string, Registers>): AccountCount
   return { seconds, ...everyone, ...diversityOf({ active: everyone.active, elsewhere: everyone.elsewhere, apps: [...apps.values()].map(countSketch) }) };
 }
 
-export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Accounts> {
+/**
+ * A range's accounts, and how many different accounts wrote to every app heard in it (not
+ * only the top ones), so the busiest apps by records can say whether a crowd wrote them or
+ * one account's batch did (weather-history.ts).
+ */
+export interface AccountsRead {
+  accounts: Accounts;
+  byApp: Map<string, number>;
+}
+
+export async function readAccounts(db: Supabase, w: AccountWindow): Promise<AccountsRead> {
   const { since, until, prev_since, prev_until, period } = w;
   const [main, appRows] = await Promise.all([
     getAll(db, `atmosphere_account_sketch?select=t,seconds,dids,dids_bluesky,dids_elsewhere,bluesky,elsewhere&period=eq.${period}&${range(since, until)}&order=t.asc`),
@@ -184,7 +194,7 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
   const prevTotal = everyoneOf(prevSketches, prev);
   const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
 
-  return {
+  const accounts: Accounts = {
     seconds,
     prevSeconds,
     total,
@@ -195,4 +205,5 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
       return { ...a, prevActive: p ? countSketch(p) : 0, collections: collections[i] ?? [] };
     }),
   };
+  return { accounts, byApp: new Map(apps.map((a) => [a.domain, a.active])) };
 }

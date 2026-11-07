@@ -87,8 +87,11 @@ thousand records a minute is a thousand records and one account.
   nothing. Each second keeps its commits' register updates (about 7 MB an hour).
 - **Live:** `/v1/now` has `accounts: { active, bluesky, elsewhere, index, apps }`
   for its 60 seconds. `index` is the share of active accounts that wrote elsewhere,
-  and `apps` is the 10 apps with the most accounts. The website's fallback sampler
-  has no accounts: a few seconds of accounts don't add up to a minute's.
+  and `apps` is the 10 apps with the most accounts. Each of the reading's busiest
+  apps by records carries its own `accounts` too (since 2026-11-07), so a flood of
+  records from one account reads as that account's batch, not a crowd. The
+  website's fallback sampler has no accounts: a few seconds of accounts don't add
+  up to a minute's.
 - **The diversity index** goes by them, not by records (since 2026-10-21): one account
   writing a thousand records is one account. `diversity.share` is the percent of active
   accounts that wrote elsewhere; `diversity.spread` is how many apps they're spread

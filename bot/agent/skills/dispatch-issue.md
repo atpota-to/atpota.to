@@ -55,7 +55,9 @@ Then gather, with your tools:
    moving its records to a new format. A migration is the same people, not new ones:
    the 7,600 tangled manifests one week were tangled copying existing repos into its
    new format, not 7,600 newcomers. That goes for new lexicons too. If you can't find
-   why, say so.
+   why, say so. Go by accounts, not records: a lexicon with thousands of records
+   from one or two accounts (get_lexicon_activity's `didsEstimate`) is one person's
+   import or bot, not something growing, so leave it out.
 5. **The weather.** read_weather with `report: "week"`, and the dispatch-weather
    skill for that section.
 

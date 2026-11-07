@@ -356,6 +356,22 @@ describe('reading the weather station', () => {
     expect(r.bluesky).toEqual([]);
   });
 
+  it('passes each busy app\'s accounts through when the station counted them, and drops an odd count', () => {
+    const r = fromStation({
+      ...STATION,
+      apps: [
+        { domain: 'zelk.space', perSecond: 40, count: 2400, collections: [], accounts: 1 },
+        { domain: 'tangled.sh', perSecond: 4, count: 240, collections: [], accounts: 'many' },
+        { domain: 'teal.fm', perSecond: 2, count: 120, collections: [] },
+      ],
+    })!;
+    expect(r.apps).toEqual([
+      { domain: 'zelk.space', perSecond: 40, count: 2400, collections: [], accounts: 1 },
+      { domain: 'tangled.sh', perSecond: 4, count: 240, collections: [] },
+      { domain: 'teal.fm', perSecond: 2, count: 120, collections: [] },
+    ]);
+  });
+
   it('passes the station\'s active accounts through, checked, and does without them when they are off', () => {
     const accounts = {
       active: 21000,

@@ -55,6 +55,18 @@ const utcHour = (ms) => new Date(ms).toISOString().slice(0, 13);
 const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
+ * Whether enough different accounts wrote an app's records for it to be news
+ * (weatherNewAppMinAccounts): one account's batch is not an app blowing in. An
+ * app with no count (the station hadn't counted it yet) doesn't pass; the check
+ * is off when the minimum is 0 or not a number.
+ */
+export function enoughAccounts(app, g) {
+  const min = g.weatherNewAppMinAccounts;
+  if (!Number.isFinite(min) || min <= 0) return true;
+  return Number.isFinite(app?.accounts) && app.accounts >= min;
+}
+
+/**
  * The moments due in this reading, most newsworthy first, before any cap or
  * cooldown. `reading` is the last 60 seconds (/api/atmosphere), `almanac` today
  * against usual (/api/weather-almanac), both already checked field by field;
@@ -87,7 +99,7 @@ export function dueMoments({ reading, almanac, nowMs, gates: g }) {
   }
 
   const fresh = (almanac?.newApps ?? [])
-    .filter((a) => a.records >= g.weatherNewAppMinRecords && nowMs - Date.parse(a.firstSeen) <= DAY)
+    .filter((a) => a.records >= g.weatherNewAppMinRecords && enoughAccounts(a, g) && nowMs - Date.parse(a.firstSeen) <= DAY)
     .sort((a, b) => b.records - a.records);
   if (kinds.has('new_app')) {
     for (const app of fresh) out.push({ kind: 'new_app', subject: app.domain, trigger: { app } });

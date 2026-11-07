@@ -236,6 +236,25 @@ test('accounts: who committed in the window, by the same coverage and replay rul
   assert.equal(m.seconds, 60);
 });
 
+test('each busy app says how many accounts wrote it, so one account\'s batch reads as one account', () => {
+  const c = clock(T0 + 2.5);
+  const s = new Station({ now: c.now });
+  const CHESS = create('io.zzstoatzz.chess.game');
+  s.beginSession();
+  let i = 0;
+  for (let t = T0 - 59; t <= T0 + 0.95; t += 0.05) {
+    // one account writing chess games all minute, and tangled.sh from eight accounts now and then
+    if (i % 4 === 0) s.ingest(us(t), TANGLED, undefined, { register: registerOf(`did:plc:t${(i / 4) % 8}`), app: 'tangled.sh' });
+    else s.ingest(us(t), CHESS, undefined, { register: registerOf('did:plc:chess'), app: 'zzstoatzz.io' });
+    i++;
+  }
+  const r = s.reading();
+  const by = Object.fromEntries(r.apps.map((a) => [a.domain, a]));
+  assert.ok(by['zzstoatzz.io'].count > by['tangled.sh'].count, 'the batch is the busier app by records');
+  assert.equal(by['zzstoatzz.io'].accounts, 1);
+  assert.equal(by['tangled.sh'].accounts, 8);
+});
+
 test('accounts in seconds that were not covered do not count', () => {
   const c = clock(T0 + 2.5);
   const s = new Station({ now: c.now });

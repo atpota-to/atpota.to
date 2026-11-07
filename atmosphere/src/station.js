@@ -176,6 +176,12 @@ export class Station {
     const sketches = this.accounts(w.from, w.to);
     const reading = summarize(w.tally, w.seconds, iso(w.to), crowdOf(sketches));
     reading.accounts = summarizeAccounts(sketches, w.tally);
+    // each busy app's different accounts, so a flood of records from one account reads as
+    // that account's batch, not a crowd (an app past MAX_ACCOUNT_APPS has no count)
+    for (const app of reading.apps) {
+      const s = sketches.apps.get(app.domain);
+      if (s) app.accounts = s.estimate();
+    }
     reading.window = { from: iso(w.from), to: iso(w.to) };
     reading.series = w.series;
     return reading;
