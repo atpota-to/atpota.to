@@ -49,8 +49,8 @@ function almanacBody({ nowCreates = 1206209, usualCreates = 1031111, newApps } =
     newApps: {
       warmingUp: false, heard: 228,
       apps: newApps ?? [
-        { domain: 'songnario.app', firstSeen: '2026-10-21T11:50:00.000Z', creates: 289, collections: ['app.songnario.profile'] },
-        { domain: 'politi.es', firstSeen: '2026-10-21T08:07:00.000Z', creates: 31, collections: ['es.politi.clock'] },
+        { domain: 'songnario.app', firstSeen: '2026-10-21T11:50:00.000Z', creates: 289, collections: ['app.songnario.profile'], accounts: 41 },
+        { domain: 'politi.es', firstSeen: '2026-10-21T08:07:00.000Z', creates: 31, collections: ['es.politi.clock'], accounts: 4 },
       ],
     },
   };
@@ -116,6 +116,41 @@ test('a storm, an unusual hour, a new app, a mixed sky and the daily report, mos
   assert.equal(due[1].trigger.direction, 'busier');
   assert.equal(due[2].subject, 'songnario.app', 'only the app with enough records');
   assert.equal(due[4].subject, '2026-10-21');
+});
+
+test('one account\'s batch is not a new app blowing in, however many records it wrote', () => {
+  const only = { ...g, weatherKinds: ['new_app'] };
+  const apps = [
+    // 2026-11-07: one account's scrobble history, 5,800 records
+    { domain: 'pythonplayer123.dev', firstSeen: '2026-10-21T11:00:00.000Z', creates: 5800, collections: ['dev.pythonplayer123.music.scrobble'], accounts: 1 },
+    { domain: 'nibling.run', firstSeen: '2026-10-21T13:22:00.000Z', creates: 500, collections: [], accounts: 2 },
+    // heard in the last few minutes, before the station counted its accounts: it waits
+    { domain: 'just.now', firstSeen: '2026-10-21T16:58:00.000Z', creates: 900, collections: [] },
+    { domain: 'songnario.app', firstSeen: '2026-10-21T11:50:00.000Z', creates: 289, collections: [], accounts: 41 },
+  ];
+  const a = almanac({ newApps: apps });
+  assert.deepEqual(a.newApps.map((x) => [x.domain, x.accounts]),
+    [['pythonplayer123.dev', 1], ['nibling.run', 2], ['just.now', undefined], ['songnario.app', 41]]);
+  assert.deepEqual(dueMoments({ reading: null, almanac: a, nowMs: NOW, gates: only }).map((m) => m.subject), ['songnario.app']);
+  // the operator can turn the check off
+  assert.deepEqual(dueMoments({ reading: null, almanac: a, nowMs: NOW, gates: { ...only, weatherNewAppMinAccounts: 0 } }).map((m) => m.subject),
+    ['pythonplayer123.dev', 'just.now', 'nibling.run', 'songnario.app']);
+  // and the batch isn't slipped in beside another moment either
+  const facts = factsFor({ kind: 'daily', subject: '2026-10-21', trigger: {} }, null, a, g);
+  assert.deepEqual(facts.newToday.map((x) => x.domain), ['songnario.app']);
+});
+
+test('the last minute\'s apps say how many accounts wrote them, when the station counted', () => {
+  const r = parseReading(atmosphere({
+    apps: [
+      { domain: 'zelk.space', count: 2400, collections: [], accounts: 1 },
+      { domain: 'teal.fm', count: 120, collections: [], accounts: 'lots' },
+    ],
+  }));
+  assert.deepEqual(r.apps, [
+    { domain: 'zelk.space', recordsLastMinute: 2400, accounts: 1, collections: [] },
+    { domain: 'teal.fm', recordsLastMinute: 120, collections: [] },
+  ]);
 });
 
 test('an ordinary afternoon has only the daily report, and only from its hour', () => {

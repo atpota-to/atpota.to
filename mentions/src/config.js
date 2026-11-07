@@ -163,6 +163,14 @@ export const GATE_DEFAULTS = {
   // A new app is worth asking about once it has written this many records. The
   // station hears a few new apps a day, most of them a handful of test records.
   weatherNewAppMinRecords: 250,
+  // ...and once at least this many different accounts have written them. One
+  // account's batch (an import, a backfill, a bot, a developer testing their own
+  // app) can be thousands of records and still isn't an app blowing in: on
+  // 2026-11-07 one account's 5,800 scrobbles went out as a new app. An app the
+  // station couldn't count accounts for yet waits until it can. 0 or null turns
+  // the check off. The same rule keeps one account's batch out of the new apps
+  // shown with every other moment.
+  weatherNewAppMinAccounts: 3,
   // The diversity index from which the sky counts as mixed: "high" on the page.
   // A usual minute in October 2026 was about 2.
   weatherMixedMinIndex: 6,

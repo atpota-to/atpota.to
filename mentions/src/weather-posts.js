@@ -24,7 +24,7 @@ import { isNapping } from './nap.js';
 import { faceRules } from './richtext.js';
 import { buildAnnouncement, defaultDeps as dispatchDeps, nextTid, ogContent, postUrl } from './dispatch.js';
 import {
-  MOMENT_KINDS, WEATHER_PAGES, askGate, dueMoments, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
+  MOMENT_KINDS, WEATHER_PAGES, askGate, dueMoments, enoughAccounts, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
   weatherPageOf, weatherPageUrl,
 } from './gates/weather.js';
 
@@ -157,7 +157,11 @@ export function parseReading(body) {
     apps: list(body.apps).flatMap((a) => {
       const domain = isObject(a) ? domainOf(a.domain) : null;
       const records = isObject(a) ? count(a.count) : null;
-      return domain && records !== null ? [{ domain, recordsLastMinute: records, collections: collectionsOf(a.collections) }] : [];
+      // the different accounts that wrote them, when the station counted
+      const accounts = isObject(a) ? count(a.accounts) : null;
+      return domain && records !== null
+        ? [{ domain, recordsLastMinute: records, ...(accounts === null ? {} : { accounts }), collections: collectionsOf(a.collections) }]
+        : [];
     }).slice(0, 5),
     accounts: accounts && count(accounts.active) !== null
       ? { active: count(accounts.active), writingElsewhere: count(accounts.elsewhere) }
@@ -214,7 +218,11 @@ export function parseAlmanac(body, nowMs = Date.now()) {
     const domain = isObject(a) ? domainOf(a.domain) : null;
     const firstSeen = isObject(a) ? iso(a.firstSeen) : null;
     const records = isObject(a) ? count(a.creates) : null;
-    return domain && firstSeen && records !== null ? [{ domain, firstSeen, records, collections: collectionsOf(a.collections) }] : [];
+    // the different accounts that wrote them (gates/weather.js enoughAccounts), when the station had counted
+    const accounts = isObject(a) ? count(a.accounts) : null;
+    return domain && firstSeen && records !== null
+      ? [{ domain, firstSeen, records, ...(accounts === null ? {} : { accounts }), collections: collectionsOf(a.collections) }]
+      : [];
   }).slice(0, 20);
   return out;
 }
@@ -232,16 +240,21 @@ async function fetchJson(url, fetcher) {
   return JSON.parse(text);
 }
 
-/** What Poe is shown with a moment: why it was asked, and the sky around it. */
-export function factsFor(moment, reading, almanac) {
+/**
+ * What Poe is shown with a moment: why it was asked, and the sky around it. The
+ * new apps shown are the ones enough accounts wrote (enoughAccounts): one
+ * account's batch is not news, whatever moment it rides along with.
+ */
+export function factsFor(moment, reading, almanac, g = gates()) {
+  const newToday = (almanac?.newApps ?? []).filter((a) => enoughAccounts(a, g));
   return {
     timeZone: 'UTC',
     trigger: moment.trigger,
     ...(reading ? { lastMinute: reading } : {}),
     ...(almanac?.today ? { today: almanac.today } : {}),
     ...(almanac?.lastHour ? { lastHour: almanac.lastHour } : {}),
-    ...(almanac?.newApps?.length
-      ? { newToday: [...almanac.newApps].sort((a, b) => b.records - a.records).slice(0, 3) }
+    ...(newToday.length
+      ? { newToday: [...newToday].sort((a, b) => b.records - a.records).slice(0, 3) }
       : {}),
   };
 }
@@ -365,7 +378,7 @@ export async function weatherTick({ nowMs = Date.now(), deps = defaultDeps } = {
   const moment = pickMoment(dueMoments({ reading, almanac, nowMs, gates: g }), rows, nowMs, g);
   if (!moment) return { skipped: 'nothing_due' };
 
-  const facts = factsFor(moment, reading, almanac);
+  const facts = factsFor(moment, reading, almanac, g);
   const at = new Date(nowMs).toISOString();
   const id = Number(db.prepare(`INSERT INTO weather_post (kind, subject, facts, status, created_at, updated_at)
     VALUES (?, ?, ?, 'dispatched', ?, ?)`).run(moment.kind, moment.subject, JSON.stringify(facts), at, at).lastInsertRowid);

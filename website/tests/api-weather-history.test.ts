@@ -302,7 +302,7 @@ describe('steady counts and bursts', () => {
       if (table === 'atmosphere_minute_app')
         return Response.json(
           url.searchParams.getAll('minute')[0] === 'gte.2026-10-17T00:00:00.000Z'
-            ? [{ minute: '2026-10-17T00:59:00+00:00', domain: 'podping.at', creates: 3_400_000, collections: ['at.podping.records.podping', '<b>'] }]
+            ? [{ minute: '2026-10-17T00:59:00+00:00', domain: 'podping.at', creates: 3_400_000, collections: ['at.podping.records.podping', '<b>'], dids: 1 }]
             : [{ minute: '2026-10-17T02:06:00+00:00', domain: 'standard.site', creates: 7_869, collections: [] }],
         );
       if (url.pathname.includes('/rpc/')) return new Response('no', { status: 404 });
@@ -314,7 +314,8 @@ describe('steady counts and bursts', () => {
       {
         t: '2026-10-17T00:00:00.000Z',
         records: 3_500_000,
-        app: { domain: 'podping.at', minute: '2026-10-17T00:59:00.000Z', records: 3_400_000, collections: ['at.podping.records.podping'] },
+        // and one account wrote all of that minute: somebody's batch
+        app: { domain: 'podping.at', minute: '2026-10-17T00:59:00.000Z', records: 3_400_000, collections: ['at.podping.records.podping'], accounts: 1 },
       },
       // the biggest app-minute that hour is a sliver of it, so no app gets the blame
       { t: '2026-10-17T02:00:00.000Z', records: 500_000 },
@@ -324,6 +325,7 @@ describe('steady counts and bursts', () => {
     expect(asked.searchParams.getAll('minute')).toEqual(['gte.2026-10-17T00:00:00.000Z', 'lt.2026-10-17T01:00:00.000Z']);
     expect(asked.searchParams.get('order')).toBe('creates.desc');
     expect(asked.searchParams.get('limit')).toBe('1');
+    expect(asked.searchParams.get('select')!.split(',')).toContain('dids');
   });
 
   it('lists bursts for a week only (Poe\'s dispatch), so the page\'s other ranges and the cards don\'t wait on them', async () => {
@@ -431,6 +433,33 @@ describe('active accounts in the trends', () => {
     expect(body.accounts.prev).toEqual({ seconds: 3600, active: 4, bluesky: 3, elsewhere: 1, share: 25, spread: 1, index: 25 });
     const earlier = urls.filter((u) => u.pathname.endsWith('/atmosphere_account_app_sketch') && u.searchParams.get('t')?.startsWith('gte.2026-10-18'));
     expect(earlier[0]!.searchParams.get('domain')).toBeNull();
+  });
+
+  it('says how many accounts wrote each of the busiest apps, so one account\'s batch doesn\'t read as a crowd', async () => {
+    const db = stationDb();
+    const trends = {
+      seconds: 3600,
+      prevSeconds: 3600,
+      apps: [
+        { domain: 'whtwnd.com', creates: 8600, prevCreates: 0, collections: [] },
+        { domain: 'tangled.sh', creates: 420, prevCreates: 300, collections: [] },
+        { domain: 'fresh.app', creates: 50, prevCreates: 0, collections: [] },
+      ],
+    };
+    const fetch = (async (input: string, init?: RequestInit) =>
+      input.endsWith('/rpc/atmosphere_app_trends') ? Response.json(trends) : db.fetch(input, init)) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined, liveSince: 0 });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=hour'))).json()) as { apps: App[]; accounts: { apps: unknown[] } };
+    expect(body.apps).toEqual([
+      // the busiest by records, from one account: whtwnd.com's sketches over the hour hold one register
+      { domain: 'whtwnd.com', creates: 8600, prevCreates: 0, collections: [], accounts: 1 },
+      { domain: 'tangled.sh', creates: 420, prevCreates: 300, collections: [], accounts: 2 },
+      // no sketch for it yet (heard in the last few minutes, say): unknown, so no count at all, never 0
+      { domain: 'fresh.app', creates: 50, prevCreates: 0, collections: [] },
+    ]);
+    // the accounts part itself is as it was, with no list of every app in it
+    expect(body.accounts.apps).toHaveLength(2);
+    expect('byApp' in body.accounts).toBe(false);
   });
 
   it('leaves the earlier window\'s diversity index out when the station heard it from the archive, not live', async () => {

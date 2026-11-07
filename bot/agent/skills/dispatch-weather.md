@@ -56,6 +56,10 @@ out most, and leave the rest to the report.
    (`bursts`: one app writing a flood of records in a minute, a bulk import) is left
    out of the weather, so it's never the busiest hour or a forecast, but a big one can
    be the thing that stood out: name the app, how many records, and how fast.
+   Before you call an app way up or say it blew in, look at its `accounts` (on a
+   burst, `accountsThatMinute`): thousands of records from one or two accounts is one
+   person's import, backfill or bot, not an app taking off. Leave it out of what
+   stood out, or, for a burst big enough to mention, say it was one account.
 4. **Where the atmosphere lives**, only if something there stood out
    (`whereTheAtmosphereLives`): a week when the migration wind blew hard out of
    Bluesky (`thisWeek.movingHouse`), a burst of new independent hosts or one growing

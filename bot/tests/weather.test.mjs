@@ -413,6 +413,36 @@ test("week: one app's bulk import is a burst, not the weather: not the busiest h
   assert.equal("bursts" in (await lib.readWeather("week", "UTC", fakeFetch(FULL).impl, NOW)), false, "no bursts, nothing to say");
 });
 
+test("every app says how many accounts wrote it, so one account's batch can't pass for a crowd", async () => {
+  const BURST = firstHour + 120 * HOUR;
+  const { impl } = fakeFetch({
+    ...FULL,
+    "/api/atmosphere": { ...LIVE, apps: [
+      { domain: "zelk.space", perSecond: 40, count: 2400, collections: [], accounts: 1 },
+      { domain: "lexicon.community", perSecond: 1, count: 58, collections: [], accounts: "lots" },
+    ] },
+    "/api/weather-history?range=day": { ...DAY_HISTORY, apps: [
+      { domain: "zzstoatzz.io", creates: 8600, prevCreates: 800, collections: ["io.zzstoatzz.chess.game"], accounts: 1 },
+      { domain: "tangled.sh", creates: 400, prevCreates: 0, collections: [] },
+    ] },
+    "/api/weather-history?range=week": { ...WEEK_HISTORY,
+      apps: [{ domain: "teal.fm", creates: 90_000, prevCreates: 80_000, collections: [], accounts: 2400 }],
+      bursts: [{ t: isoAt(BURST), records: 3_600_000, app: { domain: "podping.at", minute: isoAt(BURST + 59 * 60_000), records: 3_570_000, collections: [], accounts: 1 } }] },
+    "/api/weather-almanac?tz=UTC": { ...ALMANAC, newApps: { ...ALMANAC.newApps, apps: [
+      { domain: "pythonplayer123.dev", firstSeen: isoAt(NOW - 2 * HOUR), creates: 5800, collections: ["dev.pythonplayer123.music.scrobble"], accounts: 1 },
+      { domain: "new.app", firstSeen: isoAt(NOW - HOUR), creates: 40, collections: [] },
+    ] } },
+  });
+  const now = await lib.readWeather("now", "UTC", impl, NOW);
+  assert.deepEqual(now.apps.map((a) => [a.domain, a.accounts]), [["zelk.space", 1], ["lexicon.community", undefined]], "an odd count is left out, not passed on");
+  const today = await lib.readWeather("today", "UTC", impl, NOW);
+  assert.deepEqual(today.last24Hours.apps.map((a) => [a.domain, a.records, a.accounts]), [["zzstoatzz.io", 8600, 1], ["tangled.sh", 400, undefined]]);
+  assert.deepEqual(today.newApps.apps.map((a) => [a.domain, a.accounts]), [["pythonplayer123.dev", 1], ["new.app", undefined]]);
+  const week = await lib.readWeather("week", "UTC", impl, NOW);
+  assert.equal(week.apps[0].accounts, 2400);
+  assert.equal(week.bursts[0].accountsThatMinute, 1);
+});
+
 test("week: a part that can't be read is named, and the rest still comes back", async () => {
   const { impl } = fakeFetch({ "/api/weather-history?range=week": WEEK_HISTORY });
   const r = await lib.readWeather("week", "UTC", impl, NOW);

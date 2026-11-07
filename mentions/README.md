@@ -905,12 +905,16 @@ atpota.to's public endpoints, the ones `/weather` reads (`/api/atmosphere` and
 | --- | --- | --- |
 | `storm` | the station's last minute is stormy (600+ new records a second) | 12 hours |
 | `unusual` | the last hour is 1.4x busier or 0.65x as busy as usual for it, when the station heard at least 45 minutes of it | 12 hours |
-| `new_app` | an app the station never heard before has written 250+ records in its first day | 24 hours, and an app once |
+| `new_app` | an app the station never heard before has written 250+ records in its first day, from 3 or more different accounts | 24 hours, and an app once |
 | `mixed` | the diversity index is 6 or more ("high") | 24 hours |
 | `daily` | the day's report, from 16:00 UTC | UTC day |
 
 Only the station's own readings count; a website sample is too short to call a
-storm on. App names are checked as domains and collections as NSIDs before Poe
+storm on. A new app needs a crowd, not just records (`weatherNewAppMinAccounts`):
+one account's batch (an import, a backfill, a bot) can write thousands of records
+and still isn't an app blowing in, so it is never asked about, and it's left out of
+the new apps shown beside any other moment. An app the station hasn't counted
+accounts for yet waits until it has. App names are checked as domains and collections as NSIDs before Poe
 sees them. Poe is asked about one moment at a time, and not at all while
 3 weather posts went out in the last 24 hours (`weatherPostsPerDay`), one went
 out in the last 2 hours (`weatherMinGapMin`), or it has been asked 8 times in
