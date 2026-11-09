@@ -300,25 +300,85 @@ function draftContext() {
   };
 }
 
-async function dispatchDm(row, fetcher = fetch) {
+// How much of the conversation goes with each DM. Each DM is its own agent
+// session, so this is all Poe knows of what came before, its own replies
+// included. Read from chat when the DM is handed over and never stored here.
+export const DM_HISTORY_MAX_MESSAGES = 30;
+export const DM_HISTORY_MAX_CHARS = 16000;
+export const DM_HISTORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DM_HISTORY_MAX_MESSAGE_CHARS = 4000;
+
+/**
+ * The conversation before `row`'s message, oldest first, as { you, text, sentAt }.
+ * `messages` is a page of chat.bsky.convo.getMessages. Only the operator and Poe
+ * count (the convo has just the two of them); deleted messages and anything
+ * older than DM_HISTORY_MAX_AGE_MS are left out, and past the caps the oldest go.
+ */
+export function dmHistory(messages, row, now = Date.now()) {
+  const before = Date.parse(row.received_at);
+  if (!Array.isArray(messages) || !Number.isFinite(before)) return [];
+  const picked = messages
+    .filter((m) => m && m.id !== row.message_id && typeof m.text === 'string' &&
+      (m.sender?.did === config.botDid || m.sender?.did === row.operator_did))
+    .map((m) => ({ m, at: Date.parse(m.sentAt) }))
+    .filter(({ at }) => Number.isFinite(at) && at < before && now - at <= DM_HISTORY_MAX_AGE_MS)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, DM_HISTORY_MAX_MESSAGES)
+    .map(({ m }) => {
+      const full = [expandLinks(m.text, m.facets), describeShared(m.embed)].filter((t) => t?.trim()).join('\n\n');
+      const text = full.length > DM_HISTORY_MAX_MESSAGE_CHARS ? `${full.slice(0, DM_HISTORY_MAX_MESSAGE_CHARS)}…` : full;
+      return { you: m.sender.did === config.botDid, text, sentAt: m.sentAt };
+    })
+    .filter((m) => m.text.trim());
+  const kept = [];
+  let chars = 0;
+  for (const m of picked) {
+    chars += m.text.length;
+    if (chars > DM_HISTORY_MAX_CHARS) break;
+    kept.push(m);
+  }
+  return kept.reverse();
+}
+
+async function readHistory(row, api) {
+  if (!api?.getDmMessages) return [];
+  try {
+    return dmHistory((await api.getDmMessages(row.convo_id))?.messages, row);
+  } catch (err) {
+    // Context only: a DM without it still gets its answer.
+    logger.warn('operator DM history unavailable', { messageId: row.message_id, error: err.message });
+    return [];
+  }
+}
+
+async function dispatchDm(row, fetcher = fetch, api = chat) {
   if (config.stage < 4 || killSwitchEngaged() || !config.dmEnabled) return;
   // A retried dispatch may launch another agent turn; only the first accepted
   // draft wins. Avoid automatic re-dispatch after a successful 202.
   db.prepare(`UPDATE operator_dm SET status = 'dispatched', updated_at = ?
     WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
-  const ac = AbortSignal.timeout(15000);
   const drafts = draftContext();
-  const response = await fetcher(`${config.agentUrl}/operator/dm`, {
+  const history = await readHistory(row, api);
+  const body = {
+    dmId: row.message_id, operatorDid: row.operator_did,
+    text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
+    guidance: /^(?:remember|style):\s*\S/i.test(row.text),
+    ...drafts,
+  };
+  const send = (payload) => fetcher(`${config.agentUrl}/operator/dm`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-atpotato-secret': config.sharedSecret },
-    body: JSON.stringify({
-      dmId: row.message_id, operatorDid: row.operator_did,
-      text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
-      guidance: /^(?:remember|style):\s*\S/i.test(row.text),
-      ...drafts,
-    }),
-    signal: ac,
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000),
   });
+  let response = await send(history.length ? { ...body, history } : body);
+  // A 400 is the bot refusing the payload before any turn starts, so sending it
+  // again can't answer twice. The history is the optional part, and a bot that
+  // doesn't take it yet (a deploy ahead of the bot's) still gets the message.
+  if (response.status === 400 && history.length) {
+    logger.warn('operator DM history refused; sending the message without it', { messageId: row.message_id });
+    response = await send(body);
+  }
   if (!response.ok) throw new Error(`operator DM dispatch failed: ${response.status}`);
 }
 
@@ -476,7 +536,7 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
         await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         continue;
       }
-      await dispatchDm(row, fetcher);
+      await dispatchDm(row, fetcher, api);
       db.prepare('UPDATE operator_dm SET draft_text = NULL, shared_text = NULL WHERE message_id = ? AND status = ?')
         .run(row.message_id, 'dispatched');
     } catch (err) {
