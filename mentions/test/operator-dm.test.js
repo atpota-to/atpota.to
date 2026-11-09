@@ -4,7 +4,8 @@ import { config } from '../src/config.js';
 import { db } from '../src/db.js';
 import {
   baseline, acceptMessage, receiveDraft, deliverDm, pollOperatorDms, describeShared, splitDmText,
-  DM_MAX_GRAPHEMES, DM_MAX_PARTS,
+  DM_MAX_GRAPHEMES, DM_MAX_PARTS, dmHistory,
+  DM_HISTORY_MAX_MESSAGES, DM_HISTORY_MAX_CHARS, DM_HISTORY_MAX_AGE_MS,
 } from '../src/operator-dm.js';
 import { graphemeLength, byteLength } from '../src/richtext.js';
 
@@ -117,6 +118,109 @@ test('a link the app shortened reaches Poe whole', async () => {
   }] };
   const body = (await dispatchAll([target])).find((b) => b.dmId === target.id);
   assert.equal(body.text, `what about ${url}?`);
+});
+
+// --- the conversation so far ------------------------------------------------
+
+const minutesAgo = (n) => new Date(Date.now() - n * 60000).toISOString();
+const earlier = (sender, text, minutes, extra = {}) => ({
+  id: `earlier-${++counter}`, text, sender: { did: sender }, sentAt: minutesAgo(minutes), ...extra,
+});
+
+test('a DM reaches Poe with the conversation before it, its own replies included, oldest first', async () => {
+  const target = { ...message(), text: 'yes make the swap!' };
+  // chat.bsky.convo.getMessages pages newest first. The earlier ones predate the
+  // baseline, so only the target is a new message to answer.
+  const page = [
+    target,
+    earlier(config.botDid, 'If you go with For You, I would cut the survey down. Want me to make the swap?', 5),
+    earlier(admin, 'which story should lead?', 9),
+    earlier('did:plc:intruder', 'not part of this convo', 10),
+    { id: 'gone', sender: { did: admin }, sentAt: minutesAgo(11) },
+  ];
+  const bodies = await dispatchAll(page);
+  const body = bodies.find((b) => b.dmId === target.id);
+  assert.equal(body.text, 'yes make the swap!');
+  assert.deepEqual(body.history.map(({ you, text }) => ({ you, text })), [
+    { you: false, text: 'which story should lead?' },
+    { you: true, text: 'If you go with For You, I would cut the survey down. Want me to make the swap?' },
+  ]);
+  assert.equal(body.history[1].sentAt, page[1].sentAt);
+});
+
+test('dmHistory leaves out later messages, old ones, and past the caps the oldest', () => {
+  const row = { message_id: 'now-msg', operator_did: admin, received_at: minutesAgo(0) };
+  const week = DM_HISTORY_MAX_AGE_MS / 60000;
+  const later = { ...earlier(admin, 'sent after this one', 0), sentAt: new Date(Date.now() + 1000).toISOString() };
+  const stale = earlier(admin, 'last month', week + 5);
+  const self = { ...earlier(admin, 'the message itself', 1), id: 'now-msg' };
+  assert.deepEqual(dmHistory([later, stale, self], row), []);
+
+  const many = Array.from({ length: DM_HISTORY_MAX_MESSAGES + 5 }, (_, i) => earlier(admin, `m${i}`, i + 1));
+  const kept = dmHistory(many, row);
+  assert.equal(kept.length, DM_HISTORY_MAX_MESSAGES);
+  assert.equal(kept.at(-1).text, 'm0', 'the newest is last');
+
+  const long = Array.from({ length: 8 }, (_, i) => earlier(config.botDid, `${i}${'x'.repeat(3000)}`, i + 1));
+  const trimmed = dmHistory(long, row);
+  assert.ok(trimmed.reduce((n, m) => n + m.text.length, 0) <= DM_HISTORY_MAX_CHARS);
+  assert.equal(trimmed.at(-1).text[0], '0', 'the oldest go first');
+  assert.ok(trimmed.every((m) => m.you));
+});
+
+test('dmHistory writes out shortened links and attached posts, as the operator sent them', () => {
+  const row = { message_id: 'now-msg', operator_did: admin, received_at: minutesAgo(0) };
+  const url = 'https://dfom.eu/position-paper';
+  const shown = 'dfom.eu/position...';
+  const msg = earlier(admin, `look ${shown}`, 3, {
+    facets: [{ index: { byteStart: 5, byteEnd: 5 + Buffer.byteLength(shown) },
+      features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }] }],
+    embed: attachedPost(),
+  });
+  const [only] = dmHistory([msg], row);
+  assert.equal(only.text, `look ${url}\n\n(attached to this message: the post ` +
+    `https://bsky.app/profile/archive.org/post/3myg7pie6p224, ${ARCHIVE_POST})`);
+});
+
+test('a bot that refuses the history still gets the message, sent again without it', async () => {
+  const target = message();
+  const bodies = [];
+  await pollOperatorDms({
+    api: {
+      listDmConvos: async () => ({ convos: [convo] }),
+      getDmMessages: async () => ({ messages: [target, earlier(config.botDid, 'an earlier reply', 2)] }),
+    },
+    fetcher: async (_url, options) => {
+      const body = JSON.parse(options.body);
+      bodies.push(body);
+      return body.history ? { ok: false, status: 400 } : { ok: true, status: 202 };
+    },
+  });
+  const mine = bodies.filter((b) => b.dmId === target.id);
+  assert.equal(mine.length, 2);
+  assert.ok(mine[0].history);
+  assert.equal(mine[1].history, undefined);
+  assert.equal(db.prepare('SELECT status FROM operator_dm WHERE message_id = ?').get(target.id).status, 'dispatched');
+});
+
+test('when the conversation cannot be read, the DM goes without it', async () => {
+  const target = message();
+  let reads = 0;
+  const bodies = [];
+  await pollOperatorDms({
+    api: {
+      listDmConvos: async () => ({ convos: [convo] }),
+      // The poll's own read works; the read for the history fails.
+      getDmMessages: async () => {
+        if (++reads > 1) throw new Error('chat.bsky.convo.getMessages failed: 502');
+        return { messages: [target] };
+      },
+    },
+    fetcher: async (_url, options) => { bodies.push(JSON.parse(options.body)); return { ok: true }; },
+  });
+  const body = bodies.find((b) => b.dmId === target.id);
+  assert.ok(body, 'dispatched anyway');
+  assert.equal(body.history, undefined);
 });
 
 test('describeShared names hidden posts and other records by at-uri, and ignores the rest', () => {

@@ -587,11 +587,25 @@ A chat message holds 1000 graphemes and 10000 bytes. A longer reply is sent as u
 (`splitDmText`); the first answers the operator's message and the rest follow it, and past
 the fourth the reply ends with an ellipsis. `parts_sent` records how far a reply got: a part
 that fails leaves the row in `sending` for review, like a single send, and is never resent.
+
+Each DM is its own agent session (the bot addresses it by the message, not the
+conversation), so Poe knows what was said before only because the droplet tells it. When
+a DM is handed over, the droplet reads the conversation from chat and sends the messages
+before it as `history`: `{ you, text, sentAt }`, oldest first, where `you` marks
+anything from Poe's account. That includes what never went through the agent: the
+proposals and preview links put under its replies, the answers to a yes or no, and the
+drafting session's previews. It is the last `DM_HISTORY_MAX_MESSAGES` (30) messages from
+the past 7 days, at most `DM_HISTORY_MAX_CHARS` (16000) characters, dropping the oldest
+first (`dmHistory`). It is context only: if chat can't be read, the DM goes without it,
+and if the bot answers 400 (a bot deployed before it accepted `history`), the DM is sent
+again without it, which can't answer twice because a 400 starts no turn.
 An operator-confirmed fact about Poe may go into shared self memory only if it
 is safe to recall in public conversation. Prefix `style:` to store a private,
 standing voice note in droplet SQLite; future public Bluesky turns receive up
 to 30 active notes. The notes are never published as PDS records. Private
-memory uses the bot's Vercel Blob store; Eve also keeps DM session history.
+memory uses the bot's Vercel Blob store; Eve also keeps each DM's session,
+with the conversation history sent alongside it. The droplet reads that history
+from chat for each hand-off and does not store it.
 Inbound message text and drafts are held in local SQLite. Anyone with access
 to those stores can read them. The DM bridge does not log message text; review
 Vercel and Eve telemetry separately before sending sensitive material.
