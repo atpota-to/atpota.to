@@ -26,7 +26,7 @@ const PAGE = readFileSync(resolve(process.cwd(), 'weather/index.html'), 'utf8');
 const MAIN = PAGE.slice(PAGE.indexOf('<main'), PAGE.indexOf('</main>') + '</main>'.length);
 const DAY = 86_400_000;
 
-const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 20000, createdBluesky: 1000, createdIndependent: 50, createdUnlisted: 200, createdCustomHandle: 20, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 2, deleted: 1, destinations: [], ...extra });
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 20000, createdBluesky: 1000, createdIndependent: 50, createdUnlisted: 200, createdCustomHandle: 20, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 2, deleted: 1, destinations: [], moves: [], ...extra });
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 /** Every day from `from` to `to`, each as `of` makes it. */
 const daysFrom = (from: string, to: string, of: (day: string) => Partial<IdentityDay> = () => ({})) => {

@@ -11,6 +11,11 @@
  *                                ?range=year   the last 12 months, a point a month
  *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts?, hosts?, bursts? }
  *
+ *   GET /api/weather-history?host=<hostname>   one host: its accounts day by day, who was
+ *                                              active, and who moved in and away, by the
+ *                                              other host (weather-hosts.ts readHost)
+ *   ->  { host: { hostname, bluesky, days, moves, movesSince?, similar? } }
+ *
  * Points are raw counts with the seconds they cover, never rates: a rate is
  * count / seconds, worked out in the page, so summing points (into months, or into the
  * total) stays exact. The diversity index goes by accounts, so it comes with them.
@@ -31,8 +36,10 @@
  *                 diversity index they make, and the apps with the most, from the
  *                 station's sketches (weather-accounts.ts); and everyone in the earlier
  *                 window with its diversity index (prev), when that was all heard live
- *   hosts         the PDS hosts in each bucket from the station's censuses, and the
- *                 independent hosts new or growing over the range (weather-hosts.ts)
+ *   hosts         the PDS hosts in each bucket from the station's censuses, the
+ *                 independent hosts new or growing over the range, and each day's sign-ups
+ *                 and accounts moving house, with which host each mover left for which
+ *                 (weather-hosts.ts)
  *   bursts        for a week: the hours that ran far past their steady count
  *                 (below), biggest first, each with the app whose busiest minute made it,
  *                 when one did, and how many accounts wrote to it that minute
@@ -231,7 +238,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const host = askedHost(asked);
     if (!host) return json(request, 400, { error: 'host must be a hostname' }, 'no-store');
     try {
-      return json(request, 200, { host: await readHost(supabase(env(), fetchImpl), host) }, RANGES.day.cache);
+      return json(request, 200, { host: await readHost(supabase(env(), fetchImpl), host, now()) }, RANGES.day.cache);
     } catch (error) {
       log({ event: 'history_host_error', error: (error as Error)?.message ?? 'Error' });
       return json(request, 503, { error: 'unavailable' }, 'no-store');
@@ -278,7 +285,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       const { since, until, prev_since, prev_until } = trendArgs(range, at);
       return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS, liveSince });
     });
-    const hosts = extra('hosts', () => readHosts(db, rangeStart(range, at), bucket));
+    const hosts = extra('hosts', () => readHosts(db, rangeStart(range, at), bucket, at));
     let rows: unknown;
     try {
       rows = await db.get(queryPath(range, at));

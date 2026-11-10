@@ -49,6 +49,9 @@ dispatch due    ──► droplet ──► bot  POST /dispatch/draft  ──►
   the last minute, today against usual, or the past week with an outlook. It writes
   the dispatch's weather section from the week
   ([`bot/agent/skills/dispatch-weather.md`](bot/agent/skills/dispatch-weather.md)).
+  For accounts moving house it knows which host each mover left for which, and can
+  read one host on its own (`host`), so "how many of those came from that host?" has
+  an answer.
 - **The website writes no database.** The blog, gardens, comments and
   subscriptions are records in people's own repos, read through public
   infrastructure: plc.directory, the Bluesky AppView, Jetstream,
@@ -193,7 +196,7 @@ in `website/server/`, so Vercel only builds the entry points.
 | `api/leaderboard.ts` | The community garden's leaderboards, counted by the garden index (`garden_leaderboard`) and moderated like the garden: atpotato's blocks, hidden accounts and atpotato itself are left off |
 | `api/latest.ts` | The home page's "latest" feed |
 | `api/atmosphere.ts` | The weather station's rolling 60 seconds, for the home page's "atmospheric conditions" and `/weather` (cached 5 seconds; needs `ATMOSPHERE_STATION_SECRET`). Without the station it samples a few seconds of Jetstream itself, and one sample serves everyone for a minute |
-| `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key): records a second, active accounts and the diversity index they make, and apps heard over a range, and the busiest apps with how each did against a day (or month, or year) earlier |
+| `api/weather-history.ts` | The trends on `/weather`, from the station's minute rows in Supabase (public, read with the publishable key): records a second, active accounts and the diversity index they make, and apps heard over a range, and the busiest apps with how each did against a day (or month, or year) earlier; the PDS hosts, sign-ups and accounts moving house, with which host each mover left for which; and with `?host=`, one host's accounts and who moved to it and away |
 | `api/weather-almanac.ts` | The almanac on `/weather`, in the reader's time zone: today's high and low, the last hour against usual, apps heard for the first time, and the week as a heat map |
 | `api/og-weather.ts` | `/weather`'s Open Graph card, `/og/weather.png` (a rewrite), drawn from the weather right now with satori and resvg and cached for 5 minutes. `?card=forecast` (the default), `trend`, `mix`, `today`, `hosts` or `migration` picks the design; each of the report's pages names its own. Without the numbers it draws a quiet card, never an error |
 

@@ -106,7 +106,7 @@ const HOSTS = {
 
 const day = (d: string, over: Partial<IdentityDay> = {}): IdentityDay => ({
   day: d, ops: 266_000, createdBluesky: 17_000, createdIndependent: 1000, createdUnlisted: 245_000, createdCustomHandle: 300,
-  createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], ...over,
+  createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], moves: [], ...over,
 });
 
 /** The day's hosts, as /api/weather-history?range=day has them: two censuses, and the plc directory's last eight days. */

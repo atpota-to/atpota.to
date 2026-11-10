@@ -140,11 +140,82 @@ describe('weather history', () => {
         { day: '2026-10-23', active: 1885, change: -2, joined: 4, left: 6, estimated: false },
       ],
       identities: [
-        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], createdUnnamed: 0, createdScripted: 0, scripted: [], destinations: [{ hostname: 'eurosky.social', accounts: 4 }] },
+        { day: '2026-10-22', ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, createdBulk: 4000, bulk: [{ hostname: 'goodmkt.id', accounts: 4000, bursts: 2, seconds: 1929 }], createdUnnamed: 0, createdScripted: 0, scripted: [], destinations: [{ hostname: 'eurosky.social', accounts: 4 }], moves: [] },
       ],
       activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
       liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
     });
+  });
+
+  it('says which host each day\'s movers left for which, checked, and leaves the days whole when it can\'t', async () => {
+    const MOVES = [
+      { day: '2026-10-22', from_host: 'bluesky', to_host: 'eurosky.social', accounts: 16 },
+      { day: '2026-10-22', from_host: 'pds.tophhie.cloud', to_host: 'blacksky.app', accounts: '2' },
+      { day: '2026-10-22', from_host: 'pds.tophhie.cloud', to_host: 'bluesky', accounts: 1 },
+      // someone else's text, and rows that say nothing
+      { day: '2026-10-22', from_host: '<b>x</b>', to_host: 'eurosky.social', accounts: 1 },
+      { day: '2026-10-22', from_host: 'Bluesky', to_host: 'eurosky.social', accounts: 1 },
+      { day: '2026-10-22', from_host: 'bluesky', to_host: 'bluesky', accounts: 1 },
+      { day: '2026-10-22', from_host: 'bluesky', to_host: 'blacksky.app', accounts: 0 },
+      { day: 'today', from_host: 'bluesky', to_host: 'blacksky.app', accounts: 1 },
+      // a day the hosts' answer has no identities for
+      { day: '2026-10-19', from_host: 'bluesky', to_host: 'blacksky.app', accounts: 3 },
+    ];
+    const urls: string[] = [];
+    const scripted = (moves: () => Response) =>
+      (async (url: string) => {
+        urls.push(url);
+        if (url.endsWith('/rpc/atmosphere_host_trends')) return Response.json(HOSTS);
+        if (url.includes('/rpc/')) return new Response('no', { status: 404 });
+        if (url.includes('atmosphere_host_move_day')) return moves();
+        return Response.json([row('2026-10-20T16:59:00+00:00')]);
+      }) as typeof globalThis.fetch;
+    const identities = async (fetch: typeof globalThis.fetch) => {
+      const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+      const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?range=week'))).json()) as { hosts: { identities: Array<{ day: string; moves: unknown }> } };
+      return body.hosts.identities;
+    };
+    expect((await identities(scripted(() => Response.json(MOVES))))[0]).toMatchObject({
+      day: '2026-10-22',
+      movedOut: 19,
+      moves: [
+        { from: 'bluesky', to: 'eurosky.social', accounts: 16 },
+        { from: 'pds.tophhie.cloud', to: 'blacksky.app', accounts: 2 },
+        { from: 'pds.tophhie.cloud', to: 'bluesky', accounts: 1 },
+      ],
+    });
+    // asked from the first day the hosts give identities for (a week of days at least), newest and biggest first
+    expect(urls.find((u) => u.includes('atmosphere_host_move_day'))).toBe(
+      `${SUPABASE_URL}/rest/v1/atmosphere_host_move_day?select=day,from_host,to_host,accounts&day=gte.2026-10-13&order=day.desc,accounts.desc,from_host.asc,to_host.asc&limit=1000&offset=0`,
+    );
+    expect(hosts.identitiesSince('2026-10-20T16:00:00.000Z', NOW)).toBe('2026-10-14');
+    expect(hosts.identitiesSince('2026-09-20T17:00:00.000Z', NOW)).toBe('2026-09-20');
+    // the table isn't there (the migration hasn't been applied), or it's down: the days come all the same
+    expect((await identities(scripted(() => new Response('no such table', { status: 404 }))))[0]).toMatchObject({ day: '2026-10-22', movedOut: 19, moves: [] });
+    expect((await identities(scripted(() => Response.json({ not: 'rows' }))))[0]).toMatchObject({ day: '2026-10-22', moves: [] });
+  });
+
+  it('names at most 25 pairs a day, and drops the oldest day when the pages run out before the range does', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({ day: '2026-10-22', from_host: 'bluesky', to_host: `h${String(i).padStart(2, '0')}.example`, accounts: 40 - i }));
+    const one = await hosts.readMoves({ get: async () => many, rpc: async () => null }, '2026-10-22');
+    expect(one.get('2026-10-22')).toHaveLength(hosts.TOP_MOVES);
+    expect(one.get('2026-10-22')![0]).toEqual({ from: 'bluesky', to: 'h00.example', accounts: 40 });
+    // of pairs the same size, the ones that left an independent host are kept before the ones that left bluesky's:
+    // 30 single accounts off bluesky's hosts, and two off tophhie, which sort after them by name
+    const singles = [...Array.from({ length: 30 }, (_, i) => ({ day: '2026-10-22', from_host: 'bluesky', to_host: `h${String(i).padStart(2, '0')}.example`, accounts: 1 })), { day: '2026-10-22', from_host: 'pds.tophhie.cloud', to_host: 'eurosky.social', accounts: 1 }, { day: '2026-10-22', from_host: 'pds.tophhie.cloud', to_host: 'bluesky', accounts: 1 }];
+    const kept = (await hosts.readMoves({ get: async () => singles, rpc: async () => null }, '2026-10-22')).get('2026-10-22')!;
+    expect(kept).toHaveLength(hosts.TOP_MOVES);
+    expect(kept.slice(0, 2)).toEqual([{ from: 'pds.tophhie.cloud', to: 'bluesky', accounts: 1 }, { from: 'pds.tophhie.cloud', to: 'eurosky.social', accounts: 1 }]);
+    expect(kept.at(-1)).toEqual({ from: 'bluesky', to: 'h22.example', accounts: 1 });
+    // every page comes back full: the last day read may be cut short, so it isn't known
+    const asked: string[] = [];
+    const full = (day: string) => Array.from({ length: hosts.MOVE_ROWS }, (_, i) => ({ day, from_host: 'bluesky', to_host: `h${i}.example`, accounts: 1 }));
+    const days = ['2026-10-22', '2026-10-21', '2026-10-20', '2026-10-19', '2026-10-18', '2026-10-17'];
+    const cut = await hosts.readMoves({ get: async (path) => (asked.push(path), full(days[asked.length - 1]!)), rpc: async () => null }, '2026-10-01');
+    expect(asked).toHaveLength(hosts.MOVE_PAGES);
+    expect(asked[4]).toContain('offset=4000');
+    expect([...cut.keys()]).toEqual(['2026-10-22', '2026-10-21', '2026-10-20', '2026-10-19']);
+    await expect(hosts.readMoves({ get: async () => 'nope', rpc: async () => null }, '2026-10-01')).rejects.toThrow('moves did not check out');
   });
 
   it('leaves the hosts out, and caches briefly, when they do not come', async () => {
@@ -218,6 +289,8 @@ describe('weather history', () => {
     const fetch = (async (url: string) => {
       urls.push(url);
       if (url.includes('atmosphere_host_active_day')) return Response.json([{ day: '2026-10-22', dids: 1204 }, { day: 'nope', dids: 1 }]);
+      // nobody's moves kept yet
+      if (url.includes('atmosphere_host_move_day')) return Response.json([]);
       return Response.json([
         { day: '2026-10-22', accounts: 38036, estimated: false, bluesky: false },
         { day: '2026-10-21', accounts: '37979', estimated: true, bluesky: false },
@@ -236,14 +309,81 @@ describe('weather history', () => {
           { day: '2026-10-21', accounts: 37979, estimated: true },
           { day: '2026-10-22', accounts: 38036, estimated: false, active: 1204 },
         ],
+        moves: [],
       },
     });
     expect(db.urls).toEqual([
       `${SUPABASE_URL}/rest/v1/atmosphere_host_day?hostname=eq.eurosky.social&select=day,accounts,estimated,bluesky&order=day.desc&limit=400`,
       `${SUPABASE_URL}/rest/v1/atmosphere_host_active_day?hostname=eq.eurosky.social&select=day,dids&order=day.desc&limit=400`,
+      `${SUPABASE_URL}/rest/v1/atmosphere_host_move_day?to_host=eq.eurosky.social&select=day,from_host,accounts&order=day.desc,accounts.desc,from_host.asc&limit=1000`,
+      `${SUPABASE_URL}/rest/v1/atmosphere_host_move_day?from_host=eq.eurosky.social&select=day,to_host,accounts&order=day.desc,accounts.desc,to_host.asc&limit=1000`,
+      `${SUPABASE_URL}/rest/v1/atmosphere_host_move_day?select=day&order=day.asc&limit=1`,
     ]);
     expect((await h.GET(new Request('https://atpota.to/api/weather-history?host=a%26b'))).status).toBe(400);
     expect((await h.GET(new Request('https://atpota.to/api/weather-history?host='))).status).toBe(400);
+  });
+
+  it('answers who moved to one host and away from it, by the day and the other host', async () => {
+    const fetch = (async (url: string) => {
+      if (url.includes('atmosphere_host_move_day?to_host=')) {
+        return Response.json([
+          { day: '2026-11-10', from_host: 'bluesky', accounts: 19 },
+          { day: '2026-11-10', from_host: 'pds.wsocial.network', accounts: '1' },
+          { day: '2026-11-09', from_host: 'bluesky', accounts: 12 },
+          { day: '2026-11-09', from_host: 'pds.tophhie.cloud', accounts: 1 },
+          { day: '2026-11-09', from_host: '<script>', accounts: 1 },
+          { day: '2026-11-09', from_host: 'pds.oso.social', accounts: 0 },
+        ]);
+      }
+      if (url.includes('atmosphere_host_move_day?from_host=')) return Response.json([{ day: '2026-11-08', to_host: 'bluesky', accounts: 1 }]);
+      if (url.includes('atmosphere_host_move_day?select=day')) return Response.json([{ day: '2026-10-08' }]);
+      if (url.includes('atmosphere_host_active_day')) return Response.json([]);
+      return Response.json([{ day: '2026-11-10', accounts: 38200, estimated: false, bluesky: false }]);
+    }) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?host=eurosky.social'))).json()) as { host: { moves: unknown; movesSince?: unknown; similar?: unknown } };
+    expect(body.host.moves).toEqual([
+      { day: '2026-11-08', arrived: [], left: [{ to: 'bluesky', accounts: 1 }] },
+      { day: '2026-11-09', arrived: [{ from: 'bluesky', accounts: 12 }, { from: 'pds.tophhie.cloud', accounts: 1 }], left: [] },
+      { day: '2026-11-10', arrived: [{ from: 'bluesky', accounts: 19 }, { from: 'pds.wsocial.network', accounts: 1 }], left: [] },
+    ]);
+    // from when the station kept anyone's moves: a day this host isn't in, since then, nobody moved
+    expect(body.host.movesSince).toBe('2026-10-08');
+    expect(body.host.similar).toBeUndefined();
+    // a side that comes back full may have cut its oldest day short: only whole days are told, on both sides
+    const full = Array.from({ length: hosts.MOVE_ROWS }, (_, i) => ({ day: i < 999 ? '2026-11-10' : '2026-11-01', from_host: `h${i}.example`, accounts: 1 }));
+    const cut = hosts.toHostMoves(full, [{ day: '2026-11-10', to_host: 'bluesky', accounts: 2 }, { day: '2026-10-30', to_host: 'bluesky', accounts: 1 }]);
+    expect(cut.map((d) => [d.day, d.arrived.length, d.left.length])).toEqual([['2026-11-10', 999, 1]]);
+  });
+
+  it('says which hosts a name the station never kept could be', async () => {
+    const urls: string[] = [];
+    const fetch = (async (url: string) => {
+      urls.push(url);
+      // tophhie.social is the service's website; its accounts live on pds.tophhie.cloud
+      if (url.includes('hostname=ilike.')) {
+        return Response.json([
+          { hostname: 'pds.tophhie.cloud', accounts: 611 },
+          { hostname: 'pds.tophhie.cloud', accounts: 611 },
+          { hostname: 'tophhie.social', accounts: 0 },
+          { hostname: 'Not A Host', accounts: 1 },
+        ]);
+      }
+      return Response.json([]);
+    }) as typeof globalThis.fetch;
+    const h = createHistoryHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await h.GET(new Request('https://atpota.to/api/weather-history?host=tophhie.social'))).json()) as { host: unknown };
+    expect(body.host).toEqual({ hostname: 'tophhie.social', bluesky: false, days: [], moves: [], similar: ['pds.tophhie.cloud'] });
+    // hosts kept in the last week whose names hold the asked one's own, biggest first
+    expect(urls.at(-1)).toBe(`${SUPABASE_URL}/rest/v1/atmosphere_host_day?hostname=ilike.*tophhie*&day=gte.2026-10-13&select=hostname,accounts&order=day.desc,accounts.desc&limit=50`);
+    // a name too short to mean anything ("co" of example.co.uk) isn't looked up, and a failed lookup is only left out
+    const quiet: string[] = [];
+    const none = { get: async (path: string) => (quiet.push(path), []), rpc: async () => null };
+    expect(await hosts.similarHosts(none, 'example.co.uk', NOW)).toEqual([]);
+    expect(quiet).toEqual([]);
+    const down = (async (url: string) => (url.includes('ilike') ? new Response('no', { status: 500 }) : Response.json([]))) as typeof globalThis.fetch;
+    const h2 = createHistoryHandlers({ fetch: down, now: () => NOW, env: () => ({}), log: () => undefined });
+    expect(((await (await h2.GET(new Request('https://atpota.to/api/weather-history?host=tophhie.social'))).json()) as { host: unknown }).host).toEqual({ hostname: 'tophhie.social', bluesky: false, days: [], moves: [] });
   });
 
   it('only takes GET and HEAD', async () => {
