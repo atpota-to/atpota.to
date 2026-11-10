@@ -52,6 +52,21 @@ npm run review               # matches next to the posts that prompted them
 npm run review -- 50 drafted # only drafts, for milestone 3
 ```
 
+Reading how Poe sounds, across a batch (the tells are in `src/voice-tells.js`):
+
+```bash
+npm run measure-voice -- --posted                     # replies and weather posts that went out
+npm run measure-voice -- --posted --since 2026-11-10  # only since a UTC date (--until works too)
+npm run measure-voice -- --posted --show contrast     # the lines behind one number
+npm run measure-voice -- 120 180                      # voice-sample drafts 120 to 180 (src/tools/sample.js)
+node src/tools/measure-voice.js --repo poe.atpota.to  # from the public repo: no db, no .env, runs anywhere
+```
+
+Each line is a habit that reads as machine-written when it repeats (a thing
+explained by what it isn't, a question on the end of every reply, the same
+opening word), as a share of the batch. To see whether a change to the voice rules
+in `bot/agent/` did anything, compare the same kind of batch before and after it.
+
 ### Going quiet
 
 Three levers, and only the first two are safe to reach for during an incident.

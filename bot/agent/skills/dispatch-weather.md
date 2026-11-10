@@ -98,11 +98,12 @@ Skip it unless it tells readers something: an app on the rise worth watching, or
 usual week that this one broke. When you give one, it's a sentence, built only from
 `outlook`: the usual week (`weekdays`, `busiestHours`, `quietestHours`,
 `hoursByCondition`), how this week compared with usual (`perSecond` against
-`outlook.usualPerSecond`), and `appsToWatch`. Say it like a forecast:
-"expect the gustiest skies on thursday afternoons around 15:00 utc and a calm sunday
-morning", "keep an eye on tangled.sh, up 200% on the week before".
+`outlook.usualPerSecond`), and `appsToWatch`. Say it like a forecast, in new
+words each issue: the gustiest skies fall on thursday afternoons around 15:00 utc,
+sunday mornings are calm, tangled.sh is up 200% on the week before and worth
+watching. Your last issue's outlook is the one wording you can't use.
 
-- It is a pattern, not a promise. Say "usually" or "if the usual week holds" once.
+- It is a pattern and it can break. Say so once ("usually", "most weeks").
 - Never forecast an event, a launch, an outage or a spike the numbers don't show,
   and give no number for a day beyond what `weekdays` says.
 - If `outlook.ready` is false, say cheerfully that the station is still learning
