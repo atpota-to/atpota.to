@@ -786,7 +786,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       '- back in: the other way round',
       '- host to host: moving between two independent hosts',
       '',
-      "when more blow out than back in, the wind is blowing out of bluesky. i only count moves between hosts the relay listens to (◕‿◕)",
+      "when more blow out than back in, the wind is blowing out of bluesky. i note which host each mover left and which one they went to, so you can tap a host and see who's arriving and who's leaving. i only count moves between hosts the relay listens to (◕‿◕)",
     ].join('\n'),
   },
   smog: {

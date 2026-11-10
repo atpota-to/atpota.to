@@ -557,6 +557,12 @@
                     <ol class="weather-bars weather-bars--hosts" role="list" data-p-dest data-host-list></ol>
                     <p class="weather-tile__note" data-p-dest-note></p>
                 </div>
+                <!-- the independent hosts movers left, from atmosphere_host_move_day (weather-hosts.ts originsOf) -->
+                <div class="weather-winds__to" data-p-from-wrap hidden>
+                    <h3 class="weather-hosts__subtitle">where they moved from</h3>
+                    <ol class="weather-bars weather-bars--hosts" role="list" data-p-from data-host-list></ol>
+                    <p class="weather-tile__note" data-p-from-note></p>
+                </div>
                 <p class="weather-pds__line" data-p-deleted></p>
                 <figure class="weather-chart-card" data-p-winds-card hidden>
                     <figcaption class="weather-chart-card__title">accounts moving out of bluesky each day</figcaption>
@@ -644,6 +650,7 @@
                 </div>
                 <p class="weather-pds__line" data-hp-story></p>
                 <p class="weather-pds__line" data-hp-active hidden></p>
+                <p class="weather-pds__line" data-hp-moves hidden></p>
                 <figure class="weather-chart-card" hidden>
                     <figcaption class="weather-chart-card__title">accounts hosted each day</figcaption>
                     <div class="weather-chart" data-hp-chart></div>

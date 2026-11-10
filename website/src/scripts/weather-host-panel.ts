@@ -1,7 +1,8 @@
 /**
  * Tap a host, see its own weather: any host named in a list marked [data-host-list] (the
- * biggest hosts, new ones, the fastest growing, where movers went) opens a panel with its
- * accounts day by day, from /api/weather-history?host= (server/weather-hosts.ts readHost).
+ * biggest hosts, new ones, the fastest growing, where movers went and where they left) opens
+ * a panel with its accounts day by day, and who moved to it and away from it, from
+ * /api/weather-history?host= (server/weather-hosts.ts readHost).
  * Days from before the station kept count are the backfill's estimates, and say so.
  */
 
@@ -13,7 +14,24 @@ export interface OneHost {
   bluesky: boolean;
   /** `active`: the accounts that wrote anything that day, once the station counted them. */
   days: Array<{ day: string; accounts: number; estimated: boolean; active?: number }>;
+  /** Who moved to this host and away from it, by the day and the other host (BLUESKY for any of Bluesky's own), oldest first. */
+  moves: HostMoveDay[];
+  /** The first day the station kept anyone's moves: without it, this host's aren't known. */
+  movesSince?: string;
 }
+
+export interface HostMoveDay {
+  day: string;
+  arrived: Array<{ from: string; accounts: number }>;
+  left: Array<{ to: string; accounts: number }>;
+}
+
+/** Bluesky's own hosts, as one place, where a move names the other host (server/weather-hosts.ts BLUESKY). */
+const BLUESKY = 'bluesky';
+/** How far back the panel adds up a host's moves. */
+export const MOVES_DAYS = 30;
+/** How many other hosts it names each way before "and N from M others". */
+const MOVES_NAMED = 3;
 
 const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -21,6 +39,13 @@ const obj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' 
 const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
 const DAY_FORMAT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const dayWords = (day: string) => DAY_FORMAT.format(new Date(`${day}T00:00:00Z`)).toLowerCase();
+
+const place = (x: unknown): x is string => x === BLUESKY || (typeof x === 'string' && HOSTNAME_RE.test(x));
+
+/** One side of a day's moves, checked: [{ from | to, accounts }]. */
+function side<K extends 'from' | 'to'>(x: unknown, key: K): Array<Record<K, string> & { accounts: number }> {
+  return (Array.isArray(x) ? x : []).flatMap((m) => (obj(m) && place(m[key]) && n(m.accounts) && m.accounts > 0 ? [{ [key]: m[key], accounts: m.accounts } as Record<K, string> & { accounts: number }] : []));
+}
 
 /** The answer's host, checked, or null. */
 export function toOneHost(x: unknown): OneHost | null {
@@ -30,6 +55,8 @@ export function toOneHost(x: unknown): OneHost | null {
     hostname: h.hostname,
     bluesky: h.bluesky === true,
     days: h.days.filter((d): d is OneHost['days'][number] => obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && n(d.accounts)).map((d) => ({ day: d.day, accounts: d.accounts, estimated: d.estimated === true, ...(n(d.active) ? { active: d.active } : {}) })),
+    moves: (Array.isArray(h.moves) ? h.moves : []).flatMap((d) => (obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) ? [{ day: d.day, arrived: side(d.arrived, 'from'), left: side(d.left, 'to') }] : [])),
+    ...(typeof h.movesSince === 'string' && DAY_RE.test(h.movesSince) ? { movesSince: h.movesSince } : {}),
   };
 }
 
@@ -51,6 +78,38 @@ export function activeStory(h: OneHost): string {
   if (!d || d.active === undefined) return '';
   const share = d.accounts > 0 ? ` (${(Math.min(100, (d.active / d.accounts) * 100)).toFixed(1)}% of them)` : '';
   return `${formatCount(d.active)} account${d.active === 1 ? '' : 's'} wrote something on ${dayWords(d.day)}${share}.`;
+}
+
+/** "38 from bluesky's hosts, 2 from pds.tophhie.cloud and 3 from 2 other hosts": the other hosts added up, the most first. */
+function others(lists: Array<Array<{ host: string; accounts: number }>>, word: 'from' | 'to'): string {
+  const by = new Map<string, number>();
+  for (const list of lists) for (const m of list) by.set(m.host, (by.get(m.host) ?? 0) + m.accounts);
+  const all = [...by].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  const named = all.slice(0, MOVES_NAMED).map(([host, accounts]) => `${formatCount(accounts)} ${word} ${host === BLUESKY ? "bluesky's hosts" : host}`);
+  const rest = all.slice(MOVES_NAMED);
+  if (rest.length) named.push(`${formatCount(rest.reduce((t, [, a]) => t + a, 0))} ${word} ${formatCount(rest.length)} other host${rest.length === 1 ? '' : 's'}`);
+  return named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}` : (named[0] ?? '');
+}
+
+/**
+ * Who moved to the host and away from it over the last MOVES_DAYS days, or since the station
+ * kept anyone's moves when that's later: "over the last 30 days, 41 accounts moved here (38 from
+ * bluesky's hosts, 3 from pds.tophhie.cloud) and 2 moved away (2 to blacksky.app)." Nothing
+ * for one of Bluesky's own hosts (they're one place for moves), or before any were kept.
+ */
+export function moveStory(h: OneHost, now = Date.now()): string {
+  if (h.bluesky || !h.movesSince) return '';
+  const from = new Date(now - (MOVES_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const days = h.moves.filter((d) => d.day >= from);
+  const span = h.movesSince > from ? `since ${dayWords(h.movesSince)}` : `over the last ${MOVES_DAYS} days`;
+  const arrived = days.flatMap((d) => d.arrived);
+  const left = days.flatMap((d) => d.left);
+  const total = (list: Array<{ accounts: number }>) => list.reduce((t, m) => t + m.accounts, 0);
+  const [came, went] = [total(arrived), total(left)];
+  if (came === 0 && went === 0) return `${span}, nobody moved here from another host, or away.`;
+  const here = came > 0 ? `${formatCount(came)} account${came === 1 ? '' : 's'} moved here (${others([arrived.map((m) => ({ host: m.from, accounts: m.accounts }))], 'from')})` : 'nobody moved here';
+  const away = went > 0 ? `${formatCount(went)} moved away (${others([left.map((m) => ({ host: m.to, accounts: m.accounts }))], 'to')})` : 'nobody moved away';
+  return `${span}, ${here} and ${away}.`;
 }
 
 /** The note on estimated days, or nothing when every day was counted. */
@@ -92,6 +151,8 @@ export function renderHostPanel(dialog: HTMLElement, h: OneHost | null | 'loadin
     for (const c of Array.from(dialog.querySelectorAll<HTMLElement>('.weather-chart-card'))) c.hidden = true;
     const line = $(dialog, '[data-hp-active]');
     if (line) line.hidden = true;
+    const movesLine = $(dialog, '[data-hp-moves]');
+    if (movesLine) movesLine.hidden = true;
     return;
   }
   setText(dialog, '[data-hp-story]', hostStory(h));
@@ -100,6 +161,12 @@ export function renderHostPanel(dialog: HTMLElement, h: OneHost | null | 'loadin
   if (line) {
     line.hidden = !lively;
     line.textContent = lively;
+  }
+  const moved = moveStory(h);
+  const movesLine = $(dialog, '[data-hp-moves]');
+  if (movesLine) {
+    movesLine.hidden = !moved;
+    movesLine.textContent = moved;
   }
   const activeDays = h.days.filter((d) => d.active !== undefined);
   const activeChart = $(dialog, '[data-hp-active-chart]');

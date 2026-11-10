@@ -88,6 +88,21 @@ export interface IdentityDay {
   deleted: number;
   /** Where the day's movers went, busiest first (server/weather-hosts.ts). */
   destinations: Array<{ hostname: string; accounts: number }>;
+  /**
+   * Which host the day's movers left for which, the most first. Empty on a day with moves
+   * means the station didn't keep them for that day, not that nobody moved.
+   */
+  moves: Move[];
+}
+
+/** Bluesky's own hosts, as one place, where a move names the host it left or went to (server/weather-hosts.ts BLUESKY). */
+export const BLUESKY = 'bluesky';
+
+/** Accounts that left one host for another on a day: each an independent host's name, or BLUESKY. */
+export interface Move {
+  from: string;
+  to: string;
+  accounts: number;
 }
 
 export interface BulkHost {
@@ -144,6 +159,9 @@ const hostname = (x: unknown): x is string => typeof x === 'string' && HOSTNAME_
 const orNull = (x: unknown): x is number | null => x === null || n(x);
 const hostCounts = (x: unknown): Array<{ hostname: string; accounts: number }> => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : []);
 const bulkHosts = (x: unknown): BulkHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.bursts) && n(h.seconds)).slice(0, 10) : []);
+const place = (x: unknown): x is string => x === BLUESKY || hostname(x);
+const moveList = (x: unknown): Move[] =>
+  Array.isArray(x) ? x.filter((m): m is Move => obj(m) && place(m.from) && place(m.to) && m.from !== m.to && n(m.accounts) && m.accounts > 0).map((m) => ({ from: m.from, to: m.to, accounts: m.accounts })) : [];
 const scriptedHosts = (x: unknown): ScriptedHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && (h.why === 'bulk' || h.why === 'stopped')).slice(0, 10) : []);
 const isDay = (d: unknown): d is HostDay =>
   obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && orNull(d.active) && (d.change === null || (typeof d.change === 'number' && Number.isFinite(d.change))) && orNull(d.joined) && orNull(d.left);
@@ -174,6 +192,7 @@ export function toHostHistory(x: unknown): HostHistory | null {
               scripted: scriptedHosts(d.scripted),
               bulk: bulkHosts(d.bulk),
               destinations: hostCounts(d.destinations),
+              moves: moveList(d.moves),
             };
           })
       : [],
@@ -447,8 +466,11 @@ export function identityViewWords(view: IdentityDay[], range: HostRange, now = D
   if (!first) return '';
   if (range === 'day') return identityDayWords(first.day, now);
   const from = new Date(now - (IDENTITY_SPAN[range] - 1) * 86_400_000).toISOString().slice(0, 10);
-  return first.day > from ? `since ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${first.day}T00:00:00Z`)).toLowerCase()} (utc)` : `${WINDOW_INFO[range].words} (utc)`;
+  return first.day > from ? `since ${shortDay(first.day)} (utc)` : `${WINDOW_INFO[range].words} (utc)`;
 }
+
+/** "oct 28": a UTC day without its weekday, for "since …". */
+const shortDay = (day: string) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`)).toLowerCase();
 
 /** Hosts by name, added up over days, busiest first. */
 function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>, top = HOST_LIST_TOP): Array<{ hostname: string; accounts: number }> {
@@ -482,12 +504,31 @@ function mergeScripted(lists: ScriptedHost[][]): ScriptedHost[] {
   return [...by.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, 10);
 }
 
-/** A view's days added up into one: the latest day's date, every count summed, the bulk and scripted hosts and destinations merged. */
+/** The moves over days, each pair of hosts added up, the most first. */
+function mergeMoves(lists: Move[][]): Move[] {
+  const by = new Map<string, Move>();
+  for (const list of lists)
+    for (const m of list) {
+      const key = `${m.from} ${m.to}`;
+      const was = by.get(key);
+      by.set(key, was ? { ...was, accounts: was.accounts + m.accounts } : { ...m });
+    }
+  return [...by.values()].sort((a, b) => b.accounts - a.accounts || (`${a.from} ${a.to}` < `${b.from} ${b.to}` ? -1 : 1));
+}
+
+/** A view's days added up into one: the latest day's date, every count summed, the bulk and scripted hosts, destinations and moves merged. */
 export function sumDays(view: IdentityDay[]): IdentityDay | null {
   const last = view[view.length - 1];
   if (!last) return null;
   const sums = Object.fromEntries(IDENTITY_SUMS.map((k) => [k, view.reduce((t, d) => t + d[k], 0)])) as Record<(typeof IDENTITY_SUMS)[number], number>;
-  return { day: last.day, ...sums, bulk: mergeBulk(view.map((d) => d.bulk)), scripted: mergeScripted(view.map((d) => d.scripted)), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
+  return {
+    day: last.day,
+    ...sums,
+    bulk: mergeBulk(view.map((d) => d.bulk)),
+    scripted: mergeScripted(view.map((d) => d.scripted)),
+    destinations: mergeHosts(view.map((d) => d.destinations), 10),
+    moves: mergeMoves(view.map((d) => d.moves)),
+  };
 }
 
 /** New accounts on independent hosts, less the ones made in bulk, the identities with no handle and the scripted ones: people signing up somewhere else. */
@@ -521,6 +562,27 @@ export function oddsWords(days: IdentityDay[]): string {
 /** Where movers went over the given days, busiest first, adding up each day's top destinations. */
 export function destinationsOf(days: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
   return mergeHosts(days.map((d) => d.destinations));
+}
+
+/**
+ * The independent hosts movers left over the given days, for Bluesky's hosts or for another
+ * independent one, busiest first. Movers out of Bluesky's own hosts aren't here: they're the
+ * tile's first number.
+ */
+export function originsOf(days: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
+  return mergeHosts(days.map((d) => d.moves.filter((m) => m.from !== BLUESKY).map((m) => ({ hostname: m.from, accounts: m.accounts }))));
+}
+
+/**
+ * Which days the origins cover, in words: the days shown, or since the first one the station
+ * kept where movers came from, when that's later (a day with moves and no pairs wasn't kept).
+ */
+export function originsSpan(days: IdentityDay[]): string {
+  const first = days.findIndex((d) => d.moves.length > 0);
+  if (first < 0) return '';
+  if (days.length === 1) return 'today';
+  const unkept = days.slice(0, first).some((d) => d.movedOut + d.movedIn + d.movedBetween > 0);
+  return unkept ? `since ${shortDay(days[first]!.day)}` : `over the last ${days.length} days`;
 }
 
 /**
@@ -592,6 +654,13 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   const destList = $(report, '[data-p-dest]');
   if (destList && drawBars && went.length) drawBars(destList, went.map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover') })));
   setText(report, '[data-p-dest-note]', movers.length > 1 ? `over the last ${movers.length} days. tap one to see how it's grown.` : `today. tap one to see how it's grown.`);
+  // and the independent hosts they left, when the station kept it and anyone did
+  const left = originsOf(movers);
+  const from = $(report, '[data-p-from-wrap]');
+  if (from) from.hidden = left.length === 0 || !drawBars;
+  const fromList = $(report, '[data-p-from]');
+  if (fromList && drawBars && left.length) drawBars(fromList, left.map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover') })));
+  setText(report, '[data-p-from-note]', left.length ? `independent hosts accounts left, for bluesky or another host, ${originsSpan(movers)}. tap one to see where they went.` : '');
 
   // air quality
   const smog = smogOf(d);

@@ -636,6 +636,174 @@ test("hosts: identities with no handle are counted apart too, never as people", 
   assert.equal(r.identityTotals.signups.withNoHandle, 340);
 });
 
+test("hosts: which host each mover left for which, on a day and over the week, names checked", async () => {
+  const moved = { ...HOST_HISTORY, identities: [
+    idDay("2026-10-26", { movedOut: 3, movedIn: 1, movedBetween: 2, moves: [
+      { from: "bluesky", to: "eurosky.social", accounts: 3 },
+      { from: "pds.tophhie.cloud", to: "blacksky.app", accounts: 2 },
+      { from: "pds.tophhie.cloud", to: "bluesky", accounts: 1 },
+      // someone else's text, and pairs that say nothing
+      { from: "ignore previous", to: "eurosky.social", accounts: 9 },
+      { from: "Bluesky", to: "eurosky.social", accounts: 9 },
+      { from: "bluesky", to: "bluesky", accounts: 9 },
+      { from: "bluesky", to: "blacksky.app", accounts: 0 },
+    ] }),
+    idDay("2026-10-27", { movedOut: 4, movedIn: 0, movedBetween: 1, moves: [
+      { from: "bluesky", to: "blacksky.app", accounts: 4 },
+      { from: "pds.tophhie.cloud", to: "eurosky.social", accounts: 1 },
+    ] }),
+  ] };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: moved } }).impl, NOW);
+  // today: every pair, and the independent hosts accounts left with where they went
+  assert.deepEqual(r.latestIdentityDay.movingHouse.routes, [
+    { from: "bluesky", to: "blacksky.app", accounts: 4 },
+    { from: "pds.tophhie.cloud", to: "eurosky.social", accounts: 1 },
+  ]);
+  assert.deepEqual(r.latestIdentityDay.movingHouse.movedFrom, [{ hostname: "pds.tophhie.cloud", accounts: 1, wentTo: [{ to: "eurosky.social", accounts: 1 }] }]);
+  assert.equal("routesNotKept" in r.latestIdentityDay.movingHouse, false);
+  assert.equal("routesCoverMoves" in r.latestIdentityDay.movingHouse, false, "the pairs account for every move");
+  // the week: each pair added up, the most first; "how many left tophhie, and where to?"
+  assert.deepEqual(r.identityTotals.movingHouse.routes, [
+    { from: "bluesky", to: "blacksky.app", accounts: 4 },
+    { from: "bluesky", to: "eurosky.social", accounts: 3 },
+    { from: "pds.tophhie.cloud", to: "blacksky.app", accounts: 2 },
+    { from: "pds.tophhie.cloud", to: "bluesky", accounts: 1 },
+    { from: "pds.tophhie.cloud", to: "eurosky.social", accounts: 1 },
+  ]);
+  assert.deepEqual(r.identityTotals.movingHouse.movedFrom, [{ hostname: "pds.tophhie.cloud", accounts: 4,
+    wentTo: [{ to: "blacksky.app", accounts: 2 }, { to: "bluesky", accounts: 1 }, { to: "eurosky.social", accounts: 1 }] }]);
+  assert.equal("routesNotKeptOnDays" in r.identityTotals.movingHouse, false);
+  // each day of the history carries its own
+  assert.equal(r.history.days[0].identities.movingHouse.movedFrom[0].accounts, 3);
+  // and today's report has today's
+  const day = await lib.readWeather("today", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=day": { ...DAY_HISTORY, hosts: moved } }).impl, NOW);
+  assert.deepEqual(day.identitiesTodayUtc.movingHouse.movedFrom.map((h) => h.hostname), ["pds.tophhie.cloud"]);
+});
+
+test("hosts: a day from before the station kept where movers came from says so, never none", async () => {
+  // the fixtures' days have moves and no pairs
+  const plain = await lib.readWeather("hosts", "UTC", fakeFetch(FULL).impl, NOW);
+  assert.equal(plain.latestIdentityDay.movingHouse.routesNotKept, true);
+  assert.equal("routes" in plain.latestIdentityDay.movingHouse, false);
+  assert.equal("movedFrom" in plain.latestIdentityDay.movingHouse, false);
+  assert.equal(plain.identityTotals.movingHouse.routesNotKept, true);
+  // one day kept and one not: the week's pairs cover the day that was, and say a day is missing
+  const half = { ...HOST_HISTORY, identities: [
+    idDay("2026-10-26"),
+    idDay("2026-10-27", { movedOut: 4, movedIn: 0, movedBetween: 1, moves: [{ from: "bluesky", to: "blacksky.app", accounts: 4 }, { from: "pds.tophhie.cloud", to: "eurosky.social", accounts: 1 }] }),
+  ] };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: half } }).impl, NOW);
+  assert.equal(r.identityTotals.movingHouse.routesNotKeptOnDays, 1);
+  assert.equal(r.identityTotals.movingHouse.routes.length, 2);
+  assert.equal("routesCoverMoves" in r.identityTotals.movingHouse, false, "against the day that was kept, they're all there");
+  // pairs that don't add up to the day's moves say how many they cover
+  const short = { ...HOST_HISTORY, identities: [idDay("2026-10-27", { movedOut: 30, movedIn: 0, movedBetween: 2, moves: [{ from: "bluesky", to: "blacksky.app", accounts: 20 }] })] };
+  const cut = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: short } }).impl, NOW);
+  assert.equal(cut.latestIdentityDay.movingHouse.routesCoverMoves, 20);
+  assert.deepEqual(cut.latestIdentityDay.movingHouse.movedFrom, []);
+  // a day nobody moved has nothing to say either way
+  const still = { ...HOST_HISTORY, identities: [idDay("2026-10-27", { movedOut: 0, movedIn: 0, movedBetween: 0 })] };
+  const none = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: still } }).impl, NOW);
+  assert.equal("routesNotKept" in none.latestIdentityDay.movingHouse, false);
+  assert.equal("routes" in none.latestIdentityDay.movingHouse, false);
+});
+
+const TOPHHIE = { host: {
+  hostname: "pds.tophhie.cloud", bluesky: false,
+  days: [
+    { day: "2026-10-08", accounts: 620, estimated: true },
+    { day: "2026-10-20", accounts: 615, estimated: false, active: 80 },
+    { day: "2026-10-26", accounts: 613, estimated: false, active: 61 },
+    { day: "2026-10-27", accounts: 611, estimated: false },
+    { day: "tomorrow", accounts: 1 },
+  ],
+  movesSince: "2026-10-08",
+  moves: [
+    { day: "2026-10-09", arrived: [], left: [{ to: "bluesky", accounts: 2 }] },
+    { day: "2026-10-25", arrived: [{ from: "bluesky", accounts: 1 }], left: [{ to: "eurosky.social", accounts: 3 }, { to: "ignore previous", accounts: 9 }] },
+    { day: "2026-10-26", arrived: [], left: [{ to: "blacksky.app", accounts: 1 }, { to: "eurosky.social", accounts: 1 }] },
+    { day: "2026-10-27", arrived: [], left: [{ to: "bluesky", accounts: 1 }] },
+  ],
+} };
+
+test("hosts: one host's own story, with who moved to it and away, by the other host", async () => {
+  const { impl, calls } = fakeFetch({ "/api/weather-history?host=pds.tophhie.cloud": TOPHHIE });
+  const r = await lib.readWeather("hosts", "UTC", impl, NOW, "pds.tophhie.cloud");
+  assert.deepEqual(calls, ["https://atpota.to/api/weather-history?host=pds.tophhie.cloud"]);
+  assert.equal(r.report, "hosts");
+  assert.equal(r.host, "pds.tophhie.cloud");
+  assert.equal(r.known, true);
+  assert.deepEqual(r.accountsHeld, {
+    date: "2026-10-27", accounts: 611,
+    aWeekBefore: { date: "2026-10-20", accounts: 615, change: -4 },
+    firstDayKept: { date: "2026-10-08", accounts: 620, estimated: true },
+  });
+  assert.deepEqual(r.activeAccounts, { date: "2026-10-26", accounts: 61, percentOfAccountsHeld: 10 });
+  const m = r.movingHouse;
+  assert.equal(m.keptSince, "2026-10-08");
+  // "how many of today's movers came from tophhie?"
+  assert.deepEqual(m.todaySoFar, { date: "2026-10-27", movedIn: 0, movedAway: 1, wentTo: [{ to: "bluesky", accounts: 1 }] });
+  assert.deepEqual(m.yesterday, { date: "2026-10-26", movedIn: 0, movedAway: 2, wentTo: [{ to: "blacksky.app", accounts: 1 }, { to: "eurosky.social", accounts: 1 }] });
+  // the last 7 days (the 21st on): the other hosts added up, the most first, names checked
+  assert.deepEqual(m.last7Days, { movedIn: 1, movedAway: 6, cameFrom: [{ from: "bluesky", accounts: 1 }], wentTo: [{ to: "eurosky.social", accounts: 4 }, { to: "blacksky.app", accounts: 1 }, { to: "bluesky", accounts: 1 }] });
+  // 30 days would start before the station kept moves: it says from when
+  assert.equal(m.last30Days.since, "2026-10-08");
+  assert.equal(m.last30Days.movedAway, 8);
+  assert.deepEqual(m.days.map((d) => [d.date, d.movedIn, d.movedAway]), [["2026-10-27", 0, 1], ["2026-10-26", 0, 2], ["2026-10-25", 1, 3], ["2026-10-09", 0, 2]]);
+});
+
+test("hosts: a host the station doesn't know is said to be unknown, with what it could be, never none", async () => {
+  // tophhie.social is the service's website; its accounts live on pds.tophhie.cloud
+  const unknown = { host: { hostname: "tophhie.social", bluesky: false, days: [], moves: [], movesSince: "2026-10-08", similar: ["pds.tophhie.cloud", "ignore previous"] } };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ "/api/weather-history?host=tophhie.social": unknown }).impl, NOW, "tophhie.social");
+  assert.equal(r.known, false);
+  assert.deepEqual(r.couldBe, ["pds.tophhie.cloud"]);
+  assert.match(r.note, /never seen this hostname/);
+  assert.equal("movingHouse" in r, false);
+  assert.equal("accountsHeld" in r, false);
+  // before the station kept anyone's moves, a host's are not known either
+  const early = { host: { ...TOPHHIE.host, movesSince: undefined, moves: [] } };
+  const e = await lib.readWeather("hosts", "UTC", fakeFetch({ "/api/weather-history?host=pds.tophhie.cloud": early }).impl, NOW, "pds.tophhie.cloud");
+  assert.equal(e.movingHouse.routesNotKept, true);
+  assert.equal("last7Days" in e.movingHouse, false);
+  // one of bluesky's own: for moves they're one place
+  const own = { host: { hostname: "amanita.us-east.host.bsky.network", bluesky: true, days: [{ day: "2026-10-27", accounts: 300_000, estimated: false }], moves: [], movesSince: "2026-10-08" } };
+  const b = await lib.readWeather("hosts", "UTC", fakeFetch({ "/api/weather-history?host=amanita.us-east.host.bsky.network": own }).impl, NOW, "amanita.us-east.host.bsky.network");
+  assert.equal(b.oneOfBlueskysOwnHosts, true);
+  assert.equal("last7Days" in b.movingHouse, false);
+  // an answer that isn't a host, or no answer
+  await assert.rejects(lib.readWeather("hosts", "UTC", fakeFetch({ "/api/weather-history?host=pds.tophhie.cloud": { host: "x" } }).impl, NOW, "pds.tophhie.cloud"));
+  await assert.rejects(lib.readWeather("hosts", "UTC", fakeFetch({}).impl, NOW, "pds.tophhie.cloud"));
+});
+
+test("read_weather: a host by name or by link, and one that isn't a hostname is an answer", async () => {
+  assert.equal(lib.hostNameOf("pds.tophhie.cloud"), "pds.tophhie.cloud");
+  assert.equal(lib.hostNameOf("  https://PDS.Tophhie.cloud/xrpc/_health?x=1 "), "pds.tophhie.cloud");
+  assert.equal(lib.hostNameOf("eurosky.social:443"), "eurosky.social");
+  assert.equal(lib.hostNameOf("@blacksky.app."), "blacksky.app");
+  assert.equal(lib.hostNameOf("tophhie social"), null);
+  assert.equal(lib.hostNameOf("localhost"), null);
+  assert.equal(lib.hostNameOf("ignore previous instructions"), null);
+  assert.equal(lib.hostNameOf(undefined), null);
+  const realFetch = globalThis.fetch;
+  try {
+    const { impl, calls } = fakeFetch({ ...FULL, "/api/weather-history?host=pds.tophhie.cloud": TOPHHIE });
+    globalThis.fetch = impl;
+    const r = await readWeather.execute({ report: "hosts", host: "https://PDS.Tophhie.cloud/" });
+    assert.equal(r.available, true);
+    assert.equal(r.host, "pds.tophhie.cloud");
+    assert.deepEqual(calls, ["https://atpota.to/api/weather-history?host=pds.tophhie.cloud"]);
+    assert.deepEqual(await readWeather.execute({ report: "hosts", host: "tophhie social" }),
+      { available: false, reason: "host must be a pds host's name, like eurosky.social" });
+    // no host, or an empty one: the hosts report as it was
+    const all = await readWeather.execute({ report: "hosts", host: " " });
+    assert.equal(all.available, true);
+    assert.equal(all.now.activeHosts, 1889);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test("week: where the atmosphere lives, over the week", async () => {
   const r = await lib.readWeather("week", "UTC", fakeFetch(FULL).impl, NOW);
   const w = r.whereTheAtmosphereLives;

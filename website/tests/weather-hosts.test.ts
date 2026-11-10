@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, destinationsOf, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, destinationsOf, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -35,7 +35,7 @@ const HOSTS: HostHistory = {
   identities: [],
 };
 
-const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], ...extra });
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 170066, createdBluesky: 9946, createdIndependent: 4383, createdUnlisted: 150845, createdCustomHandle: 122, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 19, movedIn: 0, movedBetween: 1, deleted: 1, destinations: [], moves: [], ...extra });
 
 let part: HTMLElement;
 const bars = (list: HTMLElement, b: Parameters<typeof renderBars>[1]) => renderBars(list, b, undefined);
@@ -283,6 +283,48 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(report.querySelector('[data-p-dest]')!.hasAttribute('data-host-list')).toBe(true);
     renderIdentities(report, [idDay('2026-10-29')], NOW, bars);
     expect(report.querySelector<HTMLElement>('[data-p-dest-wrap]')!.hidden).toBe(true);
+  });
+
+  it('lists the independent hosts movers left, when the station kept where they came from', () => {
+    const days = [
+      idDay('2026-10-28', { movedOut: 3, movedBetween: 2, moves: [{ from: 'bluesky', to: 'eurosky.social', accounts: 3 }, { from: 'pds.tophhie.cloud', to: 'blacksky.app', accounts: 2 }] }),
+      idDay('2026-10-29', { movedOut: 4, movedIn: 1, movedBetween: 1, moves: [{ from: 'bluesky', to: 'blacksky.app', accounts: 4 }, { from: 'pds.tophhie.cloud', to: 'bluesky', accounts: 1 }, { from: 'pds.wsocial.network', to: 'eurosky.social', accounts: 1 }] }),
+    ];
+    // movers out of bluesky's own hosts aren't in it: they're the tile's first number
+    expect(originsOf(days)).toEqual([{ hostname: 'pds.tophhie.cloud', accounts: 3 }, { hostname: 'pds.wsocial.network', accounts: 1 }]);
+    expect(originsSpan(days)).toBe('over the last 2 days');
+    expect(originsSpan(days.slice(-1))).toBe('today');
+    // a day with moves and no pairs is from before they were kept: the list only covers from the first day that has them
+    expect(originsSpan([idDay('2026-10-27', { movedOut: 9 }), ...days])).toBe('since oct 28');
+    // but a day nobody moved doesn't cut it short
+    expect(originsSpan([idDay('2026-10-27', { movedOut: 0, movedIn: 0, movedBetween: 0 }), ...days])).toBe('over the last 3 days');
+    expect(originsSpan([idDay('2026-10-29')])).toBe('');
+    // the week's days added up carry every pair
+    expect(sumDays(days)!.moves[0]).toEqual({ from: 'bluesky', to: 'blacksky.app', accounts: 4 });
+    expect(sumDays(days)!.moves).toHaveLength(5);
+
+    renderIdentities(report, days, NOW);
+    const wrap = report.querySelector<HTMLElement>('[data-p-from-wrap]')!;
+    // without bars to draw with, it stays hidden
+    expect(wrap.hidden).toBe(true);
+    renderIdentities(report, days, NOW, bars);
+    expect(wrap.hidden).toBe(false);
+    expect([...report.querySelectorAll('[data-p-from] .weather-bars__label')].map((el) => el.textContent)).toEqual(['pds.tophhie.cloud', 'pds.wsocial.network']);
+    expect(report.querySelector('[data-p-from-note]')!.textContent).toBe('independent hosts accounts left, for bluesky or another host, over the last 2 days. tap one to see where they went.');
+    // everyone came off bluesky's hosts, or the station didn't keep it: nothing to list
+    renderIdentities(report, [idDay('2026-10-29', { moves: [{ from: 'bluesky', to: 'blacksky.app', accounts: 4 }] })], NOW, bars);
+    expect(wrap.hidden).toBe(true);
+    renderIdentities(report, [idDay('2026-10-29')], NOW, bars);
+    expect(wrap.hidden).toBe(true);
+    expect(report.querySelector('[data-p-from-note]')!.textContent).toBe('');
+  });
+
+  it('checks each day\'s moves in the history answer', () => {
+    const day = { ...idDay('2026-10-29'), moves: [{ from: 'bluesky', to: 'eurosky.social', accounts: 3 }, { from: '<b>', to: 'eurosky.social', accounts: 1 }, { from: 'bluesky', to: 'bluesky', accounts: 1 }, { from: 'Bluesky', to: 'a.example', accounts: 1 }, { from: 'a.example', to: 'bluesky', accounts: 0 }] };
+    expect(toHostHistory({ ...HOSTS, identities: [day] })!.identities[0]!.moves).toEqual([{ from: 'bluesky', to: 'eurosky.social', accounts: 3 }]);
+    // an answer from before moves were kept
+    const { moves: _moves, ...old } = idDay('2026-10-29');
+    expect(toHostHistory({ ...HOSTS, identities: [old] })!.identities[0]!.moves).toEqual([]);
   });
 
   it('puts air quality on the new arrivals tile', () => {

@@ -185,13 +185,20 @@ test('moves made while the directory is being read are carried over into it', as
   await a.onCensus([]);
   assert.ok(a.reading, 'still reading');
   const relay = new Set(['eurosky.social', 'blacksky.app']);
+  // where an account lives, for the PLC watch (plc-watch.js livedOn): nobody yet, the first read isn't in
+  const hostOf = a.hostOf;
+  assert.equal(hostOf('did:plc:stays'), null);
   a.onPlcEntry({ did: 'did:plc:arrives', host: 'blacksky.app' }, relay);
   a.onPlcEntry({ did: 'did:plc:leaves', host: 'morel.us-east.host.bsky.network' }, relay);
+  assert.equal(hostOf('did:plc:arrives'), 'blacksky.app');
   open();
   await a.reading;
   assert.equal(a.directory.hostOf('did:plc:stays'), 'eurosky.social');
   assert.equal(a.directory.hostOf('did:plc:arrives'), 'blacksky.app');
   assert.equal(a.directory.hostOf('did:plc:leaves'), null);
+  // and it follows the directory that replaced the one it was handed out under
+  assert.equal(hostOf('did:plc:arrives'), 'blacksky.app');
+  assert.equal(hostOf('did:plc:stays'), 'eurosky.social');
 });
 
 test('keeps what a backfill wrote for today between two writes of its own', async () => {

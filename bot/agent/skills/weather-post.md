@@ -56,7 +56,11 @@ more than goes in any one post, and the choice of what to share is yours. Read i
   good the forecast has been lately.
 - `report: "hosts"`: where the atmosphere lives: independent hosts, the hosting
   diversity, new and growing hosts, sign-ups on and off Bluesky's hosts, accounts
-  moving house (the migration wind), air quality.
+  moving house (the migration wind), air quality. Moves come with where from:
+  `routes` is every pair of hosts (`from` "bluesky" is any of Bluesky's own),
+  and `movedFrom` the independent hosts accounts left, with where they went. A
+  day marked `routesNotKept` is from before the station kept that; don't say
+  where its movers came from.
 
 Use UTC (no timeZone) unless the moment says otherwise. For a new app, you can
 also look at what it writes (its collections, a lexicon) with your Atmosphere tools
