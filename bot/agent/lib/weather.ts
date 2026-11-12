@@ -366,11 +366,14 @@ export function parseHistory(body: unknown) {
   const accCover = counts(acc, ["seconds", "prevSeconds"] as const);
   const accTotal = counts(acc?.total, ["active", "bluesky", "elsewhere"] as const);
   const accPrev = counts(acc?.prev, ["seconds", "active", "bluesky", "elsewhere"] as const);
+  // a range's diversity index is its average reading (minute, hour or day) when the server sends
+  // one, as the weather page shows it: the whole range's own index climbs with its length
+  const typical = (x: unknown) => (isRecord(x) && isRecord(x.typical) ? x.typical : x);
   if (acc && accCover && accTotal) {
     accounts = {
       ...accCover,
-      total: withIndex(acc?.total, accTotal),
-      ...(accPrev ? { prev: withIndex(acc.prev, accPrev) } : {}),
+      total: withIndex(isRecord(acc.typical) ? acc.typical : acc.total, accTotal),
+      ...(accPrev ? { prev: withIndex(typical(acc.prev), accPrev) } : {}),
       points: list(acc.points).flatMap((p) => {
         const t = isRecord(p) ? iso(p.t) : null;
         const c = counts(p, ["seconds", "active", "bluesky", "elsewhere"] as const);

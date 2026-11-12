@@ -194,13 +194,13 @@ describe('og weather: the page\'s words', () => {
     for (const index of [0, 7.43, 10, 60, 499, 900]) expect(hostingPosition(index), String(index)).toBe(weatherPage.hostingPosition(index));
     const week = hostHistory().identities.slice(-7);
     expect(destinationsOf(week)).toEqual(hostsPage.destinationsOf(week));
-    expect(`over the last 7 days: ${oddsOf(week)} started outside bluesky.`).toBe(hostsPage.oddsWords(week));
+    expect(`over the last 7 days, ${oddsOf(week)} did.`).toBe(hostsPage.oddsWords(week));
     expect(oddsOf(week.slice(-1))).toBeNull(); // a day is too few to say
     expect(hostsPage.oddsWords(week.slice(-1))).toBe('');
     // a batch on one host leaves the odds as they were, on both
     const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615 + 1062 + 300, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 }], createdScripted: 1062, createdUnnamed: 300 }];
     expect(oddsOf(batch)).toBe(oddsOf(week));
-    expect(`over the last 7 days: ${oddsOf(batch)} started outside bluesky.`).toBe(hostsPage.oddsWords(batch));
+    expect(`over the last 7 days, ${oddsOf(batch)} did.`).toBe(hostsPage.oddsWords(batch));
   });
 
   it('says usual the way the almanac does', () => {
@@ -327,7 +327,7 @@ describe('og weather: the cards', () => {
     // the last seven days: 30 a day for five, then 32 and today's 65 so far
     expect(words).toEqual(expect.arrayContaining([
       '247', 'moved out of bluesky', 'the last 7 days', '6 moved back in · 38 host to host',
-      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', '1 in 18 new accounts started outside bluesky', 'atpota.to/weather/migration',
+      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', '5.6% of new accounts started on an independent host', 'atpota.to/weather/migration',
     ]));
     expect(words.join(' ')).not.toContain('999');
     // just today, so far: no week to chart, and no odds
@@ -335,7 +335,7 @@ describe('og weather: the cards', () => {
     one.day!.hosts!.identities = one.day!.hosts!.identities.slice(-1);
     const today = texts(drawCard('migration', one, art));
     expect(today).toEqual(expect.arrayContaining(['65', 'today so far']));
-    expect(today.join(' ')).not.toContain('started outside bluesky');
+    expect(today.join(' ')).not.toContain('started on an independent host');
     // nobody went anywhere we know of: the moves have the card to themselves
     const nowhere = data();
     nowhere.day!.hosts!.identities = nowhere.day!.hosts!.identities.map((x) => ({ ...x, destinations: [] }));

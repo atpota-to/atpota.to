@@ -223,11 +223,11 @@ describe('atmospheric conditions', () => {
     expect(mix.hidden).toBe(false);
     expect(tile.querySelector('[data-weather-index]')!.textContent).toBe('1.6');
     expect(tile.querySelector('[data-weather-level]')!.textContent).toBe('low');
-    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe("1 in 200 accounts active just now wrote outside bluesky, across about 10 apps");
+    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe("1 in 200 accounts active just now wrote with apps other than bluesky, as spread out as 10 apps the same size");
     expect(tile.querySelector<HTMLElement>('[data-weather-bar-else]')!.style.flexGrow).toBe('0.5');
     // a reading from before the index went by accounts words the records instead
     renderReading(tile, { ...READING, records: { perSecond: 400, bluesky: 398, elsewhere: 2 }, diversity: { index: 0.5, level: 'low', apps: 3, collections: 20 } });
-    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from outside bluesky');
+    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from apps other than bluesky');
   });
 
   it('says where the atmosphere lives once a reading has the hosts', () => {
@@ -252,10 +252,10 @@ describe('atmospheric conditions', () => {
     expect(formatIndex(2.44)).toBe('2.4');
     expect(formatIndex(12.4)).toBe('12');
     expect(ratioText({ perSecond: 400, bluesky: 400, elsewhere: 0 })).toBe('every new record just now was a bluesky one');
-    expect(ratioText({ perSecond: 10, bluesky: 2, elsewhere: 8 })).toBe('most new records came from outside bluesky');
-    expect(diversityText({ share: 0, spread: 0 })).toBe('nobody active just now wrote outside bluesky');
-    expect(diversityText({ share: 0.52, spread: 1.3 })).toBe('1 in 192 accounts active just now wrote outside bluesky, all in one app');
-    expect(diversityText({ share: 80, spread: 3 })).toBe('most accounts active just now wrote outside bluesky, across about 3 apps');
+    expect(ratioText({ perSecond: 10, bluesky: 2, elsewhere: 8 })).toBe('most new records came from apps other than bluesky');
+    expect(diversityText({ share: 0, spread: 0 })).toBe('nobody active just now wrote with an app other than bluesky');
+    expect(diversityText({ share: 0.52, spread: 1.3 })).toBe('1 in 192 accounts active just now wrote with apps other than bluesky, nearly all in one app');
+    expect(diversityText({ share: 80, spread: 3 })).toBe('most accounts active just now wrote with apps other than bluesky, as spread out as 3 apps the same size');
   });
 
   it("says what the weather report's header says, over its lens's window", async () => {

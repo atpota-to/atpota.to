@@ -454,6 +454,14 @@ test("week: a part that can't be read is named, and the rest still comes back", 
   await assert.rejects(lib.readWeather("week", "UTC", fakeFetch({}).impl, NOW));
 });
 
+test("a range's diversity index is its average reading when the server sends one, as the page shows it", async () => {
+  // the whole week's crowd has tried more apps than any hour's, so its own index reads high just for being long
+  const week = { ...WEEK_HISTORY, accounts: { ...WEEK_HISTORY.accounts, total: { ...WEEK_HISTORY.accounts.total, index: 4.25 }, typical: { index: 2, share: 0.49, spread: 17.2 } } };
+  const { impl } = fakeFetch({ ...FULL, "/api/weather-history?range=week": week });
+  const r = await lib.readWeather("week", "UTC", impl, NOW);
+  assert.deepEqual(r.diversity, { index: 2, level: "low" });
+});
+
 test("the mix against usual and the week before goes by the diversity index, never by records", () => {
   const usual = (diversity) => lib.todayReport({ almanac: { ...ALMANAC, normal: { ...ALMANAC.normal, diversity } } }, NOW, "UTC").lastHour;
   // far more records from other apps than usual (one busy account can do that) says nothing about the mix

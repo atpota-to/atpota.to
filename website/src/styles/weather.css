@@ -598,6 +598,13 @@ html[data-theme="dark"] .weather-station[data-level="down"] { --station-dot: #EE
   width: fit-content;
 }
 
+/* "vs the hour before": the baseline every arrow on the page shares, said once */
+.weather-hero__vs {
+  margin: 0;
+  font-size: 13px;
+  color: var(--weather-sky-text);
+}
+
 /* No pill when steady, so it takes the sky's text color, day or night. */
 .weather-hero .weather-hero__change[data-trend="steady"] {
   color: var(--weather-sky-text);
@@ -1587,6 +1594,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   grid-template-columns: 386fr 138fr 173fr 156fr 147fr;
 }
 
+/* hosting diversity is about where accounts live: the ground's soil, not the sky's green */
+.weather-scale--hosts .weather-scale__bands > span {
+  background: var(--weather-host-indep);
+}
+
 /* Too narrow for five names: the ends of the scale, and the card above names the level. */
 @media (max-width: 640px) {
   .weather-scale--hosts .weather-scale__names {
@@ -1694,6 +1706,14 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   background: repeating-linear-gradient(135deg, var(--weather-else) 0 3px, color-mix(in srgb, var(--weather-else) 70%, transparent) 3px 5px);
 }
 
+.weather-key--host-bsky {
+  background: var(--weather-host-bsky);
+}
+
+.weather-key--host-indep {
+  background: repeating-linear-gradient(135deg, var(--weather-host-indep) 0 3px, color-mix(in srgb, var(--weather-host-indep) 70%, transparent) 3px 5px);
+}
+
 .weather-mix__total {
   margin-top: auto;
   color: var(--text-soft);
@@ -1780,6 +1800,12 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   border-top: 1px solid var(--line);
 }
 
+/* a list's own window, when it's shorter than its tile's ("since nov 10") */
+.weather-hosts__span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .weather-hosts__subtitle {
   margin: 0;
   font-size: 18px;
@@ -1821,6 +1847,22 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 .weather-hosts__table tbody th {
   font-weight: 400;
+}
+
+/* Two sources, two groups: the relay's count at day's end, and independent hosts heard from (weather-hosts.ts renderHostDays). */
+.weather-hosts__table thead .weather-hosts__group {
+  text-align: center;
+  border-bottom-color: var(--line-strong);
+}
+
+/* numbers sit right, so their headings do too */
+.weather-hosts__table thead th:not(:first-child),
+.weather-hosts__table thead tr + tr th {
+  text-align: right;
+}
+
+.weather-hosts__table thead .weather-hosts__group {
+  text-align: center;
 }
 
 /* Like the change chips: green going up; going down keeps the text colour, its minus says it. */
@@ -2156,6 +2198,26 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-variant-numeric: tabular-nums;
 }
 
+/* An axis that doesn't start at zero: two short slashes at its foot (weather-chart.ts). */
+.weather-chart__break {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/* A stretch set apart (a scripted wave): a soft wash behind the line, with its name at the top. */
+.weather-chart__band {
+  fill: var(--line-strong);
+  opacity: 0.55;
+}
+
+.weather-chart__band-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .weather-chart__line {
   fill: none;
   stroke: var(--chart-color);
@@ -2315,6 +2377,15 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   border-radius: 4px;
   background: var(--weather-else);
   transition: width 0.8s var(--ease-out);
+}
+
+/* lists of hosts sit on the ground: independent hosts in soil, every host the relay knows in slate */
+:is(.weather-bars--hosts, .weather-bars--sizes, .weather-bars--tlds) .weather-bars__fill {
+  background: var(--weather-host-indep);
+}
+
+.weather-bars--roll .weather-bars__fill {
+  background: var(--weather-host-bsky);
 }
 
 .weather-bars__sub {

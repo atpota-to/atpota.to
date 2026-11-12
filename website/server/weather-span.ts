@@ -50,7 +50,7 @@ export type Stretch = {
 
 export const SPANS = {
   minute: { stretchMs: MINUTE, cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=120' },
-  hour: { stretchMs: HOUR, cache: 'public, max-age=0, s-maxage=60, stale-while-revalidate=300' },
+  hour: { stretchMs: HOUR, cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
   day: { stretchMs: DAY, cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
   week: { stretchMs: 7 * DAY, cache: 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600' },
   month: { stretchMs: 30 * DAY, cache: 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400' },

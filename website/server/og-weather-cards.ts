@@ -978,12 +978,12 @@ export function weekOf(d: CardData): IdentityDay[] {
   return (d.day?.hosts?.identities ?? []).slice(-7);
 }
 
-/** "1 in 17", from a week's listed sign-ups by people, not scripts (weather-hosts.ts oddsWords); null without a week or anyone outside. */
+/** "5.6%", from a week's listed sign-ups by people, not scripts (weather-hosts.ts oddsWords); null without a week or anyone outside. */
 export function oddsOf(week: IdentityDay[]): string | null {
   const indep = week.reduce((t, x) => t + peopleIndependentOf(x), 0);
   const listed = week.reduce((t, x) => t + x.createdBluesky + peopleIndependentOf(x), 0);
   if (week.length < 2 || indep === 0 || listed === 0) return null;
-  return `1 in ${int(Math.max(1, Math.round(listed / indep)))}`;
+  return `${formatIndex((indep / listed) * 100)}%`;
 }
 
 /** Where the week's movers went, busiest first (weather-hosts.ts destinationsOf). */
@@ -1035,7 +1035,7 @@ function migration(d: CardData, art: Art): El | null {
             ),
           )
         : null,
-      odds ? h({ fontSize: 22, color: C.soft, marginTop: 14 }, `${odds} new accounts started outside bluesky`) : null,
+      odds ? h({ fontSize: 22, color: C.soft, marginTop: 14 }, `${odds} of new accounts started on an independent host`) : null,
       h({ marginTop: 16 }, footer(d, C.muted, 'atpota.to/weather/migration')),
     ),
     went.length

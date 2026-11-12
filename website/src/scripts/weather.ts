@@ -335,16 +335,16 @@ export function formatIndex(index: number): string {
 export function ratioText(records: NonNullable<Reading['records']>): string {
   if (records.elsewhere <= 0) return 'every new record just now was a bluesky one';
   const n = Math.max(1, Math.round(records.perSecond / records.elsewhere));
-  return n <= 1 ? 'most new records came from outside bluesky' : `1 in ${n.toLocaleString('en-US')} new records came from outside bluesky`;
+  return n <= 1 ? 'most new records came from apps other than bluesky' : `1 in ${n.toLocaleString('en-US')} new records came from apps other than bluesky`;
 }
 
 /** "1 in 190 accounts active just now wrote outside bluesky, across about 10 apps", or that nobody did. */
 export function diversityText(d: { share: number; spread: number }): string {
-  if (d.share <= 0) return 'nobody active just now wrote outside bluesky';
+  if (d.share <= 0) return 'nobody active just now wrote with an app other than bluesky';
   const n = Math.round(100 / d.share);
   const apps = Math.max(1, Math.round(d.spread));
   const who = n <= 1 ? 'most accounts' : `1 in ${n.toLocaleString('en-US')} accounts`;
-  return `${who} active just now wrote outside bluesky, ${apps === 1 ? 'all in one app' : `across about ${apps} apps`}`;
+  return `${who} active just now wrote with apps other than bluesky, ${apps === 1 ? 'nearly all in one app' : `as spread out as ${apps} apps the same size`}`;
 }
 
 /** Sizes a two-part bar (bluesky, elsewhere) for elsewhere's share, in percent. A sliver of "elsewhere" stays visible. */

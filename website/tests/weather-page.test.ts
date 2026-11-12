@@ -99,7 +99,7 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-r-index]')).toBe('1.8');
     expect(text('[data-r-level]')).toBe('low');
     expect(text('[data-r-level-text]')).toBe(LEVEL_TEXT.low);
-    expect(text('[data-r-ratio]')).toBe('1 in 56 new records came from outside bluesky');
+    expect(text('[data-r-ratio]')).toBe('1 in 56 new records came from apps other than bluesky');
     expect(text('[data-r-else-share]')).toBe('(1.8%)');
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 2');
     expect(text('[data-r-event="deletes"]')).toBe('810'); // 13.5 a second, counted over the minute
@@ -138,7 +138,7 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-h-writing]')).toBe('700');
     expect(text('[data-h-writing-words]')).toBe('hosts that wrote in the last 30 minutes');
     expect(text('[data-h-age]')).toBe('counted 7 minutes ago');
-    expect(text('[data-h-share]')).toBe('1.5% of 24.1m accounts live on independent hosts, across about 25 hosts.');
+    expect(text('[data-h-share]')).toBe('1.5% of 24.1m accounts live on independent hosts, as spread out as 25 hosts the same size.');
     expect([...report.querySelectorAll('[data-h-top] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'eurosky.social']);
     renderHosts(report, { ...hosts, writing: null });
     expect(report.querySelector<HTMLElement>('[data-h-writing-wrap]')!.hidden).toBe(true);
@@ -389,18 +389,18 @@ describe('records or accounts', () => {
     const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
     expect(minute.hidden).toBe(false);
     expect(text('[data-r-active]')).toBe('21,345');
-    expect(text('[data-r-acct-index]')).toBe('0.52% of 21,345 active accounts wrote outside bluesky, across about 12 apps.');
+    expect(text('[data-r-acct-index]')).toBe('0.52% of 21,345 active accounts wrote with apps other than bluesky, as spread out as 12 apps the same size.');
     renderReport(report, READING, lens());
     expect(minute.hidden).toBe(true);
-    expect(text('[data-r-acct-index]')).toBe('0.52% of the accounts heard just now wrote outside bluesky, across about 12 apps.');
+    expect(text('[data-r-acct-index]')).toBe('0.52% of the accounts heard just now wrote with apps other than bluesky, as spread out as 12 apps the same size.');
     // a reading from before the index went by accounts
     renderReport(report, { ...READING, diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 } }, lens());
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
   });
 
   it('words what an index is made of', () => {
-    expect(diversityParts(0, 0, 100)).toBe('none of 100 active accounts wrote outside bluesky.');
-    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote outside bluesky, all in one app.');
+    expect(diversityParts(0, 0, 100)).toBe('none of 100 active accounts wrote with apps other than bluesky.');
+    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote with apps other than bluesky, nearly all in one app.');
   });
 
   it('ranks the apps elsewhere by accounts, or by records when the reading has no accounts', () => {
@@ -422,9 +422,9 @@ describe('records or accounts', () => {
     renderTrends(section(), HISTORY, NOW, 'accounts');
     const s = section();
     expect(s.dataset.measure).toBe('accounts');
-    expect(s.querySelector('[data-t-summary]')!.textContent).toBe('the last hour (from 3 minutes of counting so far): 40,000 different accounts wrote something, 2.3% of them somewhere other than bluesky.');
+    expect(s.querySelector('[data-t-summary]')!.textContent).toBe('the last hour (from 3 minutes of counting so far): 40,000 different accounts wrote something, 2.3% of them with apps other than bluesky.');
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('active accounts each minute');
-    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('share of accounts writing elsewhere');
+    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('share of accounts using other apps');
     expect(s.querySelector('[data-t-chart="records"] svg')!.getAttribute('aria-label')).toMatch(/^active accounts each minute/);
     // focusing a chart reads its newest point
     const newest = (chart: string) => {
@@ -454,7 +454,7 @@ describe('records or accounts', () => {
     renderTrends(section(), HISTORY, NOW, 'records');
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('new records a second');
     expect(newest('records')[0]).toBe('440');
-    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('diversity index');
+    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('diversity index each minute');
     expect(newest('index')[0]).toBe('9.2');
   });
 
@@ -488,11 +488,11 @@ describe('records or accounts', () => {
     renderSky(report, skyOfHistory({ ...HISTORY, accounts: { ...acct, total: { ...acct.total, index: 6.6 }, prev } }), lens({ window: 'hour', measure: 'accounts' }));
     const chipEl = report.querySelector<HTMLElement>('[data-r-index-change]')!;
     expect(chipEl.dataset.trend).toBe('up');
-    expect(chipEl.textContent).toBe('↑ 10%up 10% on the same hour yesterday');
-    expect(chipEl.title).toBe('up 10% on the same hour yesterday');
+    expect(chipEl.textContent).toBe('↑ 10%up 10% on the hour before');
+    expect(chipEl.title).toBe('up 10% on the hour before');
     const note = report.querySelector<HTMLElement>('[data-r-index-note]')!;
     expect(note.hidden).toBe(false);
-    expect(note.textContent).toBe('the arrow compares with the same hour yesterday.');
+    expect(note.textContent).toBe('the arrow compares with the hour before.');
     expect(indexChange({ ...acct, total: { ...acct.total, index: 6.2 }, prev }, 'x')).toEqual({ text: '→', words: 'about the same as x', trend: 'steady' });
     // no earlier window to compare with: no chip, no note
     renderSky(report, skyOfHistory(HISTORY), lens({ window: 'hour', measure: 'accounts' }));
@@ -541,6 +541,8 @@ describe("what's this? Poe explains", () => {
     expect(button.getAttribute('aria-label')).toBe("what's the diversity index? ask poe");
     expect(button.getAttribute('aria-haspopup')).toBe('dialog');
     expect(tile.textContent).not.toMatch(/square root/);
+    // but what it measures is on the tile, in plain words
+    expect(tile.textContent).toMatch(/read it like the uv index/);
   });
 
   it('opens Poe on the question and its answer, back to the button after', () => {
@@ -580,7 +582,9 @@ describe("what's this? Poe explains", () => {
       expect(answer.trim()).toMatch(/\(◕‿◕\)$|[.?!]$/);
     }
     const levels = EXPLAINERS.diversity!.answer;
-    expect(levels).toContain('0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme');
+    expect(levels).toContain('under 3 is low, 3 to 6 moderate, 6 to 8 high, 8 to 11 very high, and 11 and up extreme');
+    // and for a longer stretch, that it's the average reading
+    expect(levels).toContain('i show the average reading');
     expect(DIVERSITY_SCALE.map(([, from]) => from)).toEqual([0, 3, 6, 8, 11]);
   });
 });
@@ -816,7 +820,7 @@ describe('in the lens', () => {
     expect(text('[data-r-total-words]')).toBe('new records an hour in all');
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(false);
     renderReport(report, LIVE, lens({ measure: 'accounts' }));
-    expect(text('[data-r-ratio]')).toBe('1 in 34 active accounts wrote outside bluesky');
+    expect(text('[data-r-ratio]')).toBe('1 in 34 active accounts wrote with an app other than bluesky');
     expect(text('[data-r-else]')).toBe('620');
     expect(text('[data-r-else-share]')).toBe('(2.9%)');
     expect([...report.querySelectorAll('[data-r-mix-unit]')].map((u) => u.textContent)).toEqual(['accounts', 'accounts']);
@@ -849,14 +853,14 @@ describe('in the lens', () => {
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(false);
     expect(text('[data-r-index]')).toBe('4.2');
     expect(text('[data-r-level]')).toBe('moderate');
-    expect(text('[data-r-acct-index]')).toBe('3.0% of 2,000,000 active accounts over the last 24 hours wrote outside bluesky.');
+    expect(text('[data-r-acct-index]')).toBe('3.0% of 2,000,000 active accounts over the last 24 hours wrote with apps other than bluesky.');
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')).toEqual([
       ['tangled.sh', '1'],
       ['whtwnd.com', '0.1'],
     ]);
     expect(report.querySelector('[data-r-apps] .weather-bars__change')!.getAttribute('data-trend')).toBe('up');
-    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the day before.');
+    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the 24 hours before.');
     expect(text('[data-r-apps-count]')).toBe('top 2');
 
     renderWindow(report, DAY, lens({ window: 'day', unit: 'total' }));
@@ -868,7 +872,7 @@ describe('in the lens', () => {
     expect(text('[data-r-records]')).toBe('2m');
     expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
-    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
+    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the 24 hours before.');
   });
 
   it('says how much of a window the station has heard, and when there are no account counts for it', () => {
