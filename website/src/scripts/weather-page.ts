@@ -59,7 +59,7 @@ import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts
 import { initSignupHistory } from './weather-signups';
 import { bindPageLinks, bindShare } from './weather-share';
 import { topicOf } from './weather-topics';
-import { chip, initSpan, percentChange, showLive, SPAN_INFO, spanFor, type Change, type ChangeKey, type Span } from './weather-span';
+import { beforeWords, chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey, type Span } from './weather-span';
 import {
   bindLens,
   createLens,
@@ -78,6 +78,10 @@ import {
   type RateUnit,
   type Unit,
   type Window,
+  compareOf,
+  EARLIER,
+  earlierWords,
+  type Compare,
 } from './weather-lens';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { projectLast, renderChart, type ChartPoint } from './weather-chart';
@@ -333,7 +337,8 @@ const HISTORY_BLUESKY = [
 
 /** A history as a sky: the whole window, as rates over the seconds the station heard of it. */
 export function skyOfHistory(h: History, now: number = Date.now()): Sky {
-  const info = RANGE_INFO[h.range];
+  // what its arrows compare with: the stretch before, or a cycle ago, as it was asked for
+  const info = { ...RANGE_INFO[h.range], earlier: earlierWords(h.range, h.vs ?? 'before') };
   const t = h.total;
   const secs = t.seconds;
   const a = h.accounts && h.accounts.seconds > 0 && h.accounts.total.active > 0 ? h.accounts : null;
@@ -447,10 +452,11 @@ export function renderHeadlineChange(report: HTMLElement, changes?: Record<Chang
   chip(el, c);
   // and what it's against, in words, since the page's arrows all compare with the same stretch
   const vs = $(report, '[data-r-headline-vs]');
-  const span = $(report, '[data-s-tile]')?.dataset.span as Span | undefined;
+  const tile = $(report, '[data-s-tile]');
+  const span = tile?.dataset.span as Span | undefined;
   if (vs) {
-    vs.hidden = !c || !span || !SPAN_INFO[span];
-    vs.textContent = !vs.hidden && span ? `vs ${SPAN_INFO[span].before}` : '';
+    vs.hidden = !c || !span;
+    vs.textContent = !vs.hidden && span ? `vs ${beforeWords(span, tile?.dataset.vs === 'cycle' ? 'cycle' : 'before')}` : '';
   }
 }
 
@@ -910,6 +916,8 @@ export interface HistoryApp {
 
 export interface History {
   range: Range;
+  /** What its earlier window is: the stretch right before, or the same stretch a cycle ago (asked as ?vs=cycle). */
+  vs?: Compare;
   points: HistoryPoint[];
   total: HistoryPoint;
   /** The busiest apps outside Bluesky over the range, when the server could get them. */
@@ -994,13 +1002,13 @@ function isApp(a: unknown): a is HistoryApp {
   );
 }
 
-export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch): Promise<History | null> {
+export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch, vs: Compare = 'before'): Promise<History | null> {
   try {
-    const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
+    const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}${vs === 'cycle' ? '&vs=cycle' : ''}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
     const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown; hosts?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
-    const history: History = { range, points: body.points.filter(isPoint), total: body.total };
+    const history: History = { range, ...(vs === 'cycle' ? { vs } : {}), points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
     const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
     const c = body.compare as Record<string, unknown> | undefined;
@@ -1233,25 +1241,28 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
 
 /** Histories by range, shared by the trends and the window's tiles: one request each, however many ask. */
 export interface HistoryFeed {
-  /** The range's history, from the last one if it's under `maxAgeMs` old. */
-  get(range: Range, maxAgeMs?: number): Promise<History | null>;
+  /** The range's history, from the last one if it's under `maxAgeMs` old, its arrows against the stretch before or (`vs`) a cycle ago. */
+  get(range: Range, maxAgeMs?: number, vs?: Compare): Promise<History | null>;
 }
 
 export function createHistoryFeed(fetchImpl: typeof fetch = fetch): HistoryFeed {
-  const kept = new Map<Range, { at: number; history: History }>();
-  const asking = new Map<Range, Promise<History | null>>();
+  const kept = new Map<string, { at: number; history: History }>();
+  const asking = new Map<string, Promise<History | null>>();
   return {
-    get(range, maxAgeMs = 30_000) {
-      const had = kept.get(range);
+    get(range, maxAgeMs = 30_000, vs = 'before') {
+      // a range with no cycle of its own is always against the stretch before, so it's one answer either way
+      const v: Compare = vs === 'cycle' && EARLIER[range].cycle ? 'cycle' : 'before';
+      const key = `${range}:${v}`;
+      const had = kept.get(key);
       if (had && Date.now() - had.at < maxAgeMs) return Promise.resolve(had.history);
-      const already = asking.get(range);
+      const already = asking.get(key);
       if (already) return already;
-      const asked = fetchHistory(range, fetchImpl).then((h) => {
-        asking.delete(range);
-        if (h) kept.set(range, { at: Date.now(), history: h });
+      const asked = fetchHistory(range, fetchImpl, v).then((h) => {
+        asking.delete(key);
+        if (h) kept.set(key, { at: Date.now(), history: h });
         return h;
       });
-      asking.set(range, asked);
+      asking.set(key, asked);
       return asked;
     },
   };
@@ -1276,7 +1287,7 @@ export function initTrends(section: HTMLElement, feed: HistoryFeed, lens?: Lens)
     const mine = ++asked;
     const ready = section.dataset.state === 'ready';
     if (!(quietly && ready)) section.dataset.state = ready ? 'refreshing' : 'loading';
-    const history = await feed.get(range, quietly ? historyRefreshMs(range) - 5_000 : 30_000);
+    const history = await feed.get(range, quietly ? historyRefreshMs(range) - 5_000 : 30_000, compareOf(view()));
     if (mine !== asked) return; // a newer range took over
     if (!history && quietly && ready && shown?.range === range) return;
     shown = history;
@@ -1291,7 +1302,8 @@ export function initTrends(section: HTMLElement, feed: HistoryFeed, lens?: Lens)
     }
   };
   lens?.onChange((l, was) => {
-    if (trendsRange(l.window) !== trendsRange(was.window)) void load();
+    // the comparison doesn't change the charts, but the window's tiles ask for that answer, so the trends take the same one
+    if (trendsRange(l.window) !== trendsRange(was.window) || compareOf(l) !== compareOf(was)) void load();
     else if (shown) draw(shown);
   });
   void load();
@@ -1385,7 +1397,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
       return;
     }
     if (!quietly) report.dataset.lensState = 'loading';
-    const history = await feed.get(w, quietly ? historyRefreshMs(w) - 5_000 : 30_000);
+    const history = await feed.get(w, quietly ? historyRefreshMs(w) - 5_000 : 30_000, compareOf(lens.get()));
     if (mine !== windowAsked) return; // the lens moved on
     if (history) {
       windowShown = history;
@@ -1398,11 +1410,12 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     }
   };
   const minute = $(report, '[data-s-tile]');
-  const span = minute ? initSpan(minute, fetchImpl, { span: spanFor(lens.get().window), unit: lens.get().unit, onChanges: (c) => renderHeadlineChange(report, c) }) : null;
+  const span = minute ? initSpan(minute, fetchImpl, { span: spanFor(lens.get().window), unit: lens.get().unit, vs: compareOf(lens.get()), onChanges: (c) => renderHeadlineChange(report, c) }) : null;
   lens.onChange((l, was) => {
     span?.setSpan(spanFor(l.window));
     span?.setUnit(l.unit);
-    if (l.window !== was.window) void showWindow();
+    span?.setVersus(compareOf(l));
+    if (l.window !== was.window || compareOf(l) !== compareOf(was)) void showWindow();
     else if (l.window === 'now') {
       if (shown) renderSky(report, skyOfReading(shown), l);
     } else if (windowShown?.range === l.window) renderWindow(report, windowShown, l);

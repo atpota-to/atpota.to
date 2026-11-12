@@ -2723,6 +2723,15 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   background: var(--bg);
 }
 
+/* "vs", ahead of what the arrows compare with: a word, not a button */
+.weather-seg__label {
+  align-self: center;
+  padding: 0 6px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .weather-seg__btn {
   min-width: 44px;
   min-height: 36px;

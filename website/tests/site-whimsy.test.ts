@@ -263,12 +263,12 @@ describe('atmospheric conditions', () => {
     const accounts = { total: { active: 52_000 }, points: [{ t: '2026-10-22T20:00:00Z', seconds: 60, active: 3000 }, { t: '2026-10-22T20:01:00Z', seconds: 60, active: 3200 }] };
     const h = (await readHeadline('hour', (async () => Response.json({ range: 'hour', points, total: { seconds: 120, creates: 15_000 }, accounts })) as typeof fetch))!;
     expect(h.records).toEqual([100, null, 150]);
-    const byAccounts = headlineOf(h, { window: 'hour', measure: 'accounts', unit: 'second' }, Date.parse('2026-10-22T21:00:00Z'));
+    const byAccounts = headlineOf(h, { window: 'hour', measure: 'accounts', unit: 'second', compare: 'before' }, Date.parse('2026-10-22T21:00:00Z'));
     expect([byAccounts.period, byAccounts.value, byAccounts.unit, byAccounts.cond]).toEqual(['the last hour', 52_000, 'accounts', '']);
     expect(byAccounts.line).toEqual([3000, 3200]);
-    const byRecords = headlineOf(h, { window: 'hour', measure: 'records', unit: 'minute' });
+    const byRecords = headlineOf(h, { window: 'hour', measure: 'records', unit: 'minute', compare: 'before' });
     expect([byRecords.value, byRecords.unit, byRecords.line]).toEqual([7500, 'rec/min', [100, null, 150]]);
-    expect(headlineOf(h, { window: 'hour', measure: 'records', unit: 'total' }).value).toBe(15_000);
+    expect(headlineOf(h, { window: 'hour', measure: 'records', unit: 'total', compare: 'before' }).value).toBe(15_000);
     expect(await readHeadline('day', (async () => Response.json({ range: 'hour', points, total: { seconds: 1, creates: 1 } })) as typeof fetch)).toBeNull();
 
     document.body.innerHTML = tileHtml();
@@ -279,7 +279,7 @@ describe('atmospheric conditions', () => {
     expect(tile.querySelector<HTMLElement>('[data-weather-spark]')!.hidden).toBe(false);
     // the report's lens, as this browser keeps it; on now, the live reading
     localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'day', measure: 'records', unit: 'hour' }));
-    expect(tileLens()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
+    expect(tileLens()).toEqual({ window: 'day', measure: 'records', unit: 'hour', compare: 'before' });
     localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'now' }));
     expect(tileLens()).toBeNull();
   });

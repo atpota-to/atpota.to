@@ -51,7 +51,7 @@
         <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
         <div class="weather" data-weather-report data-state="loading">
             <!-- the page's sections ([data-section]): the dock dims the controls that don't reach the one you're in (weather-dock.ts initSections) -->
-            <header class="tile weather-hero" id="the-sky" aria-labelledby="weather-title" data-weather-hero data-lensed data-section="sky" data-section-label="the sky" data-section-lens="window measure unit">
+            <header class="tile weather-hero" id="the-sky" aria-labelledby="weather-title" data-weather-hero data-lensed data-section="sky" data-section-label="the sky" data-section-lens="window measure unit compare">
                 <!-- the weather itself: wind, rain or snow, and now and then a rainbow (src/scripts/weather-hero.ts) -->
                 <div class="weather-air" aria-hidden="true" data-weather-air></div>
                 <!-- clouds that come with the diversity index (src/scripts/weather-sky.ts) -->
@@ -121,6 +121,13 @@
                         <option value="day">per day</option>
                         <option value="total">in all</option>
                     </select>
+                    <!-- what every arrow compares with: the stretch right before, or the same stretch a cycle ago, where the
+                         network's rhythm repeats (weather-lens.ts EARLIER); a window with no cycle of its own hides the choice -->
+                    <div class="weather-seg" role="group" aria-label="compared with" data-lens-compare-group>
+                        <span class="weather-seg__label" aria-hidden="true">vs</span>
+                        <button type="button" class="weather-seg__btn" data-lens-compare="before" aria-pressed="true">hour before</button>
+                        <button type="button" class="weather-seg__btn" data-lens-compare="cycle" aria-pressed="false">yesterday</button>
+                    </div>
                     <!-- what the controls reach in this section, when it isn't all of them -->
                     <p class="weather-dock__note" data-dock-note hidden></p>
                 </div>
@@ -213,7 +220,7 @@
             </section>
 
             <!-- the lens's window over time (weather-page.ts initTrends); on now, the last hour -->
-            <section class="tile weather-tile weather-trends" id="trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading" data-section="trends" data-section-label="trends" data-section-lens="window measure unit" data-topics="trends">
+            <section class="tile weather-tile weather-trends" id="trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading" data-section="trends" data-section-label="trends" data-section-lens="window measure unit compare" data-topics="trends">
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
                         <h2 class="weather-tile__title" id="weather-trends-title">trends</h2>
@@ -683,7 +690,7 @@
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="weather-tile__title" id="weather-how-title">how i measure it</h2>
                 <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by, live while you&#39;re here.</p>
-                <p>the bar up top picks what you&#39;re looking at: right now or the last hour, day, week or month, and what a rate is per. it starts on <strong>accounts</strong>, counting who&#39;s writing rather than how much, so one chatty bot can&#39;t pass for a crowd. switch to <strong>records</strong> for how much. i never keep track of who&#39;s who.</p>
+                <p>the bar up top picks what you&#39;re looking at: right now or the last hour, day, week or month, what a rate is per, and what the arrows compare with: the stretch just before, or the same time yesterday (last week, for a day), when you&#39;d rather not see the daily rise and fall as news. it starts on <strong>accounts</strong>, counting who&#39;s writing rather than how much, so one chatty bot can&#39;t pass for a crowd. switch to <strong>records</strong> for how much. i never keep track of who&#39;s who.</p>
                 <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in (◕‿◕)</p>
                 <p>my records go back to oct 6, read afterwards from jetstream&#39;s archive, and i&#39;ve listened live since oct 20. the archive missed most edits and some apps and accounts, so the readouts, the records and the apps&#39; arrows start on oct 20. sign-ups, moves and hosts come from the plc directory and the relay, from oct 8. days marked utc are utc days; everything else is in your time.</p>
                 <p>i&#39;m a potato, not a satellite, so a quiet app can slip past me now and then. <a href="/">back home</a>.</p>

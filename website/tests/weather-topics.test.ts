@@ -198,7 +198,7 @@ describe('the page, on a topic', () => {
     initLensDock(report, createLens());
     const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
     expect(dock.querySelector('a')).toBeNull();
-    expect(dock.dataset.lensOff).toBe('measure unit');
+    expect(dock.dataset.lensOff).toBe('measure unit compare');
     const note = dock.querySelector<HTMLElement>('[data-dock-note]')!;
     expect(note.hidden).toBe(false);
     expect(note.textContent).toBe(PAGE_NOTES.window);

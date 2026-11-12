@@ -654,8 +654,8 @@ describe('the lens', () => {
   it("the dock's strip says it in the controls' words", () => {
     const bar = report.querySelector<HTMLElement>('.weather-dock__panel')!;
     expect(dockSummary(bar, LENS_DEFAULT)).toBe('1h · accounts');
-    expect(dockSummary(bar, { window: 'day', measure: 'records', unit: 'hour' })).toBe('24h · records · per hour');
-    expect(dockSummary(bar, { window: 'now', measure: 'records', unit: 'total' })).toBe('now · records · in all');
+    expect(dockSummary(bar, { window: 'day', measure: 'records', unit: 'hour', compare: 'before' })).toBe('24h · records · per hour');
+    expect(dockSummary(bar, { window: 'now', measure: 'records', unit: 'total', compare: 'before' })).toBe('now · records · in all');
   });
 
   it('the dock shows once bound, opens to the controls with a tap on its strip, and a tap elsewhere puts it away', () => {
@@ -706,14 +706,16 @@ describe('the lens', () => {
   });
 
   it('starts from the address, else this browser, else the last hour, accounts, a second', () => {
-    expect(LENS_DEFAULT).toEqual({ window: 'hour', measure: 'accounts', unit: 'second' });
+    expect(LENS_DEFAULT).toEqual({ window: 'hour', measure: 'accounts', unit: 'second', compare: 'before' });
     expect(createLens('?w=now').get().window).toBe('now');
     expect(createLens('').get()).toEqual(LENS_DEFAULT);
     expect(createLens('?m=records').get().measure).toBe('records');
-    expect(createLens('?w=24h&m=records&u=hour').get()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
+    expect(createLens('?w=24h&m=records&u=hour').get()).toEqual({ window: 'day', measure: 'records', unit: 'hour', compare: 'before' });
+    expect(createLens('?vs=cycle').get().compare).toBe('cycle');
+    expect(createLens('?vs=sideways').get().compare).toBe('before');
     expect(createLens('?w=lots&u=fortnight').get()).toEqual(LENS_DEFAULT);
     localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'week', measure: 'records', unit: 'nope' }));
-    expect(createLens('').get()).toEqual({ window: 'week', measure: 'records', unit: 'second' });
+    expect(createLens('').get()).toEqual({ window: 'week', measure: 'records', unit: 'second', compare: 'before' });
     expect(createLens('?w=1h').get().window).toBe('hour');
   });
 
@@ -726,7 +728,11 @@ describe('the lens', () => {
     l.set({ unit: 'total' });
     expect(seen).toEqual(['hour→day second', 'day→day total']);
     expect(location.search).toBe('?w=24h&u=total');
-    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'accounts', unit: 'total' });
+    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'accounts', unit: 'total', compare: 'before' });
+    l.set({ compare: 'cycle' });
+    expect(new URLSearchParams(location.search).get('vs')).toBe('cycle');
+    l.set({ compare: 'before' });
+    expect(new URLSearchParams(location.search).get('vs')).toBeNull();
     l.set({ measure: 'records' });
     expect(new URLSearchParams(location.search).get('m')).toBe('records');
     l.set({ measure: 'accounts' });

@@ -150,9 +150,20 @@ export function queryUrl(base: string, range: Range, now: number): string {
   return `${base}/rest/v1/${queryPath(range, now)}`;
 }
 
+/**
+ * How far back the earlier window is: the stretch right before (each range's lagMs), or with
+ * `?vs=cycle` the same stretch a cycle ago, where the network's rhythm repeats: the same hour
+ * yesterday, the same 24 hours a week ago. A week or more is always against the stretch before.
+ */
+export const CYCLE_LAG_MS: Partial<Record<Range, number>> = { hour: DAY, day: 7 * DAY };
+
+export function lagFor(range: Range, vs: string | null): number {
+  return (vs === 'cycle' ? CYCLE_LAG_MS[range] : undefined) ?? RANGES[range].lagMs;
+}
+
 /** The arguments to atmosphere_app_trends: the range, and the same span `lagMs` earlier. */
-export function trendArgs(range: Range, now: number) {
-  const { spanMs, lagMs } = RANGES[range];
+export function trendArgs(range: Range, now: number, lagMs: number = RANGES[range].lagMs) {
+  const { spanMs } = RANGES[range];
   const end = rangeEnd(range, now);
   const at = (ms: number) => new Date(ms).toISOString();
   return { since: at(end - spanMs), until: at(end), prev_since: at(end - spanMs - lagMs), prev_until: at(end - lagMs), max_apps: TOP_APPS };
@@ -265,7 +276,8 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     if (!isRange(range)) return json(request, 400, { error: 'range must be hour, day, week, month or year' }, 'no-store');
     const db = supabase(env(), fetchImpl);
     const at = now();
-    const { key: column, cache, lagMs, bucket, bursts: listBursts } = RANGES[range];
+    const { key: column, cache, bucket, bursts: listBursts } = RANGES[range];
+    const lagMs = lagFor(range, new URL(request.url).searchParams.get('vs'));
     let partial = false;
     /** An extra: asked alongside the points, and left out if it doesn't come. */
     const extra = async <T>(what: string, run: () => Promise<T>): Promise<T | undefined> => {
@@ -278,7 +290,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       }
     };
     const trends = extra('apps', async () => {
-      const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at));
+      const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at, lagMs));
       const c = counts(body, ['seconds', 'prevSeconds'] as const);
       if (!c || !isRecord(body) || !Array.isArray(body.apps)) throw new Error('apps did not check out');
       const apps = body.apps.map(toApp).filter((a): a is App => a !== null).slice(0, TOP_APPS);
@@ -295,7 +307,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       return { bucket, points };
     });
     const accounts = extra('accounts', () => {
-      const { since, until, prev_since, prev_until } = trendArgs(range, at);
+      const { since, until, prev_since, prev_until } = trendArgs(range, at, lagMs);
       return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS, liveSince });
     });
     const hosts = extra('hosts', () => readHosts(db, rangeStart(range, at), bucket, at));

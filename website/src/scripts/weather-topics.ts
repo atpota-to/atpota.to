@@ -45,7 +45,7 @@ export const TOPICS: readonly Topic[] = [
       "how much of the atmosphere isn't bluesky: the diversity index (the share of active accounts writing with other apps, and how many apps they're spread across), which apps are busiest, and which are new, read live from the firehose.",
     card: 'mix',
     alt: 'the diversity index on its scale as it was when this was shared, and the busiest apps outside bluesky over the last 24 hours.',
-    lens: ['window', 'measure', 'unit'],
+    lens: ['window', 'measure', 'unit', 'compare'],
     nudge: 'psst. ask me how the diversity index works (◕‿◕)',
   },
   {
@@ -58,7 +58,7 @@ export const TOPICS: readonly Topic[] = [
       'how busy the atmosphere has been: new records and active accounts over the last hour, 24 hours, 7 days or 30 days, with the diversity index and the apps heard along the way.',
     card: 'trend',
     alt: 'the last 24 hours of new records a second across the whole network as a chart, with the busiest and quietest hours marked.',
-    lens: ['window', 'measure', 'unit'],
+    lens: ['window', 'measure', 'unit', 'compare'],
     nudge: 'psst. ask me what a lexicon is (◕‿◕)',
   },
   {
