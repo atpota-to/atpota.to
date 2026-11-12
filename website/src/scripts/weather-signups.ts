@@ -382,6 +382,7 @@ export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf
   const series = signupSeries(days, asOf);
   tile.hidden = !series;
   if (!series) return;
+  tile.dataset.state = 'ready';
   const first = days[0]!.day;
   setText(tile, '[data-sh-since]', startOf(first) <= asOf - 365 * DAY ? 'the last 12 months (utc)' : `since ${shortDay(first)} (utc)`);
 
@@ -433,9 +434,12 @@ export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf
 export function initSignupHistory(report: ParentNode, fetchImpl: typeof fetch = fetch): void {
   const tile = $(report, '[data-p-history]');
   if (!tile) return;
+  // it holds its place while the year's days come (the slowest answer on the page), so nothing under it jumps;
+  // if the first answer doesn't come, it goes
   const load = async () => {
     const got = await fetchSignups(fetchImpl);
     if (got) renderSignupHistory(tile, got.days, got.asOf);
+    else if (tile.dataset.state === 'loading') tile.hidden = true;
   };
   void load();
   const tick = () =>

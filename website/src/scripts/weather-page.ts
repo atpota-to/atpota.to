@@ -1215,8 +1215,9 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
   if (!o) return;
   const step = BUCKET_MS[o.bucket];
   setText(card, '[data-t-apps-chart-title]', `apps heard each ${BUCKET_WORDS[o.bucket]}`);
-  const points: ChartPoint[] = o.points.map((p) => ({ t: Date.parse(p.t), v: p.apps }));
   const start = now - RANGE_INFO[h.range].spanMs;
+  // only buckets that start inside the range, as the records' rows do, so its axis starts with theirs (it began a day early)
+  const points: ChartPoint[] = o.points.map((p) => ({ t: Date.parse(p.t), v: p.apps })).filter((p) => p.t >= start || o.bucket === 'minute');
   if ((points[0]?.t ?? now) - start > step) points.unshift({ t: start, v: null });
   // The newest bucket is still filling up; most apps turn up early in one, so it's not scaled, only marked so far.
   renderChart(host, projectLast(points, now, step, { scale: false }), { label: `apps heard each ${BUCKET_WORDS[o.bucket]}`, color: 'var(--weather-else)', format: (v) => String(Math.round(v)), formatTime, stepMs: step });

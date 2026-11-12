@@ -19,7 +19,7 @@
  * and they only reach the DOM through textContent (renderBars).
  */
 
-import { renderChart, type ChartPoint } from './weather-chart';
+import { projectLast, renderChart, type ChartPoint } from './weather-chart';
 import { WINDOW_INFO, type Lens, type Window } from './weather-lens';
 import { compactCount, formatCount, formatIndex, renderShare } from './weather';
 import type { Bar } from './weather-page';
@@ -329,7 +329,7 @@ function renderActive(part: HTMLElement, h: HostHistory, drawBars: (list: HTMLEl
   if (card) card.hidden = days.length < 2;
   if (chart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
-    renderChart(chart, days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: activeShareOf(d) })), { label: 'active accounts off bluesky, by day', color: 'var(--weather-host-indep)', format: pct, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime: dayFmt, stepMs: 86_400_000, fromZero: false });
+    renderChart(chart, projectLast(days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: activeShareOf(d) })), now, 86_400_000, { scale: false }), { label: 'active accounts off bluesky, by day', color: 'var(--weather-host-indep)', format: pct, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime: dayFmt, stepMs: 86_400_000, fromZero: false });
   }
   const lively = h.liveliest;
   const wrap = $(part, '[data-h-lively-wrap]');
@@ -706,7 +706,8 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   if (chart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
     const shareOf = (x: IdentityDay) => (x.createdBluesky + independentOf(x) > 0 ? (independentOf(x) / (x.createdBluesky + independentOf(x))) * 100 : null);
-    renderChart(chart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: shareOf(x) })), { label: 'new accounts starting on independent hosts each day, as a share', color: 'var(--weather-host-indep)', format: (v) => `${formatIndex(v)}%`, formatTick: (v) => `${Number(v.toFixed(1))}%`, formatTime: dayFmt, stepMs: 86_400_000 });
+    // today is still going: a share needs no scaling, only marking as so far
+    renderChart(chart, projectLast(days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: shareOf(x) })), now, 86_400_000, { scale: false }), { label: 'new accounts starting on independent hosts each day, as a share', color: 'var(--weather-host-indep)', format: (v) => `${formatIndex(v)}%`, formatTick: (v) => `${Number(v.toFixed(1))}%`, formatTime: dayFmt, stepMs: 86_400_000 });
   }
   const odds = single ? oddsWords(days) : '';
   const oddsLine = $(report, '[data-p-odds]');
@@ -726,7 +727,8 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   if (windsCard) windsCard.hidden = days.length < 2;
   if (windsChart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
-    renderChart(windsChart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.movedOut })), { label: 'accounts moving out of bluesky each day', color: 'var(--weather-host-indep)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
+    // today so far, drawn out to where it's on pace to end, as the sign-ups are, so it doesn't read as a drop
+    renderChart(windsChart, projectLast(days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.movedOut })), now, 86_400_000), { label: 'accounts moving out of bluesky each day', color: 'var(--weather-host-indep)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
   }
   // all three kinds of move, so the destinations below add up: they take in moves between hosts too
   const between = week.reduce((t, x) => t + x.movedBetween, 0);

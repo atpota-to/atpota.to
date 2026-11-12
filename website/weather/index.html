@@ -585,7 +585,7 @@
             </section>
 
             <!-- new accounts over the whole history kept, and against the stretch before, from atmosphere_plc_day; keeps its own times, not the lens's (src/scripts/weather-signups.ts) -->
-            <section class="tile weather-tile weather-pds weather-signups" aria-labelledby="weather-signups-title" data-p-history hidden data-topics="migration">
+            <section class="tile weather-tile weather-pds weather-signups" aria-labelledby="weather-signups-title" data-p-history data-state="loading" data-topics="migration">
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
                         <h2 class="weather-tile__title" id="weather-signups-title">sign-ups over time</h2>
@@ -595,7 +595,7 @@
                     </div>
                     <p class="weather-tile__aside" data-sh-since></p>
                 </div>
-                <p class="weather-pds__line weather-pds__lede" data-sh-headline></p>
+                <p class="weather-pds__line weather-pds__lede" data-sh-headline>counting every day of sign-ups…</p>
                 <dl class="weather-pds__stats weather-pds__stats--three">
                     <div><dt data-sh-label="day">yesterday</dt><dd data-sh-value="day">&ndash;</dd><dd class="weather-change" data-sh-change="day"></dd></div>
                     <div><dt data-sh-label="week">last 7 days</dt><dd data-sh-value="week">&ndash;</dd><dd class="weather-change" data-sh-change="week"></dd></div>

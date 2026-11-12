@@ -74,6 +74,16 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
   if (!dock || !panel || !strip || !now || dock.dataset.bound === 'true') return;
   dock.dataset.bound = 'true';
   dock.hidden = false;
+  // while the header's own period is on screen, it says what's showing and opens the controls: the strip waits,
+  // off the page's first screen (on a phone it sat over the pages' links)
+  const period = report.querySelector<HTMLElement>('[data-r-period]');
+  const view = dock.ownerDocument.defaultView;
+  if (period && view && typeof view.IntersectionObserver === 'function') {
+    new view.IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting && entry.boundingClientRect.height > 0) dock.dataset.resting = '';
+      else delete dock.dataset.resting;
+    }).observe(period);
+  }
 
   const open = (yes: boolean) => {
     panel.hidden = !yes;

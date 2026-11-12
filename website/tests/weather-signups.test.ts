@@ -142,7 +142,9 @@ describe('sign-ups over time: the tile', () => {
 
   it('is a migration tile of its own, with poe to explain it', () => {
     expect(tile.dataset.topics).toBe('migration');
-    expect(tile.hidden).toBe(true);
+    // it holds its place while the year's days come, rather than popping in and pushing the page down
+    expect(tile.hidden).toBe(false);
+    expect(tile.dataset.state).toBe('loading');
     bindExplainers(report);
     expect(tile.querySelector<HTMLElement>('[data-poe-explain="signups"]')!.hidden).toBe(false);
   });
@@ -210,6 +212,16 @@ describe('sign-ups over time: the tile', () => {
     expect(await fetchSignups(answer({ ...YEAR, range: 'month' }) as unknown as typeof fetch)).toBeNull();
     expect(await fetchSignups(answer({ ...YEAR, hosts: undefined }) as unknown as typeof fetch)).toBeNull();
     expect(await fetchSignups(answer(YEAR, false) as unknown as typeof fetch)).toBeNull();
+  });
+
+  it('goes when its first answer never comes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      initSignupHistory(report, (async () => ({ ok: false, json: async () => ({}) }) as Response) as unknown as typeof fetch);
+      await vi.waitFor(() => expect(tile.hidden).toBe(true));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('loads itself, and keeps what it showed when a refresh fails', async () => {
