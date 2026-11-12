@@ -592,7 +592,7 @@ test("hosts: a station without the census or the history says which", async () =
   await assert.rejects(lib.readWeather("hosts", "UTC", fakeFetch({}).impl, NOW));
   assert.equal(lib.windOf(0, 0).startsWith("still"), true);
   assert.equal(lib.windOf(2, 5), "blowing back to bluesky");
-  assert.deepEqual(lib.smogOf({ bluesky: 0, independent: 0, unlisted: 0 }), { level: "clear", unlistedSignupsPercent: 0 });
+  assert.deepEqual(lib.smogOf({ bluesky: 0, independent: 0, unlisted: 0 }), { level: "clear", unlistedIdentitiesPercent: 0 });
 });
 
 test("hosts: new accounts made in bulk are counted apart, the host named", async () => {
@@ -606,7 +606,7 @@ test("hosts: new accounts made in bulk are counted apart, the host named", async
   assert.deepEqual(r.identityTotals.signups.madeInBulk, { accounts: 4615, onHosts: [{ hostname: "goodmkt.id", accounts: 4615, bursts: 2, minutes: 32.2 }] });
   assert.equal(r.identityTotals.newAccountsStartingOutsideBlueskyPercent, 5.6);
   // the air quality is against every sign-up, the bulk ones included: 480,000 of 520,615 (93% without them)
-  assert.equal(r.identityTotals.airQuality.unlistedSignupsPercent, 92.2);
+  assert.equal(r.identityTotals.airQuality.unlistedIdentitiesPercent, 92.2);
   // an answer from before bulk was counted has none
   const plain = await lib.readWeather("hosts", "UTC", fakeFetch(FULL).impl, NOW);
   assert.equal("madeInBulk" in plain.latestIdentityDay.signups, false);

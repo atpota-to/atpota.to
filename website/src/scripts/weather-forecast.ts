@@ -123,6 +123,12 @@ export function forecastWords(hours: ForecastHour[], tz?: string): string {
     const next = hours[turn]!;
     const how = rank(next.condition) > rank(first.condition) ? 'picking up to' : 'calming down to';
     words = `${CONDITION_WORDS[first.condition]} until about ${hourLabel(next.t, tz)}, then ${how} ${CONDITION_WORDS[next.condition]}`;
+    // and the turn after, when there is one: "picking up to gusty" read as if it stayed gusty all evening
+    const after = hours.findIndex((h, i) => i > turn && h.condition !== next.condition);
+    if (after >= 0) {
+      const then = hours[after]!;
+      words += `, ${rank(then.condition) > rank(next.condition) ? 'picking up again' : 'easing off'} around ${hourLabel(then.t, tz)}`;
+    }
   }
   const storm = hours.reduce<ForecastHour | null>((best, h) => (h.chance.storm > (best?.chance.storm ?? 0) ? h : best), null);
   if (storm && storm.chance.storm >= STORM_SAID) words += `. a ${chanceWords(storm.chance.storm)} chance of a storm around ${hourLabel(storm.t, tz)}`;
@@ -299,7 +305,7 @@ export function renderForecast(tile: HTMLElement, f: Forecast, nowMs = Date.now(
     sun.hidden = !wakes || !settles;
     if (wakes && settles) {
       const [a, b] = Date.parse(wakes.at) < Date.parse(settles.at) ? [wakes, settles] : [settles, wakes];
-      sun.replaceChildren(sunCard(a, tz), sunCard(b, tz));
+      sun.replaceChildren(sunCard(a, tz, nowMs), sunCard(b, tz, nowMs));
     }
   }
   const note = $(tile, '[data-f-note]');
@@ -310,7 +316,13 @@ export function renderForecast(tile: HTMLElement, f: Forecast, nowMs = Date.now(
 const SUNRISE = '<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 4.5v5M9.5 7 12 4.5 14.5 7"/>';
 const SUNSET = '<path d="M3 17.5h18M7.5 17.5a4.5 4.5 0 0 1 9 0"/><path d="M12 4.5v5M9.5 7 12 9.5 14.5 7"/>';
 
-function sunCard(e: Forecast['sun'][number], tz?: string): HTMLElement {
+/** "tomorrow" for a time on the reader's next day, so tomorrow's 7:10 am sunrise doesn't read as one already past. */
+export function dayWord(iso: string, nowMs: number, tz?: string): string {
+  const day = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: tz });
+  return day(Date.parse(iso)) === day(nowMs) ? '' : day(Date.parse(iso)) === day(nowMs + 86_400_000) ? 'tomorrow' : '';
+}
+
+function sunCard(e: Forecast['sun'][number], tz?: string, nowMs = Date.now()): HTMLElement {
   const div = document.createElement('div');
   div.className = 'weather-forecast__sun-card';
   const dt = document.createElement('dt');
@@ -323,8 +335,9 @@ function sunCard(e: Forecast['sun'][number], tz?: string): HTMLElement {
   const dd = document.createElement('dd');
   const at = document.createElement('strong');
   at.textContent = timeLabel(e.at, tz);
+  const when = dayWord(e.at, nowMs, tz);
   const why = document.createElement('span');
-  why.textContent = e.kind === 'wakes' ? 'the atmosphere wakes up' : 'the atmosphere settles down';
+  why.textContent = `${when ? `${when}: ` : ''}${e.kind === 'wakes' ? 'the atmosphere wakes up' : 'the atmosphere settles down'}`;
   dd.append(at, why);
   div.append(dt, dd);
   return div;

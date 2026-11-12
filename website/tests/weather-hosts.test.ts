@@ -83,7 +83,7 @@ describe('where accounts live, over time', () => {
     expect(part.querySelector('[data-h-chart="active"] svg')).not.toBeNull();
     expect(part.querySelector('[data-h-chart="index"] svg')).not.toBeNull();
     expect([...part.querySelectorAll('[data-h-new] .weather-bars__label')].map((el) => el.textContent)).toEqual(['fresh.example', 'tiny.example']);
-    expect(part.querySelector('[data-h-new-note]')!.textContent).toBe('7 new independent hosts in the last 7 days, the 2 with the most people arriving.');
+    expect(part.querySelector('[data-h-new-note]')!.textContent).toBe('7 new independent hosts in the last 7 days. people have arrived on 2 of them so far.');
     expect([...part.querySelectorAll('[data-h-new] .weather-bars__value')].map((el) => el.textContent)).toEqual(['31', '2']);
     // the people who arrived, not the relay's count
     expect(part.querySelector('[data-h-growing] .weather-bars__value')!.textContent).toBe('+312');
@@ -155,7 +155,7 @@ describe('where accounts live, over time', () => {
     // new hosts nobody arrived on (a git server's, say) are counted, not listed
     const knots: HostHistory = { ...HOSTS, newHosts: 56, new: [{ hostname: 'knot.example', accounts: 23, people: 0, first: '2026-10-29' }] };
     expect(newHostsWords(knots, 'day')).toBe('56 new independent hosts in the last 24 hours. nobody has signed up on one or moved there yet.');
-    expect(newHostsWords({ ...knots, new: [...knots.new, { hostname: 'pds.example', accounts: 4, people: 3, first: '2026-10-29' }] }, 'day')).toBe('56 new independent hosts in the last 24 hours, the one with the most people arriving.');
+    expect(newHostsWords({ ...knots, new: [...knots.new, { hostname: 'pds.example', accounts: 4, people: 3, first: '2026-10-29' }] }, 'day')).toBe('56 new independent hosts in the last 24 hours. people have arrived on one of them so far.');
     renderHostTrends(part, knots, 'day', bars, NOW);
     expect(part.querySelectorAll('[data-h-new] li')).toHaveLength(0);
     expect(hostBars(HOSTS.growing, true)).toEqual([{ label: 'blacksky.app', perSecond: 312, count: 312, value: '+312' }]);

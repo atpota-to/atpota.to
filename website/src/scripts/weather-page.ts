@@ -556,6 +556,9 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
       ? sky.appsByAccounts!.map((x) => ({ label: appName(x.domain, x.collections), sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatCount(x.count), change: x.change }))
       : sky.apps.map((x) => ({ label: appName(x.domain, x.collections), sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatAmount(lens.unit === 'total' ? x.count : perUnit(x.perSecond, lens.unit)), change: x.change })),
   );
+  // one style down a list: once any is past 100k, the thousands go compact too ("124.7k" over "94.4k", not "94,364")
+  const shownOf = (b: Bar) => (byAcct || lens.unit === 'total' ? b.count : perUnit(b.perSecond, lens.unit));
+  if (bars.some((b) => shownOf(b) >= 100_000)) for (const b of bars) if (shownOf(b) >= 1000) b.value = compactCount(shownOf(b));
   const list = $(report, '[data-r-apps]');
   if (list) renderBars(list, bars, sky.window === 'now' && !byAcct ? sky.seconds : undefined);
   const shown = bars.length;
@@ -571,16 +574,19 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   setText(report, '[data-r-apps-note]', shown ? `${what}.${arrows}` : '');
 }
 
-/** Every tile that follows the lens, from one sky. */
 /** The tiles that always count records ("patterns and outlook") say so while the lens counts accounts. */
 export function tagRecordsOnly(report: ParentNode, lens: LensState): void {
   for (const el of Array.from(report.querySelectorAll<HTMLElement>('[data-tag-records]'))) el.hidden = lens.measure !== 'accounts';
 }
 
+/** Every tile that follows the lens, from one sky. */
 export function renderSky(report: HTMLElement, sky: Sky, lens: LensState = LENS_DEFAULT): void {
   tagRecordsOnly(report, lens);
   renderHeadline(report, sky, lens);
   renderDiversity(report, sky, lens);
+  // screen readers hear the window's own index when the lens moves to one, not the live minute's from the first load
+  // (the live one ticks every few seconds, so it's said once, by renderReport)
+  if (sky.window !== 'now' && sky.diversity) setText(report, '[data-r-status]', `${WINDOW_INFO[sky.window].words}: diversity index ${formatIndex(sky.diversity.index)}, ${sky.diversity.level}.`);
   renderMix(report, sky, lens);
   renderElsewhere(report, sky, lens);
 }

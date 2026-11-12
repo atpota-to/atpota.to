@@ -1725,6 +1725,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   background: repeating-linear-gradient(135deg, var(--weather-host-indep) 0 3px, color-mix(in srgb, var(--weather-host-indep) 70%, transparent) 3px 5px);
 }
 
+/* a share keeps its parentheses together: "(99.70%)", never "(" at the end of a line */
+.weather-mix__share {
+  white-space: nowrap;
+}
+
 .weather-mix__total {
   margin-top: auto;
   color: var(--text-soft);

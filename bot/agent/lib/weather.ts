@@ -630,13 +630,17 @@ function outlookOf(heat: NonNullable<Almanac["heatmap"]>, historyStart: string |
  * SIZE_BOUNDS: 0, 1, up to 10, 100, 1,000, 10,000, more) and the weather page names them.
  */
 const HOST_SIZES = ["empty", "justOnePerson", "household2to10", "village11to100", "town101to1000", "city1001to10000", "metropolis10000plus"] as const;
-/** The air quality: the share of a day's sign-ups that went to hosts no relay carries (website weather-hosts.ts SMOG_LEVELS). */
+/**
+ * The air quality: the share of a day's new identities in the plc directory that point at hosts no relay carries
+ * (website weather-hosts.ts SMOG_LEVELS). They're not sign-ups: nobody can see what's on those hosts, and nearly all
+ * of them lately are one script's (pds.trump.com, about 9,000 an hour, paused oct 30 to nov 4).
+ */
 const SMOG_LEVELS = [["thick smog", 90], ["smoggy", 50], ["hazy", 10]] as const;
 
 export function smogOf(created: { bluesky: number; independent: number; unlisted: number }) {
   const all = created.bluesky + created.independent + created.unlisted;
   const percent = all > 0 ? round1((100 * created.unlisted) / all) : 0;
-  return { level: SMOG_LEVELS.find(([, from]) => percent >= from)?.[0] ?? "clear", unlistedSignupsPercent: percent };
+  return { level: SMOG_LEVELS.find(([, from]) => percent >= from)?.[0] ?? "clear", unlistedIdentitiesPercent: percent };
 }
 
 /** Which way accounts are moving between Bluesky's hosts and independent ones. */
@@ -844,8 +848,8 @@ function identityDayOf(x: unknown) {
       // and where they came from (routes, movedFrom), when the station kept it for this day
       ...whereFrom(routesOf(x.moves), c.movedOut + c.movedIn + c.movedBetween),
     },
-    // sign-ups on hosts no relay carries: test servers, typos, bulk sign-ups nobody relays. not the network's weather
-    airQuality: { ...smogOf({ bluesky: c.createdBluesky, independent: c.createdIndependent, unlisted: c.createdUnlisted }), unlistedSignups: c.createdUnlisted },
+    // identities on hosts no relay carries: test servers, typos, scripts by the hundred thousand. not sign-ups, and not the network's weather
+    airQuality: { ...smogOf({ bluesky: c.createdBluesky, independent: c.createdIndependent, unlisted: c.createdUnlisted }), unlistedIdentities: c.createdUnlisted },
     deletedAccounts: c.deleted,
   };
 }
@@ -940,7 +944,7 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
   const sum = (f: (d: (typeof days)[number]) => number) => days.reduce((n, d) => n + f(d), 0);
   const out = sum((d) => d.movingHouse.outOfBluesky);
   const back = sum((d) => d.movingHouse.backToBluesky);
-  const created = { bluesky: sum((d) => d.signups.onBlueskyHosts), independent: sum((d) => d.signups.onIndependentHosts), unlisted: sum((d) => d.airQuality.unlistedSignups) };
+  const created = { bluesky: sum((d) => d.signups.onBlueskyHosts), independent: sum((d) => d.signups.onIndependentHosts), unlisted: sum((d) => d.airQuality.unlistedIdentities) };
   const bulk = sum((d) => d.signups.madeInBulk?.accounts ?? 0);
   const unnamed = sum((d) => d.signups.withNoHandle ?? 0);
   const scripted = sum((d) => d.signups.likelyScripted?.accounts ?? 0);

@@ -227,6 +227,9 @@ export function newHostsWords(h: HostHistory, range: HostRange): string {
   const hosts = `${formatCount(h.newHosts)} new independent host${h.newHosts === 1 ? '' : 's'} in ${words}`;
   const shown = newHostsShown(h).length;
   if (shown === 0) return `${hosts}. nobody has signed up on ${h.newHosts === 1 ? 'it' : 'one'} or moved there yet.`;
+  // the rest had nobody arrive: say so, rather than "the 2 with the most people", which reads as if all had some
+  const peopled = h.new.filter((x) => x.people > 0).length;
+  if (peopled <= shown && shown < h.newHosts) return `${hosts}. people have arrived on ${shown === 1 ? 'one' : formatCount(shown)} of them so far.`;
   return `${hosts}${h.newHosts > shown ? `, the ${shown === 1 ? 'one' : formatCount(shown)} with the most people arriving` : ''}.`;
 }
 
