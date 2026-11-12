@@ -19,7 +19,7 @@
  * and they only reach the DOM through textContent (renderBars).
  */
 
-import { renderChart, type ChartPoint } from './weather-chart';
+import { projectLast, renderChart, type ChartPoint } from './weather-chart';
 import { WINDOW_INFO, type Lens, type Window } from './weather-lens';
 import { compactCount, formatCount, formatIndex, renderShare } from './weather';
 import type { Bar } from './weather-page';
@@ -88,6 +88,21 @@ export interface IdentityDay {
   deleted: number;
   /** Where the day's movers went, busiest first (server/weather-hosts.ts). */
   destinations: Array<{ hostname: string; accounts: number }>;
+  /**
+   * Which host the day's movers left for which, the most first. Empty on a day with moves
+   * means the station didn't keep them for that day, not that nobody moved.
+   */
+  moves: Move[];
+}
+
+/** Bluesky's own hosts, as one place, where a move names the host it left or went to (server/weather-hosts.ts BLUESKY). */
+export const BLUESKY = 'bluesky';
+
+/** Accounts that left one host for another on a day: each an independent host's name, or BLUESKY. */
+export interface Move {
+  from: string;
+  to: string;
+  accounts: number;
 }
 
 export interface BulkHost {
@@ -144,6 +159,9 @@ const hostname = (x: unknown): x is string => typeof x === 'string' && HOSTNAME_
 const orNull = (x: unknown): x is number | null => x === null || n(x);
 const hostCounts = (x: unknown): Array<{ hostname: string; accounts: number }> => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts)).slice(0, 10) : []);
 const bulkHosts = (x: unknown): BulkHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.bursts) && n(h.seconds)).slice(0, 10) : []);
+const place = (x: unknown): x is string => x === BLUESKY || hostname(x);
+const moveList = (x: unknown): Move[] =>
+  Array.isArray(x) ? x.filter((m): m is Move => obj(m) && place(m.from) && place(m.to) && m.from !== m.to && n(m.accounts) && m.accounts > 0).map((m) => ({ from: m.from, to: m.to, accounts: m.accounts })) : [];
 const scriptedHosts = (x: unknown): ScriptedHost[] => (Array.isArray(x) ? x.filter((h) => obj(h) && hostname(h.hostname) && n(h.accounts) && (h.why === 'bulk' || h.why === 'stopped')).slice(0, 10) : []);
 const isDay = (d: unknown): d is HostDay =>
   obj(d) && typeof d.day === 'string' && DAY_RE.test(d.day) && orNull(d.active) && (d.change === null || (typeof d.change === 'number' && Number.isFinite(d.change))) && orNull(d.joined) && orNull(d.left);
@@ -174,6 +192,7 @@ export function toHostHistory(x: unknown): HostHistory | null {
               scripted: scriptedHosts(d.scripted),
               bulk: bulkHosts(d.bulk),
               destinations: hostCounts(d.destinations),
+              moves: moveList(d.moves),
             };
           })
       : [],
@@ -208,25 +227,64 @@ export function newHostsWords(h: HostHistory, range: HostRange): string {
   const hosts = `${formatCount(h.newHosts)} new independent host${h.newHosts === 1 ? '' : 's'} in ${words}`;
   const shown = newHostsShown(h).length;
   if (shown === 0) return `${hosts}. nobody has signed up on ${h.newHosts === 1 ? 'it' : 'one'} or moved there yet.`;
+  // the rest had nobody arrive: say so, rather than "the 2 with the most people", which reads as if all had some
+  const peopled = h.new.filter((x) => x.people > 0).length;
+  if (peopled <= shown && shown < h.newHosts) return `${hosts}. people have arrived on ${shown === 1 ? 'one' : formatCount(shown)} of them so far.`;
   return `${hosts}${h.newHosts > shown ? `, the ${shown === 1 ? 'one' : formatCount(shown)} with the most people arriving` : ''}.`;
 }
 
 /** A share of accounts, to the hundredth: "1.51%". */
 const pct = (v: number) => `${v.toFixed(2)}%`;
 
+/** When a range began, to set the latest share against: "a day ago". */
+const RANGE_AGO: Record<HostRange, string> = { day: 'a day ago', week: 'a week ago', month: '30 days ago' };
+
+const DAY_MS = 86_400_000;
+
 /**
- * The hosts' headline over a range: "1.51% of accounts live off bluesky's servers, up from
- * 1.46% over the last 7 days: +2,310 accounts on independent hosts."
+ * People arriving on independent hosts over a range: signing up there (less the ones made in
+ * bulk, by script or with no handle) or moving in from Bluesky's hosts, from the PLC
+ * directory's UTC days. A day only partly inside the range counts for that part, so the last
+ * 24 hours take today so far and the rest of yesterday. Null without the days.
  */
-export function shareHeadline(h: HostHistory, range: HostRange): string {
+export function peopleArriving(days: IdentityDay[] | undefined, range: HostRange, now = Date.now()): number | null {
+  if (!days?.length) return null;
+  const start = now - IDENTITY_SPAN[range] * DAY_MS;
+  let people = 0;
+  let covered = false;
+  for (const d of days) {
+    const from = Date.parse(`${d.day}T00:00:00Z`);
+    const to = Math.min(from + DAY_MS, now);
+    const inside = Math.min(to, now) - Math.max(from, start);
+    if (!(to > from) || inside <= 0) continue;
+    covered = true;
+    people += (independentOf(d) + d.movedOut) * (inside / (to - from));
+  }
+  return covered ? Math.round(people) : null;
+}
+
+/**
+ * The hosts' headline over a range: the share of accounts off Bluesky's servers against a day
+ * (or week, or month) ago, and the people who arrived on independent hosts. The relay's own
+ * count of their accounts also rises when a script makes thousands at once, or when it starts
+ * counting a host's accounts it had missed (nacg.club went from 5,850 to 20,019 overnight on
+ * 2026-11-12 with nobody arriving), so that's only said beside the people, when it's far off.
+ */
+export function shareHeadline(h: HostHistory, range: HostRange, now = Date.now()): string {
   const last = h.points[h.points.length - 1];
   if (!last) return '';
-  const now = `${pct(last.share)} of accounts live off bluesky's servers`;
+  const share = `${pct(last.share)} of accounts live off bluesky's servers`;
   const first = h.points[0]!;
-  if (first === last) return `${now}.`;
+  if (first === last) return `${share}.`;
   const gained = last.accountsIndependent - first.accountsIndependent;
   const way = last.share > first.share ? 'up from' : last.share < first.share ? 'down from' : 'level with';
-  return `${now}, ${way} ${pct(first.share)} over ${WINDOW_INFO[range].words}: ${signed(gained)} accounts on independent hosts.`;
+  const head = `${share}, ${way} ${pct(first.share)} ${RANGE_AGO[range]}`;
+  const people = peopleArriving(h.identities, range, now);
+  if (people === null) return `${head}: ${signed(gained)} accounts on independent hosts.`;
+  const arrived = `about ${formatCount(people)} ${people === 1 ? 'person' : 'people'} signed up on independent hosts or moved to one`;
+  // the relay's count far past the people: say so, so the rise doesn't read as a crowd arriving
+  if (gained > people * 2 && gained - people >= 500) return `${head}. ${arrived}. the relay counts ${formatCount(gained)} more accounts on them, most of them made by scripts or ones it hadn't counted before.`;
+  return `${head}. ${arrived}.`;
 }
 
 /** The share of a day's active accounts that wrote from independent hosts, or null without everyone's count. */
@@ -255,7 +313,8 @@ export function livelyBars(list: NonNullable<HostHistory['liveliest']>['hosts'])
     perSecond: h.active,
     count: h.active,
     value: `${compactCount(h.active)} active`,
-    ...(h.accounts ? { sub: `${formatIndex(Math.min(100, (h.active / h.accounts) * 100))}% of its ${compactCount(h.accounts)} accounts` } : {}),
+    // more active than the relay's count of its accounts: the relay's count is short (seiran-beta.org lists 5,115 to its 173), so say that, not 100%
+    ...(h.accounts ? { sub: h.active > h.accounts ? `more than the ${compactCount(h.accounts)} accounts the relay counts for it` : `${formatIndex((h.active / h.accounts) * 100)}% of its ${compactCount(h.accounts)} accounts` } : {}),
   }));
 }
 
@@ -273,7 +332,7 @@ function renderActive(part: HTMLElement, h: HostHistory, drawBars: (list: HTMLEl
   if (card) card.hidden = days.length < 2;
   if (chart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
-    renderChart(chart, days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: activeShareOf(d) })), { label: 'active accounts off bluesky, by day', color: 'var(--weather-else)', format: pct, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime: dayFmt, stepMs: 86_400_000, fromZero: false });
+    renderChart(chart, projectLast(days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: activeShareOf(d) })), now, 86_400_000, { scale: false }), { label: 'active accounts off bluesky, by day', color: 'var(--weather-host-indep)', format: pct, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime: dayFmt, stepMs: 86_400_000, fromZero: false });
   }
   const lively = h.liveliest;
   const wrap = $(part, '[data-h-lively-wrap]');
@@ -317,7 +376,9 @@ export function renderHostDays(table: HTMLTableElement, days: HostDay[], now = D
       cell(d.active === null ? '–' : formatCount(d.active));
       cell(signed(d.change), d.change === null || d.change === 0 ? undefined : d.change > 0 ? 'up' : 'down');
       cell(d.joined === null ? '–' : d.joined === 0 ? '0' : `+${formatCount(d.joined)}`, d.joined ? 'up' : undefined);
-      cell(d.left === null ? '–' : d.left === 0 ? '0' : `−${formatCount(d.left)}`, d.left ? 'down' : undefined);
+      // today's gone quiet is every host not heard from yet today: it only settles once the day is over
+      if (d.day === today) cell('–');
+      else cell(d.left === null ? '–' : d.left === 0 ? '0' : `−${formatCount(d.left)}`, d.left ? 'down' : undefined);
       return tr;
     });
   body.replaceChildren(...rows);
@@ -357,11 +418,11 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   const pts = (v: (r: (typeof rows)[number]) => number): ChartPoint[] => [...lead, ...rows.map((r) => ({ t: r.t, v: v(r), ...(r.estimated ? { estimated: true } : {}) }))];
   const active = $(part, '[data-h-chart="active"]');
   const index = $(part, '[data-h-chart="index"]');
-  setText(part, '[data-h-headline]', shareHeadline(h, range));
+  setText(part, '[data-h-headline]', shareHeadline(h, range, now));
   const share = $(part, '[data-h-chart="share"]');
-  if (share) renderChart(share, pts((r) => r.share), { label: 'share of accounts off bluesky', color: 'var(--weather-else)', format: pct, formatTick: (v) => `${Number(v.toFixed(3))}%`, formatTime, stepMs: step, fromZero: false });
-  if (active) renderChart(active, pts((r) => r.active), { label: 'active pds hosts', color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
-  if (index) renderChart(index, pts((r) => r.index), { label: 'hosting diversity', color: 'var(--weather-else)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
+  if (share) renderChart(share, pts((r) => r.share), { label: 'share of accounts off bluesky', color: 'var(--weather-host-indep)', format: pct, formatTick: (v) => `${Number(v.toFixed(3))}%`, formatTime, stepMs: step, fromZero: false });
+  if (active) renderChart(active, pts((r) => r.active), { label: 'pds hosts online', color: 'var(--weather-host-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
+  if (index) renderChart(index, pts((r) => r.index), { label: 'hosting diversity', color: 'var(--weather-host-indep)', format: formatIndex, formatTick: (v) => String(Number(v.toFixed(2))), formatTime, stepMs: step });
 
   renderActive(part, h, drawBars, now);
 
@@ -420,12 +481,39 @@ export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, d
 
 // ---------- the identity tiles: new arrivals (with air quality), migration winds ----------
 
-/** "today so far", "yesterday" or the day, for the identity tiles' asides. */
-export function identityDayWords(day: string, now = Date.now()): string {
+/**
+ * When today's UTC day began, in the reader's own time ("7 pm yesterday", "9 am"), or null
+ * where that's midnight anyway. The PLC directory's days are UTC, and the almanac's "today"
+ * is the reader's: without this, a reader in New York sees two "todays" five hours apart.
+ */
+export function utcDayStartWords(now = Date.now(), tz?: string): string | null {
+  const start = Math.floor(now / 86_400_000) * 86_400_000;
+  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(new Date(start)).toLowerCase().replace(':00', '');
+  if (clock === '12 am') return null;
+  const dayOf = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(ms));
+  return dayOf(start) < dayOf(now) ? `${clock} yesterday` : clock;
+}
+
+/** "today so far", "yesterday" or the day, for the identity tiles' asides; today says when it began, in the reader's time. */
+export function identityDayWords(day: string, now = Date.now(), tz?: string): string {
   const today = new Date(now).toISOString().slice(0, 10);
-  if (day === today) return 'today so far (utc)';
+  if (day === today) {
+    const since = utcDayStartWords(now, tz);
+    return since ? `since ${since}, your time` : 'today so far (utc)';
+  }
   if (day === new Date(now - 86_400_000).toISOString().slice(0, 10)) return 'yesterday (utc)';
   return dayWords(day);
+}
+
+/** "today" (or "since 7 pm yesterday", away from UTC), "yesterday" or "on tue, nov 10": when a single UTC day was, to start a sentence with. */
+export function identityWhen(day: string, now = Date.now(), tz?: string): string {
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (day === today) {
+    const since = utcDayStartWords(now, tz);
+    return since ? `since ${since}` : 'today';
+  }
+  if (day === new Date(now - 86_400_000).toISOString().slice(0, 10)) return 'yesterday';
+  return `on ${dayWords(day)}`;
 }
 
 /** How many of the PLC directory's days each range adds up: its UTC days, today's so far. */
@@ -447,8 +535,11 @@ export function identityViewWords(view: IdentityDay[], range: HostRange, now = D
   if (!first) return '';
   if (range === 'day') return identityDayWords(first.day, now);
   const from = new Date(now - (IDENTITY_SPAN[range] - 1) * 86_400_000).toISOString().slice(0, 10);
-  return first.day > from ? `since ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${first.day}T00:00:00Z`)).toLowerCase()} (utc)` : `${WINDOW_INFO[range].words} (utc)`;
+  return first.day > from ? `since ${shortDay(first.day)} (utc)` : `${WINDOW_INFO[range].words} (utc)`;
 }
+
+/** "oct 28": a UTC day without its weekday, for "since …". */
+const shortDay = (day: string) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`)).toLowerCase();
 
 /** Hosts by name, added up over days, busiest first. */
 function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>, top = HOST_LIST_TOP): Array<{ hostname: string; accounts: number }> {
@@ -482,12 +573,31 @@ function mergeScripted(lists: ScriptedHost[][]): ScriptedHost[] {
   return [...by.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, 10);
 }
 
-/** A view's days added up into one: the latest day's date, every count summed, the bulk and scripted hosts and destinations merged. */
+/** The moves over days, each pair of hosts added up, the most first. */
+function mergeMoves(lists: Move[][]): Move[] {
+  const by = new Map<string, Move>();
+  for (const list of lists)
+    for (const m of list) {
+      const key = `${m.from} ${m.to}`;
+      const was = by.get(key);
+      by.set(key, was ? { ...was, accounts: was.accounts + m.accounts } : { ...m });
+    }
+  return [...by.values()].sort((a, b) => b.accounts - a.accounts || (`${a.from} ${a.to}` < `${b.from} ${b.to}` ? -1 : 1));
+}
+
+/** A view's days added up into one: the latest day's date, every count summed, the bulk and scripted hosts, destinations and moves merged. */
 export function sumDays(view: IdentityDay[]): IdentityDay | null {
   const last = view[view.length - 1];
   if (!last) return null;
   const sums = Object.fromEntries(IDENTITY_SUMS.map((k) => [k, view.reduce((t, d) => t + d[k], 0)])) as Record<(typeof IDENTITY_SUMS)[number], number>;
-  return { day: last.day, ...sums, bulk: mergeBulk(view.map((d) => d.bulk)), scripted: mergeScripted(view.map((d) => d.scripted)), destinations: mergeHosts(view.map((d) => d.destinations), 10) };
+  return {
+    day: last.day,
+    ...sums,
+    bulk: mergeBulk(view.map((d) => d.bulk)),
+    scripted: mergeScripted(view.map((d) => d.scripted)),
+    destinations: mergeHosts(view.map((d) => d.destinations), 10),
+    moves: mergeMoves(view.map((d) => d.moves)),
+  };
 }
 
 /** New accounts on independent hosts, less the ones made in bulk, the identities with no handle and the scripted ones: people signing up somewhere else. */
@@ -515,12 +625,50 @@ export function oddsWords(days: IdentityDay[]): string {
   const listed = week.reduce((t, d) => t + d.createdBluesky + independentOf(d), 0);
   if (indep === 0 || listed === 0) return '';
   if (week.length === 1) return '';
-  return `over the last ${week.length} days: 1 in ${formatCount(Math.max(1, Math.round(listed / indep)))} started outside bluesky.`;
+  return `over the last ${week.length} days, ${formatIndex((indep / listed) * 100)}% did.`;
 }
 
 /** Where movers went over the given days, busiest first, adding up each day's top destinations. */
 export function destinationsOf(days: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
   return mergeHosts(days.map((d) => d.destinations));
+}
+
+/** A destination this many movers took in one day, most of its movers in the range, is one batch: someone moving a whole host, not a crowd. */
+export const BATCH_MOVERS = 50;
+
+/**
+ * When most of a destination's movers over the days came on one day, that day: "all on nov 6",
+ * "290 on nov 6". A whole host moving house reads as a crowd otherwise. Null when they came spread out.
+ */
+export function batchWords(host: string, total: number, days: IdentityDay[]): string | null {
+  let best: { day: string; accounts: number } | null = null;
+  for (const d of days) {
+    const got = d.destinations.find((x) => x.hostname === host)?.accounts ?? 0;
+    if (!best || got > best.accounts) best = { day: d.day, accounts: got };
+  }
+  if (!best || best.accounts < BATCH_MOVERS || best.accounts < total * 0.9 || days.length < 2) return null;
+  return best.accounts === total ? `all on ${shortDay(best.day)}, in one go` : `${formatCount(best.accounts)} on ${shortDay(best.day)}, in one go`;
+}
+
+/**
+ * The independent hosts movers left over the given days, for Bluesky's hosts or for another
+ * independent one, busiest first. Movers out of Bluesky's own hosts aren't here: they're the
+ * tile's first number.
+ */
+export function originsOf(days: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
+  return mergeHosts(days.map((d) => d.moves.filter((m) => m.from !== BLUESKY).map((m) => ({ hostname: m.from, accounts: m.accounts }))));
+}
+
+/**
+ * Which days the origins cover, in words: the days shown, or since the first one the station
+ * kept where movers came from, when that's later (a day with moves and no pairs wasn't kept).
+ */
+export function originsSpan(days: IdentityDay[]): string {
+  const first = days.findIndex((d) => d.moves.length > 0);
+  if (first < 0) return '';
+  if (days.length === 1) return 'today';
+  const unkept = days.slice(0, first).some((d) => d.movedOut + d.movedIn + d.movedBetween > 0);
+  return unkept ? `since ${shortDay(days[first]!.day)}` : `over the last ${days.length} days`;
 }
 
 /**
@@ -552,7 +700,7 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
     report,
     '[data-p-own]',
     listed > 0
-      ? `${formatIndex((indep / listed) * 100)}% started outside bluesky, and ${formatCount(d.createdCustomHandle)} with a handle on their own domain.`
+      ? `${formatIndex((indep / listed) * 100)}% started on an independent host, and ${formatCount(d.createdCustomHandle)} with a handle on their own domain.`
       : 'nobody has signed up yet.',
   );
   const card = $(report, '[data-p-arrivals-card]');
@@ -561,7 +709,8 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   if (chart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
     const shareOf = (x: IdentityDay) => (x.createdBluesky + independentOf(x) > 0 ? (independentOf(x) / (x.createdBluesky + independentOf(x))) * 100 : null);
-    renderChart(chart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: shareOf(x) })), { label: 'new accounts starting outside bluesky each day, as a share', color: 'var(--weather-else)', format: (v) => `${formatIndex(v)}%`, formatTick: (v) => `${Number(v.toFixed(1))}%`, formatTime: dayFmt, stepMs: 86_400_000 });
+    // today is still going: a share needs no scaling, only marking as so far
+    renderChart(chart, projectLast(days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: shareOf(x) })), now, 86_400_000, { scale: false }), { label: 'new accounts starting on independent hosts each day, as a share', color: 'var(--weather-host-indep)', format: (v) => `${formatIndex(v)}%`, formatTick: (v) => `${Number(v.toFixed(1))}%`, formatTime: dayFmt, stepMs: 86_400_000 });
   }
   const odds = single ? oddsWords(days) : '';
   const oddsLine = $(report, '[data-p-odds]');
@@ -581,29 +730,54 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
   if (windsCard) windsCard.hidden = days.length < 2;
   if (windsChart && days.length >= 2) {
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
-    renderChart(windsChart, days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.movedOut })), { label: 'accounts moving out of bluesky each day', color: 'var(--weather-bsky)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
+    // today so far, drawn out to where it's on pace to end, as the sign-ups are, so it doesn't read as a drop
+    renderChart(windsChart, projectLast(days.map((x) => ({ t: Date.parse(`${x.day}T00:00:00Z`), v: x.movedOut })), now, 86_400_000), { label: 'accounts moving out of bluesky each day', color: 'var(--weather-host-indep)', format: formatCount, formatTime: dayFmt, stepMs: 86_400_000 });
   }
-  setText(report, '[data-p-week]', single && week.length > 1 ? `over the last ${week.length} days: ${plural(sum('movedOut'), 'account')} moved out, ${formatCount(sum('movedIn'))} moved back.` : '');
+  // all three kinds of move, so the destinations below add up: they take in moves between hosts too
+  const between = week.reduce((t, x) => t + x.movedBetween, 0);
+  setText(
+    report,
+    '[data-p-week]',
+    single && week.length > 1 ? `over the last ${week.length} days: ${plural(sum('movedOut'), 'account')} moved out of bluesky, ${formatCount(sum('movedIn'))} moved back, and ${formatCount(between)} moved from one independent host to another.` : '',
+  );
   // where they went: a day's movers are few, so a day shows the last week's
   const movers = single ? week : view;
   const went = destinationsOf(movers);
   const dest = $(report, '[data-p-dest-wrap]');
   if (dest) dest.hidden = went.length === 0 || !drawBars;
   const destList = $(report, '[data-p-dest]');
-  if (destList && drawBars && went.length) drawBars(destList, went.map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover') })));
-  setText(report, '[data-p-dest-note]', movers.length > 1 ? `over the last ${movers.length} days. tap one to see how it's grown.` : `today. tap one to see how it's grown.`);
+  if (destList && drawBars && went.length) {
+    drawBars(
+      destList,
+      went.map((h) => {
+        const batch = batchWords(h.hostname, h.accounts, movers);
+        return { label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover'), ...(batch ? { sub: batch } : {}) };
+      }),
+    );
+  }
+  setText(report, '[data-p-dest-note]', `out of bluesky or from another host, ${movers.length > 1 ? `over the last ${movers.length} days` : identityWhen(movers[0]?.day ?? d.day, now)}. tap one to see how it's grown.`);
+  // and the independent hosts they left, when the station kept it and anyone did
+  const left = originsOf(movers);
+  const from = $(report, '[data-p-from-wrap]');
+  if (from) from.hidden = left.length === 0 || !drawBars;
+  const fromList = $(report, '[data-p-from]');
+  if (fromList && drawBars && left.length) drawBars(fromList, left.map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: plural(h.accounts, 'mover') })));
+  // the window goes in the heading, since it can be shorter than the tile's (the station only kept who left which host from nov 10)
+  setText(report, '[data-p-from-span]', left.length ? originsSpan(movers) : '');
+  setText(report, '[data-p-from-note]', left.length ? 'accounts that left independent hosts, for bluesky or another host. tap one to see where they went.' : '');
 
   // air quality
   const smog = smogOf(d);
   setText(report, '[data-p-smog-level]', smog.level);
-  // against every sign-up, not the arrivals above, so the share doesn't read as theirs
-  const all = d.createdBluesky + d.createdIndependent + d.createdUnlisted;
+  // identities, not sign-ups: nobody relays what's on those hosts, so they're counted apart from the arrivals, and set against them
+  const when = single ? identityWhen(d.day, now) : `over ${WINDOW_INFO[range].words}`;
+  const per = listed > 0 ? Math.round(d.createdUnlisted / listed) : 0;
   setText(
     report,
     '[data-p-smog-words]',
     d.createdUnlisted === 0
-      ? 'every sign-up went somewhere the relay listens.'
-      : `${formatIndex(smog.share)}% of all ${plural(all, 'sign-up')} went to hosts no relay carries, so they're not in the new arrivals above.`,
+      ? 'every new identity went somewhere a relay listens.'
+      : `${when}, ${plural(d.createdUnlisted, 'new identity', 'new identities')} pointed at hosts no relay carries${per >= 2 ? `: ${formatCount(per)} for every new account above` : ''}. nobody sees what's on them, so they're not counted as sign-ups.`,
   );
-  setText(report, '[data-p-deleted]', `${plural(d.deleted, 'account')} deleted ${d.deleted === 1 ? 'itself' : 'themselves'}.`);
+  setText(report, '[data-p-deleted]', d.deleted === 0 ? '' : `${when}, ${plural(d.deleted, 'account')} deleted ${d.deleted === 1 ? 'itself' : 'themselves'}.`);
 }

@@ -175,14 +175,27 @@ After each census the station also reads the PLC directory's log of identity cha
 row of `atmosphere_plc_day` up to date: new accounts by where they signed up, new accounts
 with a handle on their own domain, the ones made in bulk and the ones with no handle,
 accounts moving out of Bluesky's hosts, back in and between independent hosts, and
-deletions; and today's rows of `atmosphere_host_arrival_day`, who arrived on each
-independent host (the columns are under "Backfilling hosts" below). It counts exactly as
+deletions; today's rows of `atmosphere_host_arrival_day`, who arrived on each
+independent host; and today's rows of `atmosphere_host_move_day`, which host each mover
+left for which (the columns of both are under "Backfilling hosts" below). It counts exactly as
 the backfill does. A move needs to know where the account was
 before, so an account that names an independent host (or deletes itself), and wasn't seen
 earlier today, has its history read once. The log runs at about 250,000 operations a day,
 about 250 pages, so each poll reads a few dozen; on 2026-10-22 reading the day from midnight
 took 17 s and 137 MB. After a restart it reads today again from midnight UTC. A day the
 station was down across the end of isn't finished, and the backfill rewrites it.
+
+A move back to Bluesky's hosts is the one kind the log hides. Its operation names a Bluesky
+host, and so do the handle changes there: about 1,100 accounts a day (1,102 on 2026-11-09,
+none of which had moved). Reading every one's history to find the few that came from
+somewhere else isn't worth it, and one day Bluesky may shuffle millions of accounts between
+its own hosts. So the station asks its directory of who lives on which independent host
+(below, "Who's active on each host") first: an account the directory has on one, now naming
+a Bluesky host, has its history read, and the history decides. That costs nothing on a day
+nobody moves back. It's as good as the directory, which is read from the hosts once a week
+and kept up from this log while the station runs, but only saved at each read: after a
+restart it can miss an account that arrived on an independent host since then and went back.
+The writes of the moves fail on their own, so a missing table never holds up the day's row.
 
 ### Tangled's knots aren't hosts
 
@@ -244,6 +257,13 @@ has its whole history read to find where it was before. Pages and histories are 
 `plc-cache/` (git-ignored), so a stopped run picks up where it was and the real run reuses
 the dry run's reading. Days the station wrote itself are left alone unless `--overwrite`.
 
+It has no directory to ask about moves back to Bluesky's hosts (above), so it only sees one
+when the account did something else in the window first. `--moves-back` reads the history of
+every account that named a Bluesky host instead, about 1,100 more a day, and finds them all.
+Without it, a day the station counted live can come out of a backfill with a lower
+`moved_in` than it had, while its rows to `bluesky` in `atmosphere_host_move_day` stay (a
+backfill adds and rewrites rows, it never removes one).
+
 What it writes, for each day from `--from` to yesterday:
 
 - `atmosphere_hosts` (one row, as at 23:59:59Z) and `atmosphere_host_day` (a row per host),
@@ -283,6 +303,37 @@ What it writes, for each day from `--from` to yesterday:
   rules, since `bulkRun` only catches the obvious runs: a host caught making accounts in
   bulk in the last 30 days has none of its sign-ups counted as people, and a day of 100 or
   more sign-ups on a host after which it signed nobody up for 3 days isn't people either.
+- `atmosphere_host_move_day`: which host each mover left for which that day, a row per pair
+  of hosts (`from_host`, `to_host`, `accounts`). `bluesky` is any of Bluesky's own hosts,
+  which count as one place, as they do everywhere else. `atmosphere_plc_day` says how many
+  moved and where to; this says where from, so "how many of today's movers left
+  pds.tophhie.cloud?" has an answer (two on 2026-11-09, one to blacksky.app and one to
+  eurosky.social). A day's rows add up to its `moved_out + moved_in + moved_between`, less
+  any move to or from a host whose name isn't a plain hostname: on 2026-11-09, 13 pairs for
+  32 moves. The run prints the busiest pairs at the end as a check. Always rewritten, like
+  the arrivals. The website reads the table directly: each day's pairs on
+  `/api/weather-history` (`hosts.identities[].moves`), and one host's own arrivals and
+  departures on `/api/weather-history?host=`.
+  Two stretches of the log aren't what they look like, checked against plc.directory's own
+  export on 2026-11-12:
+
+  - **Oct 8 to Oct 18: a scripted wave on Bluesky's hosts.** `created_bluesky` runs about
+    58,000 a day, then about 18,000 from Oct 19 on. In hours sampled from Oct 8 to Oct 18, 54
+    to 74% of new accounts on `*.host.bsky.network` had handles from the Faker library, a
+    first name and a word of lorem ipsum (`penelope_explicabo.bsky.social`); by 23:00 UTC on
+    Oct 18 there were none. Without them Oct 18 had the same rate as Oct 19 and Nov 11. The
+    rules here only catch scripts on independent hosts, so these are counted; the website
+    shades the wave on sign-ups over time and stars what takes it in
+    (`website/src/scripts/weather-signups.ts` SIGNUP_WAVES).
+  - **Oct 30 to Nov 4: clear air.** `created_unlisted` fell from about 245,000 a day to 200
+    or 300, and came back at 251,424 on Nov 5. Nearly all of it is one host, `pds.trump.com`
+    (about 9,100 an hour in the hours sampled), which paused from about 20:00 UTC on Oct 29.
+
+  The relay's own count of a host's accounts can be far off either way: on 2026-11-12
+  nacg.club went from 5,850 to 20,019 overnight with nobody arriving in the log, and
+  seiran-beta.org lists 5,115 accounts of its own (`listRepos`) where the relay counts 173,
+  which is why its liveliest row has more active accounts than accounts.
+
   The sign-ups tile goes by the same rules (`created_scripted` on each day, and the hosts). A host
   only counts as new if it had 25 or fewer accounts when the station first saw it, or at
   least half its accounts arrived in the range. Checked on 2026-10-31 against the log from
@@ -374,6 +425,7 @@ detail of old data never makes the report less accurate.
 | `atmosphere_host_day`: each active host, each day | forever | ~60 MB a year |
 | `atmosphere_plc_day`: each day's identity changes, from the PLC log | forever | tiny |
 | `atmosphere_host_arrival_day`: who arrived on each independent host, each day | forever | ~5 MB a year |
+| `atmosphere_host_move_day`: which host each mover left for which, each day | forever | tiny |
 | `atmosphere_host_kind`: which independent hosts are Tangled's knots, asked weekly | forever | tiny |
 | `atmosphere_host_active_day`: each independent host's active accounts, a sketch a day | forever | ~150 MB a year |
 
@@ -647,7 +699,7 @@ src/replay.js      recount and rewrite minutes from Jetstream's history (repairs
 src/archive.js     backfill minutes from Jetstream v2's archive (older history)
 src/hosts.js       the PDS hosts, from the relay's list every 10 minutes, and their rows
 src/plc.js         reading the PLC directory's log of identity changes
-src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day
+src/plc-watch.js   today's identity changes from that log, live, into atmosphere_plc_day (and who arrived where, and who left which host for which)
 src/knots.js       which hosts are Tangled's knots (git servers, not counted), into atmosphere_host_kind
 src/host-activity.js  who's active on each independent host, a sketch a day, into atmosphere_host_active_day
 src/backfill-host-activity.js  the same, for days before the station counted, from the archive

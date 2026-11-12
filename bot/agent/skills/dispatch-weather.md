@@ -66,9 +66,10 @@ out most, and leave the rest to the report.
    fast, or the hosting diversity moving (`overTheWeek`). One sentence, one number.
    The hosting diversity is its own scale (about 7.5 in October 2026); never put it
    next to the diversity index as if they compare. Days marked `estimated` came from a
-   backfill: don't make news of their day-to-day wiggles. Air quality (sign-ups to
-   hosts nobody relays) is dust, not the network's weather: mention it only if it
-   changed a lot, and never name a host as spam. For more than the week has, call
+   backfill: don't make news of their day-to-day wiggles. Air quality (new identities
+   pointing at hosts nobody relays, not sign-ups: mostly scripts) is dust, not the
+   network's weather: mention it only if it changed a lot, never call those identities
+   sign-ups or people, and never name a host as spam. For more than the week has, call
    read_weather with `report: "hosts"`.
 5. **The outlook**, only when it says something worth knowing. See below.
 6. **Point to the full report**, at the end, in a few words of your own: the hours,

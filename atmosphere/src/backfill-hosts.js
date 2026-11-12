@@ -6,6 +6,7 @@
 //
 //   node --env-file=.env src/backfill-hosts.js --from 2026-10-08 --dry-run
 //   node --env-file=.env src/backfill-hosts.js --from 2026-10-08
+//   node --env-file=.env src/backfill-hosts.js --from 2026-10-08 --moves-back   (reads far more histories; below)
 //
 // How. The relay's list of hosts only says how things stand now (accounts per host,
 // today), so the run starts there and walks back: an account created on day D wasn't on
@@ -39,11 +40,18 @@
 // ones), how many of the new accounts on listed hosts started with a handle on their own
 // domain (not one their host hands out), the new accounts on independent hosts made in bulk (bulkRun), the
 // new identities there with no handle, accounts moving out of Bluesky's hosts, back in, and between independent
-// hosts, and deletions, and the independent hosts accounts moved to; and in atmosphere_host_arrival_day, who
-// arrived on each independent host (arrivalRows). These are counted, not estimated.
+// hosts, and deletions, and the independent hosts accounts moved to; in atmosphere_host_arrival_day, who
+// arrived on each independent host (arrivalRows); and in atmosphere_host_move_day, which host each mover
+// left for which (moveRows). These are counted, not estimated.
 //
-// Days the station already wrote itself are left alone unless --overwrite (the identity weather
-// and the arrivals are always rewritten: they're counted, so a recount only fills in). The log pages
+// A move back to Bluesky's hosts is the one kind the log hides: the operation names a Bluesky host, as a
+// handle change there does, and only the account's history says it lived somewhere else. Reading every such
+// history is about 1,100 a day (2026-11-09, when none of them turned out to be a move), so the run only does it
+// with --moves-back. Without it, a move back is counted when the account did something else in the window
+// first. The station's own count of today has a shortcut the backfill can't use (plc-watch.js).
+//
+// Days the station already wrote itself are left alone unless --overwrite (the identity weather,
+// the arrivals and the moves are always rewritten: they're counted, so a recount only fills in). The log pages
 // and the audit answers are cached in --cache (default ./plc-cache), so a run that stops
 // picks up where it got to, and a dry run's reading is reused by the real one. About
 // 2,000 export pages for two weeks, plus an audit per identity that moved or changed
@@ -82,7 +90,7 @@ export function parseArgs(argv, nowMs = Date.now()) {
   if ((startOfDay(today) - startOfDay(from)) / DAY_MS > MAX_DAYS) throw new Error(`at most ${MAX_DAYS} days in one run`);
   const concurrency = Number(value('--concurrency') ?? 4);
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16) throw new Error('--concurrency must be 1 to 16');
-  return { from, today, dryRun: argv.includes('--dry-run'), overwrite: argv.includes('--overwrite'), cache: value('--cache') ?? 'plc-cache', concurrency, relay: value('--relay') ?? DEFAULT_RELAY };
+  return { from, today, dryRun: argv.includes('--dry-run'), overwrite: argv.includes('--overwrite'), movesBack: argv.includes('--moves-back'), cache: value('--cache') ?? 'plc-cache', concurrency, relay: value('--relay') ?? DEFAULT_RELAY };
 }
 
 /** The days of the run, oldest first: --from to yesterday. */
@@ -92,7 +100,7 @@ export function daysOf(from, today) {
   return days;
 }
 
-const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, created_unnamed: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {}, arrivals: {} });
+const emptySignals = () => ({ ops: 0, created_bluesky: 0, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, created_unnamed: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {}, arrivals: {}, moves: {} });
 
 /** How many destinations (and hosts making accounts in bulk) a day's row names. */
 export const TOP_DESTINATIONS = 10;
@@ -226,14 +234,36 @@ export function arrivalRows(day, signals) {
     });
 }
 
+// ---------- which host each mover left for which ----------
+// The day's totals say how many accounts moved out of Bluesky's hosts, back in and between
+// independent ones, and `destinations` where they went. Neither says where they came from, so
+// "how many of today's movers left pds.tophhie.cloud?" had no answer. Each move is kept as a pair:
+// the host it left and the host it went to, with Bluesky's own hosts as one place (BLUESKY), the
+// way they count everywhere else. So a day's pairs add up to moved_out + moved_in + moved_between,
+// less any move to or from a host whose name isn't a plain hostname.
+
+/** Bluesky's own hosts, as one place, where a move names the host it left or went to. Not a hostname: it has no dot. */
+export const BLUESKY = 'bluesky';
+
+/**
+ * A day's atmosphere_host_move_day rows: how many accounts moved from each host to each other
+ * (`from_host`, `to_host`: an independent host's name, or BLUESKY), the most first.
+ */
+export function moveRows(day, signals) {
+  const rows = [];
+  for (const [from_host, went] of Object.entries(signals.moves ?? {})) for (const [to_host, accounts] of Object.entries(went)) rows.push({ day, from_host, to_host, accounts });
+  return rows.sort((a, b) => b.accounts - a.accounts || (a.from_host !== b.from_host ? (a.from_host < b.from_host ? -1 : 1) : a.to_host < b.to_host ? -1 : 1));
+}
+
 /**
  * A day's atmosphere_plc_day row: its signals, with `destinations` (independent hosts
  * accounts moved to, out of Bluesky's hosts or from another independent one, by count)
  * and `bulk_hosts` (independent hosts that made accounts in bulk: how many, in how many
  * runs, over how many seconds) cut to the TOP_DESTINATIONS busiest. Who arrived on each
- * host goes in its own rows (arrivalRows).
+ * host goes in its own rows (arrivalRows), and so does which host each mover left for which
+ * (moveRows).
  */
-export function plcRow(day, { arrivals, ...signals }) {
+export function plcRow(day, { arrivals, moves, ...signals }) {
   const destinations = Object.entries(signals.destinations ?? {})
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, TOP_DESTINATIONS)
@@ -252,10 +282,16 @@ export function plcRow(day, { arrivals, ...signals }) {
  * walk back, never written).
  */
 export class PlcHistory {
-  constructor({ from, days, relayHosts }) {
+  /**
+   * `livedOn(did)`: the independent host the station's directory has an account on, or null
+   * (host-activity.js). With it, an account that names one of Bluesky's hosts while the directory
+   * has it elsewhere has its history read, so a move back to Bluesky's hosts is seen (needsAudit).
+   */
+  constructor({ from, days, relayHosts, livedOn = null }) {
     this.fromMs = startOfDay(from);
     this.days = days;
     this.relayHosts = relayHosts;
+    this.livedOn = livedOn;
     this.hosts = [];
     this.hostIndex = new Map();
     this.dids = new Map();
@@ -362,8 +398,16 @@ export class PlcHistory {
     if (a === 'bluesky' && b === 'independent') s.moved_out++;
     else if (a === 'independent' && b === 'bluesky') s.moved_in++;
     else if (a === 'independent' && b === 'independent') s.moved_between++;
+    else return;
+    // which host it left for which, Bluesky's own as one place (moveRows)
+    const left = a === 'bluesky' ? BLUESKY : this.hosts[from];
+    const went = b === 'bluesky' ? BLUESKY : this.hosts[to];
+    if ((left === BLUESKY || isHostname(left)) && (went === BLUESKY || isHostname(went))) {
+      const pairs = (s.moves[left] ??= {});
+      pairs[went] = (pairs[went] ?? 0) + 1;
+    }
     // where they went: an independent host, out of Bluesky's or from another
-    if (b === 'independent' && (a === 'bluesky' || a === 'independent')) {
+    if (b === 'independent') {
       const host = this.hosts[to];
       if (isHostname(host)) {
         s.destinations[host] = (s.destinations[host] ?? 0) + 1;
@@ -411,6 +455,9 @@ export class PlcHistory {
       // created on a host nobody relays: nothing to place, unless it moves to one later
       if (entry.genesis && (host === UNLISTED || host === NONE)) return;
       rec = { start: entry.genesis ? NONE : null, events: [] };
+      // it names one of Bluesky's hosts and wasn't just made: a move back in only if it lived on an
+      // independent host until now. The log doesn't say here; the station's directory does
+      if (!entry.genesis && this.livedOn && this.sideOfIndex(host) === 'bluesky' && this.livedOn(entry.did)) rec.audit = true;
       this.dids.set(entry.did, rec);
     } else {
       const last = rec.events.length ? rec.events[rec.events.length - 1] : rec.start;
@@ -421,18 +468,22 @@ export class PlcHistory {
 
   /**
    * Identities whose start is unknown and worth an audit: any operation names an
-   * independent host, or deletes it (to find which host it left).
+   * independent host, or deletes it (to find which host it left); or it named one of Bluesky's
+   * hosts while the station's directory had it on an independent one (`livedOn`). With
+   * `movesBack`, every one that names a Bluesky host: the only way to see every move back
+   * without a directory, and about 1,100 histories a day.
    */
-  needsAudit() {
+  needsAudit({ movesBack = false } = {}) {
     const out = [];
     for (const [did, rec] of this.dids) {
       if (rec.start !== null) continue;
-      for (let i = 1; i < rec.events.length; i += 2) {
-        if (rec.events[i] === NONE || this.sideOfIndex(rec.events[i]) === 'independent') {
-          out.push(did);
-          break;
-        }
+      let want = rec.audit === true;
+      for (let i = 1; !want && i < rec.events.length; i += 2) {
+        // no host at all: a tombstone
+        const side = this.sideOfIndex(rec.events[i]);
+        want = side === null || side === 'independent' || (movesBack && side === 'bluesky');
       }
+      if (want) out.push(did);
     }
     return out;
   }
@@ -696,8 +747,8 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   const pages = await readExport({ fetchImpl, from: args.from, untilMs: nowMs, cacheFile: exportCache, onEntry: (e) => history.add(e), log });
   log(`read ${history.seen.toLocaleString('en-US')} operations (${pages} new pages) in ${Math.round((Date.now() - started) / 1000)} s; ${history.dids.size.toLocaleString('en-US')} identities on listed hosts changed`);
 
-  const audit = history.needsAudit();
-  log(`auditing ${audit.length.toLocaleString('en-US')} identities that changed on an independent host before their first operation here`);
+  const audit = history.needsAudit({ movesBack: args.movesBack });
+  log(`auditing ${audit.length.toLocaleString('en-US')} identities that changed on an independent host before their first operation here${args.movesBack ? ", or named one of Bluesky's (--moves-back)" : ''}`);
   const a = await readAudits({ fetchImpl, dids: audit, cacheFile: path.join(args.cache, 'audit.ndjson'), concurrency: args.concurrency, onLog: (did, entries) => history.fromAudit(did, entries), log });
   log(`audited ${a.fetched.toLocaleString('en-US')} (${a.cached.toLocaleString('en-US')} from the cache)`);
   history.settle();
@@ -711,6 +762,7 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   const listed = census.length;
   const written = [];
   const arrived = new Map();
+  const moved = new Map();
   log('');
   log('day          active  indep   accounts elsewhere  diversity   new: bsky  indep  unlisted  own-domain  bulk  unnamed   moved: out  in  between   deleted');
   for (let d = 0; d < days.length; d++) {
@@ -724,6 +776,8 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
       for (const k of Object.keys(t)) t[k] += a[k];
       arrived.set(a.hostname, t);
     }
+    const moves = moveRows(day, s);
+    for (const m of moves) moved.set(`${m.from_host} -> ${m.to_host}`, (moved.get(`${m.from_host} -> ${m.to_host}`) ?? 0) + m.accounts);
     log(
       `${day}  ${pad(rows.summary.active, 6)} ${pad(rows.summary.independent, 6)}  ${pad(rows.summary.accounts.independent.toLocaleString('en-US'), 18)}  ${pad(rows.summary.diversity.index, 9)}   ${pad(s.created_bluesky, 9)} ${pad(s.created_independent, 6)} ${pad(s.created_unlisted, 9)} ${pad(s.created_custom_handle, 11)} ${pad(s.created_bulk, 5)} ${pad(s.created_unnamed, 8)}   ${pad(s.moved_out, 10)} ${pad(s.moved_in, 3)} ${pad(s.moved_between, 8)}   ${pad(s.deleted, 7)}`,
     );
@@ -731,6 +785,7 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
     const live = skipBefore !== null && day >= skipBefore;
     await db.upsert('atmosphere_plc_day', 'day', [plc]);
     for (let i = 0; i < arrivals.length; i += WRITE_BATCH) await db.upsert('atmosphere_host_arrival_day', 'day,hostname', arrivals.slice(i, i + WRITE_BATCH));
+    for (let i = 0; i < moves.length; i += WRITE_BATCH) await db.upsert('atmosphere_host_move_day', 'day,from_host,to_host', moves.slice(i, i + WRITE_BATCH));
     if (live) continue;
     await db.upsert('atmosphere_hosts', 't', [rows.census]);
     for (let i = 0; i < rows.days.length; i += WRITE_BATCH) await db.upsert('atmosphere_host_day', 'day,hostname', rows.days.slice(i, i + WRITE_BATCH));
@@ -742,6 +797,13 @@ export async function backfill({ args, fetchImpl = (u, i) => fetch(u, i), db = n
   if (most.length) {
     log('people arriving on independent hosts over the run, the most (signed up, moved in; and made in bulk, unnamed):');
     for (const [host, t] of most) log(`  ${host.padEnd(36)} ${pad((t.signed_up + t.moved_in).toLocaleString('en-US'), 8)}  (${t.signed_up.toLocaleString('en-US')} + ${t.moved_in.toLocaleString('en-US')}; ${t.bulk.toLocaleString('en-US')} bulk, ${t.unnamed.toLocaleString('en-US')} unnamed)`);
+    log('');
+  }
+  // and another: the moves accounts made most, by the host they left and the one they went to
+  const routes = [...moved].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  if (routes.length) {
+    log(`accounts moving house over the run, by where from and where to (${BLUESKY}: any of Bluesky's own hosts), ${routes.length.toLocaleString('en-US')} pair(s), the most:`);
+    for (const [pair, accounts] of routes.slice(0, 25)) log(`  ${pair.padEnd(64)} ${pad(accounts.toLocaleString('en-US'), 6)}`);
     log('');
   }
   if (!db) log('dry run: nothing was written. run it again without --dry-run to write it (the cache makes that quick).');

@@ -18,6 +18,7 @@ import {
   weekStart,
   weekWords,
   WEEKLY_AFTER,
+  type SignupWave,
 } from '../src/scripts/weather-signups.js';
 
 // Sign-ups over time: new accounts over the whole history kept, against the stretch before.
@@ -26,7 +27,7 @@ const PAGE = readFileSync(resolve(process.cwd(), 'weather/index.html'), 'utf8');
 const MAIN = PAGE.slice(PAGE.indexOf('<main'), PAGE.indexOf('</main>') + '</main>'.length);
 const DAY = 86_400_000;
 
-const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 20000, createdBluesky: 1000, createdIndependent: 50, createdUnlisted: 200, createdCustomHandle: 20, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 2, deleted: 1, destinations: [], ...extra });
+const idDay = (day: string, extra: Partial<IdentityDay> = {}): IdentityDay => ({ day, ops: 20000, createdBluesky: 1000, createdIndependent: 50, createdUnlisted: 200, createdCustomHandle: 20, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 2, deleted: 1, destinations: [], moves: [], ...extra });
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 /** Every day from `from` to `to`, each as `of` makes it. */
 const daysFrom = (from: string, to: string, of: (day: string) => Partial<IdentityDay> = () => ({})) => {
@@ -73,11 +74,11 @@ describe('sign-ups over time: the numbers', () => {
   it('heads the tile with how the week went, or yesterday, or what came so far', () => {
     const stretches = stretchesOf(DAYS, AS_OF);
     expect(signupHeadline(stretches)).toBe('sign-ups are up 10% on the 7 days before: 8,120 new accounts over the last 7 days.');
-    expect(signupShareWords(stretches)).toBe('5.2% started outside bluesky over the last 7 days, up 0.4 points on the 7 days before.');
+    expect(signupShareWords(stretches)).toBe('5.2% started on an independent host over the last 7 days, up 0.4 points on the 7 days before.');
     // two days kept: yesterday against the day before
     const two = stretchesOf(daysFrom('2026-11-02', '2026-11-03', (d) => (d === '2026-11-03' ? { createdBluesky: 1200 } : {})), AS_OF);
     expect(signupHeadline(two)).toBe('sign-ups are up 19% on the day before: 1,250 new accounts yesterday.');
-    expect(signupShareWords(two)).toBe('4.0% started outside bluesky yesterday, down 0.8 points on the day before.');
+    expect(signupShareWords(two)).toBe('4.0% started on an independent host yesterday, down 0.8 points on the day before.');
     // one whole day: just what came
     expect(signupHeadline(stretchesOf([idDay('2026-11-03'), idDay('2026-11-04')], AS_OF))).toBe('1,050 new accounts since nov 3.');
     expect(signupHeadline(stretchesOf([idDay('2026-11-04')], AS_OF))).toBe('');
@@ -141,16 +142,19 @@ describe('sign-ups over time: the tile', () => {
 
   it('is a migration tile of its own, with poe to explain it', () => {
     expect(tile.dataset.topics).toBe('migration');
-    expect(tile.hidden).toBe(true);
+    // it holds its place while the year's days come, rather than popping in and pushing the page down
+    expect(tile.hidden).toBe(false);
+    expect(tile.dataset.state).toBe('loading');
     bindExplainers(report);
     expect(tile.querySelector<HTMLElement>('[data-poe-explain="signups"]')!.hidden).toBe(false);
   });
 
   it('stays hidden with a day or none, and fills in from the days', () => {
-    renderSignupHistory(tile, [idDay('2026-11-04')], AS_OF);
+    renderSignupHistory(tile, [idDay('2026-11-04')], AS_OF, []);
     expect(tile.hidden).toBe(true);
-    renderSignupHistory(tile, DAYS, AS_OF);
+    renderSignupHistory(tile, DAYS, AS_OF, []);
     expect(tile.hidden).toBe(false);
+    expect(tile.querySelector<HTMLElement>('[data-sh-note]')!.hidden).toBe(true);
     expect(text('[data-sh-since]')).toBe('since oct 8 (utc)');
     expect(text('[data-sh-headline]')).toBe('sign-ups are up 10% on the 7 days before: 8,120 new accounts over the last 7 days.');
     expect(text('[data-sh-value="day"]')).toBe('1,160');
@@ -168,6 +172,22 @@ describe('sign-ups over time: the tile', () => {
     const rows = [...tile.querySelectorAll('[data-sh-weeks] tbody tr')].map((r) => [...r.children].map((c) => c.textContent));
     expect(rows[0]).toEqual(['oct 28 to nov 3', '8,120', '↑ 10%up 10% on the 7 days before', '420', '↑ 20%up 20% on the 7 days before']);
     expect(rows.at(-1)).toEqual(['oct 8 to oct 13 (6 days)', '6,300', '–', '300', '–']);
+  });
+
+  it('shades a scripted wave on the chart of everyone, stars what takes it in, and says what it was', () => {
+    const wave: SignupWave = { from: '2026-09-01', to: '2026-10-12', label: 'scripted', words: 'a script made accounts until oct 12.' };
+    renderSignupHistory(tile, DAYS, AS_OF, [wave]);
+    expect(tile.querySelectorAll('[data-sh-chart="all"] .weather-chart__band')).toHaveLength(1);
+    expect(tile.querySelectorAll('[data-sh-chart="independent"] .weather-chart__band')).toHaveLength(0);
+    const note = tile.querySelector<HTMLElement>('[data-sh-note]')!;
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe('* a script made accounts until oct 12.');
+    // the 30 days take it in; the 7 days don't
+    expect(text('[data-sh-label="month"]')).toBe('since oct 8 *');
+    expect(text('[data-sh-label="week"]')).toBe('last 7 days');
+    // the weeks that take it in, and the one whose arrow compares with one that does
+    const labels = [...tile.querySelectorAll('[data-sh-weeks] tbody th')].map((th) => th.textContent);
+    expect(labels).toEqual(['oct 28 to nov 3', 'oct 21 to oct 27', 'oct 14 to oct 20 *', 'oct 8 to oct 13 (6 days) *']);
   });
 
   it('says week by week in the chart titles once it goes that way', () => {
@@ -192,6 +212,16 @@ describe('sign-ups over time: the tile', () => {
     expect(await fetchSignups(answer({ ...YEAR, range: 'month' }) as unknown as typeof fetch)).toBeNull();
     expect(await fetchSignups(answer({ ...YEAR, hosts: undefined }) as unknown as typeof fetch)).toBeNull();
     expect(await fetchSignups(answer(YEAR, false) as unknown as typeof fetch)).toBeNull();
+  });
+
+  it('goes when its first answer never comes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      initSignupHistory(report, (async () => ({ ok: false, json: async () => ({}) }) as Response) as unknown as typeof fetch);
+      await vi.waitFor(() => expect(tile.hidden).toBe(true));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('loads itself, and keeps what it showed when a refresh fails', async () => {

@@ -1842,6 +1842,15 @@ html[data-theme="dark"] .site-footer__sprout {
 }
 
 /* Diagonal stripes as well as a colour, so the two parts differ without colour too. */
+/* where accounts live: the ground's pair, so a host bar never reads as an app bar */
+.weather-ratio--hosts .weather-ratio__bsky {
+  background: var(--weather-host-bsky);
+}
+
+.weather-ratio--hosts .weather-ratio__else {
+  background: repeating-linear-gradient(135deg, var(--weather-host-indep) 0 4px, color-mix(in srgb, var(--weather-host-indep) 70%, transparent) 4px 7px);
+}
+
 .weather-ratio__else {
   background: repeating-linear-gradient(135deg, var(--weather-else) 0 4px, color-mix(in srgb, var(--weather-else) 70%, transparent) 4px 7px);
 }

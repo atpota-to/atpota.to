@@ -64,7 +64,7 @@ const hostWatch = createHostWatch({
   onCensus: async (census) => {
     if (hostWriter) {
       await hostWriter.write(census);
-      plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log, onEntry: hostActivity.onPlcEntry });
+      plcWatch ??= createPlcWatch({ census, upsert: rest.upsert, log, onEntry: hostActivity.onPlcEntry, livedOn: hostActivity.hostOf });
       await plcWatch.poll();
       await hostActivity.onCensus(census.hosts);
     }

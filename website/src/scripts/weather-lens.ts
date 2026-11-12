@@ -8,13 +8,18 @@
  *            bot writing a thousand records counts once), or new records
  *   unit     what a rate is per: a second, a minute, an hour or a day, or "total" for
  *            the counts themselves
+ *   compare  what every arrow is set against: the stretch right before (the default), or
+ *            the same stretch a cycle ago, where the network's own rhythm repeats (the same
+ *            minute or hour yesterday, the same 24 hours last week). A week and 30 days have
+ *            no cycle of their own, so there it's always the stretch before; the choice is
+ *            kept for when the window comes back
  *
  * Accounts don't scale with time (an hour has far fewer than 60 minutes' worth), so they
  * are never a rate: with accounts the unit stands aside, kept for when records come back.
  * On a chart or a grid, "total" means each point's own count (new records each hour); on
  * a single number, the window's.
  *
- * The lens lives in the address (?w=24h&m=accounts&u=hour), so a view can be shared, and
+ * The lens lives in the address (?w=24h&m=accounts&u=hour&vs=cycle), so a view can be shared, and
  * in this browser as the default for next time. The address wins.
  *
  * The tiles that keep their own times (today so far, the forecast, when the sky is
@@ -28,10 +33,30 @@ export type Window = 'now' | 'hour' | 'day' | 'week' | 'month';
 export type Measure = 'records' | 'accounts';
 export type Unit = 'second' | 'minute' | 'hour' | 'day' | 'total';
 export type RateUnit = Exclude<Unit, 'total'>;
+export type Compare = 'before' | 'cycle';
 
 export const WINDOWS: readonly Window[] = ['now', 'hour', 'day', 'week', 'month'];
 export const MEASURES: readonly Measure[] = ['records', 'accounts'];
 export const UNITS: readonly Unit[] = ['second', 'minute', 'hour', 'day', 'total'];
+export const COMPARES: readonly Compare[] = ['before', 'cycle'];
+
+/**
+ * What each window is set against: the stretch right before, or a cycle ago (null where it
+ * has no cycle of its own), in full for the tiles and short for the dock's buttons.
+ */
+export const EARLIER: Record<Window, { before: string; cycle: string | null; short: { before: string; cycle: string | null } }> = {
+  now: { before: 'the minute before', cycle: 'the same minute yesterday', short: { before: 'minute before', cycle: 'yesterday' } },
+  hour: { before: 'the hour before', cycle: 'the same hour yesterday', short: { before: 'hour before', cycle: 'yesterday' } },
+  day: { before: 'the 24 hours before', cycle: 'the same 24 hours last week', short: { before: 'day before', cycle: 'last week' } },
+  week: { before: 'the week before', cycle: null, short: { before: 'week before', cycle: null } },
+  month: { before: 'the 30 days before', cycle: null, short: { before: '30 days before', cycle: null } },
+};
+
+/** The comparison a lens actually makes: a cycle only where its window has one. */
+export const compareOf = (s: Pick<LensState, 'window' | 'compare'>): Compare => (s.compare === 'cycle' && EARLIER[s.window].cycle ? 'cycle' : 'before');
+
+/** "the hour before", "the same hour yesterday": what a window's arrows compare with. */
+export const earlierWords = (window: Window, compare: Compare): string => (compare === 'cycle' ? EARLIER[window].cycle : null) ?? EARLIER[window].before;
 
 export const WINDOW_INFO: Record<Window, { short: string; words: string; seconds: number }> = {
   now: { short: 'now', words: 'the last minute', seconds: 60 },
@@ -55,9 +80,10 @@ export interface LensState {
   window: Window;
   measure: Measure;
   unit: Unit;
+  compare: Compare;
 }
 
-export const LENS_DEFAULT: LensState = { window: 'hour', measure: 'accounts', unit: 'second' };
+export const LENS_DEFAULT: LensState = { window: 'hour', measure: 'accounts', unit: 'second', compare: 'before' };
 
 /** Where the lens is kept in this browser. */
 export const LENS_KEY = 'weather-lens';
@@ -67,6 +93,15 @@ export const LENS_KEY = 'weather-lens';
 /** The unit a rate is shown in: "total" falls back to `bucket` (a chart's step, or an hour for the tiles that keep their own times). */
 export function rateUnit(unit: Unit, bucket: RateUnit = 'hour'): RateUnit {
   return unit === 'total' ? bucket : unit;
+}
+
+/**
+ * The unit the patterns tiles count in (the almanac, the forecast, the heat map): the lens's,
+ * up to an hour. Their numbers are a minute's or an hour's pace, and a day of one ("19.1m new
+ * records a day, at 4:29 am") reads as nonsense.
+ */
+export function patternUnit(unit: Unit): RateUnit {
+  return unit === 'day' || unit === 'total' ? 'hour' : unit;
 }
 
 /** A rate a second, per `unit`. */
@@ -86,7 +121,7 @@ export const rateIn = (perSecond: number, unit: RateUnit) => formatAmount(perUni
  */
 export function wholeRate(perSecond: number, unit: RateUnit): string {
   const v = perUnit(perSecond, unit);
-  return v < 10_000 ? String(Math.round(v)) : compactCount(v);
+  return v < 10_000 ? Math.round(v).toLocaleString('en-US') : compactCount(v);
 }
 
 /** "new records a second", "new records an hour". */
@@ -115,6 +150,8 @@ export function lensFromSearch(search: string): Partial<LensState> {
   if (m === 'records' || m === 'accounts') out.measure = m;
   const u = pick(Object.fromEntries(UNITS.map((k) => [k, UNIT_INFO[k].param])) as Record<Unit, string>, q.get('u'));
   if (u) out.unit = u;
+  const vs = q.get('vs');
+  if (vs === 'before' || vs === 'cycle') out.compare = vs;
   return out;
 }
 
@@ -125,6 +162,7 @@ export function searchFor(lens: LensState, search = ''): string {
   set('w', WINDOW_PARAM[lens.window], WINDOW_PARAM[LENS_DEFAULT.window]);
   set('m', lens.measure, LENS_DEFAULT.measure);
   set('u', UNIT_INFO[lens.unit].param, UNIT_INFO[LENS_DEFAULT.unit].param);
+  set('vs', lens.compare, LENS_DEFAULT.compare);
   const s = q.toString();
   return s ? `?${s}` : '';
 }
@@ -138,6 +176,7 @@ function stored(): Partial<LensState> {
     if (WINDOWS.includes(data.window as Window)) out.window = data.window as Window;
     if (MEASURES.includes(data.measure as Measure)) out.measure = data.measure as Measure;
     if (UNITS.includes(data.unit as Unit)) out.unit = data.unit as Unit;
+    if (COMPARES.includes(data.compare as Compare)) out.compare = data.compare as Compare;
     return out;
   } catch {
     return {};
@@ -177,7 +216,7 @@ export function createLens(search = typeof location === 'undefined' ? '' : locat
     get: () => current,
     set(change) {
       const next = { ...current, ...change };
-      if (next.window === current.window && next.measure === current.measure && next.unit === current.unit) return;
+      if (next.window === current.window && next.measure === current.measure && next.unit === current.unit && next.compare === current.compare) return;
       const was = current;
       current = next;
       remember(current);
@@ -206,10 +245,22 @@ export function bindLens(root: HTMLElement, lens: Lens, opts: { unitAlone?: bool
   const windows = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-window]')];
   const measures = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-measure]')];
   const units = [...root.querySelectorAll<HTMLSelectElement>('[data-lens-unit]')];
+  const compares = [...root.querySelectorAll<HTMLButtonElement>('[data-lens-compare]')];
   const show = (s: LensState) => {
     root.dataset.window = s.window;
     root.dataset.measure = s.measure;
     root.dataset.unit = s.unit;
+    root.dataset.compare = compareOf(s);
+    // each button says what it compares with for this window; a window with no cycle hides the choice
+    for (const b of compares) {
+      const which = b.dataset.lensCompare as Compare;
+      const label = EARLIER[s.window].short[which];
+      if (label) b.textContent = label;
+      b.setAttribute('aria-label', `compare with ${earlierWords(s.window, which)}`);
+      b.setAttribute('aria-pressed', String(compareOf(s) === which));
+    }
+    const group = compares[0]?.closest<HTMLElement>('[data-lens-compare-group]');
+    if (group) group.hidden = !EARLIER[s.window].cycle;
     for (const b of windows) b.setAttribute('aria-pressed', String(b.dataset.lensWindow === s.window));
     for (const b of measures) b.setAttribute('aria-pressed', String(b.dataset.lensMeasure === s.measure));
     for (const unit of units) {
@@ -221,6 +272,7 @@ export function bindLens(root: HTMLElement, lens: Lens, opts: { unitAlone?: bool
   for (const b of windows) b.addEventListener('click', () => WINDOWS.includes(b.dataset.lensWindow as Window) && lens.set({ window: b.dataset.lensWindow as Window }));
   for (const b of measures) b.addEventListener('click', () => MEASURES.includes(b.dataset.lensMeasure as Measure) && lens.set({ measure: b.dataset.lensMeasure as Measure }));
   for (const unit of units) unit.addEventListener('change', () => UNITS.includes(unit.value as Unit) && lens.set({ unit: unit.value as Unit }));
+  for (const b of compares) b.addEventListener('click', () => COMPARES.includes(b.dataset.lensCompare as Compare) && lens.set({ compare: b.dataset.lensCompare as Compare }));
   root.addEventListener('click', (event) => {
     const cycle = (event.target as Element | null)?.closest?.<HTMLButtonElement>('[data-lens-cycle-unit]');
     if (cycle && !cycle.disabled && root.contains(cycle)) lens.set({ unit: nextUnit(lens.get().unit) });

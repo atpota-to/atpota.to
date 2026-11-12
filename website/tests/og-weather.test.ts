@@ -106,7 +106,7 @@ const HOSTS = {
 
 const day = (d: string, over: Partial<IdentityDay> = {}): IdentityDay => ({
   day: d, ops: 266_000, createdBluesky: 17_000, createdIndependent: 1000, createdUnlisted: 245_000, createdCustomHandle: 300,
-  createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], ...over,
+  createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], moves: [], ...over,
 });
 
 /** The day's hosts, as /api/weather-history?range=day has them: two censuses, and the plc directory's last eight days. */
@@ -158,7 +158,7 @@ function data(over: Partial<CardData> = {}): CardData {
   };
 }
 
-const EMPTY: CardData = { at: NOW, now: null, day: null, almanac: null };
+const EMPTY: CardData = { at: NOW, now: null, day: null, almanac: null, hour: null };
 
 /** A PNG's width and height, from its IHDR chunk. */
 function pngSize(bytes: Uint8Array): { width: number; height: number } {
@@ -194,13 +194,13 @@ describe('og weather: the page\'s words', () => {
     for (const index of [0, 7.43, 10, 60, 499, 900]) expect(hostingPosition(index), String(index)).toBe(weatherPage.hostingPosition(index));
     const week = hostHistory().identities.slice(-7);
     expect(destinationsOf(week)).toEqual(hostsPage.destinationsOf(week));
-    expect(`over the last 7 days: ${oddsOf(week)} started outside bluesky.`).toBe(hostsPage.oddsWords(week));
+    expect(`over the last 7 days, ${oddsOf(week)} did.`).toBe(hostsPage.oddsWords(week));
     expect(oddsOf(week.slice(-1))).toBeNull(); // a day is too few to say
     expect(hostsPage.oddsWords(week.slice(-1))).toBe('');
     // a batch on one host leaves the odds as they were, on both
     const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615 + 1062 + 300, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 }], createdScripted: 1062, createdUnnamed: 300 }];
     expect(oddsOf(batch)).toBe(oddsOf(week));
-    expect(`over the last 7 days: ${oddsOf(batch)} started outside bluesky.`).toBe(hostsPage.oddsWords(batch));
+    expect(`over the last 7 days, ${oddsOf(batch)} did.`).toBe(hostsPage.oddsWords(batch));
   });
 
   it('says usual the way the almanac does', () => {
@@ -292,6 +292,20 @@ describe('og weather: the cards', () => {
     expect(texts(drawCard('trend', data(), art))).toEqual(expect.arrayContaining(['busiest hour 450', '362']));
   });
 
+  it("leads the default card with the last hour's active accounts, as the page's header does, and records a second without them", async () => {
+    const art = await cardArt();
+    const crowd = (active: number, seconds: number) => ({ seconds, active, bluesky: active - 900, elsewhere: 1000, index: 2, share: 0.45, spread: 18 });
+    const hour = { accounts: { seconds: 3540, prevSeconds: 3600, total: crowd(224_186, 3540), prev: crowd(221_696, 3600), points: [], apps: [] } } as unknown as NonNullable<CardData['hour']>;
+    const words = texts(drawCard('forecast', data({ hour }), art));
+    expect(words).toEqual(expect.arrayContaining(['224k', 'accounts', 'active in the last hour, up 1% on the hour before', 'a light breeze.']));
+    expect(words).not.toContain('rec/sec');
+    // an hour before heard much less isn't one to compare with: just the hour
+    const thin = { accounts: { ...hour.accounts!, prev: crowd(221_696, 1200) } } as unknown as NonNullable<CardData['hour']>;
+    expect(texts(drawCard('forecast', data({ hour: thin }), art))).toEqual(expect.arrayContaining(['active in the last hour']));
+    // and without the hour's accounts, records a second as before
+    expect(texts(drawCard('forecast', data({ hour: null }), art))).toEqual(expect.arrayContaining(['362', 'rec/sec']));
+  });
+
   it('shows where the atmosphere lives, from the station\'s census', async () => {
     const art = await cardArt();
     const withHosts = data({ now: fromStation({ ...STATION, hosts: HOSTS }) });
@@ -327,7 +341,7 @@ describe('og weather: the cards', () => {
     // the last seven days: 30 a day for five, then 32 and today's 65 so far
     expect(words).toEqual(expect.arrayContaining([
       '247', 'moved out of bluesky', 'the last 7 days', '6 moved back in · 38 host to host',
-      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', '1 in 18 new accounts started outside bluesky', 'atpota.to/weather/migration',
+      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', '5.6% of new accounts started on an independent host', 'atpota.to/weather/migration',
     ]));
     expect(words.join(' ')).not.toContain('999');
     // just today, so far: no week to chart, and no odds
@@ -335,7 +349,7 @@ describe('og weather: the cards', () => {
     one.day!.hosts!.identities = one.day!.hosts!.identities.slice(-1);
     const today = texts(drawCard('migration', one, art));
     expect(today).toEqual(expect.arrayContaining(['65', 'today so far']));
-    expect(today.join(' ')).not.toContain('started outside bluesky');
+    expect(today.join(' ')).not.toContain('started on an independent host');
     // nobody went anywhere we know of: the moves have the card to themselves
     const nowhere = data();
     nowhere.day!.hosts!.identities = nowhere.day!.hosts!.identities.map((x) => ({ ...x, destinations: [] }));

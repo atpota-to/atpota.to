@@ -102,10 +102,12 @@ export function linkFacets(text) {
 // tag, and a reply that tags a third party is the ugliest thing a prompt
 // injection can talk the model into. The outbound gate rejects on this.
 //
-// The one place a tag is real is a dispatch announcement, which the operator
+// A tag is real in two places. A dispatch announcement, which the operator
 // approves by hand: the droplet resolves each handle when Poe proposes it, the
 // operator is shown who gets tagged, and only those accounts get a mention
-// facet (mentionFacets, dispatch.js checkMentions).
+// facet (mentionFacets, dispatch.js checkMentions). And a weather post, which can
+// tag only the apps' own accounts the droplet checked in code before Poe was
+// asked (gates/weather.js appAccountProblem, weather-posts.js appAccountsFor).
 const HANDLE_RE = /(^|[\s(\[{<"'])@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)/gi;
 
 /**

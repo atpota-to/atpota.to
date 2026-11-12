@@ -20,8 +20,9 @@
  *
  * And where the atmosphere lives: the PDS hosts, from the station's census of the relay's
  * list every 10 minutes (`hosts` on /api/atmosphere), with their history and the PLC
- * directory's day by day (sign-ups, accounts moving house, air quality; `hosts` on
- * /api/weather-history).
+ * directory's day by day (sign-ups, accounts moving house and which host each mover left
+ * for which, air quality; `hosts` on /api/weather-history). And one host on its own
+ * (/api/weather-history?host=): its accounts, and who moved in and away, by the other host.
  *
  * No credentials, and nothing here can write. The website checks every field first;
  * this checks again (app names are someone else's text) and does the arithmetic, so the
@@ -365,11 +366,14 @@ export function parseHistory(body: unknown) {
   const accCover = counts(acc, ["seconds", "prevSeconds"] as const);
   const accTotal = counts(acc?.total, ["active", "bluesky", "elsewhere"] as const);
   const accPrev = counts(acc?.prev, ["seconds", "active", "bluesky", "elsewhere"] as const);
+  // a range's diversity index is its average reading (minute, hour or day) when the server sends
+  // one, as the weather page shows it: the whole range's own index climbs with its length
+  const typical = (x: unknown) => (isRecord(x) && isRecord(x.typical) ? x.typical : x);
   if (acc && accCover && accTotal) {
     accounts = {
       ...accCover,
-      total: withIndex(acc?.total, accTotal),
-      ...(accPrev ? { prev: withIndex(acc.prev, accPrev) } : {}),
+      total: withIndex(isRecord(acc.typical) ? acc.typical : acc.total, accTotal),
+      ...(accPrev ? { prev: withIndex(typical(acc.prev), accPrev) } : {}),
       points: list(acc.points).flatMap((p) => {
         const t = isRecord(p) ? iso(p.t) : null;
         const c = counts(p, ["seconds", "active", "bluesky", "elsewhere"] as const);
@@ -626,13 +630,17 @@ function outlookOf(heat: NonNullable<Almanac["heatmap"]>, historyStart: string |
  * SIZE_BOUNDS: 0, 1, up to 10, 100, 1,000, 10,000, more) and the weather page names them.
  */
 const HOST_SIZES = ["empty", "justOnePerson", "household2to10", "village11to100", "town101to1000", "city1001to10000", "metropolis10000plus"] as const;
-/** The air quality: the share of a day's sign-ups that went to hosts no relay carries (website weather-hosts.ts SMOG_LEVELS). */
+/**
+ * The air quality: the share of a day's new identities in the plc directory that point at hosts no relay carries
+ * (website weather-hosts.ts SMOG_LEVELS). They're not sign-ups: nobody can see what's on those hosts, and nearly all
+ * of them lately are one script's (pds.trump.com, about 9,000 an hour, paused oct 30 to nov 4).
+ */
 const SMOG_LEVELS = [["thick smog", 90], ["smoggy", 50], ["hazy", 10]] as const;
 
 export function smogOf(created: { bluesky: number; independent: number; unlisted: number }) {
   const all = created.bluesky + created.independent + created.unlisted;
   const percent = all > 0 ? round1((100 * created.unlisted) / all) : 0;
-  return { level: SMOG_LEVELS.find(([, from]) => percent >= from)?.[0] ?? "clear", unlistedSignupsPercent: percent };
+  return { level: SMOG_LEVELS.find(([, from]) => percent >= from)?.[0] ?? "clear", unlistedIdentitiesPercent: percent };
 }
 
 /** Which way accounts are moving between Bluesky's hosts and independent ones. */
@@ -732,6 +740,72 @@ function mergeHosts(lists: Array<Array<{ hostname: string; accounts: number }>>)
   return [...by].map(([hostname, accounts]) => ({ hostname, accounts })).sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP);
 }
 
+/** Bluesky's own hosts, as one place, where a move names the host it left or went to (website server/weather-hosts.ts BLUESKY). */
+const BLUESKY = "bluesky";
+/** How many pairs of hosts a day, or a week, names. */
+const ROUTES_TOP = 25;
+
+/** A place a move names, checked: an independent host's name, or BLUESKY. */
+const placeOf = (x: unknown): string | null => (x === BLUESKY ? BLUESKY : hostnameOf(x));
+
+interface Route { from: string; to: string; accounts: number }
+interface LeftHost { hostname: string; accounts: number; wentTo: Array<{ to: string; accounts: number }> }
+
+const byAccounts = <T extends { accounts: number }>(name: (x: T) => string) => (a: T, b: T) => b.accounts - a.accounts || (name(a) < name(b) ? -1 : 1);
+
+/** A day's moves by the host left and the host gone to, checked, the most first. */
+const routesOf = (x: unknown): Route[] => list(x).flatMap((m) => {
+  if (!isRecord(m)) return [];
+  const from = placeOf(m.from);
+  const to = placeOf(m.to);
+  const n = count(m.accounts);
+  return from && to && from !== to && n ? [{ from, to, accounts: n }] : [];
+});
+
+/** The same over days, each pair's added up, the most first. */
+function mergeRoutes(lists: Route[][]): Route[] {
+  const by = new Map<string, Route>();
+  for (const l of lists) for (const r of l) {
+    const key = `${r.from} ${r.to}`;
+    const was = by.get(key);
+    by.set(key, was ? { ...was, accounts: was.accounts + r.accounts } : { ...r });
+  }
+  return [...by.values()].sort(byAccounts((r) => `${r.from} ${r.to}`));
+}
+
+/** The independent hosts accounts left, each with where its movers went, the most first. */
+function leftHosts(routes: Route[]): LeftHost[] {
+  const by = new Map<string, LeftHost>();
+  for (const r of routes) {
+    if (r.from === BLUESKY) continue;
+    const h = by.get(r.from) ?? { hostname: r.from, accounts: 0, wentTo: [] };
+    h.accounts += r.accounts;
+    h.wentTo.push({ to: r.to, accounts: r.accounts });
+    by.set(r.from, h);
+  }
+  return [...by.values()].map((h) => ({ ...h, wentTo: h.wentTo.sort(byAccounts((w) => w.to)) })).sort(byAccounts((h) => h.hostname)).slice(0, TOP);
+}
+
+/**
+ * Where movers came from, for a day or for days added up: `moved` is how many moves there were
+ * in all, `routes` the pairs the station has for them.
+ */
+function whereFrom(routes: Route[], moved: number): { routes?: Route[]; movedFrom?: LeftHost[]; routesCoverMoves?: number; routesNotKept?: true } {
+  // moves, and no pairs: from before the station kept which host each mover left. not known, never "none"
+  if (!routes.length) return moved > 0 ? { routesNotKept: true } : {};
+  const covered = routes.reduce((n, r) => n + r.accounts, 0);
+  return {
+    // every move by the host it left and the host it went to, the most first. "bluesky" is any of bluesky's own hosts,
+    // which count as one place: from "bluesky" is a move out of bluesky, to "bluesky" a move back
+    routes: routes.slice(0, ROUTES_TOP),
+    // the independent hosts accounts left, for bluesky's hosts or for another independent host, each with where its
+    // movers went. a host that isn't here had nobody leave that the station saw; to be sure of one host, ask for it by `host`
+    movedFrom: leftHosts(routes),
+    // how many of the moves the pairs account for, when it isn't all of them: the rest weren't kept by pair
+    ...(covered < moved ? { routesCoverMoves: covered } : {}),
+  };
+}
+
 /** A day of the PLC directory's log (atmosphere_plc_day), in the page's words. */
 function identityDayOf(x: unknown) {
   if (!isRecord(x) || typeof x.day !== "string" || !DAY_RE.test(x.day)) return null;
@@ -771,9 +845,11 @@ function identityDayOf(x: unknown) {
       wind: windOf(c.movedOut, c.movedIn),
       // the independent hosts movers went to, busiest first
       movedTo: hostCounts(x.destinations),
+      // and where they came from (routes, movedFrom), when the station kept it for this day
+      ...whereFrom(routesOf(x.moves), c.movedOut + c.movedIn + c.movedBetween),
     },
-    // sign-ups on hosts no relay carries: test servers, typos, bulk sign-ups nobody relays. not the network's weather
-    airQuality: { ...smogOf({ bluesky: c.createdBluesky, independent: c.createdIndependent, unlisted: c.createdUnlisted }), unlistedSignups: c.createdUnlisted },
+    // identities on hosts no relay carries: test servers, typos, scripts by the hundred thousand. not sign-ups, and not the network's weather
+    airQuality: { ...smogOf({ bluesky: c.createdBluesky, independent: c.createdIndependent, unlisted: c.createdUnlisted }), unlistedIdentities: c.createdUnlisted },
     deletedAccounts: c.deleted,
   };
 }
@@ -868,10 +944,15 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
   const sum = (f: (d: (typeof days)[number]) => number) => days.reduce((n, d) => n + f(d), 0);
   const out = sum((d) => d.movingHouse.outOfBluesky);
   const back = sum((d) => d.movingHouse.backToBluesky);
-  const created = { bluesky: sum((d) => d.signups.onBlueskyHosts), independent: sum((d) => d.signups.onIndependentHosts), unlisted: sum((d) => d.airQuality.unlistedSignups) };
+  const created = { bluesky: sum((d) => d.signups.onBlueskyHosts), independent: sum((d) => d.signups.onIndependentHosts), unlisted: sum((d) => d.airQuality.unlistedIdentities) };
   const bulk = sum((d) => d.signups.madeInBulk?.accounts ?? 0);
   const unnamed = sum((d) => d.signups.withNoHandle ?? 0);
   const scripted = sum((d) => d.signups.likelyScripted?.accounts ?? 0);
+  const between = sum((d) => d.movingHouse.betweenIndependentHosts);
+  // where movers came from, over the days the station kept it for: the pairs are added up whole, then cut
+  const routes = mergeRoutes(days.map((d) => d.movingHouse.routes ?? []));
+  const notKept = days.filter((d) => d.movingHouse.routesNotKept).length;
+  const kept = days.filter((d) => d.movingHouse.routes).reduce((n, d) => n + d.movingHouse.outOfBluesky + d.movingHouse.backToBluesky + d.movingHouse.betweenIndependentHosts, 0);
   const scriptedHosts = new Map<string, { hostname: string; accounts: number; why: string }>();
   for (const d of days) for (const h of d.signups.likelyScripted?.onHosts ?? []) {
     const was = scriptedHosts.get(h.hostname);
@@ -888,11 +969,137 @@ function identityTotals(days: NonNullable<ReturnType<typeof identityDayOf>>[]) {
       ...(scripted > 0 ? { likelyScripted: { accounts: scripted, onHosts: [...scriptedHosts.values()].sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1)).slice(0, TOP) } } : {}),
     },
     ...(created.bluesky + created.independent > 0 ? { newAccountsStartingOutsideBlueskyPercent: round1((created.independent / (created.bluesky + created.independent)) * 100) } : {}),
-    movingHouse: { outOfBluesky: out, backToBluesky: back, betweenIndependentHosts: sum((d) => d.movingHouse.betweenIndependentHosts), wind: windOf(out, back), movedTo: movedTo(days) },
+    movingHouse: {
+      outOfBluesky: out,
+      backToBluesky: back,
+      betweenIndependentHosts: between,
+      wind: windOf(out, back),
+      movedTo: movedTo(days),
+      ...whereFrom(routes, routes.length ? kept : out + back + between),
+      // days here with moves whose pairs the station didn't keep: routes and movedFrom leave those days out
+      ...(routes.length && notKept ? { routesNotKeptOnDays: notKept } : {}),
+    },
     // against every sign-up, the bulk, no-handle and scripted ones included (as each day's)
     airQuality: smogOf({ ...created, independent: created.independent + bulk + unnamed + scripted }),
     deletedAccounts: sum((d) => d.deletedAccounts),
   };
+}
+
+// ---------- one host on its own ----------
+
+/** A hostname as someone might give it: a bare name, or a URL to it. Lower-cased and checked, or null. */
+export function hostNameOf(raw: string | undefined): string | null {
+  let h = raw?.trim().toLowerCase() ?? "";
+  h = h.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/^@/, "");
+  h = h.split(/[/?#]/)[0]!.replace(/:\d+$/, "").replace(/\.$/, "");
+  return hostnameOf(h);
+}
+
+interface HostMoves { date: string; arrived: Array<{ from: string; accounts: number }>; left: Array<{ to: string; accounts: number }> }
+
+/** One host's moves over the days from `since` on: how many moved in and away, and the other hosts, the most first. */
+function movesOver(days: HostMoves[], since: string) {
+  const cameFrom = new Map<string, number>();
+  const wentTo = new Map<string, number>();
+  for (const d of days) {
+    if (d.date < since) continue;
+    for (const a of d.arrived) cameFrom.set(a.from, (cameFrom.get(a.from) ?? 0) + a.accounts);
+    for (const l of d.left) wentTo.set(l.to, (wentTo.get(l.to) ?? 0) + l.accounts);
+  }
+  const total = (m: Map<string, number>) => [...m.values()].reduce((n, v) => n + v, 0);
+  const top = <K extends string>(m: Map<string, number>, key: K) =>
+    [...m].map(([host, accounts]) => ({ host, accounts })).sort(byAccounts((x) => x.host)).slice(0, TOP).map((x) => ({ [key]: x.host, accounts: x.accounts }) as Record<K, string> & { accounts: number });
+  return {
+    movedIn: total(cameFrom),
+    movedAway: total(wentTo),
+    ...(cameFrom.size ? { cameFrom: top(cameFrom, "from") } : {}),
+    ...(wentTo.size ? { wentTo: top(wentTo, "to") } : {}),
+  };
+}
+
+/**
+ * One PDS host's own story (/api/weather-history?host=): the accounts it holds day by day, how
+ * many of them wrote anything, and who moved to it and away from it, by the other host, today,
+ * over the last 7 days and over the last 30. null if the answer doesn't check out.
+ */
+export function oneHostReport(body: unknown, now: number) {
+  const h = isRecord(body) && isRecord(body.host) ? body.host : null;
+  const hostname = h ? hostnameOf(h.hostname) : null;
+  if (!h || !hostname) return null;
+  const out: Record<string, unknown> = { report: "hosts", host: hostname, page: `${WEATHER_PAGE}/hosts` };
+  const days = list(h.days).flatMap((d) => {
+    if (!isRecord(d) || typeof d.day !== "string" || !DAY_RE.test(d.day)) return [];
+    const accounts = count(d.accounts);
+    const active = count(d.active);
+    return accounts === null ? [] : [{ date: d.day, accounts, estimated: d.estimated === true, ...(active !== null ? { active } : {}) }];
+  });
+  const first = days[0];
+  const last = days[days.length - 1];
+  if (!first || !last) {
+    // the station has never had it in a census. don't read that as an empty host, or as nobody moving
+    const couldBe = list(h.similar).flatMap((x) => hostnameOf(x) ?? []).slice(0, 5);
+    return {
+      ...out,
+      known: false,
+      note: "the station has never seen this hostname as an active pds host, so it has nothing on it: not its accounts, not who moved. " +
+        "a service's name or website often isn't its pds (tophhie social's accounts live on pds.tophhie.cloud, not tophhie.social). " +
+        "find the pds first, from couldBe or from an account on it (its did document names it), then ask again. don't answer \"none\" from this",
+      ...(couldBe.length ? { couldBe } : {}),
+    };
+  }
+  out.known = true;
+  if (h.bluesky === true) out.oneOfBlueskysOwnHosts = true;
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const weekAgo = [...days].reverse().find((d) => d.date <= day(now - 7 * DAY));
+  // every account it holds, active or not (the relay's count): how big it is, not how busy
+  out.accountsHeld = {
+    date: last.date,
+    accounts: last.accounts,
+    ...(weekAgo && weekAgo !== last ? { aWeekBefore: { date: weekAgo.date, accounts: weekAgo.accounts, change: last.accounts - weekAgo.accounts } } : {}),
+    ...(first !== last ? { firstDayKept: { date: first.date, accounts: first.accounts, ...(first.estimated ? { estimated: true } : {}) } } : {}),
+  };
+  const lively = [...days].reverse().find((d) => d.active !== undefined);
+  // the accounts on it that wrote anything that day (utc)
+  if (lively?.active !== undefined) out.activeAccounts = { date: lively.date, accounts: lively.active, ...(lively.accounts > 0 ? { percentOfAccountsHeld: round1(Math.min(100, (lively.active / lively.accounts) * 100)) } : {}) };
+  const keptSince = typeof h.movesSince === "string" && DAY_RE.test(h.movesSince) ? h.movesSince : null;
+  if (h.bluesky === true) {
+    // bluesky's own hosts are one place where moves are kept ("bluesky"), so none of them has moves of its own
+    out.movingHouse = { note: 'one of bluesky\'s own hosts: for moves they count as one place, "bluesky". report "hosts" without a host has who left bluesky and who came back' };
+    return out;
+  }
+  if (!keptSince) {
+    out.movingHouse = { routesNotKept: true, note: "the station hasn't kept which host movers left for which yet, so who moved to this host or away from it isn't known. say you don't know, not none" };
+    return out;
+  }
+  const moves: HostMoves[] = list(h.moves).flatMap((d) => {
+    if (!isRecord(d) || typeof d.day !== "string" || !DAY_RE.test(d.day)) return [];
+    const side = <K extends "from" | "to">(x: unknown, key: K) => list(x).flatMap((m) => {
+      const host = isRecord(m) ? placeOf(m[key]) : null;
+      const n = isRecord(m) ? count(m.accounts) : null;
+      return host && n ? [{ [key]: host, accounts: n } as Record<K, string> & { accounts: number }] : [];
+    });
+    return [{ date: d.day, arrived: side(d.arrived, "from"), left: side(d.left, "to") }];
+  });
+  const today = day(now);
+  const since = (daysBack: number) => {
+    const from = day(now - (daysBack - 1) * DAY);
+    // a window that starts before the station kept moves only covers from then
+    return { ...(keptSince > from ? { since: keptSince } : {}), ...movesOver(moves, from) };
+  };
+  out.movingHouse = {
+    // accounts that moved to this host (cameFrom) and away from it (wentTo), by the other host, from the plc directory's
+    // log, in utc days. "bluesky" is any of bluesky's own hosts. kept since keptSince: a day or a window with none, from
+    // then on, is nobody moving; before it, not known. a move away to bluesky's hosts is only seen when the station
+    // already knew the account lived here, so wentTo "bluesky" can run low
+    keptSince,
+    todaySoFar: { date: today, ...movesOver(moves.filter((d) => d.date === today), today) },
+    yesterday: { date: day(now - DAY), ...movesOver(moves.filter((d) => d.date === day(now - DAY)), day(now - DAY)) },
+    last7Days: since(7),
+    last30Days: since(30),
+    // the days anyone moved, newest first
+    days: [...moves].reverse().slice(0, 14).map((d) => ({ date: d.date, ...movesOver([d], d.date) })),
+  };
+  return out;
 }
 
 // ---------- the last hour, and the forecast ----------
@@ -1200,9 +1407,17 @@ export function hostsReport(parts: Parts, range: "week" | "month" = "week") {
   return out;
 }
 
-/** One report, read fresh. Throws only when its main part can't be read. */
-export async function readWeather(report: Report, tz: string, fetchImpl: Fetch = fetch, now = Date.now()) {
+/**
+ * One report, read fresh. Throws only when its main part can't be read. With `host` (a
+ * hostname, checked: hostNameOf), it's that host's own story, whatever the report.
+ */
+export async function readWeather(report: Report, tz: string, fetchImpl: Fetch = fetch, now = Date.now(), host?: string) {
   const read = (path: string) => getJson(fetchImpl, path).catch(() => undefined);
+  if (host) {
+    const out = oneHostReport(await getJson(fetchImpl, `weather-history?host=${encodeURIComponent(host)}`), now);
+    if (!out) throw new Error("the host could not be read");
+    return out;
+  }
   if (report === "now") {
     const [body, span] = await Promise.all([getJson(fetchImpl, "atmosphere"), read("weather-span?span=hour")]);
     const out = nowReport(body, span);

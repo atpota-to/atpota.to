@@ -24,7 +24,7 @@
     <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="the atmosphere weather report as it was when this was shared: how many new records a second the whole network is writing, the diversity index, and how that compares with usual, with poe the potato on its hill under the sun.">
+    <meta property="og:image:alt" content="the atmosphere weather report as it was when this was shared: how many accounts wrote something in the last hour against the hour before, how busy the sky is against usual, and the diversity index, with poe the potato on its hill under the sun.">
     <meta name="twitter:card" content="summary_large_image">
 
     <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
@@ -51,7 +51,7 @@
         <!-- Filled by src/scripts/weather-page.ts from /api/atmosphere. Fetched text only reaches the DOM through textContent. -->
         <div class="weather" data-weather-report data-state="loading">
             <!-- the page's sections ([data-section]): the dock dims the controls that don't reach the one you're in (weather-dock.ts initSections) -->
-            <header class="tile weather-hero" id="the-sky" aria-labelledby="weather-title" data-weather-hero data-lensed data-section="sky" data-section-label="the sky" data-section-lens="window measure unit">
+            <header class="tile weather-hero" id="the-sky" aria-labelledby="weather-title" data-weather-hero data-lensed data-section="sky" data-section-label="the sky" data-section-lens="window measure unit compare">
                 <!-- the weather itself: wind, rain or snow, and now and then a rainbow (src/scripts/weather-hero.ts) -->
                 <div class="weather-air" aria-hidden="true" data-weather-air></div>
                 <!-- clouds that come with the diversity index (src/scripts/weather-sky.ts) -->
@@ -84,6 +84,8 @@
                                 <button type="button" class="weather-hero__unit" data-r-unit data-lens-cycle-unit aria-label="a second. change to a minute">rec/sec</button>
                                 <!-- against the span before, as the "last hour" tile has it (weather-page.ts renderHeadlineChange) -->
                                 <p class="weather-change weather-hero__change" data-r-headline-change data-waiting></p>
+                        <!-- what the chip is against, said once for the page: every tile's arrows compare with the same stretch -->
+                        <p class="weather-hero__vs" data-r-headline-vs aria-hidden="true" hidden></p>
                             </div>
                         </div>
                         <p class="weather-hero__cond" data-r-cond>checking the sky…</p>
@@ -119,6 +121,13 @@
                         <option value="day">per day</option>
                         <option value="total">in all</option>
                     </select>
+                    <!-- what every arrow compares with: the stretch right before, or the same stretch a cycle ago, where the
+                         network's rhythm repeats (weather-lens.ts EARLIER); a window with no cycle of its own hides the choice -->
+                    <div class="weather-seg" role="group" aria-label="compared with" data-lens-compare-group>
+                        <span class="weather-seg__label" aria-hidden="true">vs</span>
+                        <button type="button" class="weather-seg__btn" data-lens-compare="before" aria-pressed="true">hour before</button>
+                        <button type="button" class="weather-seg__btn" data-lens-compare="cycle" aria-pressed="false">yesterday</button>
+                    </div>
                     <!-- what the controls reach in this section, when it isn't all of them -->
                     <p class="weather-dock__note" data-dock-note hidden></p>
                 </div>
@@ -176,6 +185,8 @@
                     <div class="weather-scale__names"><span>low</span><span>moderate</span><span>high</span><span>very high</span><span>extreme</span></div>
                 </div>
                 <p class="weather-diversity__accounts" data-r-acct-index hidden></p>
+                <!-- what the number is, on the page and not only in Poe's chat (EXPLAINERS has the rest) -->
+                <p class="weather-tile__note">it climbs as more of the people writing use apps other than bluesky, and as they spread across more of them. read it like the uv index.</p>
                 <p class="weather-tile__note" data-r-index-note hidden></p>
             </section>
 
@@ -189,8 +200,8 @@
                     <span class="weather-ratio__bsky" data-r-bar-bsky></span><span class="weather-ratio__else" data-r-bar-else></span>
                 </div>
                 <dl class="weather-mix__legend">
-                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>bluesky</dt><dd><span data-r-bsky>&ndash;</span> <span data-r-mix-unit>a second</span> <span class="weather-mix__share" data-r-bsky-share></span></dd></div>
-                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>elsewhere</dt><dd><span data-r-else>&ndash;</span> <span data-r-mix-unit>a second</span> <span class="weather-mix__share" data-r-else-share></span></dd></div>
+                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span><span data-r-bsky-label>the bluesky app</span></dt><dd><span data-r-bsky>&ndash;</span> <span data-r-mix-unit>a second</span> <span class="weather-mix__share" data-r-bsky-share></span></dd></div>
+                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span><span data-r-else-label>other apps</span></dt><dd><span data-r-else>&ndash;</span> <span data-r-mix-unit>a second</span> <span class="weather-mix__share" data-r-else-share></span></dd></div>
                 </dl>
                 <p class="weather-mix__total"><span data-r-total>&ndash;</span> <span data-r-total-words>new records a second in all</span><span data-r-collections-wrap>, across <span data-r-collections>&ndash;</span> collections</span>.</p>
             </section>
@@ -209,7 +220,7 @@
             </section>
 
             <!-- the lens's window over time (weather-page.ts initTrends); on now, the last hour -->
-            <section class="tile weather-tile weather-trends" id="trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading" data-section="trends" data-section-label="trends" data-section-lens="window measure unit" data-topics="trends">
+            <section class="tile weather-tile weather-trends" id="trends" aria-labelledby="weather-trends-title" data-r-trends data-state="loading" data-section="trends" data-section-label="trends" data-section-lens="window measure unit compare" data-topics="trends">
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
                         <h2 class="weather-tile__title" id="weather-trends-title">trends</h2>
@@ -242,7 +253,7 @@
                  the lens moves it on to the last hour, 24 hours, 7 days or 30 days, each number with a chip against the one before (src/scripts/weather-span.ts) -->
             <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="hour" data-topics="trends">
                 <div class="weather-tile__titled">
-                    <h2 class="weather-tile__title" id="weather-minute-title">the last <span class="weather-span__word" data-s-word>hour</span></h2>
+                    <h2 class="weather-tile__title" id="weather-minute-title">conditions <span class="weather-span__over">over the last <span class="weather-span__word" data-s-word>hour</span></span></h2>
                     <button type="button" class="weather-info" data-poe-explain="readouts" aria-haspopup="dialog" aria-label="what do feels like, gusts, humidity and visibility mean? ask poe" title="what's this?">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                     </button>
@@ -286,13 +297,15 @@
                  only its unit reaches them (weather-almanac.ts, weather-forecast.ts). -->
             <div class="weather-group" id="patterns-and-outlook" data-section="patterns" data-section-label="patterns" data-section-lens="unit">
                 <h2 class="weather-group__title">patterns and outlook</h2>
-                <p class="weather-group__note">these keep their own times and always count new records. only the unit up top reaches them.</p>
+                <p class="weather-group__note">these keep their own times and always count new records. the unit up top reaches them, up to per hour.</p>
             </div>
 
             <!-- The almanac (src/scripts/weather-almanac.ts, /api/weather-almanac): today so far, and new apps. -->
             <section class="tile weather-tile weather-today" aria-labelledby="weather-today-title" data-a-today data-state="loading" data-topics="today">
                 <div class="weather-tile__titled">
                     <h2 class="weather-tile__title" id="weather-today-title">today so far</h2>
+                    <!-- it always counts records: said when the lens counts accounts (weather-page.ts tagRecordsOnly) -->
+                    <span class="weather-tag" data-tag-records hidden>by records</span>
                     <!-- this part on its own page, with a card of its own to share (src/scripts/weather-topics.ts); not on that page -->
                     <a class="weather-info weather-own-page" href="/weather/today" data-own-page="today" aria-label="today and the outlook on its own page" title="on its own page">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M8.5 4.75H6a1.75 1.75 0 0 0-1.75 1.75V14A1.75 1.75 0 0 0 6 15.75h7.5A1.75 1.75 0 0 0 15.25 14v-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M11.5 4.25h4.25V8.5M15.5 4.5 9.75 10.25" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -340,7 +353,7 @@
                 <!-- a word cloud, each app a link to its lexicons in aturi; the card is for the mouse, the links say the same in words -->
                 <ul class="weather-new__list" role="list" data-a-new-list></ul>
                 <div class="weather-new__tip" data-a-new-tip aria-hidden="true" hidden></div>
-                <p class="weather-tile__note" data-a-new-note hidden>bigger names have written more records. pick one to explore its lexicons in aturi.</p>
+                <p class="weather-tile__note" data-a-new-note hidden>bigger names have more accounts writing; faded ones are one account so far. pick one to explore its lexicons in aturi.</p>
             </section>
 
             <!-- The forecast (src/scripts/weather-forecast.ts, /api/weather-forecast): the next 12 hours, sunrise and sunset. -->
@@ -348,6 +361,7 @@
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
                         <h2 class="weather-tile__title" id="weather-forecast-title">the forecast</h2>
+                        <span class="weather-tag" data-tag-records hidden>by records</span>
                         <button type="button" class="weather-info" data-poe-explain="forecast" aria-haspopup="dialog" aria-label="how does the forecast work? ask poe" title="what's this?">
                             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                         </button>
@@ -368,7 +382,10 @@
 
             <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading" data-topics="today">
                 <div class="weather-tile__head">
-                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
+                    <div class="weather-tile__titled">
+                        <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
+                        <span class="weather-tag" data-tag-records hidden>by records</span>
+                    </div>
                     <p class="weather-tile__aside" data-a-heat-aside></p>
                 </div>
                 <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
@@ -383,6 +400,7 @@
                     <span data-a-heat-max>&ndash;</span>
                     <span class="weather-heat__legend-empty"><i class="weather-heat__cell--empty"></i> not heard yet</span>
                 </div>
+                <p class="weather-tile__note">each square is that hour&#39;s average over the weeks heard, so one big night, like an election, can show for a few weeks.</p>
             </section>
 
             <!-- Where the atmosphere lives: the PDS hosts (the station's census of the relay's list, src/scripts/weather-page.ts renderHosts)
@@ -412,7 +430,7 @@
                         <div class="weather-hosts__now">
                             <p class="weather-hosts__count" data-h-active>&ndash;</p>
                             <div>
-                                <p class="weather-hosts__words">active pds hosts</p>
+                                <p class="weather-hosts__words">pds hosts online</p>
                                 <p class="weather-hosts__blurb" data-h-split></p>
                             </div>
                         </div>
@@ -426,7 +444,8 @@
                             <div class="weather-scale__names"><span>early days</span><span>taking root</span><span>spreading</span><span>well spread</span><span>flourishing</span></div>
                         </div>
                         <p class="weather-hosts__level-text" data-h-level-text></p>
-                        <div class="weather-ratio weather-mix__bar" aria-hidden="true">
+                        <p class="weather-tile__note">it climbs as more accounts live on independent hosts, and as they spread across more of them. its bands stretch as it climbs (10, 25, 75, 200), so each is a bigger step than the last.</p>
+                        <div class="weather-ratio weather-ratio--hosts weather-mix__bar" aria-hidden="true">
                             <span class="weather-ratio__bsky" data-h-bar-bsky></span><span class="weather-ratio__else" data-h-bar-else></span>
                         </div>
                         <p class="weather-hosts__share" data-h-share></p>
@@ -447,7 +466,7 @@
                             <div class="weather-chart" data-h-chart="share"></div>
                         </figure>
                         <figure class="weather-chart-card">
-                            <figcaption class="weather-chart-card__title">active pds hosts</figcaption>
+                            <figcaption class="weather-chart-card__title">pds hosts online</figcaption>
                             <div class="weather-chart" data-h-chart="active"></div>
                         </figure>
                         <figure class="weather-chart-card">
@@ -463,12 +482,15 @@
                         <h3 class="weather-hosts__subtitle">day by day</h3>
                         <div class="weather-hosts__scroll">
                             <table class="weather-hosts__table" data-h-days>
-                                <caption class="visually-hidden">active pds hosts each day (utc), the change from the day before, and the independent hosts that joined and left</caption>
-                                <thead><tr><th scope="col">day</th><th scope="col">active</th><th scope="col">change</th><th scope="col">joined</th><th scope="col">left</th></tr></thead>
+                                <caption class="visually-hidden">pds hosts online at the end of each day (utc) and the change from the day before; and independent hosts heard from that day but not the day before, and the other way round</caption>
+                                <thead>
+                                    <tr><th scope="col" rowspan="2">day</th><th scope="colgroup" colspan="2" class="weather-hosts__group">online at day&#39;s end</th><th scope="colgroup" colspan="2" class="weather-hosts__group">independent hosts</th></tr>
+                                    <tr><th scope="col">hosts</th><th scope="col">change</th><th scope="col">first heard</th><th scope="col">gone quiet</th></tr>
+                                </thead>
                                 <tbody></tbody>
                             </table>
                         </div>
-                        <p class="weather-tile__note">days are utc. joined and left count independent hosts: active that day and not the day before, or the other way round. days marked ≈ are from before i kept count, estimated from the plc directory.</p>
+                        <p class="weather-tile__note">days are utc. online is the relay&#39;s count at the end of each day, bluesky&#39;s hosts too. first heard and gone quiet count independent hosts the relay heard from that day and not the day before, or the other way round: small hosts drift in and out, so they don&#39;t add up to the change. today&#39;s gone quiet fills in once the day is over. days marked ≈ are from before i kept count, estimated from the plc directory.</p>
                     </div>
                     <div class="weather-hosts__cols weather-hosts__cols--three">
                         <div class="weather-hosts__list" data-h-lively-wrap hidden>
@@ -506,12 +528,12 @@
                     <p class="weather-pds__big" data-p-signups>&ndash;</p>
                     <p class="weather-pds__words">new accounts</p>
                 </div>
-                <div class="weather-ratio weather-mix__bar" aria-hidden="true">
+                <div class="weather-ratio weather-ratio--hosts weather-mix__bar" aria-hidden="true">
                     <span class="weather-ratio__bsky" data-p-bar-bsky></span><span class="weather-ratio__else" data-p-bar-else></span>
                 </div>
                 <dl class="weather-pds__stats">
-                    <div><dt><span class="weather-key weather-key--bsky" aria-hidden="true"></span>bluesky</dt><dd data-p-bsky>&ndash;</dd></div>
-                    <div><dt><span class="weather-key weather-key--else" aria-hidden="true"></span>independent</dt><dd data-p-indep>&ndash;</dd></div>
+                    <div><dt><span class="weather-key weather-key--host-bsky" aria-hidden="true"></span>on bluesky&#39;s servers</dt><dd data-p-bsky>&ndash;</dd></div>
+                    <div><dt><span class="weather-key weather-key--host-indep" aria-hidden="true"></span>on independent hosts</dt><dd data-p-indep>&ndash;</dd></div>
                 </dl>
                 <p class="weather-pds__line" data-p-own></p>
                 <p class="weather-pds__line" data-p-odds hidden></p>
@@ -526,7 +548,7 @@
                     <p class="weather-pds__line" data-p-smog-words></p>
                 </div>
                 <figure class="weather-chart-card" data-p-arrivals-card hidden>
-                    <figcaption class="weather-chart-card__title">new accounts starting outside bluesky each day, as a share</figcaption>
+                    <figcaption class="weather-chart-card__title">new accounts starting on independent hosts each day, as a share</figcaption>
                     <div class="weather-chart" data-p-chart="arrivals"></div>
                 </figure>
             </section>
@@ -557,6 +579,12 @@
                     <ol class="weather-bars weather-bars--hosts" role="list" data-p-dest data-host-list></ol>
                     <p class="weather-tile__note" data-p-dest-note></p>
                 </div>
+                <!-- the independent hosts movers left, from atmosphere_host_move_day (weather-hosts.ts originsOf) -->
+                <div class="weather-winds__to" data-p-from-wrap hidden>
+                    <h3 class="weather-hosts__subtitle">where they moved from <span class="weather-hosts__span" data-p-from-span></span></h3>
+                    <ol class="weather-bars weather-bars--hosts" role="list" data-p-from data-host-list></ol>
+                    <p class="weather-tile__note" data-p-from-note></p>
+                </div>
                 <p class="weather-pds__line" data-p-deleted></p>
                 <figure class="weather-chart-card" data-p-winds-card hidden>
                     <figcaption class="weather-chart-card__title">accounts moving out of bluesky each day</figcaption>
@@ -565,7 +593,7 @@
             </section>
 
             <!-- new accounts over the whole history kept, and against the stretch before, from atmosphere_plc_day; keeps its own times, not the lens's (src/scripts/weather-signups.ts) -->
-            <section class="tile weather-tile weather-pds weather-signups" aria-labelledby="weather-signups-title" data-p-history hidden data-topics="migration">
+            <section class="tile weather-tile weather-pds weather-signups" aria-labelledby="weather-signups-title" data-p-history data-state="loading" data-topics="migration">
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
                         <h2 class="weather-tile__title" id="weather-signups-title">sign-ups over time</h2>
@@ -575,7 +603,7 @@
                     </div>
                     <p class="weather-tile__aside" data-sh-since></p>
                 </div>
-                <p class="weather-pds__line weather-pds__lede" data-sh-headline></p>
+                <p class="weather-pds__line weather-pds__lede" data-sh-headline>counting every day of sign-ups…</p>
                 <dl class="weather-pds__stats weather-pds__stats--three">
                     <div><dt data-sh-label="day">yesterday</dt><dd data-sh-value="day">&ndash;</dd><dd class="weather-change" data-sh-change="day"></dd></div>
                     <div><dt data-sh-label="week">last 7 days</dt><dd data-sh-value="week">&ndash;</dd><dd class="weather-change" data-sh-change="week"></dd></div>
@@ -592,6 +620,8 @@
                         <div class="weather-chart" data-sh-chart="independent"></div>
                     </figure>
                 </div>
+                <!-- stretches that weren't people, read from the plc directory's log (weather-signups.ts SIGNUP_WAVES) -->
+                <p class="weather-tile__note" data-sh-note hidden></p>
                 <div class="weather-hosts__days" data-sh-weeks-wrap hidden>
                     <h3 class="weather-hosts__subtitle">week by week</h3>
                     <div class="weather-hosts__scroll">
@@ -631,7 +661,7 @@
                         <h3 class="weather-hosts__subtitle">roll call</h3>
                         <p class="weather-pds__line" data-p-roll-lede></p>
                         <ol class="weather-bars weather-bars--roll" role="list" data-p-roll-list></ol>
-                        <p class="weather-tile__note">every host the relay has heard of, and how it&#39;s doing. idle hosts have gone quiet; offline ones stopped answering.</p>
+                        <p class="weather-tile__note">every host the relay has heard of, and how it&#39;s doing. online hosts are up; idle ones have gone quiet; offline ones stopped answering.</p>
                     </div>
                 </div>
             </section>
@@ -644,6 +674,7 @@
                 </div>
                 <p class="weather-pds__line" data-hp-story></p>
                 <p class="weather-pds__line" data-hp-active hidden></p>
+                <p class="weather-pds__line" data-hp-moves hidden></p>
                 <figure class="weather-chart-card" hidden>
                     <figcaption class="weather-chart-card__title">accounts hosted each day</figcaption>
                     <div class="weather-chart" data-hp-chart></div>
@@ -659,8 +690,9 @@
             <section class="tile weather-tile weather-how" aria-labelledby="weather-how-title">
                 <h2 class="weather-tile__title" id="weather-how-title">how i measure it</h2>
                 <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by, live while you&#39;re here.</p>
-                <p>the bar up top picks what you&#39;re looking at: right now or the last hour, day, week or month, and what a rate is per. it starts on <strong>accounts</strong>, counting who&#39;s writing rather than how much, so one chatty bot can&#39;t pass for a crowd. switch to <strong>records</strong> for how much. i never keep track of who&#39;s who.</p>
+                <p>the bar up top picks what you&#39;re looking at: right now or the last hour, day, week or month, what a rate is per, and what the arrows compare with: the stretch just before, or the same time yesterday (last week, for a day), when you&#39;d rather not see the daily rise and fall as news. it starts on <strong>accounts</strong>, counting who&#39;s writing rather than how much, so one chatty bot can&#39;t pass for a crowd. switch to <strong>records</strong> for how much. i never keep track of who&#39;s who.</p>
                 <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in (◕‿◕)</p>
+                <p>my records go back to oct 6, read afterwards from jetstream&#39;s archive, and i&#39;ve listened live since oct 20. the archive missed most edits and some apps and accounts, so the readouts, the records and the apps&#39; arrows start on oct 20. sign-ups, moves and hosts come from the plc directory and the relay, from oct 8. days marked utc are utc days; everything else is in your time.</p>
                 <p>i&#39;m a potato, not a satellite, so a quiet app can slip past me now and then. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>

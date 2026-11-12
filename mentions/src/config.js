@@ -174,6 +174,14 @@ export const GATE_DEFAULTS = {
   // The diversity index from which the sky counts as mixed: "high" on the page.
   // A usual minute in October 2026 was about 2.
   weatherMixedMinIndex: 6,
+  // A weather post may tag the accounts of the apps it names, up to this many, and
+  // only accounts that pass every check in gates/weather.js appAccountProblem (the
+  // app's own handle, the namespace's lexicon authority, enough accounts writing it,
+  // no pronouns, no labels). 0 turns tagging off.
+  weatherMaxTags: 2,
+  // An account a weather post tagged isn't offered again for this many days, so a
+  // busy app isn't notified every day it's busy.
+  weatherTagCooldownDays: 7,
 
   maxOtherMentions: 2,
   maxGraphemes: 300,            // from the live app.bsky.feed.post lexicon

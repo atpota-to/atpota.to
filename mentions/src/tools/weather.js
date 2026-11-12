@@ -28,6 +28,9 @@ for (const r of rows) {
   if (r.draft_text) console.log(`  ${bold('draft  ')} ${r.draft_text.replace(/\n/g, ' ')}`);
   if (r.post_text && r.post_text !== r.draft_text) console.log(`  ${dim('posted ')} ${r.post_text.replace(/\n/g, ' ')}`);
   if (r.draft_text) console.log(`  ${dim('card   ')} ${r.page ? `/weather/${r.page}` : '/weather'}`);
+  const handles = (json) => (json ? JSON.parse(json).map((a) => `@${a.handle}`).join(', ') : '');
+  if (r.tag_accounts) console.log(`  ${dim('could  ')} tag ${handles(r.tag_accounts)}`);
+  if (r.tagged) console.log(`  ${dim('tagged ')} ${handles(r.tagged)}`);
   if (r.detail) console.log(`  ${dim('detail ')} ${r.detail}`);
   if (r.post_uri) console.log(`  ${dim('link   ')} ${r.post_uri}`);
   console.log('');

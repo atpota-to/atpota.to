@@ -31,7 +31,7 @@
  * a little under the new arrivals tile's for the same day, from the last 30 days.
  */
 
-import { projectLast, renderChart, type ChartPoint } from './weather-chart';
+import { projectLast, renderChart, type ChartBand, type ChartPoint } from './weather-chart';
 import { toHostHistory, independentOf, type IdentityDay } from './weather-hosts';
 import { compactCount, formatCount } from './weather';
 import { chip, percent, percentChange, pointsChange, tileCount, type Change } from './weather-span';
@@ -46,6 +46,35 @@ export const HISTORY_WEEKS = 12;
 
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
+
+/**
+ * Stretches of the history that weren't people, found by reading the PLC directory's own
+ * log. Each is shaded on the chart of everyone, and the weeks and figures that take one in
+ * (or compare with one) get a star and a line under the charts.
+ *
+ * Oct 2026: until the afternoon of Oct 18 (UTC), most new accounts on Bluesky's hosts (54 to
+ * 74% in the hours sampled, Oct 8 to 18) had handles from the Faker library, a first name
+ * and a word of lorem ipsum ("penelope_explicabo"): about 40,000 a day on top of about
+ * 18,000 people. From Oct 19 there were none, and the day's count fell to where it's stayed.
+ */
+export interface SignupWave {
+  from: string;
+  to: string;
+  label: string;
+  words: string;
+}
+
+export const SIGNUP_WAVES: readonly SignupWave[] = [
+  {
+    from: '2026-09-01',
+    to: '2026-10-18',
+    label: 'scripted',
+    words: "until oct 18, a script was also making about 40,000 accounts a day on bluesky's servers, with made-up names like penelope_explicabo. the drop after it is the script stopping, not fewer people signing up.",
+  },
+];
+
+/** The waves that touch [from, to] (UTC days). */
+export const wavesIn = (from: string, to: string, waves: readonly SignupWave[] = SIGNUP_WAVES): SignupWave[] => waves.filter((w) => w.from <= to && w.to >= from);
 const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const startOf = (day: string) => Date.parse(`${day}T00:00:00Z`);
 
@@ -183,7 +212,7 @@ export function signupShareWords(stretches: Stretch[]): string {
   if (!s || !s.value || s.independent === null) return '';
   const share = percent((s.independent / s.value) * 100);
   const when = s.key === 'week' ? 'over the last 7 days' : 'yesterday';
-  return s.shareChange ? `${share} started outside bluesky ${when}, ${s.shareChange.words}.` : `${share} started outside bluesky ${when}.`;
+  return s.shareChange ? `${share} started on an independent host ${when}, ${s.shareChange.words}.` : `${share} started on an independent host ${when}.`;
 }
 
 // ---------- the charts ----------
@@ -302,14 +331,20 @@ export function weekWords(w: SignupWeek): string {
   return w.days < 7 ? `${words} (${w.days} day${w.days === 1 ? '' : 's'})` : words;
 }
 
-function renderWeeks(table: HTMLTableElement, weeks: SignupWeek[]): void {
+/** A week the waves touch, or whose week before they touch, so its arrow compares with one. */
+export function weekTouched(w: SignupWeek, waves: readonly SignupWave[] = SIGNUP_WAVES): boolean {
+  const before = dayKey(startOf(w.from) - 7 * DAY);
+  return wavesIn(before, w.to, waves).length > 0;
+}
+
+function renderWeeks(table: HTMLTableElement, weeks: SignupWeek[], waves: readonly SignupWave[]): void {
   const body = table.tBodies[0] ?? table.createTBody();
   body.replaceChildren(
     ...weeks.map((w) => {
       const tr = document.createElement('tr');
       const th = document.createElement('th');
       th.scope = 'row';
-      th.textContent = weekWords(w);
+      th.textContent = weekTouched(w, waves) ? `${weekWords(w)} *` : weekWords(w);
       tr.append(th);
       const cell = (text: string) => {
         const td = document.createElement('td');
@@ -343,10 +378,11 @@ function setText(root: ParentNode, sel: string, text: string): void {
 const TIP_DAY = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 /** The tile, from the days as of `asOf`. Hidden until there are two days to draw. */
-export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf: number): void {
+export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf: number, knownWaves: readonly SignupWave[] = SIGNUP_WAVES): void {
   const series = signupSeries(days, asOf);
   tile.hidden = !series;
   if (!series) return;
+  tile.dataset.state = 'ready';
   const first = days[0]!.day;
   setText(tile, '[data-sh-since]', startOf(first) <= asOf - 365 * DAY ? 'the last 12 months (utc)' : `since ${shortDay(first)} (utc)`);
 
@@ -358,8 +394,11 @@ export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf
     shareLine.hidden = !share;
     shareLine.textContent = share;
   }
+  // the stretches that take in a scripted wave, or compare with one, get a star (the line under the charts says why)
+  const yesterday = dayKey(startOf(dayKey(asOf)) - DAY);
+  const touched = (n: number) => wavesIn(dayKey(startOf(dayKey(asOf)) - 2 * n * DAY), yesterday, knownWaves).length > 0;
   for (const s of stretches) {
-    setText(tile, `[data-sh-label="${s.key}"]`, s.label);
+    setText(tile, `[data-sh-label="${s.key}"]`, s.value !== null && touched(STRETCHES[s.key].days) ? `${s.label} *` : s.label);
     setText(tile, `[data-sh-value="${s.key}"]`, s.value === null ? '–' : tileCount(s.value));
     const el = $(tile, `[data-sh-change="${s.key}"]`);
     if (el) chip(el, s.change);
@@ -371,25 +410,36 @@ export function renderSignupHistory(tile: HTMLElement, days: IdentityDay[], asOf
   const formatTime = (t: number) => SHORT_DAY.format(new Date(t)).toLowerCase();
   const formatTipTime = each === 'day' ? (t: number) => TIP_DAY.format(new Date(t)).toLowerCase() : (t: number) => `week of ${formatTime(t)}`;
   const common = { format: formatCount, formatTick: compactCount, formatTime, formatTipTime, stepMs: series.stepMs };
+  // the scripted waves, shaded on the chart of everyone (they were all on bluesky's hosts), and said under the charts
+  const waves = wavesIn(first, dayKey(asOf), knownWaves);
+  const bands: ChartBand[] = waves.map((w) => ({ from: Math.max(startOf(w.from), startOf(first)), to: startOf(w.to) + DAY - 1, label: w.label }));
   const all = $(tile, '[data-sh-chart="all"]');
-  if (all) renderChart(all, series.all, { ...common, label: `new accounts each ${each}`, color: 'var(--weather-bsky)' });
+  if (all) renderChart(all, series.all, { ...common, label: `new accounts each ${each}`, color: 'var(--weather-host-bsky)', bands });
+  const note = $(tile, '[data-sh-note]');
+  if (note) {
+    note.hidden = waves.length === 0;
+    note.textContent = waves.map((w) => `* ${w.words}`).join(' ');
+  }
   const independent = $(tile, '[data-sh-chart="independent"]');
-  if (independent) renderChart(independent, series.independent, { ...common, label: `new accounts on independent hosts each ${each}`, color: 'var(--weather-else)' });
+  if (independent) renderChart(independent, series.independent, { ...common, label: `new accounts on independent hosts each ${each}`, color: 'var(--weather-host-indep)' });
 
   const weeks = signupWeeks(days, asOf);
   const wrap = $(tile, '[data-sh-weeks-wrap]');
   if (wrap) wrap.hidden = weeks.length === 0;
   const table = $<HTMLTableElement>(tile, '[data-sh-weeks]');
-  if (table) renderWeeks(table, weeks);
+  if (table) renderWeeks(table, weeks, knownWaves);
 }
 
 /** Loads the tile, and again every SIGNUPS_REFRESH_MS while the tab is visible; a failed refresh keeps what's shown. */
 export function initSignupHistory(report: ParentNode, fetchImpl: typeof fetch = fetch): void {
   const tile = $(report, '[data-p-history]');
   if (!tile) return;
+  // it holds its place while the year's days come (the slowest answer on the page), so nothing under it jumps;
+  // if the first answer doesn't come, it goes
   const load = async () => {
     const got = await fetchSignups(fetchImpl);
     if (got) renderSignupHistory(tile, got.days, got.asOf);
+    else if (tile.dataset.state === 'loading') tile.hidden = true;
   };
   void load();
   const tick = () =>
