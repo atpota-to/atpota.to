@@ -572,7 +572,13 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
 }
 
 /** Every tile that follows the lens, from one sky. */
+/** The tiles that always count records ("patterns and outlook") say so while the lens counts accounts. */
+export function tagRecordsOnly(report: ParentNode, lens: LensState): void {
+  for (const el of Array.from(report.querySelectorAll<HTMLElement>('[data-tag-records]'))) el.hidden = lens.measure !== 'accounts';
+}
+
 export function renderSky(report: HTMLElement, sky: Sky, lens: LensState = LENS_DEFAULT): void {
+  tagRecordsOnly(report, lens);
   renderHeadline(report, sky, lens);
   renderDiversity(report, sky, lens);
   renderMix(report, sky, lens);

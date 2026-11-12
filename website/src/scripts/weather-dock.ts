@@ -199,8 +199,9 @@ export function initSections(report: HTMLElement, dock: HTMLElement): void {
       if (now) punctuate(now, dock.dataset.lensOff);
       for (const [part, el] of Object.entries(parts) as Array<[LensPart, HTMLElement | null]>) {
         if (!el) continue;
+        // faint on the whole report (it still changes the sections that follow it); gone on a topic's page, where it changes nothing
         if (at.lens.has(part)) delete el.dataset.inactive;
-        else el.dataset.inactive = '';
+        else el.dataset.inactive = topic ? 'page' : '';
       }
       if (note) {
         const all = at.lens.size === 3;

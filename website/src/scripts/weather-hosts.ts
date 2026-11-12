@@ -478,18 +478,37 @@ export function initHostTrends(report: ParentNode, feed: HostFeed, lens: Lens, d
 
 // ---------- the identity tiles: new arrivals (with air quality), migration winds ----------
 
-/** "today so far", "yesterday" or the day, for the identity tiles' asides. */
-export function identityDayWords(day: string, now = Date.now()): string {
+/**
+ * When today's UTC day began, in the reader's own time ("7 pm yesterday", "9 am"), or null
+ * where that's midnight anyway. The PLC directory's days are UTC, and the almanac's "today"
+ * is the reader's: without this, a reader in New York sees two "todays" five hours apart.
+ */
+export function utcDayStartWords(now = Date.now(), tz?: string): string | null {
+  const start = Math.floor(now / 86_400_000) * 86_400_000;
+  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(new Date(start)).toLowerCase().replace(':00', '');
+  if (clock === '12 am') return null;
+  const dayOf = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(ms));
+  return dayOf(start) < dayOf(now) ? `${clock} yesterday` : clock;
+}
+
+/** "today so far", "yesterday" or the day, for the identity tiles' asides; today says when it began, in the reader's time. */
+export function identityDayWords(day: string, now = Date.now(), tz?: string): string {
   const today = new Date(now).toISOString().slice(0, 10);
-  if (day === today) return 'today so far (utc)';
+  if (day === today) {
+    const since = utcDayStartWords(now, tz);
+    return since ? `since ${since}, your time` : 'today so far (utc)';
+  }
   if (day === new Date(now - 86_400_000).toISOString().slice(0, 10)) return 'yesterday (utc)';
   return dayWords(day);
 }
 
-/** "today", "yesterday" or "on tue, nov 10": when a single UTC day was, to start a sentence with. */
-export function identityWhen(day: string, now = Date.now()): string {
+/** "today" (or "since 7 pm yesterday", away from UTC), "yesterday" or "on tue, nov 10": when a single UTC day was, to start a sentence with. */
+export function identityWhen(day: string, now = Date.now(), tz?: string): string {
   const today = new Date(now).toISOString().slice(0, 10);
-  if (day === today) return 'today';
+  if (day === today) {
+    const since = utcDayStartWords(now, tz);
+    return since ? `since ${since}` : 'today';
+  }
   if (day === new Date(now - 86_400_000).toISOString().slice(0, 10)) return 'yesterday';
   return `on ${dayWords(day)}`;
 }
@@ -731,7 +750,7 @@ export function renderIdentities(report: ParentNode, days: IdentityDay[], now = 
       }),
     );
   }
-  setText(report, '[data-p-dest-note]', `out of bluesky or from another host, ${movers.length > 1 ? `over the last ${movers.length} days` : 'today'}. tap one to see how it's grown.`);
+  setText(report, '[data-p-dest-note]', `out of bluesky or from another host, ${movers.length > 1 ? `over the last ${movers.length} days` : identityWhen(movers[0]?.day ?? d.day, now)}. tap one to see how it's grown.`);
   // and the independent hosts they left, when the station kept it and anyone did
   const left = originsOf(movers);
   const from = $(report, '[data-p-from-wrap]');

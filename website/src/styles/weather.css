@@ -2658,6 +2658,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   opacity: 0.45;
 }
 
+/* On a topic's page nothing follows it, so it isn't offered at all (weather-dock.ts initSections). */
+.weather-dock [data-inactive="page"] {
+  display: none;
+}
+
 .weather-dock__note {
   width: 100%;
   margin: 0;
@@ -2818,6 +2823,12 @@ button.weather-hero__unit:disabled {
   font-size: 28px;
   line-height: 1.15;
   letter-spacing: -0.01em;
+}
+
+/* "conditions over the last hour": the window, quieter than what the tile is */
+.weather-span__over {
+  font-weight: 400;
+  color: var(--text-soft);
 }
 
 .weather-group__note {

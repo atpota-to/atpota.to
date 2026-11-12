@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, batchWords, destinationsOf, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, batchWords, destinationsOf, identityWhen, utcDayStartWords, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -438,5 +438,21 @@ describe('a whole host moving house', () => {
     expect(batchWords('small.host', 12, [day('2026-11-06', [{ hostname: 'small.host', accounts: 12 }]), day('2026-11-07', [])])).toBeNull();
     // most of them on one day still reads as one go
     expect(batchWords('pds.techne.town', 320, [...week, day('2026-11-08', [{ hostname: 'pds.techne.town', accounts: 16 }])])).toBe('304 on nov 6, in one go');
+  });
+});
+
+describe("the plc directory's utc day, in the reader's time", () => {
+  const at = Date.parse('2026-11-12T16:00:00.000Z');
+  it('says when today began where the reader is, and nothing extra on utc', () => {
+    expect(utcDayStartWords(at, 'America/New_York')).toBe('7 pm yesterday');
+    // in tokyo it's already tomorrow at 16:00 utc; earlier in the utc day, the same day
+    expect(utcDayStartWords(at, 'Asia/Tokyo')).toBe('9 am yesterday');
+    expect(utcDayStartWords(Date.parse('2026-11-12T05:00:00.000Z'), 'Asia/Tokyo')).toBe('9 am');
+    expect(utcDayStartWords(Date.parse('2026-11-12T05:00:00.000Z'), 'Asia/Kolkata')).toBe('5:30 am');
+    expect(utcDayStartWords(at, 'UTC')).toBeNull();
+    expect(identityDayWords('2026-11-12', at, 'America/New_York')).toBe('since 7 pm yesterday, your time');
+    expect(identityDayWords('2026-11-12', at, 'UTC')).toBe('today so far (utc)');
+    expect(identityWhen('2026-11-12', at, 'America/New_York')).toBe('since 7 pm yesterday');
+    expect(identityWhen('2026-11-11', at, 'America/New_York')).toBe('yesterday');
   });
 });

@@ -246,7 +246,7 @@
                  the lens moves it on to the last hour, 24 hours, 7 days or 30 days, each number with a chip against the one before (src/scripts/weather-span.ts) -->
             <section class="tile weather-tile weather-minute" aria-labelledby="weather-minute-title" data-s-tile data-span="hour" data-topics="trends">
                 <div class="weather-tile__titled">
-                    <h2 class="weather-tile__title" id="weather-minute-title">the last <span class="weather-span__word" data-s-word>hour</span></h2>
+                    <h2 class="weather-tile__title" id="weather-minute-title">conditions <span class="weather-span__over">over the last <span class="weather-span__word" data-s-word>hour</span></span></h2>
                     <button type="button" class="weather-info" data-poe-explain="readouts" aria-haspopup="dialog" aria-label="what do feels like, gusts, humidity and visibility mean? ask poe" title="what's this?">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                     </button>
@@ -290,13 +290,15 @@
                  only its unit reaches them (weather-almanac.ts, weather-forecast.ts). -->
             <div class="weather-group" id="patterns-and-outlook" data-section="patterns" data-section-label="patterns" data-section-lens="unit">
                 <h2 class="weather-group__title">patterns and outlook</h2>
-                <p class="weather-group__note">these keep their own times and always count new records. only the unit up top reaches them.</p>
+                <p class="weather-group__note">these keep their own times and always count new records. the unit up top reaches them, up to per hour.</p>
             </div>
 
             <!-- The almanac (src/scripts/weather-almanac.ts, /api/weather-almanac): today so far, and new apps. -->
             <section class="tile weather-tile weather-today" aria-labelledby="weather-today-title" data-a-today data-state="loading" data-topics="today">
                 <div class="weather-tile__titled">
                     <h2 class="weather-tile__title" id="weather-today-title">today so far</h2>
+                    <!-- it always counts records: said when the lens counts accounts (weather-page.ts tagRecordsOnly) -->
+                    <span class="weather-tag" data-tag-records hidden>by records</span>
                     <!-- this part on its own page, with a card of its own to share (src/scripts/weather-topics.ts); not on that page -->
                     <a class="weather-info weather-own-page" href="/weather/today" data-own-page="today" aria-label="today and the outlook on its own page" title="on its own page">
                         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M8.5 4.75H6a1.75 1.75 0 0 0-1.75 1.75V14A1.75 1.75 0 0 0 6 15.75h7.5A1.75 1.75 0 0 0 15.25 14v-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M11.5 4.25h4.25V8.5M15.5 4.5 9.75 10.25" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -352,6 +354,7 @@
                 <div class="weather-tile__head">
                     <div class="weather-tile__titled">
                         <h2 class="weather-tile__title" id="weather-forecast-title">the forecast</h2>
+                        <span class="weather-tag" data-tag-records hidden>by records</span>
                         <button type="button" class="weather-info" data-poe-explain="forecast" aria-haspopup="dialog" aria-label="how does the forecast work? ask poe" title="what's this?">
                             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 9v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/></svg>
                         </button>
@@ -372,7 +375,10 @@
 
             <section class="tile weather-tile weather-heat" aria-labelledby="weather-heat-title" data-a-heat data-state="loading" data-topics="today">
                 <div class="weather-tile__head">
-                    <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
+                    <div class="weather-tile__titled">
+                        <h2 class="weather-tile__title" id="weather-heat-title">when the sky is busiest</h2>
+                        <span class="weather-tag" data-tag-records hidden>by records</span>
+                    </div>
                     <p class="weather-tile__aside" data-a-heat-aside></p>
                 </div>
                 <p class="weather-heat__lede" data-a-heat-lede>reading the week…</p>
@@ -678,6 +684,7 @@
                 <p>this is my weather station! i listen to <a href="https://github.com/bluesky-social/jetstream">everything the network writes</a>, from bluesky and every other app, and count it as it floats by, live while you&#39;re here.</p>
                 <p>the bar up top picks what you&#39;re looking at: right now or the last hour, day, week or month, and what a rate is per. it starts on <strong>accounts</strong>, counting who&#39;s writing rather than how much, so one chatty bot can&#39;t pass for a crowd. switch to <strong>records</strong> for how much. i never keep track of who&#39;s who.</p>
                 <p>the more clouds up top, the more the sky belongs to apps other than bluesky. cloudy is my favourite! i&#39;ll pipe up when something exciting blows in (◕‿◕)</p>
+                <p>my records go back to oct 6, read afterwards from jetstream&#39;s archive, and i&#39;ve listened live since oct 20. the archive missed most edits and some apps and accounts, so the readouts, the records and the apps&#39; arrows start on oct 20. sign-ups, moves and hosts come from the plc directory and the relay, from oct 8. days marked utc are utc days; everything else is in your time.</p>
                 <p>i&#39;m a potato, not a satellite, so a quiet app can slip past me now and then. <a href="/">back home</a>.</p>
                 <p><button type="button" class="weather-how__alerts" data-alerts-toggle>hush weather alerts</button></p>
             </section>

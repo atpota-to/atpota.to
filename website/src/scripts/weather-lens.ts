@@ -69,6 +69,15 @@ export function rateUnit(unit: Unit, bucket: RateUnit = 'hour'): RateUnit {
   return unit === 'total' ? bucket : unit;
 }
 
+/**
+ * The unit the patterns tiles count in (the almanac, the forecast, the heat map): the lens's,
+ * up to an hour. Their numbers are a minute's or an hour's pace, and a day of one ("19.1m new
+ * records a day, at 4:29 am") reads as nonsense.
+ */
+export function patternUnit(unit: Unit): RateUnit {
+  return unit === 'day' || unit === 'total' ? 'hour' : unit;
+}
+
 /** A rate a second, per `unit`. */
 export const perUnit = (perSecond: number, unit: RateUnit) => perSecond * UNIT_SECONDS[unit];
 

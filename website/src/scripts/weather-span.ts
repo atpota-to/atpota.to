@@ -220,7 +220,8 @@ export function spanNote(span: Span, now: Figures | null, before: Figures | null
   const info = SPAN_INFO[span];
   const words = info.words;
   if (!now) return failed ? `${words} is hard to read right now. try again in a bit.` : `reading ${words}…`;
-  const heard = span !== 'minute' && now.seconds < info.seconds * 0.9 ? ` the station has heard ${coverageWords(now.seconds)} of ${words} so far.` : '';
+  // live only: the archive the trends also draw on missed most edits, so these figures start where the station listened live
+  const heard = span !== 'minute' && now.seconds < info.seconds * 0.9 ? ` these count only what the station heard live: ${coverageWords(now.seconds)} of ${words} so far.` : '';
   const arrows = before ? `arrows compare with ${info.before}.` : span === 'minute' ? '' : `once the station has heard ${info.before}, arrows say what's up and down.`;
   return `${arrows}${heard}`.trim();
 }

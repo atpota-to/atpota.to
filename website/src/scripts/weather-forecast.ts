@@ -20,7 +20,7 @@ import { litPath, pageMoon, type MoonPhase } from './moon';
 import { rollText } from './roll';
 import { timeOfDay } from './sky-clock';
 import type { Condition } from './weather';
-import { rateUnit, recordsPer, wholeRate, type Lens, type RateUnit } from './weather-lens';
+import { patternUnit, recordsPer, wholeRate, type Lens, type RateUnit } from './weather-lens';
 
 export const FORECAST_ENDPOINT = '/api/weather-forecast';
 export const FORECAST_REFRESH_MS = 5 * 60_000;
@@ -338,7 +338,8 @@ export function initForecast(root: ParentNode = document, fetchImpl: typeof fetc
   const tile = $(root, '[data-f-forecast]');
   if (!tile) return;
   let shown: Forecast | null = null;
-  const unit = () => rateUnit(lens?.get().unit ?? 'second');
+  // the lens's unit, up to an hour: these are a minute's or an hour's pace
+  const unit = () => patternUnit(lens?.get().unit ?? 'second');
   lens?.onChange((l, was) => {
     if (shown && l.unit !== was.unit) renderForecast(tile, shown, Date.now(), tz, unit());
   });

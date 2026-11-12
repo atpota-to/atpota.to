@@ -25,7 +25,7 @@
  */
 
 import { rollText } from './roll';
-import { rateUnit, recordsPer, UNIT_INFO, wholeRate, type Lens, type RateUnit } from './weather-lens';
+import { patternUnit, recordsPer, UNIT_INFO, wholeRate, type Lens, type RateUnit } from './weather-lens';
 import { appName } from './weather';
 
 export const ALMANAC_ENDPOINT = '/api/weather-almanac';
@@ -749,7 +749,8 @@ export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch
   if (!today && !fresh && !heat) return;
   const tz = readerTimeZone();
   let shown: Almanac | null = null;
-  const unit = () => rateUnit(lens?.get().unit ?? 'second');
+  // the lens's unit, up to an hour: these are a minute's or an hour's pace
+  const unit = () => patternUnit(lens?.get().unit ?? 'second');
   const rates = (a: Almanac, now: number) => {
     if (today && (a.today || a.normal)) renderToday(today, a, now, tz, unit());
     if (today) renderRecords(today, a, tz, unit());
