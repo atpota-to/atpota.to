@@ -960,7 +960,7 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 }
 
 /* when it was, on a line of its own, so the date never breaks around the number */
-.weather-records__list dd span {
+.weather-records__list :is([data-a-record-busiest-at], [data-a-record-apps-at]) {
   display: block;
 }
 
@@ -999,7 +999,8 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   padding: 3px 6px;
   border-radius: var(--radius-pill);
   color: var(--text);
-  font-size: calc(clamp(13px, 3.2cqi, 17px) + var(--w, 0) * var(--w, 0) * clamp(16px, 7cqi, 34px));
+  /* by its weight, but never wider than the cloud: a long name at the top size would break mid-word (--len, its characters) */
+  font-size: min(calc(clamp(13px, 3.2cqi, 17px) + var(--w, 0) * var(--w, 0) * clamp(16px, 7cqi, 34px)), calc(150cqi / var(--len, 10)));
   font-weight: 700;
   line-height: 1.15;
   text-decoration: none;

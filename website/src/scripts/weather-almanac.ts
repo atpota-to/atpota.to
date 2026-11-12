@@ -535,6 +535,7 @@ function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: 
       link.className = 'weather-new__link';
       // on a shared host, the app's own subdomain: its name, and its lexicons
       const shown = appName(app.domain, app.collections);
+      li.style.setProperty('--len', String(Math.max(6, shown.length)));
       link.href = aturiFor(shown);
       link.target = '_blank';
       link.rel = 'noopener';

@@ -511,7 +511,9 @@ function renderMix(report: HTMLElement, sky: Sky, lens: LensState): void {
   const units = tile ? [...tile.querySelectorAll<HTMLElement>('[data-r-mix-unit]')] : [];
   const collections = $(report, '[data-r-collections-wrap]');
   if (a) {
-    roll(report, '[data-r-ratio]', a.elsewhere <= 0 ? 'nobody active wrote with an app other than bluesky' : a.elsewhere * 2 > a.active ? 'most active accounts wrote with apps other than bluesky' : `1 in ${Math.round(a.active / a.elsewhere).toLocaleString('en-US')} active accounts wrote with an app other than bluesky`);
+    // the whole window's crowd, said with its window: the diversity tile beside it has an average minute's share
+    const over = sky.window === 'now' ? '' : `over ${WINDOW_INFO[sky.window].words}, `;
+    roll(report, '[data-r-ratio]', a.elsewhere <= 0 ? `${over}nobody active wrote with an app other than bluesky` : a.elsewhere * 2 > a.active ? `${over}most active accounts wrote with apps other than bluesky` : `${over}1 in ${Math.round(a.active / a.elsewhere).toLocaleString('en-US')} active accounts wrote with an app other than bluesky`);
     renderShare($(report, '[data-r-bar-bsky]'), $(report, '[data-r-bar-else]'), a.active > 0 ? (a.elsewhere / a.active) * 100 : 0);
     // someone can write to both, so the two sides are "only bluesky" and "other apps", which add up to everyone
     const only = Math.max(0, a.active - a.elsewhere);
