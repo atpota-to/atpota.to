@@ -581,7 +581,13 @@ export async function profilesByHandle(handles, { timeoutMs = 8000 } = {}) {
     const handle = typeof p?.handle === 'string' ? p.handle.toLowerCase() : null;
     if (!handle || handle === 'handle.invalid' || typeof p.did !== 'string' || !/^did:(plc|web):/.test(p.did)) continue;
     const name = typeof p.displayName === 'string' ? p.displayName.replace(/\s+/g, ' ').trim().slice(0, 64) : '';
-    out.set(handle, { did: p.did, handle, displayName: name || null });
+    // For a weather post's app accounts (gates/weather.js appAccountProblem): pronouns say a
+    // person, and a label (a moderation label, or the account's own) says leave it be.
+    const labels = Array.isArray(p.labels) ? p.labels.flatMap((l) => (typeof l?.val === 'string' ? [l.val] : [])) : [];
+    out.set(handle, {
+      did: p.did, handle, displayName: name || null,
+      pronouns: typeof p.pronouns === 'string' && p.pronouns.trim() !== '', labels,
+    });
   }
   return out;
 }
