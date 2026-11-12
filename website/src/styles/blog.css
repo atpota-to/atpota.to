@@ -1400,6 +1400,34 @@ html[data-theme="dark"] .post__body h2::after {
   display: none;
 }
 
+/* "sign in to subscribe with bluesky", where the box goes for a signed-out reader (src/blog/ui.ts). */
+.blog-email .blog-email__join {
+  display: block;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+
+.blog-email .blog-email__join:hover {
+  text-decoration-color: currentColor;
+}
+
+.blog-email .blog-email__join[hidden] {
+  display: none;
+}
+
 .blog-email__box {
   flex: none;
   width: 18px;

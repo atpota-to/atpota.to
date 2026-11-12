@@ -382,6 +382,13 @@ function setup(
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
+/** Types a handle into the sign-in dialog and sends it. */
+async function submitHandle(value: string): Promise<void> {
+  $<HTMLInputElement>('input[name="handle"]').value = value;
+  $('form[data-blog-signin-form]').dispatchEvent(new Event('submit', { cancelable: true }));
+  await flush();
+}
+
 describe('mountBlog', () => {
   beforeEach(() => {
     document.body.innerHTML = postPage();
@@ -390,11 +397,6 @@ describe('mountBlog', () => {
     vi.useRealTimers();
   });
 
-  const submitHandle = async (value: string) => {
-    $<HTMLInputElement>('input[name="handle"]').value = value;
-    $('form[data-blog-signin-form]').dispatchEvent(new Event('submit', { cancelable: true }));
-    await flush();
-  };
   const step = () => ($('form[data-blog-signin-form]').hidden ? 'confirm' : 'ask');
 
   it('signed out: shows the buttons and a sign-in prompt', async () => {
@@ -728,6 +730,7 @@ describe('email subscribe forms', () => {
 
   const form = () => $<HTMLFormElement>('form[data-blog-email]');
   const also = () => $<HTMLLabelElement>('.blog-email__also');
+  const join = () => $<HTMLButtonElement>('.blog-email__join');
   const box = () => also().querySelector<HTMLInputElement>('input[type="checkbox"]')!;
   const submit = () => {
     const event = new Event('submit', { cancelable: true });
@@ -763,6 +766,39 @@ describe('email subscribe forms', () => {
     expect(also().hidden).toBe(true);
     expect(submit().defaultPrevented).toBe(false);
     expect(h.calls).toEqual([]);
+  });
+
+  it('signed out: the form offers a sign-in to subscribe with bluesky, which finishes once back', async () => {
+    const h = setup({ start: null });
+    await h.mounted;
+    expect(join().hidden).toBe(false);
+    expect(join().textContent).toBe(COPY.email.signIn);
+    expect(join().getAttribute('type')).toBe('button');
+    // it sits between the field and the fine print, where the signed-in box goes
+    expect(join().previousElementSibling!.matches('.blog-email__row')).toBe(true);
+    join().click();
+    expect($<HTMLDialogElement>('dialog[data-blog-signin]').hasAttribute('open')).toBe(true);
+    expect($('[data-blog-signin-lede]').textContent).toBe(COPY.lede.subscribe);
+    await submitHandle('me.test');
+    $('[data-blog-signin-go]').click();
+    await flush();
+    expect(JSON.parse(h.store.get(PENDING_KEY)!)).toEqual({ kind: 'subscribe', returnTo: '/blog/3doc', at: NOW });
+    expect(h.calls).toEqual([]);
+
+    // back from the auth server, signed in: the subscription is saved, and the line is gone
+    document.body.innerHTML = postPage({ email: true });
+    const back = setup({ store: h.store });
+    await back.mounted;
+    expect(back.calls.map((c) => c.path)).toEqual(['/xrpc/com.atproto.repo.createRecord']);
+    expect(join().hidden).toBe(true);
+    expect(also().hidden).toBe(true);
+  });
+
+  it('signed in, or still finding out: no sign-in line', async () => {
+    const h = setup();
+    expect(join().hidden).toBe(true);
+    await h.mounted;
+    expect(join().hidden).toBe(true);
   });
 
   it('signed in and not subscribed on bluesky: one submit saves that subscription, then goes to Leaflet', async () => {
@@ -828,10 +864,12 @@ describe('email subscribe forms', () => {
     const link = () => $<HTMLButtonElement>('.blog-alt button[data-blog-subscribe]');
     const or = () => $('.blog-alt__or');
 
-    it('signed out: "or subscribe with bluesky" under the form, and no box', async () => {
+    it('signed out: the sign-in line in the form stands in for the link, and no box', async () => {
       const h = setup({ start: null, path: '/blog' });
       await h.mounted;
-      expect(link().hidden).toBe(false);
+      expect(join().hidden).toBe(false);
+      expect(link().hidden).toBe(true);
+      // "or follow poe"
       expect(or().hidden).toBe(false);
       expect(also().hidden).toBe(true);
     });
