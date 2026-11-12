@@ -825,6 +825,11 @@ describe('in the lens', () => {
     expect(text('[data-r-else-share]')).toBe('(2.9%)');
     expect([...report.querySelectorAll('[data-r-mix-unit]')].map((u) => u.textContent)).toEqual(['accounts', 'accounts']);
     expect(text('[data-r-total]')).toBe('21,345');
+    // only bluesky and other apps add up to everyone, even though some wrote to both
+    const only = Number(text('[data-r-bsky]')!.replace(/,/g, ''));
+    expect(only + 620).toBe(21_345);
+    expect(text('[data-r-bsky-label]')).toBe('only the bluesky app');
+    expect(Number(text('[data-r-bsky-share]')!.replace(/[()%]/g, '')) + 2.9).toBeCloseTo(100, 0);
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
   });
 
@@ -896,5 +901,22 @@ describe('in the lens', () => {
     expect(asked).toBe(1);
     await feed.get('day', 0);
     expect(asked).toBe(2);
+  });
+});
+
+describe('names and rises', () => {
+  it("names an app on a shared host by its own subdomain, when its collections agree on one", async () => {
+    const { appName } = await import('../src/scripts/weather.js');
+    expect(appName('web.app', ['app.web.trackbrowser.scoreSnapshot', 'app.web.trackbrowser.scoreProfile'])).toBe('trackbrowser.web.app');
+    expect(appName('web.app', ['app.web.one.a', 'app.web.two.b'])).toBe('web.app');
+    expect(appName('web.app', [])).toBe('web.app');
+    expect(appName('tangled.org', ['org.tangled.repo'])).toBe('tangled.org');
+  });
+
+  it('says a rise past tripling in times, not percent', async () => {
+    const { rise } = await import('../src/scripts/weather-page.js');
+    expect(rise(57, 'the hour before')).toEqual({ text: '↑ 57%', words: 'up 57% on the hour before', trend: 'up' });
+    expect(rise(1100, 'the week before')).toEqual({ text: '↑ 12×', words: 'up 12 times on the week before', trend: 'up' });
+    expect(rise(250_000, 'the week before').text).toBe('↑ 999+×');
   });
 });

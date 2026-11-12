@@ -271,30 +271,58 @@ export async function readDiversity(db: Supabase, at: number): Promise<NormalDiv
   return { hour: new Date(hour).toISOString(), now, days: usual(USUAL_DAYS), weeks: usual(USUAL_WEEKS) };
 }
 
+/** How many of the busiest minutes (and the minutes with the most apps) to weigh for a record. */
+export const RECORD_CANDIDATES = 25;
+/** A minute past this many times its hour's typical minute is a burst, as atmosphere_steady.sql trims them. */
+export const BURST_TIMES = 3;
+
 /**
  * The station's records since it listened live: the whole minute with the most new records
- * a second, and the one with the most apps outside Bluesky. Straight off the minute rows
- * (the newest of any tie), no sums needed.
+ * a second, and the one with the most apps outside Bluesky. Only minutes that are weather: a
+ * minute more than BURST_TIMES its hour's typical one (the hour's steady count, a minute's
+ * worth) is a burst the hours already leave out (atmosphere_steady.sql), whether one account's
+ * import or a backlog let out after a pause. On 2026-10-22 22:19 to 22:25 a backlog packed
+ * up to 451,738 records and 89,617 accounts into a minute, against about 23,000 records in a
+ * usual minute that hour; neither it nor its 52 apps are a record.
  */
 export async function readRecords(db: Supabase): Promise<Records> {
   const since = new Date(LIVE_SINCE).toISOString();
-  const path = (select: string, order: string, extra = '') => `atmosphere_minute?select=${select}&minute=gte.${since}${extra}&order=${order},minute.desc&limit=1`;
-  const [busy, apps] = await Promise.all([
-    db.get(path('minute,creates,seconds_covered', 'creates.desc', '&seconds_covered=eq.60')),
-    db.get(path('minute,apps', 'apps.desc')),
-  ]);
-  const first = (rows: unknown) => (Array.isArray(rows) ? rows[0] : undefined);
-  const b = first(busy);
-  const bm = isRecord(b) ? iso(b.minute) : null;
-  const bc = counts(b, ['creates', 'seconds_covered'] as const);
-  const a = first(apps);
-  const am = isRecord(a) ? iso(a.minute) : null;
-  const ac = counts(a, ['apps'] as const);
+  const path = (order: string, extra = '') =>
+    `atmosphere_minute?select=minute,creates,seconds_covered,apps&minute=gte.${since}${extra}&order=${order},minute.desc&limit=${RECORD_CANDIDATES}`;
+  const [busy, apps] = await Promise.all([db.get(path('creates.desc', '&seconds_covered=eq.60')), db.get(path('apps.desc'))]);
   if (!Array.isArray(busy) || !Array.isArray(apps)) throw new Error('records did not check out');
+  type Minute = { minute: string; creates: number; seconds: number; apps: number };
+  const minutes = (rows: unknown[]): Minute[] =>
+    rows.flatMap((r) => {
+      const minute = isRecord(r) ? iso(r.minute) : null;
+      const c = counts(r, ['creates', 'seconds_covered', 'apps'] as const);
+      return minute && c && c.seconds_covered > 0 ? [{ minute, creates: c.creates, seconds: c.seconds_covered, apps: c.apps }] : [];
+    });
+  const [byRecords, byApps] = [minutes(busy), minutes(apps)];
+  // each candidate's hour, for its typical minute
+  const hourOf = (m: string) => `${m.slice(0, 13)}:00:00.000Z`;
+  const hours = [...new Set([...byRecords, ...byApps].map((m) => hourOf(m.minute)))];
+  const typical = new Map<string, number>();
+  if (hours.length) {
+    const rows = await db.get(`atmosphere_hour?select=hour,steady,seconds_covered&hour=in.(${hours.map((h) => `"${h}"`).join(',')})`);
+    if (!Array.isArray(rows)) throw new Error('records did not check out');
+    for (const r of rows) {
+      const hour = isRecord(r) ? iso(r.hour) : null;
+      const c = counts(r, ['steady', 'seconds_covered'] as const);
+      if (hour && c && c.seconds_covered > 0) typical.set(hourOf(hour), (c.steady / c.seconds_covered) * 60);
+    }
+  }
+  // a minute whose hour the station hasn't summed yet can't be checked, so it waits
+  const weather = (m: Minute) => {
+    const usual = typical.get(hourOf(m.minute));
+    return usual !== undefined && m.creates <= BURST_TIMES * usual;
+  };
+  const b = byRecords.find(weather);
+  const a = byApps.find(weather);
   return {
     since,
-    busiest: bm && bc && bc.seconds_covered > 0 ? { minute: bm, perSecond: Math.round((bc.creates / bc.seconds_covered) * 10) / 10 } : null,
-    mostApps: am && ac ? { minute: am, apps: ac.apps } : null,
+    busiest: b ? { minute: b.minute, perSecond: Math.round((b.creates / b.seconds) * 10) / 10 } : null,
+    mostApps: a ? { minute: a.minute, apps: a.apps } : null,
   };
 }
 

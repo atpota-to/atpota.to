@@ -86,7 +86,7 @@ export const rateIn = (perSecond: number, unit: RateUnit) => formatAmount(perUni
  */
 export function wholeRate(perSecond: number, unit: RateUnit): string {
   const v = perUnit(perSecond, unit);
-  return v < 10_000 ? String(Math.round(v)) : compactCount(v);
+  return v < 10_000 ? Math.round(v).toLocaleString('en-US') : compactCount(v);
 }
 
 /** "new records a second", "new records an hour". */

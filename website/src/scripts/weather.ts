@@ -327,6 +327,20 @@ export function coverageWords(seconds: number): string {
 }
 
 /** The index as people read it: two decimals under 1, one under 10, whole after that. */
+/**
+ * Hosting domains many apps share. An app's NSIDs are its domain the other way round, so
+ * one served from a shared host reads as the host: app.web.trackbrowser.* is
+ * trackbrowser.web.app, not web.app, which belongs to everyone on Firebase.
+ */
+export const SHARED_HOSTS: ReadonlySet<string> = new Set(['web.app', 'firebaseapp.com', 'github.io', 'pages.dev', 'vercel.app', 'netlify.app', 'workers.dev', 'fly.dev', 'onrender.com', 'deno.dev', 'herokuapp.com', 'glitch.me', 'surge.sh']);
+
+/** An app's name as people would know it: on a shared host, the subdomain its collections all share; else its domain. */
+export function appName(domain: string, collections: readonly string[]): string {
+  if (!SHARED_HOSTS.has(domain)) return domain;
+  const subs = new Set(collections.map((c) => c.split('.')[2]).filter((x): x is string => !!x && /^[a-z0-9-]+$/i.test(x)));
+  return subs.size === 1 ? `${[...subs][0]!.toLowerCase()}.${domain}` : domain;
+}
+
 export function formatIndex(index: number): string {
   return index < 1 ? index.toFixed(2) : index < 10 ? index.toFixed(1) : String(Math.round(index));
 }

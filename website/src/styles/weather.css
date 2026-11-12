@@ -959,6 +959,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-variant-numeric: tabular-nums;
 }
 
+/* when it was, on a line of its own, so the date never breaks around the number */
+.weather-records__list dd span {
+  display: block;
+}
+
 .weather-new__lede {
   color: var(--text-soft);
 }
@@ -1004,6 +1009,12 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 .weather-new__link:hover {
   background: var(--butter);
+}
+
+/* one account trying something out: there, but quieter than a crowd */
+.weather-new__app.is-solo .weather-new__link {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .weather-new__link:focus-visible {

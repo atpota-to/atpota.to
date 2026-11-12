@@ -216,10 +216,11 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
       ? getAll(db, `atmosphere_minute?select=seconds:seconds_covered&minute=gte.${prev_since}&minute=lt.${prev_until}&dids=not.is.null&order=minute.asc`)
       : null,
     getAll(db, `atmosphere_account_sketch?select=t,seconds,dids,dids_bluesky,dids_elsewhere,bluesky,elsewhere&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
-    // each app's busiest collections lately, as the records' apps have them
+    // each app's busiest collections lately, as the records' apps have them: the last two days whatever the window, since
+    // an app whose accounts only edited records in the last hour wrote no new ones, and would show no collections at all
     Promise.all(
       top.map(async (a) => {
-        const rows = await db.get(`atmosphere_minute_app?select=collections&domain=eq.${a.domain}&minute=gte.${new Date(Math.max(Date.parse(since), Date.parse(until) - 2 * 86_400_000)).toISOString()}&order=creates.desc,minute.desc&limit=1`);
+        const rows = await db.get(`atmosphere_minute_app?select=collections&domain=eq.${a.domain}&minute=gte.${new Date(Date.parse(until) - 2 * 86_400_000).toISOString()}&collections=not.eq.%7B%7D&order=creates.desc,minute.desc&limit=1`);
         return Array.isArray(rows) && isRecord(rows[0]) ? collectionsOf(rows[0].collections) : [];
       }),
     ),

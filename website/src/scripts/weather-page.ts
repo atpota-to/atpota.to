@@ -94,6 +94,7 @@ import {
   ERROR_TEXT,
   LEVEL_TEXT,
   REFRESH_MS,
+  appName,
   compactCount,
   countTo,
   coverageWords,
@@ -512,19 +513,26 @@ function renderMix(report: HTMLElement, sky: Sky, lens: LensState): void {
   if (a) {
     roll(report, '[data-r-ratio]', a.elsewhere <= 0 ? 'nobody active wrote with an app other than bluesky' : a.elsewhere * 2 > a.active ? 'most active accounts wrote with apps other than bluesky' : `1 in ${Math.round(a.active / a.elsewhere).toLocaleString('en-US')} active accounts wrote with an app other than bluesky`);
     renderShare($(report, '[data-r-bar-bsky]'), $(report, '[data-r-bar-else]'), a.active > 0 ? (a.elsewhere / a.active) * 100 : 0);
-    count(report, '[data-r-bsky]', a.bluesky, formatCount);
+    // someone can write to both, so the two sides are "only bluesky" and "other apps", which add up to everyone
+    const only = Math.max(0, a.active - a.elsewhere);
+    const both = Math.max(0, a.bluesky - only);
+    setText(report, '[data-r-bsky-label]', 'only the bluesky app');
+    setText(report, '[data-r-else-label]', 'other apps');
+    count(report, '[data-r-bsky]', only, formatCount);
     count(report, '[data-r-else]', a.elsewhere, formatCount);
     count(report, '[data-r-total]', a.active, formatCount);
-    roll(report, '[data-r-bsky-share]', formatShare(a.bluesky, a.active));
+    roll(report, '[data-r-bsky-share]', formatShare(only, a.active));
     roll(report, '[data-r-else-share]', formatShare(a.elsewhere, a.active));
     for (const u of units) u.textContent = 'accounts';
-    setText(report, '[data-r-total-words]', 'different accounts wrote something in all');
+    setText(report, '[data-r-total-words]', both > 0 ? `different accounts wrote something in all. ${formatCount(both)} of those on other apps wrote on bluesky too` : 'different accounts wrote something in all');
     if (collections) collections.hidden = true;
     return;
   }
   const r = sky.records;
   if (!r) return;
   const v = (x: number) => amountIn(x, lens.unit, sky.seconds);
+  setText(report, '[data-r-bsky-label]', 'the bluesky app');
+  setText(report, '[data-r-else-label]', 'other apps');
   roll(report, '[data-r-ratio]', ratioText(r));
   renderRatio($(report, '[data-r-bar-bsky]'), $(report, '[data-r-bar-else]'), r);
   count(report, '[data-r-bsky]', v(r.bluesky), formatAmount);
@@ -545,8 +553,8 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   tag(tile, byAcct ? 'accounts' : 'records', lens);
   const bars = topBars(
     byAcct
-      ? sky.appsByAccounts!.map((x) => ({ label: x.domain, sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatCount(x.count), change: x.change }))
-      : sky.apps.map((x) => ({ label: x.domain, sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatAmount(lens.unit === 'total' ? x.count : perUnit(x.perSecond, lens.unit)), change: x.change })),
+      ? sky.appsByAccounts!.map((x) => ({ label: appName(x.domain, x.collections), sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatCount(x.count), change: x.change }))
+      : sky.apps.map((x) => ({ label: appName(x.domain, x.collections), sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatAmount(lens.unit === 'total' ? x.count : perUnit(x.perSecond, lens.unit)), change: x.change })),
   );
   const list = $(report, '[data-r-apps]');
   if (list) renderBars(list, bars, sky.window === 'now' && !byAcct ? sky.seconds : undefined);
@@ -1041,11 +1049,18 @@ function toAccounts(x: unknown): HistoryAccounts | null {
  * (two hours hold far fewer than twice an hour's), so only when the station heard both
  * windows about as well; null otherwise.
  */
+/** A rise: in percent, or past tripling in times ("↑ 12×"), which a reader takes in at a glance where "↑ 999+%" says nothing. */
+export function rise(pct: number, earlier: string): NonNullable<Bar['change']> {
+  if (pct < 200) return { text: `↑ ${pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  const times = Math.round(pct / 100 + 1);
+  return { text: `↑ ${times > 999 ? '999+' : times}×`, words: `up ${times} times on ${earlier}`, trend: 'up' };
+}
+
 export function accountChange(app: HistoryAccounts['apps'][number], a: HistoryAccounts, earlier: string): Bar['change'] | null {
   if (a.seconds <= 0 || a.prevSeconds < a.seconds * 0.9 || a.prevSeconds > a.seconds * 1.1) return null;
   if (app.prevActive === 0) return { text: 'new', words: `nobody at all in ${earlier}`, trend: 'new' };
   const pct = Math.round((app.active / app.prevActive - 1) * 100);
-  if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  if (pct >= 15) return rise(pct, earlier);
   if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
@@ -1077,7 +1092,7 @@ export function appChange(app: HistoryApp, compare: History['compare'], earlier:
   if (app.prevCreates === 0) return { text: 'new', words: `none at all in ${earlier}`, trend: 'new' };
   const ratio = app.creates / compare.seconds / (app.prevCreates / compare.prevSeconds);
   const pct = Math.round((ratio - 1) * 100);
-  if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  if (pct >= 15) return rise(pct, earlier);
   if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
