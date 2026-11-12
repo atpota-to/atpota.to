@@ -43,6 +43,7 @@ import {
   type CardData,
   type CardName,
   type DayHistory,
+  type HourHistory,
   type El,
   type MascotFace,
 } from './og-weather-cards.js';
@@ -113,11 +114,16 @@ export async function readCardData(deps: OgWeatherDeps = {}): Promise<CardData> 
     const b = await body(await createHistoryHandlers(handlerDeps).GET(new Request('https://atpota.to/api/weather-history?range=day')));
     return b && typeof b === 'object' && Array.isArray((b as DayHistory).points) ? (b as DayHistory) : null;
   });
+  // the last hour's accounts, for the default card's headline (the page's header reads the same)
+  const hour = within<HourHistory>(ms, async () => {
+    const b = await body(await createHistoryHandlers(handlerDeps).GET(new Request('https://atpota.to/api/weather-history?range=hour')));
+    return b && typeof b === 'object' && typeof (b as HourHistory).accounts === 'object' ? (b as HourHistory) : null;
+  });
   const almanac = within<AlmanacData>(ms, async () => {
     const b = await body(await createAlmanacHandlers(handlerDeps).GET(new Request('https://atpota.to/api/weather-almanac?tz=UTC')));
     return b && typeof b === 'object' ? (b as AlmanacData) : null;
   });
-  return { at, now: await now, day: await day, almanac: await almanac };
+  return { at, now: await now, day: await day, almanac: await almanac, hour: await hour };
 }
 
 // ---------- drawing ----------

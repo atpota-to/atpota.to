@@ -158,7 +158,7 @@ function data(over: Partial<CardData> = {}): CardData {
   };
 }
 
-const EMPTY: CardData = { at: NOW, now: null, day: null, almanac: null };
+const EMPTY: CardData = { at: NOW, now: null, day: null, almanac: null, hour: null };
 
 /** A PNG's width and height, from its IHDR chunk. */
 function pngSize(bytes: Uint8Array): { width: number; height: number } {
@@ -290,6 +290,20 @@ describe('og weather: the cards', () => {
       'the last hour', 'much busier than usual', '+25%', 'today in numbers', '212', '446', 'new records', '11.4 million', 'from other apps',
     ]));
     expect(texts(drawCard('trend', data(), art))).toEqual(expect.arrayContaining(['busiest hour 450', '362']));
+  });
+
+  it("leads the default card with the last hour's active accounts, as the page's header does, and records a second without them", async () => {
+    const art = await cardArt();
+    const crowd = (active: number, seconds: number) => ({ seconds, active, bluesky: active - 900, elsewhere: 1000, index: 2, share: 0.45, spread: 18 });
+    const hour = { accounts: { seconds: 3540, prevSeconds: 3600, total: crowd(224_186, 3540), prev: crowd(221_696, 3600), points: [], apps: [] } } as unknown as NonNullable<CardData['hour']>;
+    const words = texts(drawCard('forecast', data({ hour }), art));
+    expect(words).toEqual(expect.arrayContaining(['224k', 'accounts', 'active in the last hour, up 1% on the hour before', 'a light breeze.']));
+    expect(words).not.toContain('rec/sec');
+    // an hour before heard much less isn't one to compare with: just the hour
+    const thin = { accounts: { ...hour.accounts!, prev: crowd(221_696, 1200) } } as unknown as NonNullable<CardData['hour']>;
+    expect(texts(drawCard('forecast', data({ hour: thin }), art))).toEqual(expect.arrayContaining(['active in the last hour']));
+    // and without the hour's accounts, records a second as before
+    expect(texts(drawCard('forecast', data({ hour: null }), art))).toEqual(expect.arrayContaining(['362', 'rec/sec']));
   });
 
   it('shows where the atmosphere lives, from the station\'s census', async () => {
