@@ -314,6 +314,26 @@ What it writes, for each day from `--from` to yesterday:
   the arrivals. The website reads the table directly: each day's pairs on
   `/api/weather-history` (`hosts.identities[].moves`), and one host's own arrivals and
   departures on `/api/weather-history?host=`.
+  Two stretches of the log aren't what they look like, checked against plc.directory's own
+  export on 2026-11-12:
+
+  - **Oct 8 to Oct 18: a scripted wave on Bluesky's hosts.** `created_bluesky` runs about
+    58,000 a day, then about 18,000 from Oct 19 on. In hours sampled from Oct 8 to Oct 18, 54
+    to 74% of new accounts on `*.host.bsky.network` had handles from the Faker library, a
+    first name and a word of lorem ipsum (`penelope_explicabo.bsky.social`); by 23:00 UTC on
+    Oct 18 there were none. Without them Oct 18 had the same rate as Oct 19 and Nov 11. The
+    rules here only catch scripts on independent hosts, so these are counted; the website
+    shades the wave on sign-ups over time and stars what takes it in
+    (`website/src/scripts/weather-signups.ts` SIGNUP_WAVES).
+  - **Oct 30 to Nov 4: clear air.** `created_unlisted` fell from about 245,000 a day to 200
+    or 300, and came back at 251,424 on Nov 5. Nearly all of it is one host, `pds.trump.com`
+    (about 9,100 an hour in the hours sampled), which paused from about 20:00 UTC on Oct 29.
+
+  The relay's own count of a host's accounts can be far off either way: on 2026-11-12
+  nacg.club went from 5,850 to 20,019 overnight with nobody arriving in the log, and
+  seiran-beta.org lists 5,115 accounts of its own (`listRepos`) where the relay counts 173,
+  which is why its liveliest row has more active accounts than accounts.
+
   The sign-ups tile goes by the same rules (`created_scripted` on each day, and the hosts). A host
   only counts as new if it had 25 or fewer accounts when the station first saw it, or at
   least half its accounts arrived in the range. Checked on 2026-10-31 against the log from

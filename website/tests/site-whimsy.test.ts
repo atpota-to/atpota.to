@@ -223,11 +223,11 @@ describe('atmospheric conditions', () => {
     expect(mix.hidden).toBe(false);
     expect(tile.querySelector('[data-weather-index]')!.textContent).toBe('1.6');
     expect(tile.querySelector('[data-weather-level]')!.textContent).toBe('low');
-    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe("1 in 200 accounts active just now wrote outside bluesky, across about 10 apps");
+    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe("1 in 200 accounts active just now wrote with apps other than bluesky, as spread out as 10 apps the same size");
     expect(tile.querySelector<HTMLElement>('[data-weather-bar-else]')!.style.flexGrow).toBe('0.5');
     // a reading from before the index went by accounts words the records instead
     renderReading(tile, { ...READING, records: { perSecond: 400, bluesky: 398, elsewhere: 2 }, diversity: { index: 0.5, level: 'low', apps: 3, collections: 20 } });
-    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from outside bluesky');
+    expect(tile.querySelector('[data-weather-mix-text]')!.textContent).toBe('1 in 200 new records came from apps other than bluesky');
   });
 
   it('says where the atmosphere lives once a reading has the hosts', () => {
@@ -252,10 +252,10 @@ describe('atmospheric conditions', () => {
     expect(formatIndex(2.44)).toBe('2.4');
     expect(formatIndex(12.4)).toBe('12');
     expect(ratioText({ perSecond: 400, bluesky: 400, elsewhere: 0 })).toBe('every new record just now was a bluesky one');
-    expect(ratioText({ perSecond: 10, bluesky: 2, elsewhere: 8 })).toBe('most new records came from outside bluesky');
-    expect(diversityText({ share: 0, spread: 0 })).toBe('nobody active just now wrote outside bluesky');
-    expect(diversityText({ share: 0.52, spread: 1.3 })).toBe('1 in 192 accounts active just now wrote outside bluesky, all in one app');
-    expect(diversityText({ share: 80, spread: 3 })).toBe('most accounts active just now wrote outside bluesky, across about 3 apps');
+    expect(ratioText({ perSecond: 10, bluesky: 2, elsewhere: 8 })).toBe('most new records came from apps other than bluesky');
+    expect(diversityText({ share: 0, spread: 0 })).toBe('nobody active just now wrote with an app other than bluesky');
+    expect(diversityText({ share: 0.52, spread: 1.3 })).toBe('1 in 192 accounts active just now wrote with apps other than bluesky, nearly all in one app');
+    expect(diversityText({ share: 80, spread: 3 })).toBe('most accounts active just now wrote with apps other than bluesky, as spread out as 3 apps the same size');
   });
 
   it("says what the weather report's header says, over its lens's window", async () => {
@@ -263,12 +263,12 @@ describe('atmospheric conditions', () => {
     const accounts = { total: { active: 52_000 }, points: [{ t: '2026-10-22T20:00:00Z', seconds: 60, active: 3000 }, { t: '2026-10-22T20:01:00Z', seconds: 60, active: 3200 }] };
     const h = (await readHeadline('hour', (async () => Response.json({ range: 'hour', points, total: { seconds: 120, creates: 15_000 }, accounts })) as typeof fetch))!;
     expect(h.records).toEqual([100, null, 150]);
-    const byAccounts = headlineOf(h, { window: 'hour', measure: 'accounts', unit: 'second' }, Date.parse('2026-10-22T21:00:00Z'));
+    const byAccounts = headlineOf(h, { window: 'hour', measure: 'accounts', unit: 'second', compare: 'before' }, Date.parse('2026-10-22T21:00:00Z'));
     expect([byAccounts.period, byAccounts.value, byAccounts.unit, byAccounts.cond]).toEqual(['the last hour', 52_000, 'accounts', '']);
     expect(byAccounts.line).toEqual([3000, 3200]);
-    const byRecords = headlineOf(h, { window: 'hour', measure: 'records', unit: 'minute' });
+    const byRecords = headlineOf(h, { window: 'hour', measure: 'records', unit: 'minute', compare: 'before' });
     expect([byRecords.value, byRecords.unit, byRecords.line]).toEqual([7500, 'rec/min', [100, null, 150]]);
-    expect(headlineOf(h, { window: 'hour', measure: 'records', unit: 'total' }).value).toBe(15_000);
+    expect(headlineOf(h, { window: 'hour', measure: 'records', unit: 'total', compare: 'before' }).value).toBe(15_000);
     expect(await readHeadline('day', (async () => Response.json({ range: 'hour', points, total: { seconds: 1, creates: 1 } })) as typeof fetch)).toBeNull();
 
     document.body.innerHTML = tileHtml();
@@ -279,7 +279,7 @@ describe('atmospheric conditions', () => {
     expect(tile.querySelector<HTMLElement>('[data-weather-spark]')!.hidden).toBe(false);
     // the report's lens, as this browser keeps it; on now, the live reading
     localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'day', measure: 'records', unit: 'hour' }));
-    expect(tileLens()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
+    expect(tileLens()).toEqual({ window: 'day', measure: 'records', unit: 'hour', compare: 'before' });
     localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'now' }));
     expect(tileLens()).toBeNull();
   });

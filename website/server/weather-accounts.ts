@@ -57,9 +57,17 @@ export interface Accounts {
   seconds: number;
   /** How much of the earlier window the station heard, counting accounts. */
   prevSeconds: number;
+  /** Everyone active over the whole window, and the diversity index they make together. */
   total: AccountCounts & Diversity;
+  /**
+   * The window's diversity index as its average reading: each bucket's (minute, hour or day)
+   * weighted by how much of it was heard (typicalOf). The page and Poe show this one: the
+   * whole window's climbs with its length (more apps get a turn over a week than in a
+   * minute), so it can't sit on the live reading's scale. Left out without buckets.
+   */
+  typical?: Diversity;
   /** Everyone active in the earlier window, with the seconds its sketches cover, when the station kept them. */
-  prev?: AccountCounts & Diversity & { seconds: number };
+  prev?: AccountCounts & Diversity & { seconds: number; typical?: Diversity };
   points: AccountPoint[];
   apps: AccountApp[];
 }
@@ -74,6 +82,43 @@ export interface AccountWindow {
   /** When the station started listening live: an earlier window from before then is the archive's, which hears
    * fewer accounts outside Bluesky, so its diversity index isn't one to compare with (weather-almanac.ts LIVE_SINCE). */
   liveSince?: number;
+}
+
+/**
+ * The average of a window's buckets' diversity indexes, each weighted by the seconds heard,
+ * and their parts the same way. Buckets from before the station listened live (the
+ * archive heard fewer accounts outside Bluesky) only count when there are no others.
+ */
+export function typicalOf(points: ReadonlyArray<{ t: string; seconds: number } & Diversity>, liveSince = -Infinity): Diversity | undefined {
+  const heard = points.filter((p) => p.seconds > 0 && Number.isFinite(p.index));
+  const live = heard.filter((p) => Date.parse(p.t) >= liveSince);
+  const use = live.length ? live : heard;
+  const seconds = use.reduce((n, p) => n + p.seconds, 0);
+  if (seconds <= 0) return undefined;
+  const mean = (k: keyof Diversity) => Math.round((use.reduce((n, p) => n + p[k] * p.seconds, 0) / seconds) * 100) / 100;
+  return { index: mean('index'), share: mean('share'), spread: mean('spread') };
+}
+
+/** Each bucket's apps' accounts, as the station counted them (the `dids` on its app rows). */
+function appsByBucket(rows: unknown[]): Map<string, number[]> {
+  const byBucket = new Map<string, number[]>();
+  for (const r of rows) {
+    const t = isRecord(r) ? iso(r.t) : null;
+    if (!t || !isRecord(r) || typeof r.domain !== 'string' || !DOMAIN_RE.test(r.domain) || !isCount(r.dids)) continue;
+    const apps = byBucket.get(t);
+    if (apps) apps.push(num(r.dids));
+    else byBucket.set(t, [num(r.dids)]);
+  }
+  return byBucket;
+}
+
+/** A bucket's own reading from its row: who wrote, and the diversity index over its apps. */
+function bucketPoint(r: unknown, apps: Map<string, number[]>): AccountPoint | null {
+  const t = isRecord(r) ? iso(r.t) : null;
+  const c = counts(r, ['seconds', 'dids', 'dids_bluesky', 'dids_elsewhere'] as const);
+  if (!t || !c) return null;
+  const diversity = diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: apps.get(t) ?? [] });
+  return { t, seconds: c.seconds, active: c.dids, bluesky: c.dids_bluesky, elsewhere: c.dids_elsewhere, ...diversity };
 }
 
 /** Supabase answers at most this many rows at a time. */
@@ -143,27 +188,16 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
     getAll(db, `atmosphere_account_app_sketch?select=t,domain,dids,sketch&period=eq.${period}&${range(since, until)}&order=t.asc,domain.asc`),
   ]);
 
-  // each bucket's apps' accounts, as the station counted them
-  const bucketApps = new Map<string, number[]>();
-  for (const r of appRows) {
-    const t = isRecord(r) ? iso(r.t) : null;
-    if (!t || !isRecord(r) || typeof r.domain !== 'string' || !DOMAIN_RE.test(r.domain) || !isCount(r.dids)) continue;
-    const apps = bucketApps.get(t);
-    if (apps) apps.push(num(r.dids));
-    else bucketApps.set(t, [num(r.dids)]);
-  }
-
+  const bucketApps = appsByBucket(appRows);
   const points: AccountPoint[] = [];
   const kept: unknown[] = [];
   let seconds = 0;
   for (const r of main) {
-    const t = isRecord(r) ? iso(r.t) : null;
-    const c = counts(r, ['seconds', 'dids', 'dids_bluesky', 'dids_elsewhere'] as const);
-    if (!t || !c || !isRecord(r) || !fromBytea(r.bluesky) || !fromBytea(r.elsewhere)) continue;
+    const point = bucketPoint(r, bucketApps);
+    if (!point || !isRecord(r) || !fromBytea(r.bluesky) || !fromBytea(r.elsewhere)) continue;
     kept.push(r);
-    seconds += c.seconds;
-    const diversity = diversityOf({ active: c.dids, elsewhere: c.dids_elsewhere, apps: bucketApps.get(t) ?? [] });
-    points.push({ t, seconds: c.seconds, active: c.dids, bluesky: c.dids_bluesky, elsewhere: c.dids_elsewhere, ...diversity });
+    seconds += point.seconds;
+    points.push(point);
   }
   const appSketches = mergeApps(appRows);
   const apps = [...appSketches].map(([domain, s]) => ({ domain, active: countSketch(s) }));
@@ -175,30 +209,35 @@ export async function readAccounts(db: Supabase, w: AccountWindow): Promise<Acco
 
   // the earlier window's diversity index spreads its accounts over every app, not only the top ones
   const [prevRows, prevCoverage, prevSketches, collections] = await Promise.all([
-    getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc,domain.asc`),
+    getAll(db, `atmosphere_account_app_sketch?select=t,domain,dids,sketch&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc,domain.asc`),
     // minute sketches of everyone may not reach back to the earlier window (they're kept 26 hours), so its coverage
     // comes from the minute rows, and the seconds its sketches cover go with its diversity index
     period === 'minute'
       ? getAll(db, `atmosphere_minute?select=seconds:seconds_covered&minute=gte.${prev_since}&minute=lt.${prev_until}&dids=not.is.null&order=minute.asc`)
       : null,
-    getAll(db, `atmosphere_account_sketch?select=seconds,bluesky,elsewhere&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
-    // each app's busiest collections lately, as the records' apps have them
+    getAll(db, `atmosphere_account_sketch?select=t,seconds,dids,dids_bluesky,dids_elsewhere,bluesky,elsewhere&period=eq.${period}&${range(prev_since, prev_until)}&order=t.asc`),
+    // each app's busiest collections lately, as the records' apps have them: the last two days whatever the window, since
+    // an app whose accounts only edited records in the last hour wrote no new ones, and would show no collections at all
     Promise.all(
       top.map(async (a) => {
-        const rows = await db.get(`atmosphere_minute_app?select=collections&domain=eq.${a.domain}&minute=gte.${new Date(Math.max(Date.parse(since), Date.parse(until) - 2 * 86_400_000)).toISOString()}&order=creates.desc,minute.desc&limit=1`);
+        const rows = await db.get(`atmosphere_minute_app?select=collections&domain=eq.${a.domain}&minute=gte.${new Date(Date.parse(until) - 2 * 86_400_000).toISOString()}&collections=not.eq.%7B%7D&order=creates.desc,minute.desc&limit=1`);
         return Array.isArray(rows) && isRecord(rows[0]) ? collectionsOf(rows[0].collections) : [];
       }),
     ),
   ]);
   const prev = mergeApps(prevRows);
   const prevTotal = everyoneOf(prevSketches, prev);
+  const prevApps = appsByBucket(prevRows);
+  const prevTypical = typicalOf(prevSketches.flatMap((r) => bucketPoint(r, prevApps) ?? []), w.liveSince);
+  const typical = typicalOf(points, w.liveSince);
   const prevSeconds = (prevCoverage ?? prevSketches).reduce<number>((n, r) => n + (isRecord(r) && Number.isFinite(num(r.seconds)) ? num(r.seconds) : 0), 0);
 
   const accounts: Accounts = {
     seconds,
     prevSeconds,
     total,
-    ...(prevTotal.seconds > 0 && Date.parse(prev_since) >= (w.liveSince ?? -Infinity) ? { prev: prevTotal } : {}),
+    ...(typical ? { typical } : {}),
+    ...(prevTotal.seconds > 0 && Date.parse(prev_since) >= (w.liveSince ?? -Infinity) ? { prev: { ...prevTotal, ...(prevTypical ? { typical: prevTypical } : {}) } } : {}),
     points,
     apps: top.map((a, i) => {
       const p = prev.get(a.domain);

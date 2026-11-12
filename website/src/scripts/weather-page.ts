@@ -59,7 +59,7 @@ import { initHostTrends, toHostHistory, type HostHistory } from './weather-hosts
 import { initSignupHistory } from './weather-signups';
 import { bindPageLinks, bindShare } from './weather-share';
 import { topicOf } from './weather-topics';
-import { chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey } from './weather-span';
+import { beforeWords, chip, initSpan, percentChange, showLive, spanFor, type Change, type ChangeKey, type Span } from './weather-span';
 import {
   bindLens,
   createLens,
@@ -78,6 +78,10 @@ import {
   type RateUnit,
   type Unit,
   type Window,
+  compareOf,
+  EARLIER,
+  earlierWords,
+  type Compare,
 } from './weather-lens';
 import { motionOK, ROLL_EASE, ROLL_MS, rollText } from './roll';
 import { projectLast, renderChart, type ChartPoint } from './weather-chart';
@@ -94,6 +98,7 @@ import {
   ERROR_TEXT,
   LEVEL_TEXT,
   REFRESH_MS,
+  appName,
   compactCount,
   countTo,
   coverageWords,
@@ -276,7 +281,8 @@ export interface Sky {
   records: { perSecond: number; bluesky: number; elsewhere: number } | null;
   /** Different accounts over the window. */
   accounts: { active: number; bluesky: number; elsewhere: number } | null;
-  diversity: { index: number; level: DiversityLevel; share?: number; spread?: number; change?: Change } | null;
+  /** The diversity index: the live minute's, or for a window its average `per` minute, hour or day. */
+  diversity: { index: number; level: DiversityLevel; share?: number; spread?: number; per?: Bucket; change?: Change } | null;
   /** Apps outside Bluesky heard, and collections written to, when the sky knows. */
   appsHeard: number | null;
   collections: number | null;
@@ -331,7 +337,8 @@ const HISTORY_BLUESKY = [
 
 /** A history as a sky: the whole window, as rates over the seconds the station heard of it. */
 export function skyOfHistory(h: History, now: number = Date.now()): Sky {
-  const info = RANGE_INFO[h.range];
+  // what its arrows compare with: the stretch before, or a cycle ago, as it was asked for
+  const info = { ...RANGE_INFO[h.range], earlier: earlierWords(h.range, h.vs ?? 'before') };
   const t = h.total;
   const secs = t.seconds;
   const a = h.accounts && h.accounts.seconds > 0 && h.accounts.total.active > 0 ? h.accounts : null;
@@ -342,7 +349,12 @@ export function skyOfHistory(h: History, now: number = Date.now()): Sky {
     seconds: secs,
     records: secs > 0 ? { perSecond: t.creates / secs, bluesky: t.bluesky / secs, elsewhere: t.elsewhere / secs } : null,
     accounts: a ? { active: a.total.active, bluesky: a.total.bluesky, elsewhere: a.total.elsewhere } : null,
-    diversity: a && a.total.index !== undefined ? { index: a.total.index, level: levelOf(a.total.index), share, change: indexChange(a, info.earlier) ?? undefined } : null,
+    // the window's average reading, on the live reading's scale; the whole window's share goes to the mix tile
+    diversity: a?.typical
+      ? { index: a.typical.index, level: levelOf(a.typical.index), share: a.typical.share, spread: a.typical.spread, per: BUCKET_OF[h.range], change: indexChange(a, info.earlier) ?? undefined }
+      : a && a.total.index !== undefined
+        ? { index: a.total.index, level: levelOf(a.total.index), share, change: indexChange(a, info.earlier) ?? undefined }
+        : null,
     appsHeard: null,
     collections: null,
     apps:
@@ -436,7 +448,16 @@ export function renderHeadlineChange(report: HTMLElement, changes?: Record<Chang
   // its pill stays until the "last hour" tile has its answer, or gives up on it (weather.css)
   if (changes !== undefined && $(report, '[data-s-tile]')?.dataset.state !== 'loading') el.removeAttribute('data-waiting');
   const key = report.dataset.headline === 'active' ? 'active' : 'creates';
-  chip(el, headlineChanges.get(report)?.[key] ?? null);
+  const c = headlineChanges.get(report)?.[key] ?? null;
+  chip(el, c);
+  // and what it's against, in words, since the page's arrows all compare with the same stretch
+  const vs = $(report, '[data-r-headline-vs]');
+  const tile = $(report, '[data-s-tile]');
+  const span = tile?.dataset.span as Span | undefined;
+  if (vs) {
+    vs.hidden = !c || !span;
+    vs.textContent = !vs.hidden && span ? `vs ${beforeWords(span, tile?.dataset.vs === 'cycle' ? 'cycle' : 'before')}` : '';
+  }
 }
 
 function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
@@ -478,9 +499,13 @@ function renderDiversity(report: HTMLElement, sky: Sky, lens: LensState): void {
   if (sky.window === 'now') {
     parts.hidden = d?.share === undefined || d.spread === undefined;
     if (d?.share !== undefined && d.spread !== undefined) rollText(parts, diversityParts(d.share, d.spread, sky.accounts?.active));
+  } else if (d?.per && d.share !== undefined && d.spread !== undefined) {
+    // an average reading: say so, and what it's made of, in the same words as the live one
+    parts.hidden = false;
+    rollText(parts, `an average ${BUCKET_WORDS[d.per]} over ${WINDOW_INFO[sky.window].words}: ${diversityParts(d.share, d.spread, undefined, 'of active accounts')}`);
   } else {
     parts.hidden = d?.share === undefined || !sky.accounts;
-    if (d?.share !== undefined && sky.accounts) rollText(parts, `${formatIndex(d.share)}% of ${formatCount(sky.accounts.active)} active accounts over ${WINDOW_INFO[sky.window].words} wrote outside bluesky.`);
+    if (d?.share !== undefined && sky.accounts) rollText(parts, `${formatIndex(d.share)}% of ${formatCount(sky.accounts.active)} active accounts over ${WINDOW_INFO[sky.window].words} wrote with apps other than bluesky.`);
   }
 }
 
@@ -492,21 +517,30 @@ function renderMix(report: HTMLElement, sky: Sky, lens: LensState): void {
   const units = tile ? [...tile.querySelectorAll<HTMLElement>('[data-r-mix-unit]')] : [];
   const collections = $(report, '[data-r-collections-wrap]');
   if (a) {
-    roll(report, '[data-r-ratio]', a.elsewhere <= 0 ? 'nobody active wrote outside bluesky' : a.elsewhere * 2 > a.active ? 'most active accounts wrote outside bluesky' : `1 in ${Math.round(a.active / a.elsewhere).toLocaleString('en-US')} active accounts wrote outside bluesky`);
+    // the whole window's crowd, said with its window: the diversity tile beside it has an average minute's share
+    const over = sky.window === 'now' ? '' : `over ${WINDOW_INFO[sky.window].words}, `;
+    roll(report, '[data-r-ratio]', a.elsewhere <= 0 ? `${over}nobody active wrote with an app other than bluesky` : a.elsewhere * 2 > a.active ? `${over}most active accounts wrote with apps other than bluesky` : `${over}1 in ${Math.round(a.active / a.elsewhere).toLocaleString('en-US')} active accounts wrote with an app other than bluesky`);
     renderShare($(report, '[data-r-bar-bsky]'), $(report, '[data-r-bar-else]'), a.active > 0 ? (a.elsewhere / a.active) * 100 : 0);
-    count(report, '[data-r-bsky]', a.bluesky, formatCount);
+    // someone can write to both, so the two sides are "only bluesky" and "other apps", which add up to everyone
+    const only = Math.max(0, a.active - a.elsewhere);
+    const both = Math.max(0, a.bluesky - only);
+    setText(report, '[data-r-bsky-label]', 'only the bluesky app');
+    setText(report, '[data-r-else-label]', 'other apps');
+    count(report, '[data-r-bsky]', only, formatCount);
     count(report, '[data-r-else]', a.elsewhere, formatCount);
     count(report, '[data-r-total]', a.active, formatCount);
-    roll(report, '[data-r-bsky-share]', formatShare(a.bluesky, a.active));
+    roll(report, '[data-r-bsky-share]', formatShare(only, a.active));
     roll(report, '[data-r-else-share]', formatShare(a.elsewhere, a.active));
     for (const u of units) u.textContent = 'accounts';
-    setText(report, '[data-r-total-words]', 'different accounts wrote something in all');
+    setText(report, '[data-r-total-words]', both > 0 ? `different accounts wrote something in all. ${formatCount(both)} of those on other apps wrote on bluesky too` : 'different accounts wrote something in all');
     if (collections) collections.hidden = true;
     return;
   }
   const r = sky.records;
   if (!r) return;
   const v = (x: number) => amountIn(x, lens.unit, sky.seconds);
+  setText(report, '[data-r-bsky-label]', 'the bluesky app');
+  setText(report, '[data-r-else-label]', 'other apps');
   roll(report, '[data-r-ratio]', ratioText(r));
   renderRatio($(report, '[data-r-bar-bsky]'), $(report, '[data-r-bar-else]'), r);
   count(report, '[data-r-bsky]', v(r.bluesky), formatAmount);
@@ -527,9 +561,12 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   tag(tile, byAcct ? 'accounts' : 'records', lens);
   const bars = topBars(
     byAcct
-      ? sky.appsByAccounts!.map((x) => ({ label: x.domain, sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatCount(x.count), change: x.change }))
-      : sky.apps.map((x) => ({ label: x.domain, sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatAmount(lens.unit === 'total' ? x.count : perUnit(x.perSecond, lens.unit)), change: x.change })),
+      ? sky.appsByAccounts!.map((x) => ({ label: appName(x.domain, x.collections), sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatCount(x.count), change: x.change }))
+      : sky.apps.map((x) => ({ label: appName(x.domain, x.collections), sub: x.collections.join(', '), perSecond: x.perSecond, count: x.count, value: formatAmount(lens.unit === 'total' ? x.count : perUnit(x.perSecond, lens.unit)), change: x.change })),
   );
+  // one style down a list: once any is past 100k, the thousands go compact too ("124.7k" over "94.4k", not "94,364")
+  const shownOf = (b: Bar) => (byAcct || lens.unit === 'total' ? b.count : perUnit(b.perSecond, lens.unit));
+  if (bars.some((b) => shownOf(b) >= 100_000)) for (const b of bars) if (shownOf(b) >= 1000) b.value = compactCount(shownOf(b));
   const list = $(report, '[data-r-apps]');
   if (list) renderBars(list, bars, sky.window === 'now' && !byAcct ? sky.seconds : undefined);
   const shown = bars.length;
@@ -545,10 +582,19 @@ function renderElsewhere(report: HTMLElement, sky: Sky, lens: LensState): void {
   setText(report, '[data-r-apps-note]', shown ? `${what}.${arrows}` : '');
 }
 
+/** The tiles that always count records ("patterns and outlook") say so while the lens counts accounts. */
+export function tagRecordsOnly(report: ParentNode, lens: LensState): void {
+  for (const el of Array.from(report.querySelectorAll<HTMLElement>('[data-tag-records]'))) el.hidden = lens.measure !== 'accounts';
+}
+
 /** Every tile that follows the lens, from one sky. */
 export function renderSky(report: HTMLElement, sky: Sky, lens: LensState = LENS_DEFAULT): void {
+  tagRecordsOnly(report, lens);
   renderHeadline(report, sky, lens);
   renderDiversity(report, sky, lens);
+  // screen readers hear the window's own index when the lens moves to one, not the live minute's from the first load
+  // (the live one ticks every few seconds, so it's said once, by renderReport)
+  if (sky.window !== 'now' && sky.diversity) setText(report, '[data-r-status]', `${WINDOW_INFO[sky.window].words}: diversity index ${formatIndex(sky.diversity.index)}, ${sky.diversity.level}.`);
   renderMix(report, sky, lens);
   renderElsewhere(report, sky, lens);
 }
@@ -587,7 +633,7 @@ export function hostsShare(h: Hosts): string {
   const total = h.accounts.bluesky + h.accounts.independent;
   if (h.accounts.independent <= 0) return `all ${formatCount(total)} accounts live on bluesky's hosts.`;
   const hosts = Math.max(1, Math.round(h.diversity.spread));
-  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `across about ${hosts} hosts`}.`;
+  return `${formatIndex(h.diversity.share)}% of ${compactCount(total)} accounts live on independent hosts, ${hosts === 1 ? 'nearly all on one' : `as spread out as ${hosts} hosts the same size`}.`;
 }
 
 /** How long ago the station counted them: "counted just now", "counted 7 minutes ago". */
@@ -633,7 +679,7 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
 
 /** The size buckets' names, smallest first (server/atmosphere.ts HOST_SIZE_BOUNDS: 0, 1, ≤10, ≤100, ≤1,000, ≤10,000, more). */
 export const HOST_SIZE_NAMES = ['empty', 'just one person', 'a household (2 to 10)', 'a village (11 to 100)', 'a town (101 to 1,000)', 'a city (1,001 to 10,000)', 'a metropolis (10,000+)'] as const;
-const STATUS_NAMES: Record<string, string> = { active: 'active', idle: 'idle', offline: 'offline', throttled: 'throttled', banned: 'banned', other: 'something else' };
+const STATUS_NAMES: Record<string, string> = { active: 'online', idle: 'idle', offline: 'offline', throttled: 'throttled', banned: 'banned', other: 'something else' };
 
 /** The ten biggest independent hosts' share of the accounts on independent hosts (null without any). */
 export function topTenShare(h: Hosts): number | null {
@@ -701,11 +747,11 @@ export function renderWindow(report: HTMLElement, h: History, lens: LensState, n
 }
 
 /** What a diversity index is made of, in a line: its share of accounts, and how spread out they are (Poe has the rest, EXPLAINERS). */
-export function diversityParts(share: number, spread: number, active?: number): string {
-  const who = active ? `of ${formatCount(active)} active accounts` : 'of the accounts heard just now';
-  if (share <= 0) return `none ${who} wrote outside bluesky.`;
+export function diversityParts(share: number, spread: number, active?: number, who = active ? `of ${formatCount(active)} active accounts` : 'of the accounts heard just now'): string {
+  if (share <= 0) return `none ${who} wrote with apps other than bluesky.`;
+  // spread is an effective number: as spread out as this many apps of the same size
   const apps = Math.max(1, Math.round(spread));
-  return `${formatIndex(share)}% ${who} wrote outside bluesky, ${apps === 1 ? 'all in one app' : `across about ${apps} apps`}.`;
+  return `${formatIndex(share)}% ${who} wrote with apps other than bluesky, ${apps === 1 ? 'nearly all in one app' : `as spread out as ${apps} apps the same size`}.`;
 }
 
 /**
@@ -721,12 +767,14 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "it's how much of the atmosphere isn't bluesky, going by who's writing rather than how much. one account dumping a thousand records still only counts once.",
       '',
       'i multiply two things:',
-      '- the percent of accounts active in the last minute that wrote with lexicons outside `app.bsky.*` and `chat.bsky.*`',
+      '- the percent of accounts active in a minute that wrote with lexicons outside `app.bsky.*` and `chat.bsky.*`',
       '- the square root of how many apps they\'re spread across. ten apps with the same number of people each count as ten, and one app with nearly everyone counts as about one',
       '',
       'so a crowd spread over lots of apps scores higher than the same crowd piled into one.',
       '',
-      "it reads like the uv index: 0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme. a usual minute sits around 2 right now, so it's mostly bluesky out there. for now (◕‿◕)",
+      "for the last hour, day, week or month i show the average reading: each minute's, hour's or day's index, averaged. a whole week's crowd has tried more apps than any one minute's, so its own index would read high just for being long, and an average stays on the same scale as right now.",
+      '',
+      "it reads like the uv index: under 3 is low, 3 to 6 moderate, 6 to 8 high, 8 to 11 very high, and 11 and up extreme. a usual minute sits around 2 right now, so it's mostly bluesky out there. for now (◕‿◕)",
     ].join('\n'),
   },
   hosts: {
@@ -735,7 +783,7 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "a pds (personal data server) is where an account's records actually live. bluesky runs about ninety of them, and anyone else can run one too: a community, a company, or one person with a little server in a cupboard.",
       '',
       "every ten minutes i read the relay's list of every host it knows about:",
-      '- active hosts are the ones the relay is happily listening to right now',
+      '- online hosts are the ones the relay is happily listening to right now (the relay calls them active)',
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
       "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
       "- tangled's knots don't count. they're git servers the relay lists alongside the hosts, and their \"accounts\" are git repositories, not people. i ask each host what it is once a week",
@@ -772,7 +820,8 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "- the numbers are whole utc days, so today isn't in them yet. yesterday is set against the day before, the last 7 days against the 7 before, and the last 30 against the 30 before, once i've kept that long",
       "- the charts go day by day, with today as a dashed line out to where it's on pace to end up. once i've kept more than four months, they go week by week",
       '- the table goes back 7 days at a time from yesterday, each set against the 7 before',
-      '- independent means people signing up on hosts outside bluesky',
+      "- independent means people signing up on hosts outside bluesky's own servers",
+      "- a shaded stretch, and anything starred, takes in accounts a script made on bluesky's own servers that my rules didn't catch. i found them reading the plc directory's log, and the line under the charts says what they were",
       '',
       "it doesn't follow the window you pick: it's always the whole history i've kept, up to a year (◕‿◕)",
     ].join('\n'),
@@ -786,17 +835,17 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       '- back in: the other way round',
       '- host to host: moving between two independent hosts',
       '',
-      "when more blow out than back in, the wind is blowing out of bluesky. i note which host each mover left and which one they went to, so you can tap a host and see who's arriving and who's leaving. i only count moves between hosts the relay listens to (◕‿◕)",
+      "when more blow out than back in, the wind is blowing out of bluesky. where they moved to takes in all of them, out of bluesky and host to host, and when a host takes nearly all its movers on one day i say so: that's usually someone moving a whole server, not a crowd. i note which host each mover left and which one they went to, so you can tap a host and see who's arriving and who's leaving. i only count moves between hosts the relay listens to (◕‿◕)",
     ].join('\n'),
   },
   smog: {
     question: "what's the air quality?",
     answer: [
-      "anyone can make an identity in the plc directory pointing at any server at all, so lots of new accounts land on hosts the relay doesn't carry: test servers, typos, and bulk sign-ups to one-off domains.",
+      "anyone can make an identity in the plc directory pointing at any server at all, so lots of new identities land on hosts no relay carries: test servers, typos, and scripts making them by the hundred thousand.",
       '',
-      "air quality is the share of each day's sign-ups that went somewhere like that. under 10% is clear, then hazy, smoggy from half, and thick smog from 90%.",
+      "air quality is the share of each day's new identities that went somewhere like that. under 10% is clear, then hazy, smoggy from half, and thick smog from 90%. lately nearly all of it is one script, and when it pauses the sky clears.",
       '',
-      "it's not the network's real weather, more like dust in the air. none of it reaches your feed (◕‿◕)",
+      "i don't count them as sign-ups: nobody can see what's on those hosts, so they're not people arriving. it's not the network's real weather, more like dust in the air. none of it reaches your feed (◕‿◕)",
     ].join('\n'),
   },
   readouts: {
@@ -867,6 +916,8 @@ export interface HistoryApp {
 
 export interface History {
   range: Range;
+  /** What its earlier window is: the stretch right before, or the same stretch a cycle ago (asked as ?vs=cycle). */
+  vs?: Compare;
   points: HistoryPoint[];
   total: HistoryPoint;
   /** The busiest apps outside Bluesky over the range, when the server could get them. */
@@ -889,14 +940,26 @@ export interface AccountCounts {
   index?: number;
 }
 
+/** A range's average diversity reading and its parts. */
+export interface TypicalDiversity {
+  index: number;
+  share: number;
+  spread: number;
+}
+
 export interface HistoryAccounts {
   /** How much of the range, and of the earlier window, the station heard counting accounts. */
   seconds: number;
   prevSeconds: number;
   /** Everyone active over the whole range: fewer than the buckets add up to. */
   total: AccountCounts;
+  /**
+   * The range's diversity index as its average reading, bucket by bucket (server/weather-accounts.ts
+   * typicalOf): what the tile and the trends say, since the whole range's index climbs with its length.
+   */
+  typical?: TypicalDiversity;
   /** Everyone active in the earlier window, and the seconds the station heard of it, when it kept their sketches. */
-  prev?: AccountCounts & { seconds: number };
+  prev?: AccountCounts & { seconds: number; typical?: TypicalDiversity };
   points: Array<AccountCounts & { t: string; seconds: number }>;
   apps: Array<{ domain: string; active: number; prevActive: number; collections: string[] }>;
 }
@@ -905,8 +968,8 @@ export type Bucket = 'minute' | 'hour' | 'day' | 'month';
 const BUCKET_MS: Record<Bucket, number> = { minute: 60_000, hour: 3600_000, day: 86_400_000, month: 32 * 86_400_000 };
 
 export const RANGE_INFO: Record<Range, { spanMs: number; stepMs: number; words: string; earlier: string; time: Intl.DateTimeFormatOptions }> = {
-  hour: { spanMs: 3600_000, stepMs: 60_000, words: 'the last hour', earlier: 'the same hour yesterday', time: { hour: 'numeric', minute: '2-digit' } },
-  day: { spanMs: 24 * 3600_000, stepMs: 3600_000, words: 'the last 24 hours', earlier: 'the day before', time: { weekday: 'short', hour: 'numeric', minute: '2-digit' } },
+  hour: { spanMs: 3600_000, stepMs: 60_000, words: 'the last hour', earlier: 'the hour before', time: { hour: 'numeric', minute: '2-digit' } },
+  day: { spanMs: 24 * 3600_000, stepMs: 3600_000, words: 'the last 24 hours', earlier: 'the 24 hours before', time: { weekday: 'short', hour: 'numeric', minute: '2-digit' } },
   week: { spanMs: 7 * 86_400_000, stepMs: 3600_000, words: 'the last 7 days', earlier: 'the week before', time: { weekday: 'short', hour: 'numeric' } },
   month: { spanMs: 30 * 86_400_000, stepMs: 86_400_000, words: 'the last 30 days', earlier: 'the 30 days before', time: { month: 'short', day: 'numeric' } },
 };
@@ -939,13 +1002,13 @@ function isApp(a: unknown): a is HistoryApp {
   );
 }
 
-export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch): Promise<History | null> {
+export async function fetchHistory(range: Range, fetchImpl: typeof fetch = fetch, vs: Compare = 'before'): Promise<History | null> {
   try {
-    const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}`, { headers: { accept: 'application/json' } });
+    const res = await fetchImpl(`${HISTORY_ENDPOINT}?range=${range}${vs === 'cycle' ? '&vs=cycle' : ''}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
     const body = (await res.json()) as { range?: unknown; points?: unknown; total?: unknown; apps?: unknown; compare?: unknown; appsOverTime?: unknown; accounts?: unknown; hosts?: unknown };
     if (body.range !== range || !Array.isArray(body.points) || !isPoint(body.total)) return null;
-    const history: History = { range, points: body.points.filter(isPoint), total: body.total };
+    const history: History = { range, ...(vs === 'cycle' ? { vs } : {}), points: body.points.filter(isPoint), total: body.total };
     if (Array.isArray(body.apps)) history.apps = body.apps.filter(isApp);
     const n = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
     const c = body.compare as Record<string, unknown> | undefined;
@@ -974,12 +1037,19 @@ function toAccounts(x: unknown): HistoryAccounts | null {
   const isCounts = (c: unknown): c is AccountCounts => typeof c === 'object' && c !== null && n((c as AccountCounts).active) && n((c as AccountCounts).bluesky) && n((c as AccountCounts).elsewhere);
   if (typeof r !== 'object' || r === null || !n(r.seconds) || !n(r.prevSeconds) || !isCounts(r.total) || !Array.isArray(r.points) || !Array.isArray(r.apps)) return null;
   const withIndex = (c: AccountCounts): AccountCounts => ({ active: c.active, bluesky: c.bluesky, elsewhere: c.elsewhere, ...(n(c.index) ? { index: c.index } : {}) });
-  const prevSeconds = typeof r.prev === 'object' && r.prev !== null ? (r.prev as Record<string, unknown>).seconds : undefined;
-  const prev = isCounts(r.prev) && n(prevSeconds) ? { seconds: prevSeconds, ...withIndex(r.prev) } : null;
+  const typicalOf = (v: unknown): TypicalDiversity | null => {
+    const t = v as Record<string, unknown> | undefined;
+    return typeof t === 'object' && t !== null && n(t.index) && n(t.share) && n(t.spread) ? { index: t.index, share: t.share, spread: t.spread } : null;
+  };
+  const prevRaw = typeof r.prev === 'object' && r.prev !== null ? (r.prev as Record<string, unknown>) : undefined;
+  const prevTypical = typicalOf(prevRaw?.typical);
+  const prev = isCounts(r.prev) && n(prevRaw?.seconds) ? { seconds: prevRaw.seconds, ...withIndex(r.prev), ...(prevTypical ? { typical: prevTypical } : {}) } : null;
+  const typical = typicalOf(r.typical);
   return {
     seconds: r.seconds,
     prevSeconds: r.prevSeconds,
     total: withIndex(r.total),
+    ...(typical ? { typical } : {}),
     ...(prev ? { prev } : {}),
     points: r.points
       .filter((p): p is HistoryAccounts['points'][number] => {
@@ -1001,11 +1071,18 @@ function toAccounts(x: unknown): HistoryAccounts | null {
  * (two hours hold far fewer than twice an hour's), so only when the station heard both
  * windows about as well; null otherwise.
  */
+/** A rise: in percent, or past tripling in times ("↑ 12×"), which a reader takes in at a glance where "↑ 999+%" says nothing. */
+export function rise(pct: number, earlier: string): NonNullable<Bar['change']> {
+  if (pct < 200) return { text: `↑ ${pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  const times = Math.round(pct / 100 + 1);
+  return { text: `↑ ${times > 999 ? '999+' : times}×`, words: `up ${times} times on ${earlier}`, trend: 'up' };
+}
+
 export function accountChange(app: HistoryAccounts['apps'][number], a: HistoryAccounts, earlier: string): Bar['change'] | null {
   if (a.seconds <= 0 || a.prevSeconds < a.seconds * 0.9 || a.prevSeconds > a.seconds * 1.1) return null;
   if (app.prevActive === 0) return { text: 'new', words: `nobody at all in ${earlier}`, trend: 'new' };
   const pct = Math.round((app.active / app.prevActive - 1) * 100);
-  if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  if (pct >= 15) return rise(pct, earlier);
   if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
@@ -1019,11 +1096,13 @@ export const INDEX_STEADY = 0.05;
  */
 export function indexChange(a: HistoryAccounts, earlier: string): Change | null {
   const p = a.prev;
-  if (!p || a.total.index === undefined || p.index === undefined) return null;
+  // the average readings when both sides have them, as the tile shows; else the whole windows'
+  const [now, was] = a.typical && p?.typical ? [a.typical.index, p.typical.index] : [a.total.index, p?.index];
+  if (!p || now === undefined || was === undefined) return null;
   if (a.seconds <= 0 || p.seconds < a.seconds * 0.9 || p.seconds > a.seconds * 1.1) return null;
-  const c = percentChange(a.total.index, p.index, earlier);
+  const c = percentChange(now, was, earlier);
   // the index wanders a few percent on its own, so that much is the same sky
-  return c && Math.abs(a.total.index / p.index - 1) < INDEX_STEADY ? { text: '→', words: `about the same as ${earlier}`, trend: 'steady' } : c;
+  return c && Math.abs(now / was - 1) < INDEX_STEADY ? { text: '→', words: `about the same as ${earlier}`, trend: 'steady' } : c;
 }
 
 /**
@@ -1035,7 +1114,7 @@ export function appChange(app: HistoryApp, compare: History['compare'], earlier:
   if (app.prevCreates === 0) return { text: 'new', words: `none at all in ${earlier}`, trend: 'new' };
   const ratio = app.creates / compare.seconds / (app.prevCreates / compare.prevSeconds);
   const pct = Math.round((ratio - 1) * 100);
-  if (pct >= 15) return { text: `↑ ${pct > 999 ? '999+' : pct}%`, words: `up ${pct}% on ${earlier}`, trend: 'up' };
+  if (pct >= 15) return rise(pct, earlier);
   if (pct <= -15) return { text: `↓ ${-pct}%`, words: `down ${-pct}% on ${earlier}`, trend: 'down' };
   return { text: '→', words: `about the same as ${earlier}`, trend: 'steady' };
 }
@@ -1051,8 +1130,8 @@ export function trendSummary(h: History, unit: Unit = 'second'): string {
   const { records } = ratesOf(h.total);
   if (records === null) return `no readings yet for ${info.words}. the station fills this in as it goes.`;
   const covered = h.total.seconds < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(h.total.seconds)} of readings so far)` : '';
-  const index = h.accounts && h.accounts.seconds > 0 ? h.accounts.total.index : undefined;
-  const idx = index === undefined ? '' : `, diversity index ${formatIndex(index)}`;
+  const index = h.accounts && h.accounts.seconds > 0 ? (h.accounts.typical?.index ?? h.accounts.total.index) : undefined;
+  const idx = index === undefined ? '' : `, diversity index ${formatIndex(index)}${h.accounts?.typical ? ` in an average ${BUCKET_WORDS[BUCKET_OF[h.range]]}` : ''}`;
   const amount = unit === 'total' ? `${formatAmount(h.total.creates)} new records` : `${rateIn(records, unit)} ${recordsPer(unit)}`;
   return `${info.words}${covered}: ${amount}${idx}.`;
 }
@@ -1064,7 +1143,7 @@ export function accountSummary(h: History): string {
   if (a.seconds <= 0 || a.total.active <= 0) return `no account counts yet for ${info.words}. the station only just started counting accounts, and fills this in as it goes.`;
   const covered = a.seconds < (info.spanMs / 1000) * 0.9 ? ` (from ${coverageWords(a.seconds)} of counting so far)` : '';
   const share = (a.total.elsewhere / a.total.active) * 100;
-  return `${info.words}${covered}: ${formatCount(a.total.active)} different accounts wrote something, ${formatIndex(share)}% of them somewhere other than bluesky.`;
+  return `${info.words}${covered}: ${formatCount(a.total.active)} different accounts wrote something, ${formatIndex(share)}% of them with apps other than bluesky.`;
 }
 
 type TimeFormat = (t: number) => string;
@@ -1107,7 +1186,7 @@ function renderRecordTrends(section: HTMLElement, h: History, now: number, forma
   const each = unit === 'total' ? BUCKET_UNIT[BUCKET_OF[h.range]] : null;
   const title = each ? `new records each ${each}` : recordsPer(unit as RateUnit);
   setChartTitle(section, 'records', title);
-  setChartTitle(section, 'index', 'diversity index');
+  setChartTitle(section, 'index', `diversity index each ${BUCKET_WORDS[BUCKET_OF[h.range]]}`);
   const per = each ? null : UNIT_SECONDS[unit as RateUnit];
   const rows = h.points.map((p) => ({ t: Date.parse(p.t), v: per === null ? (p.seconds > 0 ? p.creates : null) : ratesOf(p).records === null ? null : ratesOf(p).records! * per }));
   // the index goes by accounts, which come in buckets of their own
@@ -1129,7 +1208,7 @@ function renderAccountTrends(section: HTMLElement, h: History, now: number, form
   const each = `each ${BUCKET_WORDS[bucket]}`;
   setText(section, '[data-t-summary]', accountSummary(h));
   setChartTitle(section, 'records', `active accounts ${each}`);
-  setChartTitle(section, 'index', 'share of accounts writing elsewhere');
+  setChartTitle(section, 'index', 'share of accounts using other apps');
   const rows = (a?.points ?? []).map((p) => ({ ...p, t: Date.parse(p.t), share: p.active > 0 ? (p.elsewhere / p.active) * 100 : null }));
   // the newest bucket is still filling up: an estimate for its accounts, its share as it is so far
   const heardMs = (rows[rows.length - 1]?.seconds ?? 0) * 1000;
@@ -1139,7 +1218,7 @@ function renderAccountTrends(section: HTMLElement, h: History, now: number, form
   const share = $(section, '[data-t-chart="index"]');
   const percent = (v: number) => `${formatIndex(v)}%`;
   if (active) renderChart(active, pts((r) => r.active, true), { label: `active accounts ${each}`, color: 'var(--weather-bsky)', format: formatCount, formatTick: compactCount, formatTime, stepMs: step });
-  if (share) renderChart(share, pts((r) => r.share, false), { label: 'share of accounts writing elsewhere', color: 'var(--weather-else)', format: percent, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime, stepMs: step });
+  if (share) renderChart(share, pts((r) => r.share, false), { label: 'share of accounts using other apps', color: 'var(--weather-else)', format: percent, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime, stepMs: step });
 }
 
 /** The third chart: apps outside Bluesky heard each minute, hour, day or month. */
@@ -1152,8 +1231,9 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
   if (!o) return;
   const step = BUCKET_MS[o.bucket];
   setText(card, '[data-t-apps-chart-title]', `apps heard each ${BUCKET_WORDS[o.bucket]}`);
-  const points: ChartPoint[] = o.points.map((p) => ({ t: Date.parse(p.t), v: p.apps }));
   const start = now - RANGE_INFO[h.range].spanMs;
+  // only buckets that start inside the range, as the records' rows do, so its axis starts with theirs (it began a day early)
+  const points: ChartPoint[] = o.points.map((p) => ({ t: Date.parse(p.t), v: p.apps })).filter((p) => p.t >= start || o.bucket === 'minute');
   if ((points[0]?.t ?? now) - start > step) points.unshift({ t: start, v: null });
   // The newest bucket is still filling up; most apps turn up early in one, so it's not scaled, only marked so far.
   renderChart(host, projectLast(points, now, step, { scale: false }), { label: `apps heard each ${BUCKET_WORDS[o.bucket]}`, color: 'var(--weather-else)', format: (v) => String(Math.round(v)), formatTime, stepMs: step });
@@ -1161,25 +1241,28 @@ function renderAppsOverTime(section: HTMLElement, h: History, now: number, forma
 
 /** Histories by range, shared by the trends and the window's tiles: one request each, however many ask. */
 export interface HistoryFeed {
-  /** The range's history, from the last one if it's under `maxAgeMs` old. */
-  get(range: Range, maxAgeMs?: number): Promise<History | null>;
+  /** The range's history, from the last one if it's under `maxAgeMs` old, its arrows against the stretch before or (`vs`) a cycle ago. */
+  get(range: Range, maxAgeMs?: number, vs?: Compare): Promise<History | null>;
 }
 
 export function createHistoryFeed(fetchImpl: typeof fetch = fetch): HistoryFeed {
-  const kept = new Map<Range, { at: number; history: History }>();
-  const asking = new Map<Range, Promise<History | null>>();
+  const kept = new Map<string, { at: number; history: History }>();
+  const asking = new Map<string, Promise<History | null>>();
   return {
-    get(range, maxAgeMs = 30_000) {
-      const had = kept.get(range);
+    get(range, maxAgeMs = 30_000, vs = 'before') {
+      // a range with no cycle of its own is always against the stretch before, so it's one answer either way
+      const v: Compare = vs === 'cycle' && EARLIER[range].cycle ? 'cycle' : 'before';
+      const key = `${range}:${v}`;
+      const had = kept.get(key);
       if (had && Date.now() - had.at < maxAgeMs) return Promise.resolve(had.history);
-      const already = asking.get(range);
+      const already = asking.get(key);
       if (already) return already;
-      const asked = fetchHistory(range, fetchImpl).then((h) => {
-        asking.delete(range);
-        if (h) kept.set(range, { at: Date.now(), history: h });
+      const asked = fetchHistory(range, fetchImpl, v).then((h) => {
+        asking.delete(key);
+        if (h) kept.set(key, { at: Date.now(), history: h });
         return h;
       });
-      asking.set(range, asked);
+      asking.set(key, asked);
       return asked;
     },
   };
@@ -1204,7 +1287,7 @@ export function initTrends(section: HTMLElement, feed: HistoryFeed, lens?: Lens)
     const mine = ++asked;
     const ready = section.dataset.state === 'ready';
     if (!(quietly && ready)) section.dataset.state = ready ? 'refreshing' : 'loading';
-    const history = await feed.get(range, quietly ? historyRefreshMs(range) - 5_000 : 30_000);
+    const history = await feed.get(range, quietly ? historyRefreshMs(range) - 5_000 : 30_000, compareOf(view()));
     if (mine !== asked) return; // a newer range took over
     if (!history && quietly && ready && shown?.range === range) return;
     shown = history;
@@ -1219,7 +1302,8 @@ export function initTrends(section: HTMLElement, feed: HistoryFeed, lens?: Lens)
     }
   };
   lens?.onChange((l, was) => {
-    if (trendsRange(l.window) !== trendsRange(was.window)) void load();
+    // the comparison doesn't change the charts, but the window's tiles ask for that answer, so the trends take the same one
+    if (trendsRange(l.window) !== trendsRange(was.window) || compareOf(l) !== compareOf(was)) void load();
     else if (shown) draw(shown);
   });
   void load();
@@ -1313,7 +1397,7 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
       return;
     }
     if (!quietly) report.dataset.lensState = 'loading';
-    const history = await feed.get(w, quietly ? historyRefreshMs(w) - 5_000 : 30_000);
+    const history = await feed.get(w, quietly ? historyRefreshMs(w) - 5_000 : 30_000, compareOf(lens.get()));
     if (mine !== windowAsked) return; // the lens moved on
     if (history) {
       windowShown = history;
@@ -1326,11 +1410,12 @@ export function init(root: ParentNode = document, fetchImpl: typeof fetch = fetc
     }
   };
   const minute = $(report, '[data-s-tile]');
-  const span = minute ? initSpan(minute, fetchImpl, { span: spanFor(lens.get().window), unit: lens.get().unit, onChanges: (c) => renderHeadlineChange(report, c) }) : null;
+  const span = minute ? initSpan(minute, fetchImpl, { span: spanFor(lens.get().window), unit: lens.get().unit, vs: compareOf(lens.get()), onChanges: (c) => renderHeadlineChange(report, c) }) : null;
   lens.onChange((l, was) => {
     span?.setSpan(spanFor(l.window));
     span?.setUnit(l.unit);
-    if (l.window !== was.window) void showWindow();
+    span?.setVersus(compareOf(l));
+    if (l.window !== was.window || compareOf(l) !== compareOf(was)) void showWindow();
     else if (l.window === 'now') {
       if (shown) renderSky(report, skyOfReading(shown), l);
     } else if (windowShown?.range === l.window) renderWindow(report, windowShown, l);

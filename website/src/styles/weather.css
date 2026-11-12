@@ -598,6 +598,13 @@ html[data-theme="dark"] .weather-station[data-level="down"] { --station-dot: #EE
   width: fit-content;
 }
 
+/* "vs the hour before": the baseline every arrow on the page shares, said once */
+.weather-hero__vs {
+  margin: 0;
+  font-size: 13px;
+  color: var(--weather-sky-text);
+}
+
 /* No pill when steady, so it takes the sky's text color, day or night. */
 .weather-hero .weather-hero__change[data-trend="steady"] {
   color: var(--weather-sky-text);
@@ -952,6 +959,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-variant-numeric: tabular-nums;
 }
 
+/* when it was, on a line of its own, so the date never breaks around the number */
+.weather-records__list :is([data-a-record-busiest-at], [data-a-record-apps-at]) {
+  display: block;
+}
+
 .weather-new__lede {
   color: var(--text-soft);
 }
@@ -987,7 +999,8 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   padding: 3px 6px;
   border-radius: var(--radius-pill);
   color: var(--text);
-  font-size: calc(clamp(13px, 3.2cqi, 17px) + var(--w, 0) * var(--w, 0) * clamp(16px, 7cqi, 34px));
+  /* by its weight, but never wider than the cloud: a long name at the top size would break mid-word (--len, its characters) */
+  font-size: min(calc(clamp(13px, 3.2cqi, 17px) + var(--w, 0) * var(--w, 0) * clamp(16px, 7cqi, 34px)), calc(150cqi / var(--len, 10)));
   font-weight: 700;
   line-height: 1.15;
   text-decoration: none;
@@ -997,6 +1010,12 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 .weather-new__link:hover {
   background: var(--butter);
+}
+
+/* one account trying something out: there, but quieter than a crowd */
+.weather-new__app.is-solo .weather-new__link {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .weather-new__link:focus-visible {
@@ -1587,6 +1606,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   grid-template-columns: 386fr 138fr 173fr 156fr 147fr;
 }
 
+/* hosting diversity is about where accounts live: the ground's soil, not the sky's green */
+.weather-scale--hosts .weather-scale__bands > span {
+  background: var(--weather-host-indep);
+}
+
 /* Too narrow for five names: the ends of the scale, and the card above names the level. */
 @media (max-width: 640px) {
   .weather-scale--hosts .weather-scale__names {
@@ -1694,6 +1718,19 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   background: repeating-linear-gradient(135deg, var(--weather-else) 0 3px, color-mix(in srgb, var(--weather-else) 70%, transparent) 3px 5px);
 }
 
+.weather-key--host-bsky {
+  background: var(--weather-host-bsky);
+}
+
+.weather-key--host-indep {
+  background: repeating-linear-gradient(135deg, var(--weather-host-indep) 0 3px, color-mix(in srgb, var(--weather-host-indep) 70%, transparent) 3px 5px);
+}
+
+/* a share keeps its parentheses together: "(99.70%)", never "(" at the end of a line */
+.weather-mix__share {
+  white-space: nowrap;
+}
+
 .weather-mix__total {
   margin-top: auto;
   color: var(--text-soft);
@@ -1780,6 +1817,12 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   border-top: 1px solid var(--line);
 }
 
+/* a list's own window, when it's shorter than its tile's ("since nov 10") */
+.weather-hosts__span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .weather-hosts__subtitle {
   margin: 0;
   font-size: 18px;
@@ -1821,6 +1864,22 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 .weather-hosts__table tbody th {
   font-weight: 400;
+}
+
+/* Two sources, two groups: the relay's count at day's end, and independent hosts heard from (weather-hosts.ts renderHostDays). */
+.weather-hosts__table thead .weather-hosts__group {
+  text-align: center;
+  border-bottom-color: var(--line-strong);
+}
+
+/* numbers sit right, so their headings do too */
+.weather-hosts__table thead th:not(:first-child),
+.weather-hosts__table thead tr + tr th {
+  text-align: right;
+}
+
+.weather-hosts__table thead .weather-hosts__group {
+  text-align: center;
 }
 
 /* Like the change chips: green going up; going down keeps the text colour, its minus says it. */
@@ -1941,6 +2000,15 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 
 /* Sign-ups over time (weather-signups.ts): a whole row, its two charts side by side on
    wide screens. A number's chip sits under it, as wide as it is, at the chips' own size. */
+/* Holding its place while the year's days come (weather-signups.ts initSignupHistory), so the tiles under it don't jump. */
+.weather-signups[data-state="loading"] {
+  min-height: 640px;
+}
+
+.weather-signups[data-state="loading"] :is(.weather-pds__stats, .weather-trends__charts, .weather-hosts__days) {
+  visibility: hidden;
+}
+
 .weather-signups {
   grid-column: 1 / -1;
 }
@@ -2156,6 +2224,26 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   font-variant-numeric: tabular-nums;
 }
 
+/* An axis that doesn't start at zero: two short slashes at its foot (weather-chart.ts). */
+.weather-chart__break {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/* A stretch set apart (a scripted wave): a soft wash behind the line, with its name at the top. */
+.weather-chart__band {
+  fill: var(--line-strong);
+  opacity: 0.55;
+}
+
+.weather-chart__band-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .weather-chart__line {
   fill: none;
   stroke: var(--chart-color);
@@ -2315,6 +2403,15 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   border-radius: 4px;
   background: var(--weather-else);
   transition: width 0.8s var(--ease-out);
+}
+
+/* lists of hosts sit on the ground: independent hosts in soil, every host the relay knows in slate */
+:is(.weather-bars--hosts, .weather-bars--sizes, .weather-bars--tlds) .weather-bars__fill {
+  background: var(--weather-host-indep);
+}
+
+.weather-bars--roll .weather-bars__fill {
+  background: var(--weather-host-bsky);
 }
 
 .weather-bars__sub {
@@ -2506,6 +2603,23 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   pointer-events: auto;
 }
 
+/* Resting while the header's period is on screen (weather-dock.ts initLensDock): out of the way of the first screen. */
+.weather-dock__strip {
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), visibility var(--dur-fast);
+}
+
+.weather-dock[data-resting]:not([data-open]) .weather-dock__strip {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-dock__strip {
+    transition: none;
+  }
+}
+
 /* open, it's over Poe's bubbles (poe.css .poe-say), which would otherwise land on the controls */
 .weather-dock[data-open] {
   z-index: calc(var(--z-poe) + 1);
@@ -2576,6 +2690,11 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   opacity: 0.45;
 }
 
+/* On a topic's page nothing follows it, so it isn't offered at all (weather-dock.ts initSections). */
+.weather-dock [data-inactive="page"] {
+  display: none;
+}
+
 .weather-dock__note {
   width: 100%;
   margin: 0;
@@ -2602,6 +2721,15 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   padding: 3px;
   border-radius: var(--radius-pill);
   background: var(--bg);
+}
+
+/* "vs", ahead of what the arrows compare with: a word, not a button */
+.weather-seg__label {
+  align-self: center;
+  padding: 0 6px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .weather-seg__btn {
@@ -2738,6 +2866,12 @@ button.weather-hero__unit:disabled {
   letter-spacing: -0.01em;
 }
 
+/* "conditions over the last hour": the window, quieter than what the tile is */
+.weather-span__over {
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
 .weather-group__note {
   margin: 0;
   font-size: 14px;
@@ -2865,6 +2999,28 @@ html[data-weather-topic] .weather-hero__crumb::before {
 
 .weather-topics__list li {
   flex: none;
+}
+
+/* On a phone every page shows: two rows rather than a sideways scroll that hid half of them. */
+@media (max-width: 640px) {
+  .weather-topics {
+    align-items: flex-start;
+  }
+
+  .weather-topics__list,
+  .weather-topics__list[data-more] {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    border-radius: 22px;
+    mask-image: none;
+  }
+
+  /* a little tighter, so the six fit in two rows beside the share button */
+  .weather-topics__list .weather-topics__link {
+    padding: 7px 10px;
+    font-size: 14px;
+  }
 }
 
 .weather-topics__link {

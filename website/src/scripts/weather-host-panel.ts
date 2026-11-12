@@ -175,7 +175,7 @@ export function renderHostPanel(dialog: HTMLElement, h: OneHost | null | 'loadin
   if (activeChart && activeDays.length >= 2) {
     renderChart(activeChart, activeDays.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: d.active! })), {
       label: `accounts active on ${hostname} each day`,
-      color: 'var(--weather-bsky)',
+      color: 'var(--weather-host-indep)',
       format: formatCount,
       formatTick: compactCount,
       formatTime: (t) => DAY_FORMAT.format(new Date(t)).toLowerCase(),
@@ -187,7 +187,7 @@ export function renderHostPanel(dialog: HTMLElement, h: OneHost | null | 'loadin
   if (chart && h.days.length >= 2) {
     renderChart(chart, h.days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: d.accounts })), {
       label: `accounts on ${hostname} each day`,
-      color: 'var(--weather-else)',
+      color: 'var(--weather-host-bsky)',
       format: formatCount,
       formatTick: compactCount,
       formatTime: (t) => DAY_FORMAT.format(new Date(t)).toLowerCase(),

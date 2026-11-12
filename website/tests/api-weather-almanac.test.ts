@@ -238,12 +238,13 @@ describe('the diversity index against usual', () => {
 });
 
 describe("the station's records", () => {
-  const db = (answers: Record<string, unknown>) => {
+  const db = (answers: Record<string, unknown>, hours: unknown = []) => {
     const asked: string[] = [];
     return {
       asked,
       get: async (path: string) => {
         asked.push(path);
+        if (path.startsWith('atmosphere_hour?')) return hours;
         const by = /order=([a-z]+)\.desc/.exec(path)?.[1] ?? '';
         if (!(by in answers)) throw new Error('nope');
         return answers[by];
@@ -253,25 +254,41 @@ describe("the station's records", () => {
       },
     };
   };
+  // each hour's steady count: a usual minute is 25,000 records
+  const hour = (t: string) => ({ hour: t, steady: 1_500_000, seconds_covered: 3600 });
 
   it('reads the busiest whole minute and the most apps in a minute, since it listened live', async () => {
-    const d = db({
-      creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 30_588, seconds_covered: 60 }],
-      apps: [{ minute: '2026-10-21T02:11:00+00:00', apps: 24 }],
-    });
+    const d = db(
+      {
+        creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 30_588, seconds_covered: 60, apps: 20 }],
+        apps: [{ minute: '2026-10-21T02:11:00+00:00', creates: 20_000, seconds_covered: 60, apps: 24 }],
+      },
+      [hour('2026-10-20T19:00:00+00:00'), hour('2026-10-21T02:00:00+00:00')],
+    );
     expect(await readRecords(d)).toEqual({
       since: new Date(LIVE_SINCE).toISOString(),
       busiest: { minute: '2026-10-20T19:04:00.000Z', perSecond: 509.8 },
       mostApps: { minute: '2026-10-21T02:11:00.000Z', apps: 24 },
     });
-    expect(d.asked).toHaveLength(2);
-    for (const path of d.asked) expect(path).toContain(`minute=gte.${new Date(LIVE_SINCE).toISOString()}`);
+    expect(d.asked).toHaveLength(3);
+    for (const path of d.asked.slice(0, 2)) expect(path).toContain(`minute=gte.${new Date(LIVE_SINCE).toISOString()}`);
     expect(d.asked[0]).toContain('seconds_covered=eq.60');
+  });
+
+  it("passes over a burst: a minute past 3 times its hour's usual one, records and apps alike", async () => {
+    // a backlog let out after a pause, as on oct 22: 451,738 records and 52 apps in a minute whose hour usually has 25,000
+    const backlog = { minute: '2026-10-22T22:24:00+00:00', creates: 451_738, seconds_covered: 60, apps: 52 };
+    const weather = { minute: '2026-11-05T00:48:00+00:00', creates: 70_000, seconds_covered: 60, apps: 29 };
+    const d = db({ creates: [backlog, weather], apps: [backlog, weather] }, [hour('2026-10-22T22:00:00+00:00'), hour('2026-11-05T00:00:00+00:00')]);
+    expect(await readRecords(d)).toMatchObject({ busiest: { minute: '2026-11-05T00:48:00.000Z', perSecond: 1166.7 }, mostApps: { minute: '2026-11-05T00:48:00.000Z', apps: 29 } });
+    // a minute whose hour isn't summed yet waits
+    expect(await readRecords(db({ creates: [weather], apps: [weather] }, []))).toMatchObject({ busiest: null, mostApps: null });
   });
 
   it('has no record before it has heard a minute, and fails when Supabase does', async () => {
     expect(await readRecords(db({ creates: [], apps: [] }))).toMatchObject({ busiest: null, mostApps: null });
     await expect(readRecords(db({ creates: { not: 'rows' }, apps: [] }))).rejects.toThrow();
     await expect(readRecords(db({ apps: [] }))).rejects.toThrow();
+    await expect(readRecords(db({ creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 1, seconds_covered: 60, apps: 1 }], apps: [] }, { not: 'rows' }))).rejects.toThrow();
   });
 });

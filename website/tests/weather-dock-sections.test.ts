@@ -85,7 +85,7 @@ describe('the dock and the page\'s sections', () => {
     initLensDock(report, createLens());
     const dock = report.querySelector<HTMLElement>('[data-weather-dock]')!;
     expect(dock.dataset.section).toBe('patterns');
-    expect(dock.dataset.lensOff).toBe('window measure');
+    expect(dock.dataset.lensOff).toBe('window measure compare');
     expect(visible()).toBe('1h · accounts');
   });
 });

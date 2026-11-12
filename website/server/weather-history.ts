@@ -23,8 +23,8 @@
  * Alongside, each from a read-only function (atmosphere/sql/atmosphere_almanac.sql) and
  * left out if it fails:
  *   apps          the busiest apps outside Bluesky over the range, each with its count in
- *                 an earlier window of the same length (atmosphere_app_trends): the same
- *                 hour yesterday, the day before, the week before, the 30 days before,
+ *                 an earlier window of the same length (atmosphere_app_trends): the hour
+ *                 before, the day before, the week before, the 30 days before,
  *                 the year before. And, when the sketches could be read, how many different
  *                 accounts wrote each one over the range (`accounts`), so thousands of
  *                 records from one account read as that account's batch, not a crowd
@@ -96,6 +96,7 @@ export interface Compare {
 export type Bucket = 'minute' | 'hour' | 'day' | 'month';
 
 export const TOP_APPS = 10;
+const MINUTE = 60_000;
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 /** An hour is a burst once its records run this far past its steady count (as a share of it). */
@@ -105,7 +106,7 @@ export const MAX_BURSTS = 3;
 const BURST_APP_SHARE = 0.5;
 
 export const RANGES = {
-  hour: { table: 'atmosphere_minute', key: 'minute', steady: false, bursts: false, spanMs: 60 * 60_000, lagMs: DAY, bucket: 'minute', cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
+  hour: { table: 'atmosphere_minute', key: 'minute', steady: false, bursts: false, spanMs: 60 * 60_000, lagMs: HOUR, bucket: 'minute', cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
   day: { table: 'atmosphere_hour', key: 'hour', steady: true, bursts: false, spanMs: DAY, lagMs: DAY, bucket: 'hour', cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
   week: { table: 'atmosphere_hour', key: 'hour', steady: true, bursts: true, spanMs: 7 * DAY, lagMs: 7 * DAY, bucket: 'hour', cache: 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600' },
   month: { table: 'atmosphere_day', key: 'day', steady: true, bursts: false, spanMs: 30 * DAY, lagMs: 30 * DAY, bucket: 'day', cache: 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400' },
@@ -121,9 +122,18 @@ export function isRange(v: string | null): v is Range {
   return v !== null && Object.hasOwn(RANGES, v);
 }
 
+/**
+ * Where a range ends: now, except the hour, which ends on the minute going on, so it's the
+ * same 60 whole minutes the "last hour" tile counts (weather-span.ts stretches) and the
+ * header's number and its chip are about one stretch.
+ */
+export function rangeEnd(range: Range, now: number): number {
+  return range === 'hour' ? Math.floor(now / MINUTE) * MINUTE : now;
+}
+
 /** The start of a range ending at `now`. */
 export function rangeStart(range: Range, now: number): string {
-  return new Date(now - RANGES[range].spanMs).toISOString();
+  return new Date(rangeEnd(range, now) - RANGES[range].spanMs).toISOString();
 }
 
 /** The PostgREST path (under /rest/v1/) for a range ending at `now`. */
@@ -131,6 +141,8 @@ export function queryPath(range: Range, now: number): string {
   const { table, key, steady } = RANGES[range];
   const params = new URLSearchParams({ select: [key, 'seconds_covered', ...COUNTS, ...(steady ? ['steady'] : [])].join(','), order: `${key}.asc`, limit: '1000' });
   params.set(key, `gte.${rangeStart(range, now)}`);
+  // the hour stops at the minute going on, as the "last hour" tile does
+  if (range === 'hour') params.append(key, `lt.${new Date(rangeEnd(range, now)).toISOString()}`);
   return `${table}?${params}`;
 }
 
@@ -138,11 +150,23 @@ export function queryUrl(base: string, range: Range, now: number): string {
   return `${base}/rest/v1/${queryPath(range, now)}`;
 }
 
+/**
+ * How far back the earlier window is: the stretch right before (each range's lagMs), or with
+ * `?vs=cycle` the same stretch a cycle ago, where the network's rhythm repeats: the same hour
+ * yesterday, the same 24 hours a week ago. A week or more is always against the stretch before.
+ */
+export const CYCLE_LAG_MS: Partial<Record<Range, number>> = { hour: DAY, day: 7 * DAY };
+
+export function lagFor(range: Range, vs: string | null): number {
+  return (vs === 'cycle' ? CYCLE_LAG_MS[range] : undefined) ?? RANGES[range].lagMs;
+}
+
 /** The arguments to atmosphere_app_trends: the range, and the same span `lagMs` earlier. */
-export function trendArgs(range: Range, now: number) {
-  const { spanMs, lagMs } = RANGES[range];
+export function trendArgs(range: Range, now: number, lagMs: number = RANGES[range].lagMs) {
+  const { spanMs } = RANGES[range];
+  const end = rangeEnd(range, now);
   const at = (ms: number) => new Date(ms).toISOString();
-  return { since: at(now - spanMs), until: at(now), prev_since: at(now - spanMs - lagMs), prev_until: at(now - lagMs), max_apps: TOP_APPS };
+  return { since: at(end - spanMs), until: at(end), prev_since: at(end - spanMs - lagMs), prev_until: at(end - lagMs), max_apps: TOP_APPS };
 }
 
 /** A row as a Point, or null if anything is off. Views sum to numeric, which may arrive as strings. */
@@ -252,7 +276,8 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     if (!isRange(range)) return json(request, 400, { error: 'range must be hour, day, week, month or year' }, 'no-store');
     const db = supabase(env(), fetchImpl);
     const at = now();
-    const { key: column, cache, lagMs, bucket, bursts: listBursts } = RANGES[range];
+    const { key: column, cache, bucket, bursts: listBursts } = RANGES[range];
+    const lagMs = lagFor(range, new URL(request.url).searchParams.get('vs'));
     let partial = false;
     /** An extra: asked alongside the points, and left out if it doesn't come. */
     const extra = async <T>(what: string, run: () => Promise<T>): Promise<T | undefined> => {
@@ -265,7 +290,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       }
     };
     const trends = extra('apps', async () => {
-      const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at));
+      const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at, lagMs));
       const c = counts(body, ['seconds', 'prevSeconds'] as const);
       if (!c || !isRecord(body) || !Array.isArray(body.apps)) throw new Error('apps did not check out');
       const apps = body.apps.map(toApp).filter((a): a is App => a !== null).slice(0, TOP_APPS);
@@ -282,7 +307,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       return { bucket, points };
     });
     const accounts = extra('accounts', () => {
-      const { since, until, prev_since, prev_until } = trendArgs(range, at);
+      const { since, until, prev_since, prev_until } = trendArgs(range, at, lagMs);
       return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS, liveSince });
     });
     const hosts = extra('hosts', () => readHosts(db, rangeStart(range, at), bucket, at));

@@ -189,8 +189,8 @@ describe('/api/weather-span', () => {
     const { now: n, before: b } = (await res.json()) as Record<string, Record<string, number | string>>;
     expect(n).toMatchObject({ since: at(start + 720 * HOUR), until: at(now), seconds: 720 * 3600, creates: 450 * 720 * 3600, gust: 450 });
     expect(b).toMatchObject({ since: at(start), until: at(start + 720 * HOUR), seconds: 720 * 3600, creates: 400 * 720 * 3600 });
-    // more hours than a page holds
-    expect(db.asked.filter((u) => u.pathname.endsWith('/atmosphere_hour')).map((u) => u.searchParams.get('offset'))).toEqual(['0', '1000']);
+    // each stretch's hours on their own (a stretch a cycle ago isn't next to this one), a page each
+    expect(db.asked.filter((u) => u.pathname.endsWith('/atmosphere_hour')).map((u) => u.searchParams.get('offset'))).toEqual(['0', '0']);
   });
 
   it("only counts what the station heard live: a stretch from before has nothing, and asks for nothing", async () => {

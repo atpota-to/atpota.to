@@ -34,12 +34,12 @@ describe('rolling numbers', () => {
   });
 
   it('keeps the text plain: textContent is the number, the reels add none', () => {
-    rollText(el, '1 in 521 new records came from outside bluesky');
-    expect(el.textContent).toBe('1 in 521 new records came from outside bluesky');
+    rollText(el, '1 in 521 new records came from apps other than bluesky');
+    expect(el.textContent).toBe('1 in 521 new records came from apps other than bluesky');
     expect(el.querySelectorAll('.roll')).toHaveLength(2);
     expect(el.querySelector('.roll__cells')!.getAttribute('aria-hidden')).toBe('true');
-    rollText(el, '1 in 520 new records came from outside bluesky');
-    expect(el.textContent).toBe('1 in 520 new records came from outside bluesky');
+    rollText(el, '1 in 520 new records came from apps other than bluesky');
+    expect(el.textContent).toBe('1 in 520 new records came from apps other than bluesky');
   });
 
   it('rolls the same cells when only the numbers change, and starts over when the words do', () => {

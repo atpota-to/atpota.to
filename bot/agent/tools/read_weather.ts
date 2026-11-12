@@ -12,7 +12,8 @@ export default defineTool({
     "400, gusty from 500, stormy from 600). The diversity index is how much of the network isn't " +
     "Bluesky by who's writing, not how much: the percent of active accounts that wrote with other apps, " +
     "times the square root of how many apps' worth they're spread across, so one account writing a " +
-    "thousand records counts once. It has a level like the UV index (low under 3, moderate, high from " +
+    "thousand records counts once. For a day or a week it's the average reading, hour by hour, as the " +
+    "weather page shows it, so it stays on the same scale as a minute's. It has a level like the UV index (low under 3, moderate, high from " +
     "6, very high from 8, extreme from 11); `mix` says how it compares with the window before " +
     "(diversityIndexBefore, when that window was heard live). Apps are named by their namespace as a domain: " +
     "sh.tangled.* is tangled.sh. report \"now\" is the last 60 seconds. \"today\" is today so far in " +
@@ -56,8 +57,8 @@ export default defineTool({
     "hosts, as one place; a day with `routesNotKept` is from before the station kept that: say you don't " +
     "know where its movers came from, never none), deletions, who wrote anything each day (accounts on independent hosts against " +
     "everyone active: the share of the active network living off Bluesky's hosts, usually higher than the share of all " +
-    "accounts, since many accounts are quiet) and the liveliest independent hosts by accounts active, and air quality (the share of sign-ups that went " +
-    "to hosts no relay carries, from clear to thick smog: dust, not the network's weather). \"now\" and " +
+    "accounts, since many accounts are quiet) and the liveliest independent hosts by accounts active, and air quality (the share of new identities that point " +
+    "at hosts no relay carries, from clear to thick smog: not sign-ups, mostly scripts, dust rather than the network's weather). \"now\" and " +
     "\"week\" have a short version of the hosts too. " +
     "With `host`, it's one host's own story instead: the accounts it holds, how many wrote anything, and who " +
     "moved to it and away from it, by the other host, today, yesterday, over 7 days and over 30. That's how to " +

@@ -81,6 +81,9 @@
   /* the weather report's two kinds of record: bluesky's, and everyone else's */
   --weather-bsky: #1A73C9;
   --weather-else: #006837;
+  /* where accounts live, on the ground under the sky's apps: bluesky's servers in slate, independent hosts in soil */
+  --weather-host-bsky: #586B7C;
+  --weather-host-indep: #96652A;
 
   /* shape and depth */
   --radius-tile: 32px;
@@ -190,6 +193,8 @@ html[data-theme="dark"] {
 
   --weather-bsky: #3E8DD8;
   --weather-else: #3E9F50;
+  --weather-host-bsky: #8DA2B5;
+  --weather-host-indep: #D29A55;
 
   --shadow-pop: 0 20px 56px rgba(0, 0, 0, 0.5);
   --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.35);

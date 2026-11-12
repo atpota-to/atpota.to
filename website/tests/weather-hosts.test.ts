@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, destinationsOf, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, batchWords, destinationsOf, identityWhen, utcDayStartWords, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -83,7 +83,7 @@ describe('where accounts live, over time', () => {
     expect(part.querySelector('[data-h-chart="active"] svg')).not.toBeNull();
     expect(part.querySelector('[data-h-chart="index"] svg')).not.toBeNull();
     expect([...part.querySelectorAll('[data-h-new] .weather-bars__label')].map((el) => el.textContent)).toEqual(['fresh.example', 'tiny.example']);
-    expect(part.querySelector('[data-h-new-note]')!.textContent).toBe('7 new independent hosts in the last 7 days, the 2 with the most people arriving.');
+    expect(part.querySelector('[data-h-new-note]')!.textContent).toBe('7 new independent hosts in the last 7 days. people have arrived on 2 of them so far.');
     expect([...part.querySelectorAll('[data-h-new] .weather-bars__value')].map((el) => el.textContent)).toEqual(['31', '2']);
     // the people who arrived, not the relay's count
     expect(part.querySelector('[data-h-growing] .weather-bars__value')!.textContent).toBe('+312');
@@ -133,7 +133,8 @@ describe('where accounts live, over time', () => {
     const rows = [...part.querySelectorAll('[data-h-days] tbody tr')].map((tr) => [...tr.children].map((c) => c.textContent));
     expect(rows).toHaveLength(4);
     expect(rows[0]![0]).toMatch(/\(so far\)$/); // the 29th is today
-    expect(rows[0]!.slice(1)).toEqual(['1,886', '0', '0', '0']);
+    // today's gone quiet waits for the day to end: every host not heard from yet would count
+    expect(rows[0]!.slice(1)).toEqual(['1,886', '0', '0', '–']);
     expect(rows[1]!.slice(1)).toEqual(['1,884', '−6', '+1', '−7']);
     expect(rows[3]!.slice(1)).toEqual(['1,887', '–', '–', '–']);
     expect(rows[3]![0]).toMatch(/ ≈$/); // estimated
@@ -154,7 +155,7 @@ describe('where accounts live, over time', () => {
     // new hosts nobody arrived on (a git server's, say) are counted, not listed
     const knots: HostHistory = { ...HOSTS, newHosts: 56, new: [{ hostname: 'knot.example', accounts: 23, people: 0, first: '2026-10-29' }] };
     expect(newHostsWords(knots, 'day')).toBe('56 new independent hosts in the last 24 hours. nobody has signed up on one or moved there yet.');
-    expect(newHostsWords({ ...knots, new: [...knots.new, { hostname: 'pds.example', accounts: 4, people: 3, first: '2026-10-29' }] }, 'day')).toBe('56 new independent hosts in the last 24 hours, the one with the most people arriving.');
+    expect(newHostsWords({ ...knots, new: [...knots.new, { hostname: 'pds.example', accounts: 4, people: 3, first: '2026-10-29' }] }, 'day')).toBe('56 new independent hosts in the last 24 hours. people have arrived on one of them so far.');
     renderHostTrends(part, knots, 'day', bars, NOW);
     expect(part.querySelectorAll('[data-h-new] li')).toHaveLength(0);
     expect(hostBars(HOSTS.growing, true)).toEqual([{ label: 'blacksky.app', perSecond: 312, count: 312, value: '+312' }]);
@@ -177,18 +178,27 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(text('[data-p-day]')).toBe('today so far (utc)');
     expect(text('[data-p-signups]')).toBe('14,329');
     expect(text('[data-p-indep]')).toBe('4,383');
-    expect(text('[data-p-own]')).toBe('31% started outside bluesky, and 122 with a handle on their own domain.');
+    expect(text('[data-p-own]')).toBe('31% started on an independent host, and 122 with a handle on their own domain.');
     expect(report.querySelector('[data-p-chart="arrivals"] svg')).not.toBeNull();
     expect(report.querySelector('[data-p-chart="winds"] svg')).not.toBeNull();
-    expect(text('[data-p-week]')).toBe('over the last 2 days: 49 accounts moved out, 2 moved back.');
+    // all three kinds of move, so the destinations (which take in moves between hosts) add up
+    expect(text('[data-p-week]')).toBe('over the last 2 days: 49 accounts moved out of bluesky, 2 moved back, and 2 moved from one independent host to another.');
     expect(text('[data-p-smog-level]')).toBe('thick smog');
-    expect(text('[data-p-smog-words]')).toMatch(/^9\d(\.\d)?% of all [\d,]+ sign-ups went to hosts no relay carries, so they're not in the new arrivals above\.$/);
-    expect(text('[data-p-deleted]')).toBe('1 account deleted itself.');
+    // identities, not sign-ups: counted, and set against the arrivals
+    expect(text('[data-p-smog-words]')).toMatch(/^today, [\d,]+ new identities pointed at hosts no relay carries: [\d,]+ for every new account above\. nobody sees what's on them, so they're not counted as sign-ups\.$/);
+    expect(text('[data-p-deleted]')).toBe('today, 1 account deleted itself.');
   });
 
   it('heads the trends with the share off bluesky and which way it went', () => {
     const up = { ...HOSTS, points: [{ ...point('2026-10-22T13:00:00.000Z', 1887), share: 1.46, accountsIndependent: 361000 }, point('2026-10-29T11:00:00.000Z', 1902)] };
-    expect(shareHeadline(up, 'week')).toBe("1.51% of accounts live off bluesky's servers, up from 1.46% over the last 7 days: +2,866 accounts on independent hosts.");
+    // without the plc directory's days, the relay's count is all there is
+    expect(shareHeadline({ ...up, identities: [] }, 'week', NOW)).toBe("1.51% of accounts live off bluesky's servers, up from 1.46% a week ago: +2,866 accounts on independent hosts.");
+    // with them, the people who arrived: 7 days of 40 signing up and 5 moving in from bluesky
+    const week = Array.from({ length: 7 }, (_, i) => idDay(`2026-10-${23 + i}`, { createdIndependent: 40, movedOut: 5 }));
+    expect(shareHeadline({ ...up, identities: week }, 'week', NOW)).toBe("1.51% of accounts live off bluesky's servers, up from 1.46% a week ago. about 315 people signed up on independent hosts or moved to one. the relay counts 2,866 more accounts on them, most of them made by scripts or ones it hadn't counted before.");
+    // close to the relay's count: just the people
+    const busy = week.map((d) => ({ ...d, createdIndependent: 400 }));
+    expect(shareHeadline({ ...up, identities: busy }, 'week', NOW)).toBe("1.51% of accounts live off bluesky's servers, up from 1.46% a week ago. about 2,835 people signed up on independent hosts or moved to one.");
     expect(shareHeadline({ ...HOSTS, points: [point('2026-10-29T11:00:00.000Z', 1902)] }, 'day')).toBe("1.51% of accounts live off bluesky's servers.");
     expect(shareHeadline({ ...HOSTS, points: [] }, 'day')).toBe('');
   });
@@ -210,7 +220,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
     expect(text('[data-p-signups]')).toBe('7,350');
     expect(text('[data-p-indep]')).toBe('350');
     expect(text('[data-p-out]')).toBe('14');
-    expect(text('[data-p-deleted]')).toBe('7 accounts deleted themselves.');
+    expect(text('[data-p-deleted]')).toBe('over the last 7 days, 7 accounts deleted themselves.');
     // the week says it all itself: no line against the last 7 days
     expect(report.querySelector<HTMLElement>('[data-p-odds]')!.hidden).toBe(true);
     expect(text('[data-p-week]')).toBe('');
@@ -230,13 +240,13 @@ describe('where the atmosphere lives: the identity tiles', () => {
     renderIdentities(report, [idDay('2026-10-28', { createdBluesky: 18395, createdIndependent: 840 }), batch], NOW);
     expect(text('[data-p-signups]')).toBe('10,851');
     expect(text('[data-p-indep]')).toBe('946');
-    expect(text('[data-p-own]')).toBe('8.7% started outside bluesky, and 50 with a handle on their own domain.');
+    expect(text('[data-p-own]')).toBe('8.7% started on an independent host, and 50 with a handle on their own domain.');
     // the tile doesn't spell out what it left out
     expect(report.querySelector('[data-p-arrivals]')!.textContent).not.toMatch(/made in bulk|left out/);
     // the week's odds leave them out too
-    expect(text('[data-p-odds]')).toBe('over the last 2 days: 1 in 17 started outside bluesky.');
-    // the air quality is against every sign-up, the bulk ones included
-    expect(text('[data-p-smog-words]')).toContain('of all 166,311 sign-ups');
+    expect(text('[data-p-odds]')).toBe('over the last 2 days, 5.9% did.');
+    // the air quality counts identities on hosts no relay carries, never calling them sign-ups
+    expect(text('[data-p-smog-words]')).toMatch(/^today, [\d,]+ new identities pointed at hosts no relay carries/);
 
     // identities with no handle are left out too, and the ones the trends call scripted
     expect(independentOf({ ...batch, createdUnnamed: 340 })).toBe(5561 - 4615 - 340);
@@ -263,7 +273,7 @@ describe('where the atmosphere lives: the identity tiles', () => {
   });
 
   it('says how many new accounts start outside bluesky, and where movers went', () => {
-    expect(oddsWords([idDay('2026-10-28', { createdBluesky: 900, createdIndependent: 100 }), idDay('2026-10-29', { createdBluesky: 1100, createdIndependent: 100 })])).toBe('over the last 2 days: 1 in 11 started outside bluesky.');
+    expect(oddsWords([idDay('2026-10-28', { createdBluesky: 900, createdIndependent: 100 }), idDay('2026-10-29', { createdBluesky: 1100, createdIndependent: 100 })])).toBe('over the last 2 days, 9.1% did.');
     expect(oddsWords([idDay('2026-10-29', { createdIndependent: 0 })])).toBe('');
     const went = destinationsOf([
       idDay('2026-10-28', { destinations: [{ hostname: 'eurosky.social', accounts: 3 }, { hostname: 'blacksky.app', accounts: 2 }] }),
@@ -310,7 +320,9 @@ describe('where the atmosphere lives: the identity tiles', () => {
     renderIdentities(report, days, NOW, bars);
     expect(wrap.hidden).toBe(false);
     expect([...report.querySelectorAll('[data-p-from] .weather-bars__label')].map((el) => el.textContent)).toEqual(['pds.tophhie.cloud', 'pds.wsocial.network']);
-    expect(report.querySelector('[data-p-from-note]')!.textContent).toBe('independent hosts accounts left, for bluesky or another host, over the last 2 days. tap one to see where they went.');
+    expect(report.querySelector('[data-p-from-note]')!.textContent).toBe('accounts that left independent hosts, for bluesky or another host. tap one to see where they went.');
+    // its window in its heading, since it can be shorter than the tile's
+    expect(report.querySelector('[data-p-from-span]')!.textContent).toBe('over the last 2 days');
     // everyone came off bluesky's hosts, or the station didn't keep it: nothing to list
     renderIdentities(report, [idDay('2026-10-29', { moves: [{ from: 'bluesky', to: 'blacksky.app', accounts: 4 }] })], NOW, bars);
     expect(wrap.hidden).toBe(true);
@@ -376,7 +388,8 @@ describe('where the atmosphere lives: the census tiles', () => {
     expect(labels('[data-p-tld-list]')).toEqual(['.com', '.social']);
     expect(report.querySelector('[data-p-tld-lede]')!.textContent).toBe('.com is the most popular ending, on 257 of 1,798 independent hosts.');
     // throttled (0) is left out
-    expect(labels('[data-p-roll-list]')).toEqual(['active', 'idle', 'offline', 'banned']);
+    // the relay's "active" reads as online: active is for accounts that wrote something
+    expect(labels('[data-p-roll-list]')).toEqual(['online', 'idle', 'offline', 'banned']);
     expect(report.querySelector<HTMLElement>('[data-p-rollcall]')!.hidden).toBe(false);
     expect(report.querySelector<HTMLElement>('[data-p-census]')!.hidden).toBe(false);
     expect(report.querySelector('[data-p-roll-lede]')!.textContent).toBe(`the relay has heard of ${census.listed.toLocaleString()} hosts. 1,888 are up and about right now.`);
@@ -410,5 +423,36 @@ describe('the hosting diversity scale', () => {
     expect(hostingPosition(-3)).toBe(0);
     // each band starts where the css draws it (386fr 138fr 173fr 156fr 147fr)
     expect(HOSTING_SCALE.slice(1).map(([, from]) => Math.round(hostingPosition(from) * 1000))).toEqual([386, 524, 697, 853]);
+  });
+});
+
+describe('a whole host moving house', () => {
+  const day = (d: string, destinations: Array<{ hostname: string; accounts: number }>): IdentityDay =>
+    ({ day: d, ops: 0, createdBluesky: 0, createdIndependent: 0, createdUnlisted: 0, createdCustomHandle: 0, createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 0, movedIn: 0, movedBetween: 0, deleted: 0, destinations, moves: [] });
+
+  it('says the day when nearly all of a destination\'s movers came in one go, and nothing when they came spread out', () => {
+    const week = [day('2026-11-06', [{ hostname: 'pds.techne.town', accounts: 304 }, { hostname: 'eurosky.social', accounts: 5 }]), day('2026-11-07', [{ hostname: 'eurosky.social', accounts: 32 }])];
+    expect(batchWords('pds.techne.town', 304, week)).toBe('all on nov 6, in one go');
+    expect(batchWords('eurosky.social', 37, week)).toBeNull();
+    // fewer than BATCH_MOVERS is a few people, not a host
+    expect(batchWords('small.host', 12, [day('2026-11-06', [{ hostname: 'small.host', accounts: 12 }]), day('2026-11-07', [])])).toBeNull();
+    // most of them on one day still reads as one go
+    expect(batchWords('pds.techne.town', 320, [...week, day('2026-11-08', [{ hostname: 'pds.techne.town', accounts: 16 }])])).toBe('304 on nov 6, in one go');
+  });
+});
+
+describe("the plc directory's utc day, in the reader's time", () => {
+  const at = Date.parse('2026-11-12T16:00:00.000Z');
+  it('says when today began where the reader is, and nothing extra on utc', () => {
+    expect(utcDayStartWords(at, 'America/New_York')).toBe('7 pm yesterday');
+    // in tokyo it's already tomorrow at 16:00 utc; earlier in the utc day, the same day
+    expect(utcDayStartWords(at, 'Asia/Tokyo')).toBe('9 am yesterday');
+    expect(utcDayStartWords(Date.parse('2026-11-12T05:00:00.000Z'), 'Asia/Tokyo')).toBe('9 am');
+    expect(utcDayStartWords(Date.parse('2026-11-12T05:00:00.000Z'), 'Asia/Kolkata')).toBe('5:30 am');
+    expect(utcDayStartWords(at, 'UTC')).toBeNull();
+    expect(identityDayWords('2026-11-12', at, 'America/New_York')).toBe('since 7 pm yesterday, your time');
+    expect(identityDayWords('2026-11-12', at, 'UTC')).toBe('today so far (utc)');
+    expect(identityWhen('2026-11-12', at, 'America/New_York')).toBe('since 7 pm yesterday');
+    expect(identityWhen('2026-11-11', at, 'America/New_York')).toBe('yesterday');
   });
 });

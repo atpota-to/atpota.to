@@ -71,6 +71,12 @@ export interface CardData {
   now: Reading | null;
   day: DayHistory | null;
   almanac: AlmanacData | null;
+  /** The last hour's accounts (/api/weather-history?range=hour), for the default card's headline, as the page's header has it. */
+  hour?: HourHistory | null;
+}
+
+export interface HourHistory {
+  accounts?: Accounts;
 }
 
 export type MascotFace = 'happy' | 'sleepy' | 'wow' | 'scawy' | 'kawaii' | 'wink';
@@ -214,6 +220,27 @@ export function hoursOf(day: DayHistory | null): Hour[] {
   return (day?.points ?? []).filter((p) => p.seconds >= 120).map((p) => ({ t: Date.parse(p.t), rate: p.creates / p.seconds }));
 }
 
+/** "224k": active accounts as the page's header writes them (weather-headline.ts bigAmount). */
+export function compactAccounts(v: number): string {
+  if (v < 100_000) return int(v);
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumSignificantDigits: 3 }).format(v).toLowerCase();
+}
+
+/**
+ * Active accounts over the last hour and how that did against the hour before, as the page's
+ * header and its chip say it; the change only when both hours were heard about as well. Null
+ * without the hour's accounts, and the card leads with records a second instead.
+ */
+export function accountsLastHour(d: CardData): { active: number; words: string } | null {
+  const a = d.hour?.accounts;
+  if (!a || a.seconds <= 0 || a.total.active <= 0) return null;
+  const p = a.prev;
+  const fair = p && p.active > 0 && p.seconds >= a.seconds * 0.9 && p.seconds <= a.seconds * 1.1;
+  const pct = fair ? Math.round((a.total.active / p.active - 1) * 100) : null;
+  const change = pct === null ? '' : pct === 0 ? ', about the same as the hour before' : `, ${pct > 0 ? 'up' : 'down'} ${Math.abs(pct)}% on the hour before`;
+  return { active: a.total.active, words: `active in the last hour${change}` };
+}
+
 /** New records a second right now: the station's 60 seconds, else the newest hour. */
 function recordsNow(d: CardData): { rate: number; live: boolean } | null {
   if (d.now) return { rate: d.now.records.perSecond, live: true };
@@ -238,8 +265,11 @@ function mixOf(d: CardData): Mix | null {
   if (div && div.share !== undefined && div.spread !== undefined) {
     return { index: div.index, level: div.level, share: div.share, spread: div.spread, active: d.now?.accounts?.active ?? null, span: 'just now' };
   }
-  const total = d.day?.accounts?.total;
-  if (total) return { index: total.index, level: diversityLevel(total.index), share: total.share, spread: total.spread, active: total.active, span: 'over the last 24 hours' };
+  // the day's average reading, as the page shows it (the whole day's own index climbs with its length)
+  const a = d.day?.accounts;
+  const reading = a?.typical ?? a?.total;
+  // an average hour's share isn't a share of the whole day's accounts, so then it names no count
+  if (a && reading) return { index: reading.index, level: diversityLevel(reading.index), share: reading.share, spread: reading.spread, active: a.typical ? null : a.total.active, span: a.typical ? 'in an average hour of the last 24' : 'over the last 24 hours' };
   return null;
 }
 
@@ -512,7 +542,9 @@ function forecast(d: CardData, art: Art): El | null {
   const usual = usualOf(d.almanac?.normal);
   const sky = { w: CARD_WIDTH - 56, h: CARD_HEIGHT - 56 };
   const [word, rest] = CONDITION_TEXT[condition].split('. ');
-  const number = int(now.rate);
+  // the page leads with active accounts over the last hour, so the card does too; records a second when it has no accounts
+  const acct = accountsLastHour(d);
+  const number = acct ? compactAccounts(acct.active) : int(now.rate);
   const onSky: Style = { background: 'rgba(255, 255, 255, 0.8)', color: C.skyText, whiteSpace: 'nowrap' };
   return page(
     tile(
@@ -526,9 +558,10 @@ function forecast(d: CardData, art: Art): El | null {
         h(
           { alignItems: 'flex-end', gap: 14 },
           big(number, number.length <= 3 ? 176 : number.length <= 5 ? 138 : 112, { color: C.ink }),
-          h({ fontSize: 42, fontWeight: 700, color: C.ink, paddingBottom: 14 }, 'rec/sec'),
+          h({ fontSize: 42, fontWeight: 700, color: C.ink, paddingBottom: 14 }, acct ? 'accounts' : 'rec/sec'),
         ),
-        h({ fontSize: 44, fontWeight: 700, marginTop: 18, color: C.ink }, `${word}.`),
+        acct ? h({ fontSize: 28, marginTop: 10 }, acct.words) : null,
+        h({ fontSize: 44, fontWeight: 700, marginTop: acct ? 14 : 18, color: C.ink }, `${word}.`),
         // The measured comparison when there is one: the condition's stock phrase ("a quiet
         // spell") can read against it, a light breeze that is still busier than usual.
         h({ fontSize: 30, marginTop: 4 }, usual
@@ -693,8 +726,8 @@ function mixCard(d: CardData, art: Art): El | null {
   const top = Math.max(1, ...apps.map((a) => a.n));
   const who =
     mix.active !== null
-      ? `${mix.share.toFixed(2)}% of the ${int(mix.active)} accounts active ${mix.span} wrote with other apps, spread across about ${Math.round(mix.spread)} apps' worth.`
-      : `${mix.share.toFixed(2)}% of active accounts wrote with other apps ${mix.span}, spread across about ${Math.round(mix.spread)} apps' worth.`;
+      ? `${mix.share.toFixed(2)}% of the ${int(mix.active)} accounts active ${mix.span} wrote with other apps, as spread out as ${Math.round(mix.spread)} apps the same size.`
+      : `${mix.share.toFixed(2)}% of active accounts wrote with other apps ${mix.span}, as spread out as ${Math.round(mix.spread)} apps the same size.`;
   const left = apps.length ? 600 : 1144;
   return page(
     tile(
@@ -978,12 +1011,12 @@ export function weekOf(d: CardData): IdentityDay[] {
   return (d.day?.hosts?.identities ?? []).slice(-7);
 }
 
-/** "1 in 17", from a week's listed sign-ups by people, not scripts (weather-hosts.ts oddsWords); null without a week or anyone outside. */
+/** "5.6%", from a week's listed sign-ups by people, not scripts (weather-hosts.ts oddsWords); null without a week or anyone outside. */
 export function oddsOf(week: IdentityDay[]): string | null {
   const indep = week.reduce((t, x) => t + peopleIndependentOf(x), 0);
   const listed = week.reduce((t, x) => t + x.createdBluesky + peopleIndependentOf(x), 0);
   if (week.length < 2 || indep === 0 || listed === 0) return null;
-  return `1 in ${int(Math.max(1, Math.round(listed / indep)))}`;
+  return `${formatIndex((indep / listed) * 100)}%`;
 }
 
 /** Where the week's movers went, busiest first (weather-hosts.ts destinationsOf). */
@@ -1035,7 +1068,7 @@ function migration(d: CardData, art: Art): El | null {
             ),
           )
         : null,
-      odds ? h({ fontSize: 22, color: C.soft, marginTop: 14 }, `${odds} new accounts started outside bluesky`) : null,
+      odds ? h({ fontSize: 22, color: C.soft, marginTop: 14 }, `${odds} of new accounts started on an independent host`) : null,
       h({ marginTop: 16 }, footer(d, C.muted, 'atpota.to/weather/migration')),
     ),
     went.length
