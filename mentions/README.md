@@ -433,9 +433,11 @@ and logs an error rather than silently reverting to something more permissive.
 `@handle` in a draft therefore notifies nobody even if the gate somehow missed
 it, which closes the mass-tagging hole at the record level rather than only at
 the check. The gate still rejects third-party handles, because it still *reads*
-as tagging. The one post that can tag anyone is a dispatch announcement, which
+as tagging. The posts that can tag anyone are a dispatch announcement, which
 the operator approves by hand after seeing who it tags (see
-[Tagging](#tagging-in-an-announcement)).
+[Tagging](#tagging-in-an-announcement)), and a weather post, which can tag only
+the apps' own accounts the droplet checked before Poe was asked (see
+[Tagging an app's account](#tagging-an-apps-account)).
 
 **Opt-out phrases are matched as demands, not as words.** A denylisting is
 permanent with no appeal flow, so a false positive silently and forever stops
@@ -747,7 +749,7 @@ blog's own card) or `none`. The proposal comes on the callback URL, told apart b
 It is accepted only while that DM is `dispatched` to the agent, from an `ADMIN_DIDS`
 sender, at most ten calls per DM, and the text is checked (300 graphemes, no
 @handles, no link since the card carries it, no markdown), with the reason back to
-Poe when it fails. Only a dispatch announcement tags anyone. The exact post and its card go under Poe's reply, and a whole-message
+Poe when it fails. These posts tag nobody: only a dispatch announcement and a weather post can. The exact post and its card go under Poe's reply, and a whole-message
 yes to that message posts it; the rules for what counts as that yes are the dispatch
 announcement's above. The card must load, or nothing is posted and the reply says
 why: a weather card is fetched by its own address, as weather posts do.
@@ -946,8 +948,8 @@ new. When the post is about one part of the report, Poe names that page
 against the website's `weather-topics.ts` by the tests). A page the droplet doesn't
 know is ignored, and the card stays on the whole report. The draft goes through
 the reply gates as a single post (length, markdown, non-answers, `@handles`), with
-no `@handle` allowed at all, no link but `https://atpota.to/weather` and its pages,
-and not the same text as the last weather post. With `WEATHER_POSTS=post` at stage 4
+no `@handle` allowed but the app accounts it was offered (below), no link but
+`https://atpota.to/weather` and its pages, and not the same text as the last weather post. With `WEATHER_POSTS=post` at stage 4
 it is posted with an `app.bsky.embed.external` card for the page Poe named
 (`https://atpota.to/weather/migration`, say) or for the whole report, with that
 page's title and description, and the caps are checked again first. The card's image
@@ -981,6 +983,45 @@ but holds every one, for reading with `npm run weather`. The kill switch stops i
 at once, without a restart, along with everything else Poe posts. Until the bot's
 weather channel is deployed, the agent refuses each moment and the watcher backs
 off for 15 minutes and asks again.
+
+### Tagging an app's account
+
+A weather post that names an app can tag the app's own account ("49 accounts
+filled @cosmik.network with cards"), so it gets the notification. Who it may tag is
+settled in code before Poe is asked (`appAccountsFor` in `src/weather-posts.js`,
+every rule in `appAccountProblem` in `src/gates/weather.js`). The candidates are the
+apps Poe might name: the moment's own, and the last day's busiest by records and by
+accounts (`/api/weather-history?range=day`). An app's account is offered only when:
+
+- enough different accounts wrote its records (`weatherNewAppMinAccounts`, 3): an app
+  one person writes is that person's project, whatever it's called;
+- the AppView has an account whose handle is exactly the app's domain
+  (`app.bsky.actor.getProfiles`, one call), so whoever holds it controls the domain;
+- that account's DID is the lexicon authority for the app's namespace: every one of
+  the app's collections the station heard whose `_lexicon.<authority>` TXT record
+  (DNS, the [lexicon resolution](https://atproto.com/specs/lexicon) method) names a
+  DID names this one, and at least one does. A domain anybody can write records
+  under, a shared host (`web.app`) or a namespace somebody else claimed fails here;
+- it has a display name, no pronouns (people set them, apps don't) and no labels;
+- it isn't Poe, isn't on the denylist, and no weather post tagged it in the last
+  `weatherTagCooldownDays` (7), so a busy app isn't notified every day.
+
+No record says an account is an app rather than a person, and the checks above
+narrow it but can't settle it: a person who publishes lexicons for their own site
+under their own domain, with a few friends writing records, passes them. So the
+last call is Poe's. Poe is shown the accounts as `tagging: { upTo, accounts: [{
+handle, displayName }] }` in the moment's facts (handles, never DIDs), and the
+weather skill (`bot/agent/skills/weather-post.md`) tells it to read each profile and
+tag only one that plainly speaks as the app, never a person's own account. A draft
+may tag at most `weatherMaxTags` (2) of the offered accounts (more is
+`too_many_tags`); any other `@handle` is still `third_party_mention`. The post tags
+the DIDs as they were checked when Poe was asked (`weather_post.tag_accounts`), with
+no second lookup, except that an account that opted out in between is dropped.
+What it tagged is kept in `weather_post.tagged`, and `npm run weather` shows both.
+
+A lookup that fails (the AppView, DNS, the history) leaves the post with nobody to
+tag, and the moment goes to Poe as before. `weatherMaxTags: 0` in `gates.json` turns
+tagging off without a deploy.
 
 ## Poe's profile look (`PROFILE_LOOK`)
 

@@ -17,15 +17,17 @@
 // The kill switch, a nap and STAGE below 4 all stop a post. The kill switch and a
 // nap also stop the watcher asking Poe at all, so a quiet potato costs nothing.
 
+import { Resolver } from 'node:dns/promises';
 import { config, gates, killSwitchEngaged } from './config.js';
-import { db, nowIso } from './db.js';
+import { db, isDenied, nowIso } from './db.js';
 import { logger } from './logger.js';
+import { profilesByHandle } from './atproto.js';
 import { isNapping } from './nap.js';
 import { faceRules } from './richtext.js';
 import { buildAnnouncement, defaultDeps as dispatchDeps, nextTid, ogContent, postUrl } from './dispatch.js';
 import {
-  MOMENT_KINDS, WEATHER_PAGES, askGate, dueMoments, enoughAccounts, evaluateWeatherDraft, isSkip, perSecond, pickMoment, postGate,
-  weatherPageOf, weatherPageUrl,
+  MOMENT_KINDS, WEATHER_PAGES, appAccountProblem, askGate, dueMoments, enoughAccounts, evaluateWeatherDraft, isSkip, lexiconAuthority,
+  maxTags, perSecond, pickMoment, postGate, weatherPageOf, weatherPageUrl,
 } from './gates/weather.js';
 
 db.exec(`
@@ -41,6 +43,8 @@ db.exec(`
     draft_key   TEXT UNIQUE,
     draft_text  TEXT,
     page        TEXT,                      -- the report's page Poe said it's about (gates/weather.js WEATHER_PAGES), or null
+    tag_accounts TEXT,                     -- JSON [{ handle, did, displayName }]: the app accounts Poe was offered to tag
+    tagged      TEXT,                      -- JSON, the same shape: the ones the post tagged (or, held, would have)
     post_text   TEXT,                      -- what was (or would have been) posted
     post_rkey   TEXT UNIQUE,               -- claimed before posting
     post_uri    TEXT,
@@ -52,9 +56,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS weather_post_created_idx ON weather_post(created_at);
   CREATE INDEX IF NOT EXISTS weather_post_status_idx ON weather_post(status);
 `);
-// Added after the table shipped; harmless when it already exists.
-try { db.exec('ALTER TABLE weather_post ADD COLUMN page TEXT'); }
-catch { /* column already present */ }
+// Added after the table shipped; harmless when they already exist.
+for (const column of ['page', 'tag_accounts', 'tagged']) {
+  try { db.exec(`ALTER TABLE weather_post ADD COLUMN ${column} TEXT`); }
+  catch { /* column already present */ }
+}
 
 const CARD_TITLE = 'the atmosphere weather report · atpotato';
 const CARD_DESCRIPTION = "how busy bluesky is right now, how much of the network isn't bluesky at all, " +
@@ -259,6 +265,123 @@ export function factsFor(moment, reading, almanac, g = gates()) {
   };
 }
 
+// --- the apps' own accounts, for tagging ----------------------------------------------
+// Which accounts a weather post may tag is settled before Poe is asked, in code
+// (gates/weather.js appAccountProblem), and Poe is shown only those. Poe can name
+// any app read_weather tells it about, so they are looked up for the moment's apps
+// and the last day's busiest, by records and by accounts.
+
+/** How many app accounts Poe is offered with one moment. */
+const MAX_OFFERED = 6;
+
+/** The last 24 hours' busiest apps outside Bluesky (/api/weather-history?range=day), checked: [{ domain, accounts, collections }]. */
+export function parseHistoryApps(body) {
+  if (!isObject(body)) return [];
+  const app = (a, accounts) => {
+    const domain = isObject(a) ? domainOf(a.domain) : null;
+    return domain ? [{ domain, ...(accounts === null ? {} : { accounts }), collections: collectionsOf(a.collections) }] : [];
+  };
+  return [
+    ...list(body.apps).flatMap((a) => app(a, isObject(a) ? count(a.accounts) : null)),
+    ...list(isObject(body.accounts) ? body.accounts.apps : []).flatMap((a) => app(a, isObject(a) ? count(a.active) : null)),
+  ].slice(0, 40);
+}
+
+/**
+ * The apps a post about this moment might name, each once, the moment's own first:
+ * { domain, accounts, collections }, with the most accounts any reading counted and
+ * every collection any heard (the namespace's lexicon authority is checked for each).
+ */
+export function appsNamed(facts, historyApps = []) {
+  const byDomain = new Map();
+  const add = (a) => {
+    if (!a?.domain) return;
+    const was = byDomain.get(a.domain) ?? { domain: a.domain, accounts: null, collections: [] };
+    const accounts = [was.accounts, a.accounts].filter(Number.isFinite);
+    byDomain.set(a.domain, {
+      domain: a.domain,
+      accounts: accounts.length ? Math.max(...accounts) : null,
+      collections: [...new Set([...was.collections, ...(a.collections ?? [])])].slice(0, 6),
+    });
+  };
+  add(facts?.trigger?.app);
+  for (const a of facts?.newToday ?? []) add(a);
+  for (const a of facts?.lastMinute?.apps ?? []) add(a);
+  for (const a of historyApps) add(a);
+  return [...byDomain.values()];
+}
+
+const dnsResolver = new Resolver({ timeout: 3000, tries: 2 });
+
+/**
+ * The DIDs a lexicon authority's `_lexicon` TXT record names (`did=did:plc:...`): []
+ * when it has none, a throw when DNS couldn't say.
+ */
+export async function lexiconDids(authority) {
+  if (!authority) return [];
+  let records;
+  try {
+    records = await dnsResolver.resolveTxt(`_lexicon.${authority}`);
+  } catch (err) {
+    if (err.code === 'ENOTFOUND' || err.code === 'ENODATA') return [];
+    throw err;
+  }
+  return records.map((chunks) => chunks.join('').trim())
+    .filter((t) => t.startsWith('did='))
+    .map((t) => t.slice(4).trim());
+}
+
+/** Whether a weather post tagged (or, held, would have tagged) this DID in the last weatherTagCooldownDays. */
+function taggedRecently(did, nowMs, g) {
+  const days = Number.isFinite(g.weatherTagCooldownDays) ? g.weatherTagCooldownDays : 7;
+  const since = new Date(nowMs - days * DAY).toISOString();
+  return db.prepare(`SELECT tagged FROM weather_post WHERE tagged IS NOT NULL
+    AND ((status = 'posted' AND posted_at >= ?) OR (status IN ('held', 'posting', 'post_failed') AND updated_at >= ?))`)
+    .all(since, since).some((r) => {
+      try { return JSON.parse(r.tagged).some((m) => m.did === did); }
+      catch { return true; }   // can't tell: treat it as tagged
+    });
+}
+
+/**
+ * The accounts a post about this moment may tag: [{ handle, did, displayName }],
+ * each an app's own account that passed appAccountProblem. Never throws: a lookup
+ * that fails leaves the post with nobody to tag, and the moment goes out as before.
+ */
+export async function appAccountsFor(facts, { nowMs = Date.now(), deps = defaultDeps, g = gates() } = {}) {
+  if (!maxTags(g)) return [];
+  try {
+    const history = await fetchJson(`${config.weather.apiBase}/weather-history?range=day`, deps.fetcher)
+      .then(parseHistoryApps)
+      .catch((err) => {
+        logger.warn('weather history unavailable for app accounts', { error: err.message });
+        return [];
+      });
+    const apps = appsNamed(facts, history).filter((a) => enoughAccounts(a, g) && a.collections.length).slice(0, 25);
+    if (!apps.length) return [];
+    const profiles = await deps.profilesByHandle(apps.map((a) => a.domain));
+    const ctx = { gates: g, botDid: config.botDid, isDenied, taggedRecently: (did) => taggedRecently(did, nowMs, g) };
+    const checked = await Promise.all(apps.map(async (app) => {
+      const profile = profiles.get(app.domain) ?? null;
+      // DNS only for an app that has an account by its name. A lookup that fails is
+      // null, and an app whose namespace can't be read isn't offered.
+      const authorities = profile?.handle === app.domain
+        ? new Map(await Promise.all(app.collections.map(async (c) =>
+          [c, await deps.lexiconDids(lexiconAuthority(c)).catch(() => null)])))
+        : null;
+      return { app, profile, problem: appAccountProblem(app, profile, authorities, ctx) };
+    }));
+    for (const { app, profile, problem } of checked) {
+      if (problem && profile) logger.debug('app account not offered for tagging', { app: app.domain, problem });
+    }
+    return checked.filter((c) => !c.problem).slice(0, MAX_OFFERED)
+      .map(({ profile }) => ({ handle: profile.handle, did: profile.did, displayName: profile.displayName }));
+  } catch (err) {
+    logger.warn('app accounts not looked up; the post tags nobody', { error: err.message });
+    return [];
+  }
+}
+
 // --- state --------------------------------------------------------------------
 
 const getRow = (id) => db.prepare('SELECT * FROM weather_post WHERE id = ?').get(id);
@@ -310,6 +433,9 @@ export const defaultDeps = {
   uploadBlob: dispatchDeps.uploadBlob,
   createPost: dispatchDeps.createPost,
   getOwnPost: dispatchDeps.getOwnPost,
+  // the apps' own accounts (appAccountsFor)
+  profilesByHandle: (handles) => profilesByHandle(handles),
+  lexiconDids,
 };
 
 // --- asking Poe -------------------------------------------------------------------
@@ -379,9 +505,17 @@ export async function weatherTick({ nowMs = Date.now(), deps = defaultDeps } = {
   if (!moment) return { skipped: 'nothing_due' };
 
   const facts = factsFor(moment, reading, almanac, g);
+  // The accounts it may tag, checked now: Poe is shown their handles and names, and
+  // the post can tag only those DIDs, so a handle that moves before it posts can't
+  // change who is tagged.
+  const accounts = await appAccountsFor(facts, { nowMs, deps, g });
+  if (accounts.length) {
+    facts.tagging = { upTo: maxTags(g), accounts: accounts.map(({ handle, displayName }) => ({ handle, displayName })) };
+  }
   const at = new Date(nowMs).toISOString();
-  const id = Number(db.prepare(`INSERT INTO weather_post (kind, subject, facts, status, created_at, updated_at)
-    VALUES (?, ?, ?, 'dispatched', ?, ?)`).run(moment.kind, moment.subject, JSON.stringify(facts), at, at).lastInsertRowid);
+  const id = Number(db.prepare(`INSERT INTO weather_post (kind, subject, facts, tag_accounts, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'dispatched', ?, ?)`).run(moment.kind, moment.subject, JSON.stringify(facts),
+    accounts.length ? JSON.stringify(accounts) : null, at, at).lastInsertRowid);
   try {
     await dispatchMoment({ momentId: `wx-${id}`, kind: moment.kind, facts, recent: recentPosts() }, deps.fetcher);
   } catch (err) {
@@ -422,9 +556,21 @@ export function receiveWeatherDraft(body) {
   return { status: 200, body: { ok: true }, id: Number(id) };
 }
 
+/** The app accounts a moment's post may tag, as they were checked when Poe was asked. */
+function offeredAccounts(row) {
+  try {
+    const list = JSON.parse(row.tag_accounts ?? '[]');
+    return Array.isArray(list) ? list.filter((a) => typeof a?.handle === 'string' && typeof a?.did === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Gate a stored draft and, when allowed, post it. Never throws; each outcome is
- * the row's status. Safe to call twice: only a `drafted` row is processed.
+ * the row's status. Safe to call twice: only a `drafted` row is processed. A post
+ * tags only the app accounts the moment offered (`tag_accounts`), at the DIDs they
+ * were checked at.
  */
 export async function handleWeatherDraft(id, deps = defaultDeps) {
   const row = getRow(id);
@@ -441,16 +587,22 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
 
   const g = gates();
   const last = db.prepare(`SELECT post_text FROM weather_post WHERE status = 'posted' ORDER BY posted_at DESC LIMIT 1`).get();
-  const verdict = evaluateWeatherDraft(draft, { gates: g, killSwitch: killSwitchEngaged, lastPostText: last?.post_text ?? null });
+  const verdict = evaluateWeatherDraft(draft, {
+    gates: g, killSwitch: killSwitchEngaged, lastPostText: last?.post_text ?? null, taggable: offeredAccounts(row),
+  });
   if (!verdict.ok) {
     if (!finish(id, 'rejected', { gate: verdict.gate, detail: verdict.detail }, 'drafted')) return;
     logger.warn('weather draft rejected', { ...log, gate: verdict.gate, detail: verdict.detail, draft });
     return;
   }
   const text = faceRules(verdict.text, { maxGraphemes: g.faceMaxGraphemes });
+  // Somebody who asked Poe to leave them alone since the moment was asked is left alone.
+  const mentions = (verdict.mentions ?? []).filter((m) => !isDenied(m.did));
+  const tagged = mentions.length ? JSON.stringify(mentions) : null;
+  if (mentions.length) log.tags = mentions.map((m) => m.handle);
 
   if (config.weather.mode !== 'post' || config.stage < 4) {
-    if (!finish(id, 'held', { gate: 'draft_mode', post_text: text }, 'drafted')) return;
+    if (!finish(id, 'held', { gate: 'draft_mode', post_text: text, tagged }, 'drafted')) return;
     logger.info('weather draft held (WEATHER_POSTS is not post, or stage < 4)', { ...log, draft: text });
     return;
   }
@@ -484,8 +636,8 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
 
   // The key first, so a post whose fate a crash leaves unknown is found, not repeated.
   const rkey = nextTid();
-  if (!db.prepare(`UPDATE weather_post SET status = 'posting', post_rkey = ?, post_text = ?, updated_at = ?
-    WHERE id = ? AND status = 'drafted'`).run(rkey, text, nowIso(), id).changes) return;
+  if (!db.prepare(`UPDATE weather_post SET status = 'posting', post_rkey = ?, post_text = ?, tagged = ?, updated_at = ?
+    WHERE id = ? AND status = 'drafted'`).run(rkey, text, tagged, nowIso(), id).changes) return;
 
   // The page only for the card's words; its image is never used (WEATHER_CARD).
   const pageUrl = weatherPageUrl(page);
@@ -502,6 +654,7 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
     title: (html && ogContent(html, 'og:title')) || CARD_TITLE,
     description: (html && ogContent(html, 'og:description')) || CARD_DESCRIPTION,
     thumb,
+    mentions,
   });
   try {
     const res = await deps.createPost(record, rkey);
