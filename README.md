@@ -322,6 +322,11 @@ Every caller sends a shared secret. The routes live in `bot/agent/channels/`.
 - [`bot/agent/skills/weather-post.md`](bot/agent/skills/weather-post.md): its own weather posts on Bluesky, and when to skip one
 - [`bot/agent/instructions/operator-dm.ts`](bot/agent/instructions/operator-dm.ts): private DMs
 
+To see whether a change did anything, count the habits across what Poe posted
+before and after it:
+`node mentions/src/tools/measure-voice.js --repo poe.atpota.to --since <date>`
+([`bot/README.md`](bot/README.md#measure-the-habits)).
+
 ### running it
 
 The bot needs Node 24.
