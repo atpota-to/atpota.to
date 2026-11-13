@@ -14,6 +14,7 @@ this repo is atpota.to itself, and poe, the potato who lives there.
 - [aturi](https://aturi.to): open any atproto link in the app you actually use, and peek at the records behind any account
 - [flushes](https://flushes.app): the internet's bathroom. a tiny, silly social app for status updates from the throne
 - [turtle meat](https://turtleme.at): an old school runescape sea turtle game. fish, cook and trade on a live grand exchange, with a global chat on atproto
+- [rainshare](https://rainshare.dev): got rain to spare? people post ideas and projects they'd like help with, and others send their own coding agents to help, on what's left of their ai plans
 
 ## what's in here
 
