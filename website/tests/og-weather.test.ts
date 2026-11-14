@@ -21,6 +21,7 @@ import {
   changeText,
   chartTop,
   cloudCount,
+  CONDITION_FACE,
   CONDITION_TEXT,
   DEFAULT_CARD,
   destinationsOf,
@@ -34,12 +35,10 @@ import {
   HOSTING_SCALE_MAX,
   HOSTING_TEXT,
   hostingPosition,
-  hostsChip,
   isCard,
   LEVEL_TEXT,
   livingOf,
   MAX_CLOUDS,
-  oddsOf,
   seasonOf,
   stamp,
   usualChip,
@@ -194,13 +193,6 @@ describe('og weather: the page\'s words', () => {
     for (const index of [0, 7.43, 10, 60, 499, 900]) expect(hostingPosition(index), String(index)).toBe(weatherPage.hostingPosition(index));
     const week = hostHistory().identities.slice(-7);
     expect(destinationsOf(week)).toEqual(hostsPage.destinationsOf(week));
-    expect(`over the last 7 days, ${oddsOf(week)} did.`).toBe(hostsPage.oddsWords(week));
-    expect(oddsOf(week.slice(-1))).toBeNull(); // a day is too few to say
-    expect(hostsPage.oddsWords(week.slice(-1))).toBe('');
-    // a batch on one host leaves the odds as they were, on both
-    const batch = [...week.slice(0, -1), { ...week[6]!, createdIndependent: week[6]!.createdIndependent + 4615 + 1062 + 300, createdBulk: 4615, bulk: [{ hostname: 'goodmkt.id', accounts: 4615, bursts: 2, seconds: 1929 }], createdScripted: 1062, createdUnnamed: 300 }];
-    expect(oddsOf(batch)).toBe(oddsOf(week));
-    expect(`over the last 7 days, ${oddsOf(batch)} did.`).toBe(hostsPage.oddsWords(batch));
   });
 
   it('says usual the way the almanac does', () => {
@@ -267,25 +259,11 @@ describe('og weather: the cards', () => {
     const art = await cardArt();
     // the measured comparison, not the condition's stock "a quiet spell" beside a busier-than-usual hour
     const forecast = texts(drawCard('forecast', data(), art));
-    expect(forecast).toEqual(expect.arrayContaining(['362', 'a light breeze.', 'diversity index 1.9 · low', 'mostly bluesky out there', '+25% busier than usual for this time of the week']));
+    expect(forecast).toEqual(expect.arrayContaining(['362', 'rec/sec', 'new records a second, right now', 'a light breeze.', '+25% busier than usual', 'atpota.to/weather']));
     expect(forecast.join(' ')).not.toContain('a quiet spell');
-    // and the pds hosts, when the station's census came with the reading
-    expect(forecast.join(' ')).not.toContain('pds hosts');
-    // by where accounts live, not a count of hosts
-    const chipFor = (share: number) => hostsChip({ measuredAt: '2026-10-21T12:05:00.000Z', listed: 1, active: 1, bluesky: 1, independent: 0, writing: null, accounts: { bluesky: 1, independent: 1 }, diversity: { index: 0, share, spread: 1 }, top: [] });
-    expect(chipFor(1.51)).toBe("98.5% of accounts on bluesky pdses · 1.5% independent");
-    expect(chipFor(0.42)).toBe("99.6% of accounts on bluesky pdses · 0.42% independent");
-    expect(chipFor(12)).toBe("88% of accounts on bluesky pdses · 12% independent");
-    const withHosts = data({
-      now: fromStation({
-        ...STATION,
-        hosts: { measuredAt: '2026-10-21T12:05:00Z', listed: 6442, active: 1889, bluesky: 90, independent: 1799, writing: null, accounts: { bluesky: 1, independent: 1 }, diversity: { share: 1.51, spread: 24.57 }, top: [] },
-      }),
-    });
-    expect(texts(drawCard('forecast', withHosts, art))).toEqual(expect.arrayContaining(["98.5% of accounts on bluesky pdses · 1.5% independent"]));
     // without a usual yet, the condition's own words
-    expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a quiet spell, right now']));
-    expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'rocksky.app', '16,836', 'low']));
+    expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a light breeze.', 'a quiet spell']));
+    expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'low', '0.53% of active accounts wrote with other apps', 'rocksky.app', '16,836']));
     expect(texts(drawCard('today', data(), art))).toEqual(expect.arrayContaining([
       'the last hour', 'much busier than usual', '+25%', 'today in numbers', '212', '446', 'new records', '11.4 million', 'from other apps',
     ]));
@@ -297,13 +275,36 @@ describe('og weather: the cards', () => {
     const crowd = (active: number, seconds: number) => ({ seconds, active, bluesky: active - 900, elsewhere: 1000, index: 2, share: 0.45, spread: 18 });
     const hour = { accounts: { seconds: 3540, prevSeconds: 3600, total: crowd(224_186, 3540), prev: crowd(221_696, 3600), points: [], apps: [] } } as unknown as NonNullable<CardData['hour']>;
     const words = texts(drawCard('forecast', data({ hour }), art));
-    expect(words).toEqual(expect.arrayContaining(['224k', 'accounts', 'active in the last hour, up 1% on the hour before', 'a light breeze.']));
+    expect(words).toEqual(expect.arrayContaining(['224k', 'accounts', 'active in the last hour', 'a light breeze.', '+25% busier than usual']));
     expect(words).not.toContain('rec/sec');
-    // an hour before heard much less isn't one to compare with: just the hour
-    const thin = { accounts: { ...hour.accounts!, prev: crowd(221_696, 1200) } } as unknown as NonNullable<CardData['hour']>;
-    expect(texts(drawCard('forecast', data({ hour: thin }), art))).toEqual(expect.arrayContaining(['active in the last hour']));
     // and without the hour's accounts, records a second as before
     expect(texts(drawCard('forecast', data({ hour: null }), art))).toEqual(expect.arrayContaining(['362', 'rec/sec']));
+  });
+
+  it('keeps the default card to a glance: one number, the condition, how it compares, where to look', async () => {
+    const art = await cardArt();
+    const crowd = (active: number) => ({ seconds: 3600, active, bluesky: active - 900, elsewhere: 1000, index: 2, share: 0.45, spread: 18 });
+    const hour = { accounts: { seconds: 3600, prevSeconds: 3600, total: crowd(224_186), prev: crowd(200_000), points: [], apps: [] } } as unknown as NonNullable<CardData['hour']>;
+    const withHosts = data({ hour, now: fromStation({ ...STATION, hosts: HOSTS }) });
+    const words = texts(drawCard('forecast', withHosts, art));
+    expect(words).toEqual(['the atmosphere weather report', '224k', 'accounts', 'active in the last hour', 'a light breeze.', '+25% busier than usual', 'atpota.to/weather', stamp(NOW)]);
+  });
+
+  it('never gives Poe the frowning face, on any card or in any weather', async () => {
+    expect(Object.values(CONDITION_FACE)).not.toContain('scawy');
+    expect(CONDITION_FACE.stormy).toBe('wow');
+    const frown = readFileSync(`${root}src/assets/mascot/potato-scawy.svg`, 'utf8');
+    const frownUri = `data:image/svg+xml;base64,${Buffer.from(frown).toString('base64')}`;
+    const art = await cardArt();
+    expect(() => art.mascot('scawy' as never)).not.toThrow();
+    expect(art.mascot('scawy' as never)).toBeUndefined();
+    /** Every picture's src in an element tree. */
+    const srcs = (node: unknown): string[] =>
+      Array.isArray(node) ? node.flatMap(srcs) : node && typeof node === 'object' && 'props' in node ? [(node as { props: { src?: string } }).props.src ?? '', ...srcs((node as { props: { children?: unknown } }).props.children)] : [];
+    for (const perSecond of [10, 320, 420, 520, 12345]) {
+      const d = data({ now: fromStation({ ...STATION, records: { ...STATION.records, perSecond } }) });
+      for (const name of CARDS) expect(srcs(drawCard(name, d, art)), `${name} at ${perSecond}`).not.toContain(frownUri);
+    }
   });
 
   it('shows where the atmosphere lives, from the station\'s census', async () => {
@@ -311,7 +312,7 @@ describe('og weather: the cards', () => {
     const withHosts = data({ now: fromStation({ ...STATION, hosts: HOSTS }) });
     const words = texts(drawCard('hosts', withHosts, art));
     expect(words).toEqual(expect.arrayContaining([
-      "accounts living off bluesky's servers", '1.51%', 'on 1,799 independent pds hosts, of 1,888 active', '+726 accounts on them in the last 24 hours',
+      "accounts living off bluesky's servers", '1.51%', 'on 1,799 independent pds hosts, of 1,888 active',
       'the biggest independent hosts', 'pds.wsocial.network', '50,662', 'atpota.to/weather/hosts',
     ]));
     expect(words.join(' ')).toMatch(/hosting diversity 7\.4 · early days/);
@@ -327,10 +328,6 @@ describe('og weather: the cards', () => {
     const still = data({ now: null });
     still.day!.hosts!.growing = [];
     expect(texts(drawCard('hosts', still, art))).not.toContain('growing fastest');
-    // one census is no change to speak of
-    const one = data({ now: null });
-    one.day!.hosts!.points = one.day!.hosts!.points.slice(-1);
-    expect(texts(drawCard('hosts', one, art)).join(' ')).not.toContain('in the last 24 hours');
     // no census at all
     expect(drawCard('hosts', data({ now: null, day: { points: points() } }), art)).toBeNull();
   });
@@ -341,15 +338,15 @@ describe('og weather: the cards', () => {
     // the last seven days: 30 a day for five, then 32 and today's 65 so far
     expect(words).toEqual(expect.arrayContaining([
       '247', 'moved out of bluesky', 'the last 7 days', '6 moved back in · 38 host to host',
-      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', '5.6% of new accounts started on an independent host', 'atpota.to/weather/migration',
+      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', 'atpota.to/weather/migration',
     ]));
+    // sign-ups are the page's business, not the movers' card
+    expect(words.join(' ')).not.toContain('started on an independent host');
     expect(words.join(' ')).not.toContain('999');
-    // just today, so far: no week to chart, and no odds
+    // just today, so far: no week to chart
     const one = data();
     one.day!.hosts!.identities = one.day!.hosts!.identities.slice(-1);
-    const today = texts(drawCard('migration', one, art));
-    expect(today).toEqual(expect.arrayContaining(['65', 'today so far']));
-    expect(today.join(' ')).not.toContain('started on an independent host');
+    expect(texts(drawCard('migration', one, art))).toEqual(expect.arrayContaining(['65', 'today so far']));
     // nobody went anywhere we know of: the moves have the card to themselves
     const nowhere = data();
     nowhere.day!.hosts!.identities = nowhere.day!.hosts!.identities.map((x) => ({ ...x, destinations: [] }));
@@ -392,8 +389,8 @@ describe('og weather: the cards', () => {
     const art = await cardArt();
     // no station: the forecast reads the newest hour, and says so
     const noStation = data({ now: null });
-    expect(texts(drawCard('forecast', noStation, art))).toEqual(expect.arrayContaining(['over the last hour, +25% busier than usual for this time of the week']));
-    expect(texts(drawCard('forecast', data({ now: null, almanac: null }), art))).toEqual(expect.arrayContaining([expect.stringContaining(', over the last hour')]));
+    expect(texts(drawCard('forecast', noStation, art))).toEqual(expect.arrayContaining(['new records a second, the last hour', '+25% busier than usual']));
+    expect(texts(drawCard('forecast', data({ now: null, almanac: null }), art))).toEqual(expect.arrayContaining(['new records a second, the last hour']));
     // an hour too old to be "now" is no forecast
     expect(drawCard('forecast', data({ now: null, at: NOW + 3 * HOUR }), art)).toBeNull();
     // too few hours for a chart

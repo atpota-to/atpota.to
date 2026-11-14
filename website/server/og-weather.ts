@@ -142,7 +142,8 @@ const FONTS = [
   ['signika-latin-600-normal.woff', 600],
   ['signika-latin-700-normal.woff', 700],
 ] as const;
-const FACES: readonly MascotFace[] = ['happy', 'sleepy', 'wow', 'scawy', 'kawaii', 'wink'];
+/** Every face a card may use (MascotFace): the frowning one isn't loaded, so no card can draw it. */
+const FACES: readonly MascotFace[] = ['happy', 'sleepy', 'wow', 'kawaii', 'wink'];
 
 interface Kit {
   fonts: Array<{ name: string; data: Buffer; weight: 400 | 600 | 700; style: 'normal' }>;
