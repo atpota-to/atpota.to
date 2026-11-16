@@ -92,7 +92,8 @@ export function timeUsOf(time) {
 /** An SDK event as the v1 message the station's counting reads (eventOfMessage, happenedUs, accountOf). */
 export function messageOf(evt) {
   const c = evt?.kind === 'commit' ? evt.commit : null;
-  return { did: evt?.did, kind: evt?.kind, time_us: timeUsOf(evt?.time), commit: c ? { operation: c.operation, collection: c.collection, rev: c.rev } : undefined };
+  // the record goes along for accountOf's Tangled rule; the raw snapshot's is bytes, which it can't read
+  return { did: evt?.did, kind: evt?.kind, time_us: timeUsOf(evt?.time), commit: c ? { operation: c.operation, collection: c.collection, rev: c.rev, record: c.record } : undefined };
 }
 
 /** Every sealed segment the archive lists, in order. */

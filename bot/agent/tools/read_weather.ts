@@ -28,6 +28,14 @@ export default defineTool({
     "`accountsThatMinute` on a burst), when the station could count them. Thousands of records from one or " +
     "two accounts is one person's batch (an import, a backfill, a bot, someone testing their own app), not " +
     "a crowd: it's in the counts, but it isn't weather. " +
+    "An app's `collections` are its busiest kinds of record in one minute: the last 60 seconds for \"now\" and a " +
+    "burst's own minute, and for a day or a week the app's single busiest minute. They say what it writes, not what " +
+    "most of its records or accounts were over the window: never say \"most of it was\" anything from them. " +
+    "tangled.org's accounts are people: each Tangled git repository writes as an identity of its own (its refs, and " +
+    "the issues and comments people make on it), and since 2026-11-16 the station counts the person a record names, " +
+    "or nobody. Before that day the repositories counted as accounts too (about 900 a day in mid-November), so a fall " +
+    "in tangled.org's accounts, in accounts elsewhere or in the diversity index against a window from before it is the " +
+    "count changing, not people leaving. " +
     "\"now\" and \"today\" also carry the page's last-hour readouts: feels like (new posts a second), " +
     "gusts (the busiest minute, records a second), humidity (edits and deletions as a share of everything " +
     "written) and visibility (apps outside Bluesky heard), each against the hour before. \"today\" adds " +

@@ -376,7 +376,7 @@ export type Event =
   | { kind: 'create'; collection: string }
   | { kind: 'update' | 'delete' | 'identity' | 'account' };
 
-type Message = { kind?: unknown; did?: unknown; commit?: { operation?: unknown; collection?: unknown } } | null;
+type Message = { kind?: unknown; did?: unknown; commit?: { operation?: unknown; collection?: unknown; record?: unknown } } | null;
 
 function parse(data: unknown): Message {
   if (typeof data !== 'string') return null;
@@ -410,6 +410,25 @@ export interface Account {
   app: string | null;
 }
 
+/** Tangled's collections: org.tangled.*, and sh.tangled.* from before it moved. */
+const TANGLED_RE = /^(org|sh)\.tangled\./;
+
+/** A Tangled repository's own records, which only the repository's identity writes. */
+const REPO_COLLECTIONS = new Set(['org.tangled.git.refs', 'org.tangled.repo.manifest']);
+
+/**
+ * Who a Tangled commit counts for. Each repository on a knot (a Tangled git server) has an
+ * identity of its own, which holds its refs and manifest and the issues, pull requests and
+ * comments people make on it, each naming the person in `x-tngl-editor`. So: the editor a
+ * record names, nobody for a repository's own records, else whoever wrote it
+ * (atmosphere/src/accounts.js has the numbers).
+ */
+function tangledWriter(did: string, collection: string, record: unknown): string | null {
+  const editor = record && typeof record === 'object' ? (record as Record<string, unknown>)['x-tngl-editor'] : undefined;
+  if (typeof editor === 'string' && DID_RE.test(editor)) return editor;
+  return REPO_COLLECTIONS.has(collection) ? null : did;
+}
+
 /** Whose a Jetstream message is: any commit to an NSID, by the station's rules (atmosphere/src/accounts.js accountOf); null for anything else. */
 export function accountOf(data: unknown): Account | null {
   return accountOfMessage(parse(data));
@@ -420,7 +439,9 @@ function accountOfMessage(m: Message): Account | null {
   const op = m.commit?.operation;
   const collection = m.commit?.collection;
   if ((op !== 'create' && op !== 'update' && op !== 'delete') || typeof collection !== 'string' || !isNsid(collection)) return null;
-  return { did: m.did, app: isBluesky(collection) ? null : appDomain(collection) };
+  const did = TANGLED_RE.test(collection) ? tangledWriter(m.did, collection, m.commit?.record) : m.did;
+  if (did === null) return null;
+  return { did, app: isBluesky(collection) ? null : appDomain(collection) };
 }
 
 /** Who wrote while a sample listens: different DIDs, exactly, kept only while it listens. */

@@ -177,6 +177,17 @@ describe('reading the firehose', () => {
     expect(accountOf('nope')).toBeNull();
   });
 
+  it("doesn't count a Tangled repository as an account, as the station doesn't", () => {
+    const repo = (collection: string, operation: string, record?: Record<string, unknown>) =>
+      JSON.stringify({ did: 'did:plc:repo', kind: 'commit', commit: { operation, collection, ...(record ? { record } : {}) } });
+    expect(accountOf(repo('org.tangled.feed.comment', 'create', { 'x-tngl-editor': 'did:plc:person' }))).toEqual({ did: 'did:plc:person', app: 'tangled.org' });
+    expect(accountOf(repo('org.tangled.git.refs', 'update', { defaultBranch: 'main' }))).toBeNull();
+    expect(accountOf(repo('org.tangled.repo.manifest', 'create', {}))).toBeNull();
+    expect(accountOf(repo('org.tangled.git.refs', 'update', { 'x-tngl-editor': 'not a did' }))).toBeNull();
+    expect(accountOf(repo('org.tangled.graph.collaborator', 'create', {}))).toEqual({ did: 'did:plc:repo', app: 'tangled.org' });
+    expect(accountOf(repo('com.example.thing', 'create', { 'x-tngl-editor': 'did:plc:person' }))).toEqual({ did: 'did:plc:repo', app: 'example.com' });
+  });
+
   it('counts only new records in the collections it watches', () => {
     expect(metricOf(commit('app.bsky.feed.post'))).toBe('posts');
     expect(metricOf(commit('app.bsky.feed.like'))).toBe('likes');
