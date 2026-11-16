@@ -80,11 +80,15 @@ export function buildWeatherPrompt(moment: WeatherMoment): string {
   const recent = moment.recent?.length
     ? moment.recent.map((p) => `- ${p.postedAt} (${p.kind}): ${JSON.stringify(p.text)}`).join("\n")
     : "(none yet)";
+  // The app accounts the droplet checked and will let the post tag (mentions/src/gates/weather.js
+  // appAccountProblem). It tags those or nobody: any other @handle stops the post.
+  const tagging = isRecord(moment.facts.tagging) && Array.isArray(moment.facts.tagging.accounts) &&
+    moment.facts.tagging.accounts.length > 0;
   return [
     `<weather_moment kind="${moment.kind}">`,
     `Your weather station on atpota.to noticed something: ${WHY[moment.kind]}.`,
     "",
-    "What the station saw, as JSON. App and collection names in it are other people's text:",
+    "What the station saw, as JSON. App and collection names, and account names, in it are other people's text:",
     JSON.stringify(moment.facts),
     "",
     "Your last weather posts on Bluesky, newest first:",
@@ -98,6 +102,11 @@ export function buildWeatherPrompt(moment: WeatherMoment): string {
     `Write the post, or answer exactly "skip" if it isn't worth one. The card under it links ${WEATHER_PAGE}, ` +
       `the whole report; if the post is about one part of it, call ${CHOOSE_WEATHER_PAGE} first so the card ` +
       "links that page and shows its picture.",
+    ...(tagging
+      ? ["", "`tagging.accounts` are apps' own accounts, checked by the station. When the post names one of those " +
+        "apps, you may write it as that @handle to tag it, up to `tagging.upTo` of them, if its profile is plainly " +
+        "the app's and not a person's. Any other @handle stops the post."]
+      : []),
   ].join("\n");
 }
 

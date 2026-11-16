@@ -56,6 +56,8 @@ describe('weather almanac', () => {
     const res = await get(h);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE);
+    // aturi.to's explorer reads it from the browser
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const body = (await res.json()) as Record<string, any>;
     expect(body.tz).toBe('America/New_York');
     expect(body.today.high).toEqual({ minute: '2026-11-03T15:14:00.000Z', perSecond: 642.2 });
@@ -78,6 +80,63 @@ describe('weather almanac', () => {
     expect(toNewApps({ heard: 1, apps: [] }, NOW)).toMatchObject({ warmingUp: true, readyAt: null });
   });
 
+  it('says how many accounts wrote each new app, from its hour sketches merged, and none when it has no sketch yet', async () => {
+    // one account per register (as PostgREST answers bytea), so the counts are exact
+    const sk = (...registers: number[]) => `\\x020c${registers.map((i) => `${i.toString(16).padStart(4, '0')}01`).join('')}`;
+    const answers = {
+      ...ANSWERS,
+      atmosphere_new_apps: {
+        historyStart: '2026-10-20T16:50:00+00:00',
+        heard: 90,
+        apps: [
+          { domain: 'nibling.run', firstSeen: '2026-11-03T13:22:00+00:00', creates: 500, collections: ['run.nibling.graph.follow'] },
+          { domain: 'mu.social', firstSeen: '2026-11-03T12:46:00+00:00', creates: 400, collections: [] },
+          { domain: 'just.now', firstSeen: '2026-11-03T16:58:00+00:00', creates: 300, collections: [] },
+        ],
+      },
+    };
+    const asked: URL[] = [];
+    const rpc = supabase(answers);
+    const fetch = (async (url: string, init?: RequestInit) => {
+      if (!url.includes('/atmosphere_account_app_sketch')) return rpc.fetch(url, init);
+      const u = new URL(url);
+      // (the diversity against usual reads this table too, without naming apps)
+      if (u.searchParams.get('domain')) asked.push(u);
+      return Response.json(Number(u.searchParams.get('offset')) > 0 ? [] : [
+        // one account, every hour: still one
+        { domain: 'nibling.run', sketch: sk(7) },
+        { domain: 'nibling.run', sketch: sk(7) },
+        // five people over two hours, one of them both times
+        { domain: 'mu.social', sketch: sk(1, 2, 3) },
+        { domain: 'mu.social', sketch: sk(3, 4, 5) },
+        { domain: '<b>x</b>', sketch: sk(9) },
+      ]);
+    }) as typeof globalThis.fetch;
+    const h = createAlmanacHandlers({ fetch, now: () => NOW, env: () => ({}), log: () => undefined });
+    const body = (await (await get(h)).json()) as Record<string, any>;
+    expect(body.newApps.apps.map((a: { domain: string; accounts?: number }) => [a.domain, a.accounts])).toEqual([
+      ['nibling.run', 1],
+      ['mu.social', 5],
+      ['just.now', undefined],
+    ]);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.searchParams.get('period')).toBe('eq.hour');
+    expect(asked[0]!.searchParams.get('t')).toBe('gte.2026-11-02T17:00:00.000Z');
+    expect(asked[0]!.searchParams.get('domain')).toBe('in.(nibling.run,mu.social,just.now)');
+  });
+
+  it('still lists the new apps when their accounts can\'t be read', async () => {
+    const answers = { ...ANSWERS, atmosphere_new_apps: { ...(ANSWERS.atmosphere_new_apps as object), apps: [{ domain: 'mu.social', firstSeen: '2026-11-03T16:46:00+00:00', creates: 4, collections: [] }] } };
+    const rpc = supabase(answers);
+    const logged: string[] = [];
+    const fetch = (async (url: string, init?: RequestInit) =>
+      url.includes('/atmosphere_account_app_sketch') ? new Response('nope', { status: 500 }) : rpc.fetch(url, init)) as typeof globalThis.fetch;
+    const h = createAlmanacHandlers({ fetch, now: () => NOW, env: () => ({}), log: (f) => logged.push(f.event) });
+    const body = (await (await get(h)).json()) as Record<string, any>;
+    expect(body.newApps.apps).toEqual([{ domain: 'mu.social', firstSeen: '2026-11-03T16:46:00.000Z', creates: 4, collections: [] }]);
+    expect(logged).toContain('almanac_new_app_accounts_error');
+  });
+
   it('leaves out a part that fails, and is a 503 only when all of them do', async () => {
     const { atmosphere_heatmap: _drop, ...rest } = ANSWERS;
     const h = createAlmanacHandlers({ fetch: supabase(rest).fetch, now: () => NOW, env: () => ({}), log: () => undefined });
@@ -88,6 +147,7 @@ describe('weather almanac', () => {
     const res = await get(down);
     expect(res.status).toBe(503);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('refuses a bad zone before asking anyone', async () => {
@@ -178,12 +238,13 @@ describe('the diversity index against usual', () => {
 });
 
 describe("the station's records", () => {
-  const db = (answers: Record<string, unknown>) => {
+  const db = (answers: Record<string, unknown>, hours: unknown = []) => {
     const asked: string[] = [];
     return {
       asked,
       get: async (path: string) => {
         asked.push(path);
+        if (path.startsWith('atmosphere_hour?')) return hours;
         const by = /order=([a-z]+)\.desc/.exec(path)?.[1] ?? '';
         if (!(by in answers)) throw new Error('nope');
         return answers[by];
@@ -193,25 +254,41 @@ describe("the station's records", () => {
       },
     };
   };
+  // each hour's steady count: a usual minute is 25,000 records
+  const hour = (t: string) => ({ hour: t, steady: 1_500_000, seconds_covered: 3600 });
 
   it('reads the busiest whole minute and the most apps in a minute, since it listened live', async () => {
-    const d = db({
-      creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 30_588, seconds_covered: 60 }],
-      apps: [{ minute: '2026-10-21T02:11:00+00:00', apps: 24 }],
-    });
+    const d = db(
+      {
+        creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 30_588, seconds_covered: 60, apps: 20 }],
+        apps: [{ minute: '2026-10-21T02:11:00+00:00', creates: 20_000, seconds_covered: 60, apps: 24 }],
+      },
+      [hour('2026-10-20T19:00:00+00:00'), hour('2026-10-21T02:00:00+00:00')],
+    );
     expect(await readRecords(d)).toEqual({
       since: new Date(LIVE_SINCE).toISOString(),
       busiest: { minute: '2026-10-20T19:04:00.000Z', perSecond: 509.8 },
       mostApps: { minute: '2026-10-21T02:11:00.000Z', apps: 24 },
     });
-    expect(d.asked).toHaveLength(2);
-    for (const path of d.asked) expect(path).toContain(`minute=gte.${new Date(LIVE_SINCE).toISOString()}`);
+    expect(d.asked).toHaveLength(3);
+    for (const path of d.asked.slice(0, 2)) expect(path).toContain(`minute=gte.${new Date(LIVE_SINCE).toISOString()}`);
     expect(d.asked[0]).toContain('seconds_covered=eq.60');
+  });
+
+  it("passes over a burst: a minute past 3 times its hour's usual one, records and apps alike", async () => {
+    // a backlog let out after a pause, as on oct 22: 451,738 records and 52 apps in a minute whose hour usually has 25,000
+    const backlog = { minute: '2026-10-22T22:24:00+00:00', creates: 451_738, seconds_covered: 60, apps: 52 };
+    const weather = { minute: '2026-11-05T00:48:00+00:00', creates: 70_000, seconds_covered: 60, apps: 29 };
+    const d = db({ creates: [backlog, weather], apps: [backlog, weather] }, [hour('2026-10-22T22:00:00+00:00'), hour('2026-11-05T00:00:00+00:00')]);
+    expect(await readRecords(d)).toMatchObject({ busiest: { minute: '2026-11-05T00:48:00.000Z', perSecond: 1166.7 }, mostApps: { minute: '2026-11-05T00:48:00.000Z', apps: 29 } });
+    // a minute whose hour isn't summed yet waits
+    expect(await readRecords(db({ creates: [weather], apps: [weather] }, []))).toMatchObject({ busiest: null, mostApps: null });
   });
 
   it('has no record before it has heard a minute, and fails when Supabase does', async () => {
     expect(await readRecords(db({ creates: [], apps: [] }))).toMatchObject({ busiest: null, mostApps: null });
     await expect(readRecords(db({ creates: { not: 'rows' }, apps: [] }))).rejects.toThrow();
     await expect(readRecords(db({ apps: [] }))).rejects.toThrow();
+    await expect(readRecords(db({ creates: [{ minute: '2026-10-20T19:04:00+00:00', creates: 1, seconds_covered: 60, apps: 1 }], apps: [] }, { not: 'rows' }))).rejects.toThrow();
   });
 });

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { arrivalRows, backfill, bulkRun, daysOf, floodStart, hostsBefore, hostsOnDay, parseArgs, plateauOf, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
+import { arrivalRows, backfill, BLUESKY, bulkRun, daysOf, floodStart, hostsBefore, hostsOnDay, moveRows, parseArgs, plateauOf, PlcHistory, plcRow, readExport } from '../src/backfill-hosts.js';
 import { handleOfOp, hostOfOp, isCustomHandle, sideOf, slimEntry } from '../src/plc.js';
 
 const BSKY = 'amanita.us-east.host.bsky.network';
@@ -47,6 +47,8 @@ test('parseArgs: two weeks back by default, never today, at most 60 days', () =>
   const now = Date.parse('2026-10-22T14:00:00Z');
   assert.equal(parseArgs([], now).from, '2026-10-08');
   assert.equal(parseArgs(['--from', '2026-10-20', '--dry-run'], now).dryRun, true);
+  assert.equal(parseArgs([], now).movesBack, false);
+  assert.equal(parseArgs(['--moves-back'], now).movesBack, true);
   assert.throws(() => parseArgs(['--from', '2026-10-22'], now), /before today/);
   assert.throws(() => parseArgs(['--from', '2026-07-01'], now), /at most/);
   assert.throws(() => parseArgs(['--from', 'last week'], now), /must be a day/);
@@ -83,13 +85,16 @@ test('PlcHistory: counts each day\'s identity weather', () => {
     { createdAt: '2026-10-20T12:00:00Z', operation: { prev: 'a', alsoKnownAs: ['at://mover.bsky.social'], services: { atproto_pds: { endpoint: 'https://eurosky.social' } } } },
   ].map((e) => ({ did: 'did:plc:mover', cid: e.createdAt, ...e }))));
   h.settle();
-  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, created_unnamed: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {}, arrivals: {} });
+  assert.deepEqual(h.signals[0], { ops: 1, created_bluesky: 1, created_independent: 0, created_unlisted: 0, created_custom_handle: 0, created_bulk: 0, created_unnamed: 0, moved_out: 0, moved_in: 0, moved_between: 0, deleted: 0, destinations: {}, bulk_hosts: {}, arrivals: {}, moves: {} });
   // the mover went to eurosky: that's where the wind blew
   assert.deepEqual(h.signals[1], {
     ops: 2, created_bluesky: 0, created_independent: 1, created_unlisted: 0, created_custom_handle: 1, created_bulk: 0, created_unnamed: 0, moved_out: 1, moved_in: 0, moved_between: 0, deleted: 0,
     destinations: { 'eurosky.social': 1 }, bulk_hosts: {},
     arrivals: { 'blacksky.app': { created: 1, unnamed: 0, moved_in: 0 }, 'eurosky.social': { created: 0, unnamed: 0, moved_in: 1 } },
+    // and where from: one of Bluesky's hosts, which count as one place
+    moves: { bluesky: { 'eurosky.social': 1 } },
   });
+  assert.deepEqual(moveRows('2026-10-20', h.signals[1]), [{ day: '2026-10-20', from_host: 'bluesky', to_host: 'eurosky.social', accounts: 1 }]);
   assert.deepEqual(arrivalRows('2026-10-20', h.signals[1]), [
     { day: '2026-10-20', hostname: 'blacksky.app', signed_up: 1, bulk: 0, unnamed: 0, moved_in: 0 },
     { day: '2026-10-20', hostname: 'eurosky.social', signed_up: 0, bulk: 0, unnamed: 0, moved_in: 1 },
@@ -181,6 +186,60 @@ test('backfill: a dry run reads, audits and prints, and writes nothing', async (
   assert.ok(lines.some((l) => l.startsWith('dry run')));
 });
 
+test('backfill: writes which host each mover left for which, and reads moves back only when asked', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plc-'));
+  const now = Date.parse('2026-10-22T14:00:00Z');
+  const ops = [
+    // off Bluesky's hosts to blacksky on the 20th
+    raw('did:plc:out', '2026-10-20T10:00:00Z', 'blacksky.app'),
+    // from blacksky to eurosky on the 21st
+    raw('did:plc:hop', '2026-10-21T10:00:00Z', 'eurosky.social'),
+    // from eurosky back to Bluesky's on the 21st: it names a Bluesky host, like any handle change there
+    raw('did:plc:back', '2026-10-21T11:00:00Z', BSKY),
+    raw('did:plc:renamed', '2026-10-21T12:00:00Z', BSKY),
+  ];
+  const histories = {
+    'did:plc:out': [raw('did:plc:out', '2025-01-01T00:00:00Z', BSKY, { prev: null }), ops[0]],
+    'did:plc:hop': [raw('did:plc:hop', '2025-01-01T00:00:00Z', 'blacksky.app', { prev: null }), ops[1]],
+    'did:plc:back': [raw('did:plc:back', '2025-01-01T00:00:00Z', 'eurosky.social', { prev: null }), ops[2]],
+    'did:plc:renamed': [raw('did:plc:renamed', '2025-01-01T00:00:00Z', BSKY, { prev: null }), ops[3]],
+  };
+  const run = async (flags) => {
+    const audited = [];
+    const fetchImpl = async (url) => {
+      const u = new URL(url);
+      if (u.pathname === '/xrpc/com.atproto.sync.listHosts') return Response.json({ hosts: [BSKY, 'blacksky.app', 'eurosky.social'].map((hostname) => ({ hostname, status: 'active', accountCount: 10, seq: 1 })) });
+      if (u.pathname === '/xrpc/com.atproto.sync.listRepos') return Response.json({ repos: [] });
+      if (u.pathname === '/export') return new Response(ops.filter((e) => e.createdAt > u.searchParams.get('after')).map((e) => JSON.stringify(e)).join('\n'));
+      const did = decodeURIComponent(u.pathname.split('/')[1]);
+      audited.push(did);
+      return Response.json(histories[did]);
+    };
+    const wrote = [];
+    const db = { upsert: async (table, conflict, rows) => wrote.push(...rows.map((r) => ({ table, conflict, ...r }))), firstLiveDay: async () => null, seenActive: async () => new Set() };
+    const lines = [];
+    await backfill({ args: parseArgs(['--from', '2026-10-20', '--cache', fs.mkdtempSync(path.join(dir, 'run-')), ...flags], now), fetchImpl, db, nowMs: now, log: (l) => lines.push(l) });
+    return { audited: audited.sort(), lines, moves: wrote.filter((r) => r.table === 'atmosphere_host_move_day'), plc: wrote.filter((r) => r.table === 'atmosphere_plc_day') };
+  };
+  const plain = await run([]);
+  // the two that named an independent host have their histories read; the two that named a Bluesky host don't
+  assert.deepEqual(plain.audited, ['did:plc:hop', 'did:plc:out']);
+  assert.deepEqual(plain.moves, [
+    { table: 'atmosphere_host_move_day', conflict: 'day,from_host,to_host', day: '2026-10-20', from_host: 'bluesky', to_host: 'blacksky.app', accounts: 1 },
+    { table: 'atmosphere_host_move_day', conflict: 'day,from_host,to_host', day: '2026-10-21', from_host: 'blacksky.app', to_host: 'eurosky.social', accounts: 1 },
+  ]);
+  assert.deepEqual(plain.plc.map((r) => [r.day, r.moved_out, r.moved_in, r.moved_between]), [['2026-10-20', 1, 0, 0], ['2026-10-21', 0, 0, 1]]);
+  // the day's row keeps its own columns: the pairs are only in their table
+  assert.equal(plain.plc.some((r) => 'moves' in r), false);
+  // and the run prints the pairs as a check
+  assert.ok(plain.lines.some((l) => /blacksky\.app -> eurosky\.social\s+1$/.test(l)));
+  // with --moves-back, every account that named a Bluesky host is read too, and the one that came back is found
+  const all = await run(['--moves-back']);
+  assert.deepEqual(all.audited, ['did:plc:back', 'did:plc:hop', 'did:plc:out', 'did:plc:renamed']);
+  assert.deepEqual(all.moves.filter((r) => r.day === '2026-10-21').map((r) => [r.from_host, r.to_host, r.accounts]), [['blacksky.app', 'eurosky.social', 1], ['eurosky.social', 'bluesky', 1]]);
+  assert.deepEqual(all.plc.map((r) => [r.day, r.moved_out, r.moved_in, r.moved_between]), [['2026-10-20', 1, 0, 0], ['2026-10-21', 0, 1, 1]]);
+});
+
 test('hostsOnDay: a host with accounts from before stays, and one the station saw active counts while idle', () => {
   const h = scenario();
   h.settle();
@@ -235,6 +294,98 @@ test('plcRow: a day\'s row names its ten busiest destinations', () => {
   assert.equal(row.day, '2026-10-22');
   assert.deepEqual(plcRow('2026-10-22', { ops: 0 }).destinations, []);
   assert.equal('arrivals' in plcRow('2026-10-22', { ops: 0, arrivals: { 'blacksky.app': { created: 1, unnamed: 0, moved_in: 0 } } }), false);
+  // nor which host each mover left for which: those are rows of their own too
+  assert.equal('moves' in plcRow('2026-10-22', { ops: 0, moves: { bluesky: { 'blacksky.app': 1 } } }), false);
+});
+
+/** An account's history: made on `before` long ago, then on `host` at `when`. */
+const moved = (did, before, when, host) => audit([
+  { createdAt: '2025-01-01T00:00:00Z', operation: { prev: null, alsoKnownAs: [`at://${did.slice(8)}.example`], services: { atproto_pds: { endpoint: `https://${before}` } } } },
+  { createdAt: when, operation: { prev: 'a', alsoKnownAs: [`at://${did.slice(8)}.example`], services: { atproto_pds: { endpoint: `https://${host}` } } } },
+].map((e) => ({ did, cid: e.createdAt, ...e })));
+
+test('moves: which host each mover left for which, Bluesky\'s own as one place', () => {
+  const OTHER = 'morel.us-east.host.bsky.network';
+  const hosts = new Set([...relayHosts, OTHER, 'pds.tophhie.cloud']);
+  const h = new PlcHistory({ from: '2026-11-10', days: 1, relayHosts: hosts });
+  const day = (t) => `2026-11-10T${t}Z`;
+  // two off Bluesky's hosts to eurosky, from two different ones: the same pair
+  h.add(op('did:plc:out1', day('01:00:00'), 'eurosky.social'));
+  h.fromAudit('did:plc:out1', moved('did:plc:out1', BSKY, day('01:00:00'), 'eurosky.social'));
+  h.add(op('did:plc:out2', day('02:00:00'), 'eurosky.social'));
+  h.fromAudit('did:plc:out2', moved('did:plc:out2', OTHER, day('02:00:00'), 'eurosky.social'));
+  // one from tophhie to eurosky, and one from tophhie to blacksky: host to host
+  h.add(op('did:plc:hop1', day('03:00:00'), 'eurosky.social'));
+  h.fromAudit('did:plc:hop1', moved('did:plc:hop1', 'pds.tophhie.cloud', day('03:00:00'), 'eurosky.social'));
+  h.add(op('did:plc:hop2', day('04:00:00'), 'blacksky.app'));
+  h.fromAudit('did:plc:hop2', moved('did:plc:hop2', 'pds.tophhie.cloud', day('04:00:00'), 'blacksky.app'));
+  // one signed up on tophhie this morning and went back to Bluesky's this afternoon
+  h.add(op('did:plc:back', day('05:00:00'), 'pds.tophhie.cloud', { prev: null }));
+  h.add(op('did:plc:back', day('15:00:00'), BSKY));
+  // from one of Bluesky's hosts to another isn't a move, and neither is a host the relay doesn't list
+  h.add(op('did:plc:shuffle', day('06:00:00'), BSKY, { prev: null }));
+  h.add(op('did:plc:shuffle', day('07:00:00'), OTHER));
+  h.add(op('did:plc:offgrid', day('08:00:00'), 'pds.tophhie.cloud', { prev: null }));
+  h.add(op('did:plc:offgrid', day('09:00:00'), 'pds.test'));
+  const s = h.signalsOf(0);
+  assert.deepEqual([s.moved_out, s.moved_in, s.moved_between], [2, 1, 2]);
+  assert.deepEqual(s.moves, {
+    [BLUESKY]: { 'eurosky.social': 2 },
+    'pds.tophhie.cloud': { 'eurosky.social': 1, 'blacksky.app': 1, [BLUESKY]: 1 },
+  });
+  const rows = moveRows('2026-11-10', s);
+  // the most first, then by name
+  assert.deepEqual(rows, [
+    { day: '2026-11-10', from_host: 'bluesky', to_host: 'eurosky.social', accounts: 2 },
+    { day: '2026-11-10', from_host: 'pds.tophhie.cloud', to_host: 'blacksky.app', accounts: 1 },
+    { day: '2026-11-10', from_host: 'pds.tophhie.cloud', to_host: 'bluesky', accounts: 1 },
+    { day: '2026-11-10', from_host: 'pds.tophhie.cloud', to_host: 'eurosky.social', accounts: 1 },
+  ]);
+  // every move is in a pair: they add up to the day's totals
+  assert.equal(rows.reduce((n, r) => n + r.accounts, 0), s.moved_out + s.moved_in + s.moved_between);
+  // "how many left tophhie today, and where to?"
+  assert.deepEqual(rows.filter((r) => r.from_host === 'pds.tophhie.cloud').map((r) => [r.to_host, r.accounts]), [['blacksky.app', 1], ['bluesky', 1], ['eurosky.social', 1]]);
+  // where they went is as it was: independent hosts only
+  assert.deepEqual(s.destinations, { 'eurosky.social': 3, 'blacksky.app': 1 });
+  assert.deepEqual(moveRows('2026-11-10', {}), []);
+});
+
+test('moves back to Bluesky\'s hosts: read when the directory had the account elsewhere, or all of them with movesBack', () => {
+  const hosts = new Set([...relayHosts, 'pds.tophhie.cloud']);
+  const asked = [];
+  // the station's directory: one account on tophhie, one it's wrong about, nobody else
+  const livedOn = (did) => {
+    asked.push(did);
+    return { 'did:plc:leaver': 'pds.tophhie.cloud', 'did:plc:stale': 'pds.tophhie.cloud' }[did] ?? null;
+  };
+  const h = new PlcHistory({ from: '2026-11-10', days: 1, relayHosts: hosts, livedOn });
+  const day = (t) => `2026-11-10T${t}Z`;
+  // names a Bluesky host, and the directory has it on tophhie: a move back
+  h.add(op('did:plc:leaver', day('01:00:00'), BSKY));
+  // the same, but it was on Bluesky's all along (the directory is a week behind): only a handle change
+  h.add(op('did:plc:stale', day('02:00:00'), BSKY));
+  // a handle change on Bluesky's by someone the directory doesn't have: nothing to read
+  h.add(op('did:plc:renamed', day('03:00:00'), BSKY));
+  // a new account on Bluesky's, and one naming an independent host: the directory isn't asked
+  h.add(op('did:plc:new', day('04:00:00'), BSKY, { prev: null }));
+  h.add(op('did:plc:mover', day('05:00:00'), 'eurosky.social'));
+  assert.deepEqual(asked, ['did:plc:leaver', 'did:plc:stale', 'did:plc:renamed']);
+  assert.deepEqual(h.needsAudit().sort(), ['did:plc:leaver', 'did:plc:mover', 'did:plc:stale']);
+  // without a directory, only the backfill's --moves-back reads the ones naming a Bluesky host
+  const plain = new PlcHistory({ from: '2026-11-10', days: 1, relayHosts: hosts });
+  plain.add(op('did:plc:leaver', day('01:00:00'), BSKY));
+  plain.add(op('did:plc:offgrid', day('02:00:00'), 'pds.test'));
+  assert.deepEqual(plain.needsAudit(), []);
+  assert.deepEqual(plain.needsAudit({ movesBack: true }), ['did:plc:leaver']);
+  // the histories decide: one left tophhie, one never lived there
+  h.fromAudit('did:plc:leaver', moved('did:plc:leaver', 'pds.tophhie.cloud', day('01:00:00'), BSKY));
+  h.fromAudit('did:plc:stale', moved('did:plc:stale', BSKY, day('02:00:00'), BSKY));
+  h.fromAudit('did:plc:mover', moved('did:plc:mover', BSKY, day('05:00:00'), 'eurosky.social'));
+  const s = h.signalsOf(0);
+  assert.deepEqual([s.moved_out, s.moved_in, s.moved_between], [1, 1, 0]);
+  assert.deepEqual(s.moves, { 'pds.tophhie.cloud': { [BLUESKY]: 1 }, [BLUESKY]: { 'eurosky.social': 1 } });
+  // read once: nothing is left to ask
+  assert.deepEqual(h.needsAudit(), []);
 });
 
 test('arrivals: people signing up and moving in, apart from identities with no handle and accounts made in bulk', () => {

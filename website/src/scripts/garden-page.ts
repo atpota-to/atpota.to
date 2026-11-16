@@ -88,10 +88,12 @@ import { rememberReader } from './reader';
 
 export { actorOf, gardenPath } from './garden';
 
-/** localStorage: the blooms this reader has already seen open ({ uris }). */
+/** localStorage: the blooms this reader has already watched open ({ uris }), so each opens with a flourish once. */
 export const SEEN_KEY = 'garden:seen';
 /** Tending shown on the tending level, per list. */
 export const TENDS_SHOWN = 50;
+/** How long a new bloom's petals wait for its card to scroll into view (ms). */
+const BLOOM_SCROLL_MS = 450;
 /** Neighbours who help count towards a flower's care, up to this many (server/garden.ts). */
 const MAX_HELPERS = 3;
 /** People shown on a board; your own place is added under them when it's further down. */
@@ -153,9 +155,6 @@ export const COPY = {
   growingLede: (day: number, weekday: string) =>
     `day ${day} of ${GROW_DAYS}. it blooms on ${weekday}, and the better it's looked after this week, the better it'll grow.`,
   visitingLede: (day: number, weekday: string) => `day ${day} of ${GROW_DAYS}. it blooms on ${weekday}. a little water from you counts towards its care.`,
-  waiting: `day ${GROW_DAYS}. something's happening…`,
-  waitingLede: 'this flower has finished growing. come and see what it turned into.',
-  takeALook: 'take a look',
   bloomLede: (since: string, care: number) => `in bloom since ${since}. cared for ${care} of ${GROW_DAYS} days.`,
   pressedLede: (place: string, care: number) => `pressed when ${place} closed. cared for ${care} of ${GROW_DAYS} days.`,
   thirsty: (whose: string, kind: string) => `${whose} ${kind} looks thirsty`,
@@ -375,13 +374,13 @@ export function poeNotesUrl(did: string): string {
   return `https://aturi.to/profile/${POE_DID}/${MEMORY_NSID}/${encodeURIComponent(did)}`;
 }
 
-/** Which flower to show up close: one waiting to be seen, then one that needs tending, then the newest. */
+/** Which flower to show up close: one of yours that has bloomed since you last looked, then one that needs tending, then the newest. */
 export function featuredFlower(flowers: readonly GardenerFlower[], opts: { owner: boolean; now: number; seen: (uri: string) => boolean; tendedToday: (f: GardenerFlower) => boolean }): GardenerFlower | null {
   const open = flowers.filter((f) => f.patch.open);
   const stage = (f: GardenerFlower) => stageFor(f.plantedAt, opts.now, f.patch.open);
   if (opts.owner) {
-    const waiting = open.find((f) => stage(f) === 'bloom' && !opts.seen(f.uri));
-    if (waiting) return waiting;
+    const fresh = open.find((f) => stage(f) === 'bloom' && !opts.seen(f.uri));
+    if (fresh) return fresh;
   }
   return (
     open.find((f) => stage(f) !== 'bloom' && !opts.tendedToday(f)) ??
@@ -560,6 +559,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       else a.removeAttribute('aria-current');
     }
     if (focus) headTitle?.focus();
+    bloomIfNew();
   }
 
   levelsNav?.addEventListener('click', (event) => {
@@ -918,6 +918,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   }
 
   function afterTend(f: GardenerFlower): void {
+    revealing = false;
     if (featured === f) renderFeatured();
     renderList();
     renderNumbers();
@@ -985,26 +986,19 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     const v = flowerVariant(f);
     const place = COPY.place(f.patch);
     const name = nameOf(f);
-    // A seed in bloom that the garden hasn't named yet is still opening: nothing to reveal.
+    // A seed in bloom that the garden hasn't named yet is still opening: nothing to show yet.
     const opening = stage === 'bloom' && f.kind === SEED;
-    const waiting = owner && open && stage === 'bloom' && !opening && !seenBloom(local, f.uri);
     const weather = [...weatherLines(f.weather, stage), ...(stage === 'bloom' && f.kind !== SEED ? weatherLooks(f.kind, v) : [])];
     const withWeather = (lede: string) => (weather.length ? `${lede} ${weather.join(', ')}.` : lede);
     setText(fEyebrow, COPY.featuredEyebrow(place, f.plot + 1));
     fBed?.classList.toggle('is-revealing', revealing);
     fBed?.classList.toggle('is-pressed', !open);
-    fBed?.replaceChildren(drawPlanted(doc, f, waiting ? 'bud' : stage));
+    fBed?.replaceChildren(drawPlanted(doc, f, stage));
     if (revealing) fBed?.append(el(doc, 'span', { class: 'garden-hero__ribbon' }, ribbonFor(v)));
     fActions?.replaceChildren();
     if (fCare) fCare.hidden = true;
     if (fWeek) fWeek.hidden = true;
     if (fTend) fTend.hidden = true;
-    if (waiting) {
-      setText(fTitle, COPY.waiting);
-      setText(fLede, COPY.waitingLede);
-      fActions?.append(el(doc, 'button', { type: 'button', class: 'btn btn--primary', 'data-reveal': '' }, COPY.takeALook));
-      return;
-    }
     if (open && opening) {
       setText(fTitle, COPY.opening);
       setText(fLede, COPY.openingLede);
@@ -1044,7 +1038,6 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       const action = b.dataset.tend as TendAction;
       if (!f) return;
       if (!(await tendIt(f, action, b, (text) => setText(fStatus, text)))) return;
-      revealing = false;
       afterTend(f);
       setText(fStatus, owner ? COPY.tended[action] : COPY.visitorWatered);
       burst(fBed ?? b, action === 'water' ? 'drops' : 'leaves', win);
@@ -1052,21 +1045,30 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     });
   }
 
-  fActions?.addEventListener('click', (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target?.closest('[data-reveal]') || !featured) return;
+  /**
+   * A flower of yours that has bloomed since you last looked opens by itself up close: it
+   * unfurls, its ribbon goes up, petals fly and the status says what it turned into. That
+   * happens once, the first time its card is on screen (SEEN_KEY); after that it's just in
+   * bloom. Everywhere else on the page it's in bloom from the day it blooms. `petalsAfter`
+   * holds the petals back while the card scrolls into view, since they're placed where the
+   * card is when they fly.
+   */
+  function bloomIfNew(petalsAfter = 0): void {
     const f = featured;
+    if (!f || !owner || level !== 'flowers' || !f.patch.open || f.kind === SEED) return;
+    if (stageFor(f.plantedAt, now(), true) !== 'bloom' || seenBloom(local, f.uri)) return;
     markSeen(local, f.uri);
     revealing = true;
     renderFeatured();
-    renderList();
-    renderGuide();
     const v = flowerVariant(f);
     setText(fStatus, COPY.bloomed(nameOf(f), bloomTitle(f, v)));
-    burst(fBed ?? target, 'petals', win, v.colourway.slice(0, 3));
-    cheer(win);
-    fTitle?.focus();
-  });
+    const petals = () => {
+      burst(fBed ?? featuredCard ?? root, 'petals', win, v.colourway.slice(0, 3));
+      cheer(win);
+    };
+    if (petalsAfter > 0) win.setTimeout(petals, petalsAfter);
+    else petals();
+  }
 
   function feature(f: GardenerFlower): void {
     featured = f;
@@ -1076,6 +1078,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     renderList();
     featuredCard?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
     fTitle?.focus();
+    bloomIfNew(BLOOM_SCROLL_MS);
   }
 
   function groupOf(f: GardenerFlower): Exclude<Filter, 'all'> {
@@ -1095,15 +1098,14 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     const stage = stageFor(f.plantedAt, now(), open);
     const v = flowerVariant(f);
     const place = COPY.place(f.patch);
-    const waiting = owner && open && stage === 'bloom' && f.kind !== SEED && !seenBloom(local, f.uri);
     const li = el(doc, 'li', { class: 'garden-flower', 'data-flower': f.uri });
     li.classList.toggle('is-featured', f === featured);
     li.classList.toggle('is-pressed', !open);
     li.classList.toggle('is-thirsty', open && f.thirsty);
     const bed = el(doc, 'span', { class: 'garden-flower__bed', 'aria-hidden': 'true' });
-    bed.append(drawPlanted(doc, f, waiting ? 'bud' : stage));
+    bed.append(drawPlanted(doc, f, stage));
     const words = el(doc, 'span', { class: 'garden-flower__words' });
-    const name = waiting || (stage === 'bloom' && open && f.kind === SEED) ? COPY.somethingBlooming : stage === 'bloom' ? bloomTitle(f, v) : COPY.growing(owner ? 'a' : whose(), nameOf(f), stage);
+    const name = stage === 'bloom' && open && f.kind === SEED ? COPY.somethingBlooming : stage === 'bloom' ? bloomTitle(f, v) : COPY.growing(owner ? 'a' : whose(), nameOf(f), stage);
     const nameButton = el(doc, 'button', { type: 'button', class: 'garden-flower__name' }, name);
     nameButton.addEventListener('click', () => feature(f));
     const meta = !open ? COPY.meta.pressed(place) : stage !== 'bloom' ? COPY.meta.growing(place, dayOf(f.plantedAt, now())) : f.thirsty ? COPY.meta.thirsty(place) : COPY.meta.bloom(place);
@@ -1177,6 +1179,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
       cheer(win);
     } finally {
       setBusy(waterAll, false);
+      revealing = false;
       if (featured) renderFeatured();
       renderList();
       renderNumbers();
@@ -1249,7 +1252,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   }
 
   /**
-   * The field guide: every kind there is. One they've grown in bloom is drawn as the first
+   * The field guide: every kind there is. One they've grown to bloom is drawn as the first
    * of theirs that bloomed, with the rare looks they've found on it; the rest stay dark,
    * with where each comes from, so they know what to look out for.
    */
@@ -1259,8 +1262,6 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     const found = new Map<FlowerKind, { flower: GardenerFlower; looks: Set<string> }>();
     for (const f of [...person.flowers].reverse()) {
       if (f.kind === SEED || stageFor(f.plantedAt, now(), f.patch.open) !== 'bloom') continue;
-      // A bloom its owner hasn't taken a look at yet isn't found yet: no spoilers.
-      if (owner && f.patch.open && !seenBloom(local, f.uri)) continue;
       const v = flowerVariant(f);
       const had = found.get(f.kind) ?? { flower: f, looks: new Set<string>() };
       for (const [on, look] of [
@@ -1307,10 +1308,8 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
     if (flower) {
       const open = flower.patch.open;
       const stage = stageFor(flower.plantedAt, now(), open);
-      // A bloom its owner hasn't taken a look at yet stays a bud here too: no spoilers.
-      const hidden = owner && open && stage === 'bloom' && (flower.kind === SEED || !seenBloom(local, flower.uri));
       const bed = el(doc, 'span', { class: 'garden-tend-item__bed', 'aria-hidden': 'true' });
-      bed.append(drawPlanted(doc, flower, hidden ? 'bud' : stage));
+      bed.append(drawPlanted(doc, flower, stage));
       li.append(bed);
     }
     return li;
@@ -1480,6 +1479,7 @@ export async function initGardenPage(opts: GardenPageOptions = {}): Promise<void
   renderPeople();
   renderGuide();
   renderTending();
+  bloomIfNew();
   // How it grows: for anyone at the community garden, and on your own page until you plant.
   if (isCommunity() || (owner && !person.flowers.length)) fillHow();
   await Promise.all([showGarden(), loadLeaders()]);

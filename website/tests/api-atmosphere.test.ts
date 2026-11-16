@@ -282,6 +282,8 @@ describe('/api/atmosphere', () => {
     const res = await pending;
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE_OK);
+    // aturi.to's explorer reads it from the browser
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const body = (await res.json()) as { perSecond: Record<string, number>; condition: string };
     expect(Object.keys(body.perSecond).sort()).toEqual(['follows', 'likes', 'posts', 'reposts']);
     expect(body.condition).toBe('calm');
@@ -303,6 +305,7 @@ describe('/api/atmosphere', () => {
     const res = await bad;
     expect(res.status).toBe(503);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('only takes GET and HEAD', async () => {
@@ -351,6 +354,22 @@ describe('reading the weather station', () => {
     expect(r.diversity).toEqual({ index: 9, level: 'very high', share: 3, spread: 9, apps: 12, collections: 40 });
     expect(r.apps).toEqual([{ domain: 'ok.app', perSecond: 1, count: 1, collections: ['app.ok.thing'] }]);
     expect(r.bluesky).toEqual([]);
+  });
+
+  it('passes each busy app\'s accounts through when the station counted them, and drops an odd count', () => {
+    const r = fromStation({
+      ...STATION,
+      apps: [
+        { domain: 'zelk.space', perSecond: 40, count: 2400, collections: [], accounts: 1 },
+        { domain: 'tangled.sh', perSecond: 4, count: 240, collections: [], accounts: 'many' },
+        { domain: 'teal.fm', perSecond: 2, count: 120, collections: [] },
+      ],
+    })!;
+    expect(r.apps).toEqual([
+      { domain: 'zelk.space', perSecond: 40, count: 2400, collections: [], accounts: 1 },
+      { domain: 'tangled.sh', perSecond: 4, count: 240, collections: [] },
+      { domain: 'teal.fm', perSecond: 2, count: 120, collections: [] },
+    ]);
   });
 
   it('passes the station\'s active accounts through, checked, and does without them when they are off', () => {

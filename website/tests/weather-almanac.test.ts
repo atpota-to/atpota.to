@@ -17,6 +17,7 @@ import {
   recordHigh,
   renderHeatmap,
   renderNewApps,
+  heardText,
   renderRecords,
   renderToday,
   roughly,
@@ -190,8 +191,8 @@ describe('new in the atmosphere', () => {
     expect(link.target).toBe('_blank');
     expect(link.rel).toBe('noopener');
     // the hover card's details, in words for screen readers too
-    expect(link.dataset.heard).toBe('first heard at 11:46 am · 4 records');
-    expect(link.textContent).toBe('mu.social, first heard at 11:46 am · 4 records: social.mu.newsFeedPrefs. opens aturi in a new tab');
+    expect(link.dataset.heard).toBe('first heard today at 11:46 am · 4 records');
+    expect(link.textContent).toBe('mu.social, first heard today at 11:46 am · 4 records: social.mu.newsFeedPrefs. opens aturi in a new tab');
     expect(root.querySelector<HTMLElement>('[data-a-new-note]')!.hidden).toBe(false);
   });
 
@@ -374,5 +375,28 @@ describe('records', () => {
     const tile = root.querySelector<HTMLElement>('[data-a-today]')!;
     renderRecords(tile, { ...ALMANAC, today: undefined, records: undefined }, TZ);
     expect(tile.querySelector<HTMLElement>('[data-a-records]')!.hidden).toBe(true);
+  });
+});
+
+describe('new apps by who wrote them', () => {
+  const app = (domain: string, creates: number, accounts?: number) => ({ domain, firstSeen: '2026-11-12T03:55:00.000Z', creates, collections: [], ...(accounts === undefined ? {} : { accounts }) });
+
+  it("sizes each by its accounts, so one account's batch stays small, and fades the ones with one account", () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<section data-a-new><p data-a-new-lede></p><p data-a-new-count></p><ul data-a-new-list></ul><div data-a-new-tip hidden></div><p data-a-new-note hidden></p></section>';
+    const tile = root.querySelector<HTMLElement>('[data-a-new]')!;
+    const apps = [app('nahdig.com', 5455, 1), app('jisaku.dev', 3, 2), app('web.app', 2, 4)];
+    renderNewApps(tile, { tz: 'UTC', newApps: { historyStart: null, readyAt: null, warmingUp: false, heard: 200, apps } } as never, Date.parse('2026-11-12T16:00:00.000Z'), 'UTC');
+    const weight = (d: string) => Number((tile.querySelector(`[data-domain="${d}"]`)!.parentElement as HTMLElement).style.getPropertyValue('--w'));
+    expect(weight('web.app')).toBeGreaterThan(weight('jisaku.dev'));
+    expect(weight('jisaku.dev')).toBeGreaterThan(weight('nahdig.com'));
+    expect(tile.querySelector('[data-domain="nahdig.com"]')!.parentElement!.classList.contains('is-solo')).toBe(true);
+    expect(tile.querySelector('[data-a-new-lede]')!.textContent).toBe('3 apps blew in for the first time in the last 24 hours. 2 have more than one account writing.');
+    expect(tile.querySelector<HTMLElement>('[data-domain="nahdig.com"]')!.dataset.heard).toBe('first heard today at 3:55 am · 5,455 records, from 1 account');
+    expect(tile.querySelector('[data-a-new-note]')!.textContent).toMatch(/faded ones are one account so far/);
+  });
+
+  it('says yesterday for a first time before midnight where the reader is', () => {
+    expect(heardText(app('mathr.app', 1, 2), 'America/New_York', Date.parse('2026-11-12T16:00:00.000Z'))).toBe('first heard yesterday at 10:55 pm · 1 record, from 2 accounts');
   });
 });

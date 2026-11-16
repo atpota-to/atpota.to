@@ -21,7 +21,7 @@
 
 import { motionOK, rollText } from './roll';
 import { compactCount, countTo, coverageWords, formatCount, type Reading } from './weather';
-import { formatAmount, perUnit, UNIT_INFO, type Unit, type Window } from './weather-lens';
+import { EARLIER, earlierWords, formatAmount, perUnit, UNIT_INFO, type Compare, type Unit, type Window } from './weather-lens';
 
 export type Span = 'minute' | 'hour' | 'day' | 'week' | 'month';
 export const SPANS: readonly Span[] = ['minute', 'hour', 'day', 'week', 'month'];
@@ -37,6 +37,12 @@ export const SPAN_INFO: Record<Span, { seconds: number; words: string; title: st
 
 /** The span for the lens's window: "now" is the live minute. */
 export const spanFor = (window: Window): Span => (window === 'now' ? 'minute' : window);
+
+/** The window a span shows: the live minute is "now". */
+export const windowFor = (span: Span): Window => (span === 'minute' ? 'now' : span);
+
+/** What a span's arrows compare with: the stretch before, or the same stretch a cycle ago (weather-lens.ts EARLIER). */
+export const beforeWords = (span: Span, vs: Compare = 'before'): string => earlierWords(windowFor(span), vs);
 
 export const EVENTS = ['creates', 'updates', 'deletes', 'identity', 'account'] as const;
 export type EventKey = (typeof EVENTS)[number];
@@ -154,9 +160,9 @@ export function readSpan(body: unknown): SpanAnswer | null {
   return { span: b.span as Span, now: toStretch(b.now), before: toStretch(b.before) };
 }
 
-export async function fetchSpan(span: Span, fetchImpl: typeof fetch = fetch): Promise<SpanAnswer | null> {
+export async function fetchSpan(span: Span, fetchImpl: typeof fetch = fetch, vs: Compare = 'before'): Promise<SpanAnswer | null> {
   try {
-    const res = await fetchImpl(`${SPAN_ENDPOINT}?span=${span}`, { headers: { accept: 'application/json' } });
+    const res = await fetchImpl(`${SPAN_ENDPOINT}?span=${span}${vs === 'cycle' ? '&vs=cycle' : ''}`, { headers: { accept: 'application/json' } });
     if (!res.ok) return null;
     const answer = readSpan(await res.json());
     return answer?.span === span ? answer : null;
@@ -199,10 +205,10 @@ export const RATE_COVERAGE = 0.5;
 export const DISTINCT_COVERAGE = 0.1;
 
 /** Each figure's chip against the span before, or null where it can't fairly say. */
-export function changesOf(now: Figures, before: Figures | null, span: Span): Record<ChangeKey, Change | null> {
+export function changesOf(now: Figures, before: Figures | null, span: Span, vs: Compare = 'before'): Record<ChangeKey, Change | null> {
   const out = Object.fromEntries(CHANGE_KEYS.map((k) => [k, null])) as Record<ChangeKey, Change | null>;
   if (!before) return out;
-  const than = SPAN_INFO[span].before;
+  const than = beforeWords(span, vs);
   const even = (a: number, b: number) => a > 0 && b >= a * (1 - DISTINCT_COVERAGE) && b <= a * (1 + DISTINCT_COVERAGE);
   if (before.seconds >= now.seconds * RATE_COVERAGE) {
     out.posts = percentChange(now.posts, before.posts, than);
@@ -216,12 +222,14 @@ export function changesOf(now: Figures, before: Figures | null, span: Span): Rec
 }
 
 /** The line under the tile: what the arrows compare with, and how much the station heard. */
-export function spanNote(span: Span, now: Figures | null, before: Figures | null, failed = false): string {
+export function spanNote(span: Span, now: Figures | null, before: Figures | null, failed = false, vs: Compare = 'before'): string {
   const info = SPAN_INFO[span];
   const words = info.words;
+  const than = beforeWords(span, vs);
   if (!now) return failed ? `${words} is hard to read right now. try again in a bit.` : `reading ${words}…`;
-  const heard = span !== 'minute' && now.seconds < info.seconds * 0.9 ? ` the station has heard ${coverageWords(now.seconds)} of ${words} so far.` : '';
-  const arrows = before ? `arrows compare with ${info.before}.` : span === 'minute' ? '' : `once the station has heard ${info.before}, arrows say what's up and down.`;
+  // live only: the archive the trends also draw on missed most edits, so these figures start where the station listened live
+  const heard = span !== 'minute' && now.seconds < info.seconds * 0.9 ? ` these count only what the station heard live: ${coverageWords(now.seconds)} of ${words} so far.` : '';
+  const arrows = before ? `arrows compare with ${than}.` : span === 'minute' && vs === 'before' ? '' : `once the station has heard ${than}, arrows say what's up and down.`;
   return `${arrows}${heard}`.trim();
 }
 
@@ -274,8 +282,10 @@ export function unitWords(unit: Unit): { posts: string; gust: string } {
 }
 
 /** The tile for a span: its readouts and counts, each with its chip, and the note; the chips it drew, null while it loads. */
-export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null, before: Figures | null, failed = false, unit: Unit = 'second'): Record<ChangeKey, Change | null> | null {
+export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null, before: Figures | null, failed = false, unit: Unit = 'second', vs: Compare = 'before'): Record<ChangeKey, Change | null> | null {
   tile.dataset.span = span;
+  // what the arrows compare with, for the header's "vs …" (weather-page.ts renderHeadlineChange)
+  tile.dataset.vs = vs;
   const words = unitWords(unit);
   const postsUnit = $(tile, '[data-s-unit="posts"]');
   if (postsUnit) postsUnit.textContent = words.posts;
@@ -283,10 +293,10 @@ export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null
   if (gustUnit) gustUnit.textContent = words.gust;
   tile.dataset.state = now ? 'ready' : failed ? 'error' : 'loading';
   const note = $(tile, '[data-s-note]');
-  if (note) note.textContent = spanNote(span, now, before, failed);
+  if (note) note.textContent = spanNote(span, now, before, failed, vs);
   const gustNote = $(tile, '[data-r-gusts-note]');
   if (gustNote) gustNote.textContent = SPAN_INFO[span].gust;
-  const changes = now ? changesOf(now, before, span) : null;
+  const changes = now ? changesOf(now, before, span, vs) : null;
   for (const el of tile.querySelectorAll<HTMLElement>('[data-s-change]')) chip(el, changes?.[el.dataset.sChange as ChangeKey] ?? null);
   // loading: the last numbers stay, dimmed, until the span's come
   if (!now && !failed) return changes;
@@ -310,9 +320,12 @@ export function renderFigures(tile: HTMLElement, span: Span, now: Figures | null
 interface TileState {
   span: Span;
   unit: Unit;
+  /** What the arrows compare with; a span with no cycle compares with the stretch before whatever this says. */
+  vs: Compare;
   live: Figures | null;
-  answers: Partial<Record<Span, SpanAnswer>>;
-  failed: Partial<Record<Span, boolean>>;
+  /** Each span's answer, by what it compares with ("hour:cycle"). */
+  answers: Partial<Record<string, SpanAnswer>>;
+  failed: Partial<Record<string, boolean>>;
   /** Told the chips each time the tile draws, so the header can have one too (weather-page.ts). */
   onChanges?: (changes: Record<ChangeKey, Change | null> | null) => void;
 }
@@ -321,15 +334,19 @@ const states = new WeakMap<HTMLElement, TileState>();
 
 function stateOf(tile: HTMLElement): TileState {
   let s = states.get(tile);
-  if (!s) states.set(tile, (s = { span: 'minute', unit: 'second', live: null, answers: {}, failed: {} }));
+  if (!s) states.set(tile, (s = { span: 'minute', unit: 'second', vs: 'before', live: null, answers: {}, failed: {} }));
   return s;
 }
 
+/** The comparison a span makes: a cycle only where it has one (weather-lens.ts EARLIER). */
+const vsOf = (s: TileState): Compare => (s.vs === 'cycle' && EARLIER[windowFor(s.span)].cycle ? 'cycle' : 'before');
+const keyOf = (s: TileState) => `${s.span}:${vsOf(s)}`;
+
 function draw(tile: HTMLElement, s: TileState): void {
-  const answer = s.answers[s.span];
+  const answer = s.answers[keyOf(s)];
   const now = s.span === 'minute' ? s.live : answer?.now ? figuresOf(answer.now) : null;
   const before = answer?.before ? figuresOf(answer.before) : null;
-  const changes = renderFigures(tile, s.span, now, before, s.span !== 'minute' && !answer && !!s.failed[s.span], s.unit);
+  const changes = renderFigures(tile, s.span, now, before, s.span !== 'minute' && !answer && !!s.failed[keyOf(s)], s.unit, vsOf(s));
   s.onChanges?.(changes);
 }
 
@@ -344,24 +361,29 @@ export interface SpanTile {
   /** Moves the tile to a span (the title says which), loading it if it isn't already. */
   setSpan(span: Span): void;
   setUnit(unit: Unit): void;
+  /** What the arrows compare with: the stretch before, or a cycle ago; loads that answer if it isn't already. */
+  setVersus(vs: Compare): void;
 }
 
 /** The tile's first load and a refresh while the tab is visible (SPAN_INFO's refreshMs); the lens moves it on (weather-page.ts). */
-export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch, start: { span?: Span; unit?: Unit; onChanges?: TileState['onChanges'] } = {}): SpanTile {
+export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch, start: { span?: Span; unit?: Unit; vs?: Compare; onChanges?: TileState['onChanges'] } = {}): SpanTile {
   const s = stateOf(tile);
   s.onChanges = start.onChanges;
   const word = $(tile, '[data-s-word]');
   const status = $(tile, '[data-s-status]');
   if (start.unit) s.unit = start.unit;
   if (start.span) s.span = start.span;
+  if (start.vs) s.vs = start.vs;
   const load = async () => {
     const span = s.span;
-    const answer = await fetchSpan(span, fetchImpl);
+    const vs = vsOf(s);
+    const key = keyOf(s);
+    const answer = await fetchSpan(span, fetchImpl, vs);
     if (answer) {
-      s.answers[span] = answer;
-      s.failed[span] = false;
-    } else s.failed[span] = true;
-    if (span === s.span) draw(tile, s);
+      s.answers[key] = answer;
+      s.failed[key] = false;
+    } else s.failed[key] = true;
+    if (key === keyOf(s)) draw(tile, s);
   };
   const label = () => {
     if (word) word.textContent = SPAN_INFO[s.span].title;
@@ -393,6 +415,14 @@ export function initSpan(tile: HTMLElement, fetchImpl: typeof fetch = fetch, sta
       if (unit === s.unit) return;
       s.unit = unit;
       draw(tile, s);
+    },
+    setVersus(vs) {
+      if (vs === s.vs) return;
+      const was = keyOf(s);
+      s.vs = vs;
+      if (keyOf(s) === was) return;
+      draw(tile, s);
+      void load();
     },
   };
 }

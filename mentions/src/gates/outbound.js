@@ -64,6 +64,7 @@ function hostAllowed(host, allowHosts) {
  *   lastReplyText,         the last reply we sent that account, or null
  *   allowedLinks,          Set of URLs seen in this turn's tool results, or null
  *   allowedLinkHosts,      host allowlist used when allowedLinks is null
+ *   allowedHandles,        @handles the caller checked and will tag, or none
  *   killSwitch,            () => reason | null, re-read at call time
  * }
  */
@@ -229,9 +230,11 @@ export function evaluateOutbound(draft, deps) {
   //    injection outcome. The poster never builds mention facets at all, so a
   //    stray @handle notifies nobody -- but it still reads as a tag, so any
   //    @handle that is not the account being replied to rejects the draft.
+  //    `allowedHandles` is for a weather post, whose caller has already checked
+  //    each one in code (gates/weather.js appAccountProblem); a reply has none.
   const handles = detectHandles(text);
   const selfHandles = new Set(
-    [deps.replyingToHandle, deps.botHandle].filter(Boolean).map((h) => h.toLowerCase())
+    [deps.replyingToHandle, deps.botHandle, ...(deps.allowedHandles ?? [])].filter(Boolean).map((h) => h.toLowerCase())
   );
   const foreign = handles.filter((h) => !selfHandles.has(h));
   if (foreign.length) {

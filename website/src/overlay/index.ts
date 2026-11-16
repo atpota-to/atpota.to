@@ -20,7 +20,7 @@
  *             scene-view.ts), from the streamer's to.atpota.poe.scene record at that id
  *             (starting, brb, ending, screenshare, or one they named), followed live too; a
  *             scene can hide Poe and the widgets, and the screen share puts Poe on its
- *             camera's side
+ *             camera's side and its own widgets on its frame (layout.ts)
  *   anisota   Anisota's moon, mark and loader as widgets, and its loading screen as a
  *             scene (anisota.ts), for streamers who use it
  *   tid       the time as an atproto TID, ticking, as a widget and a waiting screen (tid.ts)
@@ -71,7 +71,7 @@ import { mountScene } from './scene-view';
 import { fromSceneRecord, readSceneParams, SCENE_DEFAULTS, withSceneOverrides, type Scene } from './scenes';
 import { readPublicConfig, readPublicScene } from './store';
 import { createVisitors } from './visitors';
-import { mountWeatherCard, mountWidgets } from './weather';
+import { mountWidgets } from './weather';
 
 /** How often ?demo has Poe say another example line. */
 const DEMO_MS = 10_000;
@@ -102,7 +102,6 @@ async function start(): Promise<void> {
       if (config.poe.show) poe.say({ label: "it's time", text: "here we go! (◕‿◕)", face: 'happy', hop: true, burst: 'leaves', sound: 'live', rank: 4 });
     },
   });
-  const sceneWeather = mountWeatherCard(sceneRoot.querySelector<HTMLElement>('[data-ovsc-weather]')!);
 
   // ---------- settings ----------
   let saved: OverlayConfig = withOverrides(DEFAULT_CONFIG, params.overrides);
@@ -123,7 +122,7 @@ async function start(): Promise<void> {
     saved = next;
     config = onScene(next);
     sceneView.show(scene);
-    const shown = layout.apply(config);
+    const shown = layout.apply(config, scene?.kind === 'screenshare' ? scene.frame.widgets : []);
     widgets.showing(shown);
     records.showing(shown);
     poe.setNap(config.nap * 60_000);
@@ -166,7 +165,6 @@ async function start(): Promise<void> {
     if (reading) {
       latest = reading;
       widgets.render(reading);
-      sceneWeather.render(reading);
       poe.setPace(recordsPerSecond(reading));
       const seen = alertsFor(watch, reading);
       watch = seen.watch;

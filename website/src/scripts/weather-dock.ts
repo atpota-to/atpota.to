@@ -16,7 +16,7 @@
  * don't reach its tiles are dimmed for the whole page.
  */
 
-import { WINDOW_INFO, type Lens, type LensState, type Window } from './weather-lens';
+import { compareOf, EARLIER, WINDOW_INFO, type Lens, type LensState, type Window } from './weather-lens';
 import { topicOf, type Topic } from './weather-topics';
 
 /** A topic's page that only the lens's unit reaches (today's): its unit works whatever the measure (weather-lens.ts bindLens). */
@@ -37,6 +37,8 @@ export function dockParts(controls: HTMLElement, s: LensState, unitAlone = false
     ['measure', word(`[data-lens-measure="${s.measure}"]`)],
   ];
   if (s.measure === 'records' || unitAlone) parts.push(['unit', word(`[data-lens-unit] option[value="${s.unit}"]`)]);
+  // the comparison only when it isn't the usual one: "1h · accounts · vs yesterday"
+  if (compareOf(s) === 'cycle') parts.push(['compare', `vs ${EARLIER[s.window].short.cycle}`]);
   return parts.filter(([, w]) => w);
 }
 
@@ -74,6 +76,16 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
   if (!dock || !panel || !strip || !now || dock.dataset.bound === 'true') return;
   dock.dataset.bound = 'true';
   dock.hidden = false;
+  // while the header's own period is on screen, it says what's showing and opens the controls: the strip waits,
+  // off the page's first screen (on a phone it sat over the pages' links)
+  const period = report.querySelector<HTMLElement>('[data-r-period]');
+  const view = dock.ownerDocument.defaultView;
+  if (period && view && typeof view.IntersectionObserver === 'function') {
+    new view.IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting && entry.boundingClientRect.height > 0) dock.dataset.resting = '';
+      else delete dock.dataset.resting;
+    }).observe(period);
+  }
 
   const open = (yes: boolean) => {
     panel.hidden = !yes;
@@ -128,7 +140,7 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
 
 // ---------- the page's sections ----------
 
-export type LensPart = 'window' | 'measure' | 'unit';
+export type LensPart = 'window' | 'measure' | 'unit' | 'compare';
 
 export interface Section {
   el: HTMLElement;
@@ -185,6 +197,7 @@ export function initSections(report: HTMLElement, dock: HTMLElement): void {
     window: panel.querySelector<HTMLElement>('[data-lens-window]')?.closest<HTMLElement>('.weather-seg') ?? null,
     measure: panel.querySelector<HTMLElement>('[data-lens-measure]')?.closest<HTMLElement>('.weather-seg') ?? null,
     unit: panel.querySelector<HTMLElement>('[data-lens-unit]'),
+    compare: panel.querySelector<HTMLElement>('[data-lens-compare-group]'),
   };
 
   let shown: string | null = null;
@@ -199,11 +212,12 @@ export function initSections(report: HTMLElement, dock: HTMLElement): void {
       if (now) punctuate(now, dock.dataset.lensOff);
       for (const [part, el] of Object.entries(parts) as Array<[LensPart, HTMLElement | null]>) {
         if (!el) continue;
+        // faint on the whole report (it still changes the sections that follow it); gone on a topic's page, where it changes nothing
         if (at.lens.has(part)) delete el.dataset.inactive;
-        else el.dataset.inactive = '';
+        else el.dataset.inactive = topic ? 'page' : '';
       }
       if (note) {
-        const all = at.lens.size === 3;
+        const all = (Object.keys(parts) as LensPart[]).every((p) => at.lens.has(p));
         note.hidden = all;
         const notes = topic ? PAGE_NOTES : SECTION_NOTES;
         note.textContent = all ? '' : (notes[[...at.lens].sort().join(' ')] ?? notes['']!);

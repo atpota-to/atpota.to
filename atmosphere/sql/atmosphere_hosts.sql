@@ -110,6 +110,34 @@ alter table public.atmosphere_host_arrival_day enable row level security;
 drop policy if exists "anyone can read" on public.atmosphere_host_arrival_day;
 create policy "anyone can read" on public.atmosphere_host_arrival_day for select using (true);
 
+-- atmosphere_host_move_day is which host each mover left for which, each UTC day, from the PLC
+-- log (src/backfill-hosts.js moveRows): atmosphere_plc_day says how many accounts moved out of
+-- Bluesky's hosts, back in and between independent ones, and where they went, but not where
+-- they came from, so "how many of today's movers left pds.tophhie.cloud?" had no answer. One
+-- row per pair of hosts accounts moved between that day. 'bluesky' is any of Bluesky's own
+-- hosts, which count as one place (it isn't a hostname: it has no dot). A day's rows add up to
+-- its moved_out + moved_in + moved_between, less any move to or from a host whose name isn't a
+-- plain hostname. Today's are rewritten as the station reads the log (src/plc-watch.js); the
+-- backfill fills in the days before. About 15 rows a day (13 on 2026-11-09), so ~5,000 a year.
+-- A move back to Bluesky's hosts is only seen where the station's directory had the account on
+-- an independent host, or the backfill ran with --moves-back (atmosphere/README.md).
+-- Added 2026-11-10; apply it as migration `atmosphere_host_move_day`, before the station that
+-- writes it is deployed.
+create table if not exists public.atmosphere_host_move_day (
+  day        date    not null,   -- UTC
+  from_host  text    not null check (from_host = 'bluesky' or (from_host ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$' and length(from_host) <= 253)),  -- the host they left
+  to_host    text    not null check (to_host = 'bluesky' or (to_host ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$' and length(to_host) <= 253)),        -- the host they went to
+  accounts   integer not null check (accounts > 0),
+  primary key (day, from_host, to_host),
+  check (from_host <> to_host)
+);
+-- one host's arrivals and departures over time (website/server/weather-hosts.ts readHost)
+create index if not exists atmosphere_host_move_day_from on public.atmosphere_host_move_day (from_host, day);
+create index if not exists atmosphere_host_move_day_to on public.atmosphere_host_move_day (to_host, day);
+alter table public.atmosphere_host_move_day enable row level security;
+drop policy if exists "anyone can read" on public.atmosphere_host_move_day;
+create policy "anyone can read" on public.atmosphere_host_move_day for select using (true);
+
 -- atmosphere_host_active_day is who was active on each independent host each UTC day:
 -- a HyperLogLog sketch of the accounts that wrote anything (atmosphere_accounts.sql has
 -- the format), and its count. The station knows where accounts live from each host's own

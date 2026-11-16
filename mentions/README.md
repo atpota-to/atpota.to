@@ -52,6 +52,21 @@ npm run review               # matches next to the posts that prompted them
 npm run review -- 50 drafted # only drafts, for milestone 3
 ```
 
+Reading how Poe sounds, across a batch (the tells are in `src/voice-tells.js`):
+
+```bash
+npm run measure-voice -- --posted                     # replies and weather posts that went out
+npm run measure-voice -- --posted --since 2026-11-10  # only since a UTC date (--until works too)
+npm run measure-voice -- --posted --show contrast     # the lines behind one number
+npm run measure-voice -- 120 180                      # voice-sample drafts 120 to 180 (src/tools/sample.js)
+node src/tools/measure-voice.js --repo poe.atpota.to  # from the public repo: no db, no .env, runs anywhere
+```
+
+Each line is a habit that reads as machine-written when it repeats (a thing
+explained by what it isn't, a question on the end of every reply, the same
+opening word), as a share of the batch. To see whether a change to the voice rules
+in `bot/agent/` did anything, compare the same kind of batch before and after it.
+
 ### Going quiet
 
 Three levers, and only the first two are safe to reach for during an incident.
@@ -433,7 +448,11 @@ and logs an error rather than silently reverting to something more permissive.
 `@handle` in a draft therefore notifies nobody even if the gate somehow missed
 it, which closes the mass-tagging hole at the record level rather than only at
 the check. The gate still rejects third-party handles, because it still *reads*
-as tagging.
+as tagging. The posts that can tag anyone are a dispatch announcement, which
+the operator approves by hand after seeing who it tags (see
+[Tagging](#tagging-in-an-announcement)), and a weather post, which can tag only
+the apps' own accounts the droplet checked before Poe was asked (see
+[Tagging an app's account](#tagging-an-apps-account)).
 
 **Opt-out phrases are matched as demands, not as words.** A denylisting is
 permanent with no appeal flow, so a false positive silently and forever stops
@@ -590,12 +609,26 @@ A chat message holds 1000 graphemes and 10000 bytes. A longer reply is sent as u
 (`splitDmText`); the first answers the operator's message and the rest follow it, and past
 the fourth the reply ends with an ellipsis. `parts_sent` records how far a reply got: a part
 that fails leaves the row in `sending` for review, like a single send, and is never resent.
+
+Each DM is its own agent session (the bot addresses it by the message, not the
+conversation), so Poe knows what was said before only because the droplet tells it. When
+a DM is handed over, the droplet reads the conversation from chat and sends the messages
+before it as `history`: `{ you, text, sentAt }`, oldest first, where `you` marks
+anything from Poe's account. That includes what never went through the agent: the
+proposals and preview links put under its replies, the answers to a yes or no, and the
+drafting session's previews. It is the last `DM_HISTORY_MAX_MESSAGES` (30) messages from
+the past 7 days, at most `DM_HISTORY_MAX_CHARS` (16000) characters, dropping the oldest
+first (`dmHistory`). It is context only: if chat can't be read, the DM goes without it,
+and if the bot answers 400 (a bot deployed before it accepted `history`), the DM is sent
+again without it, which can't answer twice because a 400 starts no turn.
 An operator-confirmed fact about Poe may go into shared self memory only if it
 is safe to recall in public conversation. A DM starting `style:`, `dispatch:`,
 `weather:`, `website:` or `bluesky:` is saved as standing guidance, in code,
 before Poe reads it (see [Poe's memory](#poes-memory-guidance-the-backup-log-the-digest-and-the-admin-page)).
 Private memory uses the bot's Vercel Blob store, with a backup of every version
-here; Eve also keeps DM session history.
+here. Eve also keeps each DM's session, with the conversation history sent
+alongside it. The droplet reads that history from chat for each hand-off and
+does not store it.
 Inbound message text and drafts are held in local SQLite. Anyone with access
 to those stores can read them. The DM bridge does not log message text; review
 Vercel and Eve telemetry separately before sending sensitive material.
@@ -685,10 +718,11 @@ DM goes to Poe like any other. Poe calls the agent tool
 The droplet accepts it only while that DM is `dispatched` to the agent, from an
 `ADMIN_DIDS` sender, at most ten calls per DM. Without `text` it only looks the
 issue up and returns its title, description and opening for Poe to write from.
-With `text` it checks the post (300 graphemes, no @handles, no link but the
-issue's own page, no markdown) and answers `accepted: false` with the reason
-when one fails, so Poe can fix it in the same turn. An accepted proposal goes
-in `dispatch_proposal` and replaces any earlier one.
+With `text` it checks the post (300 graphemes, no link but the issue's own
+page, no markdown, and every @handle a real account, as below) and answers
+`accepted: false` with the reason when one fails, so Poe can fix it in the same
+turn. An accepted proposal goes in `dispatch_proposal` and replaces any earlier
+one.
 
 When Poe's reply arrives on `/dm-draft`, the exact post is added under it with
 "reply yes to post it, or no to drop it". The reply is cut to make room; the
@@ -701,6 +735,22 @@ under six hours old. Otherwise "yes" is ordinary conversation and goes to Poe.
 `announce` followed by a link is still the direct command. `announce` followed
 by plain words ("announce that one please") goes to Poe instead of getting the
 usage.
+
+#### Tagging in an announcement
+
+An announcement can tag the accounts behind what the issue features ("tangled
+moved house, hi @tangled.org"). Each `@handle` in Poe's proposed post is looked
+up when it is proposed, in one call to the public AppView
+(`app.bsky.actor.getProfiles`), and the proposal is refused with the reason if a
+handle isn't an account, the lookup fails, or it tags more than six. The DIDs
+found are stored with the proposal (`dispatch_proposal.mentions`,
+`dispatch_publish.mentions`), and the operator's confirmation names every one,
+with its display name: "it tags @tangled.org (Tangled) and @mu.social (mu), so
+each gets a notification." The yes posts mention facets for exactly those DIDs,
+with no second lookup, so a handle that moved in between can't change who is
+tagged. Any other `@handle` in the text stays plain text. The operator's own
+`announce <link>` text is looked up the same way when it runs, and a handle that
+isn't an account stops the post.
 
 ### Any post, in plain words: `propose_post`
 
@@ -720,7 +770,7 @@ blog's own card) or `none`. The proposal comes on the callback URL, told apart b
 It is accepted only while that DM is `dispatched` to the agent, from an `ADMIN_DIDS`
 sender, at most ten calls per DM, and the text is checked (300 graphemes, no
 @handles, no link since the card carries it, no markdown), with the reason back to
-Poe when it fails. The exact post and its card go under Poe's reply, and a whole-message
+Poe when it fails. These posts tag nobody: only a dispatch announcement and a weather post can. The exact post and its card go under Poe's reply, and a whole-message
 yes to that message posts it; the rules for what counts as that yes are the dispatch
 announcement's above. The card must load, or nothing is posted and the reply says
 why: a weather card is fetched by its own address, as weather posts do.
@@ -784,7 +834,9 @@ operator: "yes" ──► create the document in atpota.to's repo ──► anno
    per draft, at most 40 from a drafting turn and 15 calls per DM.
 5. **Making it live.** When the operator says so, Poe calls
    `propose_dispatch_publish` with the version it read and an announcement post
-   (checked like any post: 300 graphemes, no @handles, no links, no markdown).
+   (checked like any post: 300 graphemes, no links, no markdown; its @handles are
+   looked up and shown as an announcement's are, under
+   [Tagging](#tagging-in-an-announcement)).
    The steps go under its reply: the issue goes up on poe.leaflet.pub and
    atpota.to/blog, Leaflet emails every subscriber, and the exact announcement.
    A whole-message yes to that message, by the same rules as an announcement's,
@@ -888,12 +940,16 @@ atpota.to's public endpoints, the ones `/weather` reads (`/api/atmosphere` and
 | --- | --- | --- |
 | `storm` | the station's last minute is stormy (600+ new records a second) | 12 hours |
 | `unusual` | the last hour is 1.4x busier or 0.65x as busy as usual for it, when the station heard at least 45 minutes of it | 12 hours |
-| `new_app` | an app the station never heard before has written 250+ records in its first day | 24 hours, and an app once |
+| `new_app` | an app the station never heard before has written 250+ records in its first day, from 3 or more different accounts | 24 hours, and an app once |
 | `mixed` | the diversity index is 6 or more ("high") | 24 hours |
 | `daily` | the day's report, from 16:00 UTC | UTC day |
 
 Only the station's own readings count; a website sample is too short to call a
-storm on. App names are checked as domains and collections as NSIDs before Poe
+storm on. A new app needs a crowd, not just records (`weatherNewAppMinAccounts`):
+one account's batch (an import, a backfill, a bot) can write thousands of records
+and still isn't an app blowing in, so it is never asked about, and it's left out of
+the new apps shown beside any other moment. An app the station hasn't counted
+accounts for yet waits until it has. App names are checked as domains and collections as NSIDs before Poe
 sees them. Poe is asked about one moment at a time, and not at all while
 3 weather posts went out in the last 24 hours (`weatherPostsPerDay`), one went
 out in the last 2 hours (`weatherMinGapMin`), or it has been asked 8 times in
@@ -911,8 +967,8 @@ new. When the post is about one part of the report, Poe names that page
 against the website's `weather-topics.ts` by the tests). A page the droplet doesn't
 know is ignored, and the card stays on the whole report. The draft goes through
 the reply gates as a single post (length, markdown, non-answers, `@handles`), with
-no `@handle` allowed at all, no link but `https://atpota.to/weather` and its pages,
-and not the same text as the last weather post. With `WEATHER_POSTS=post` at stage 4
+no `@handle` allowed but the app accounts it was offered (below), no link but
+`https://atpota.to/weather` and its pages, and not the same text as the last weather post. With `WEATHER_POSTS=post` at stage 4
 it is posted with an `app.bsky.embed.external` card for the page Poe named
 (`https://atpota.to/weather/migration`, say) or for the whole report, with that
 page's title and description, and the caps are checked again first. The card's image
@@ -946,6 +1002,45 @@ but holds every one, for reading with `npm run weather`. The kill switch stops i
 at once, without a restart, along with everything else Poe posts. Until the bot's
 weather channel is deployed, the agent refuses each moment and the watcher backs
 off for 15 minutes and asks again.
+
+### Tagging an app's account
+
+A weather post that names an app can tag the app's own account ("49 accounts
+filled @cosmik.network with cards"), so it gets the notification. Who it may tag is
+settled in code before Poe is asked (`appAccountsFor` in `src/weather-posts.js`,
+every rule in `appAccountProblem` in `src/gates/weather.js`). The candidates are the
+apps Poe might name: the moment's own, and the last day's busiest by records and by
+accounts (`/api/weather-history?range=day`). An app's account is offered only when:
+
+- enough different accounts wrote its records (`weatherNewAppMinAccounts`, 3): an app
+  one person writes is that person's project, whatever it's called;
+- the AppView has an account whose handle is exactly the app's domain
+  (`app.bsky.actor.getProfiles`, one call), so whoever holds it controls the domain;
+- that account's DID is the lexicon authority for the app's namespace: every one of
+  the app's collections the station heard whose `_lexicon.<authority>` TXT record
+  (DNS, the [lexicon resolution](https://atproto.com/specs/lexicon) method) names a
+  DID names this one, and at least one does. A domain anybody can write records
+  under, a shared host (`web.app`) or a namespace somebody else claimed fails here;
+- it has a display name, no pronouns (people set them, apps don't) and no labels;
+- it isn't Poe, isn't on the denylist, and no weather post tagged it in the last
+  `weatherTagCooldownDays` (7), so a busy app isn't notified every day.
+
+No record says an account is an app rather than a person, and the checks above
+narrow it but can't settle it: a person who publishes lexicons for their own site
+under their own domain, with a few friends writing records, passes them. So the
+last call is Poe's. Poe is shown the accounts as `tagging: { upTo, accounts: [{
+handle, displayName }] }` in the moment's facts (handles, never DIDs), and the
+weather skill (`bot/agent/skills/weather-post.md`) tells it to read each profile and
+tag only one that plainly speaks as the app, never a person's own account. A draft
+may tag at most `weatherMaxTags` (2) of the offered accounts (more is
+`too_many_tags`); any other `@handle` is still `third_party_mention`. The post tags
+the DIDs as they were checked when Poe was asked (`weather_post.tag_accounts`), with
+no second lookup, except that an account that opted out in between is dropped.
+What it tagged is kept in `weather_post.tagged`, and `npm run weather` shows both.
+
+A lookup that fails (the AppView, DNS, the history) leaves the post with nobody to
+tag, and the moment goes to Poe as before. `weatherMaxTags: 0` in `gates.json` turns
+tagging off without a deploy.
 
 ## Poe's profile look (`PROFILE_LOOK`)
 

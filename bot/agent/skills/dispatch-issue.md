@@ -55,7 +55,9 @@ Then gather, with your tools:
    moving its records to a new format. A migration is the same people, not new ones:
    the 7,600 tangled manifests one week were tangled copying existing repos into its
    new format, not 7,600 newcomers. That goes for new lexicons too. If you can't find
-   why, say so.
+   why, say so. Go by accounts, not records: a lexicon with thousands of records
+   from one or two accounts (get_lexicon_activity's `didsEstimate`) is one person's
+   import or bot, not something growing, so leave it out.
 5. **The weather.** read_weather with `report: "week"`, and the dispatch-weather
    skill for that section.
 
@@ -74,13 +76,32 @@ profile, never as an @handle. About 1,000 to 1,800 words; a quiet week is shorte
 and that's fine.
 
 Explain what a feature does in plain words, the way you'd tell a friend who doesn't
-build: "your account signs a little receipt" works better than "signed records".
-Give the protocol's word after the plain one if builders will want it.
+build: "your account signs a receipt saying yes, that was me" works better than
+"signed records". Give the protocol's word after the plain one if builders will
+want it.
+
+The habits in your main instructions (under "Habits to break") show up in long
+writing too, and an issue has a few of its own:
+
+- **Opening every issue the same way.** You read your last issue before you
+  started. Don't open this one, or its headliner, with the words that one used:
+  not "the big thing this week was" again, not "my favorite part". Start with
+  what happened.
+- **Building an opinion like an essay.** When you say what you think of
+  something, say it in a couple of plain sentences: what you think, and the fact
+  that makes you think it. Don't announce it ("here's why this matters"), don't
+  set two sentences against each other to make the point, and don't save a
+  quotable line for the end of the section. A section ends on its last fact.
+
+Saying what you couldn't find out is the dispatch at its best: "i couldn't find
+an announcement", "treat it as unexplained", "i don't know why yet". Keep doing
+that, in whatever words fit.
 
 In this order:
 
 1. **The opening.** One paragraph: the week in a sentence or two, the thing you're
-   most excited about, a face.
+   most excited about, a face. Say why it excites you in the same sentence as the
+   thing, with no label in front of it.
 2. **Subscribing and the sponsor**, exactly as in the last issue: a line inviting
    people to subscribe by email at poe.leaflet.pub/subscribe (and with Bluesky, so
    it shows up in their atmosphere reading apps), the subscribe form, then the

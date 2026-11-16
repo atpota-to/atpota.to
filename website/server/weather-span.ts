@@ -50,7 +50,7 @@ export type Stretch = {
 
 export const SPANS = {
   minute: { stretchMs: MINUTE, cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=120' },
-  hour: { stretchMs: HOUR, cache: 'public, max-age=0, s-maxage=60, stale-while-revalidate=300' },
+  hour: { stretchMs: HOUR, cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
   day: { stretchMs: DAY, cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
   week: { stretchMs: 7 * DAY, cache: 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600' },
   month: { stretchMs: 30 * DAY, cache: 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400' },
@@ -72,18 +72,36 @@ const ceilTo = (t: number, unit: number) => Math.ceil(t / unit) * unit;
 const at = (t: number) => new Date(t).toISOString();
 
 /**
+ * What the earlier stretch is: the one right before (`before`, the default), or the same
+ * stretch a cycle ago (`cycle`), where the network's own rhythm repeats: the same minute or
+ * hour yesterday, the same 24 hours a week ago. A week and 30 days have no cycle of their own
+ * (the week before already is one), so they're always compared with the stretch before.
+ */
+export type Versus = 'before' | 'cycle';
+
+export const CYCLE_MS: Partial<Record<Span, number>> = { minute: DAY, hour: DAY, day: 7 * DAY };
+
+export function versusOf(v: string | null, span: Span): Versus {
+  return v === 'cycle' && CYCLE_MS[span] !== undefined ? 'cycle' : 'before';
+}
+
+/**
  * The two stretches for a span at `now`, as [since, until) in ms, earliest first. An hour
  * is whole minutes, up to the one going on; a day, week or month is hours, up to and including
- * the one going on, so each ends now.
+ * the one going on, so each ends now. The earlier one is the stretch right before, or for
+ * `cycle` the same stretch a day (or a week) earlier.
  */
-export function stretches(span: Exclude<Span, 'minute'>, now: number): { now: [number, number]; before: [number, number] } {
+export function stretches(span: Exclude<Span, 'minute'>, now: number, vs: Versus = 'before'): { now: [number, number]; before: [number, number] } {
+  const lag = vs === 'cycle' ? CYCLE_MS[span] : undefined;
   if (span === 'hour') {
     const m = floorTo(now, MINUTE);
-    return { now: [m - HOUR, m], before: [m - 2 * HOUR, m - HOUR] };
+    const current: [number, number] = [m - HOUR, m];
+    return { now: current, before: lag ? [current[0] - lag, current[1] - lag] : [m - 2 * HOUR, m - HOUR] };
   }
   const n = SPANS[span].stretchMs / HOUR;
   const h = floorTo(now, HOUR);
-  return { now: [h - (n - 1) * HOUR, now], before: [h - (2 * n - 1) * HOUR, h - (n - 1) * HOUR] };
+  const current: [number, number] = [h - (n - 1) * HOUR, now];
+  return { now: current, before: lag ? [current[0] - lag, current[1] - lag] : [h - (2 * n - 1) * HOUR, h - (n - 1) * HOUR] };
 }
 
 /**
@@ -200,8 +218,10 @@ export function createSpanHandlers(deps: SpanDeps = {}) {
   }
 
   async function GET(request: Request): Promise<Response> {
-    const span = new URL(request.url).searchParams.get('span') ?? 'minute';
+    const q = new URL(request.url).searchParams;
+    const span = q.get('span') ?? 'minute';
     if (!isSpan(span)) return json(request, 400, { error: 'span must be minute, hour, day, week or month' }, 'no-store');
+    const vs = versusOf(q.get('vs'), span);
     const db = supabase(env(), fetchImpl);
     const t = now();
     const { cache } = SPANS[span];
@@ -211,14 +231,15 @@ export function createSpanHandlers(deps: SpanDeps = {}) {
     };
     if (span === 'minute') {
       try {
-        return json(request, 200, { span, before: await minuteBefore(db, t) }, cache);
+        // the minute before the live one, or the same minute yesterday
+        return json(request, 200, { span, vs, before: await minuteBefore(db, vs === 'cycle' ? t - CYCLE_MS.minute! : t) }, cache);
       } catch (error) {
         return fail(error);
       }
     }
 
     const byMinute = span === 'hour';
-    const s = stretches(span, t);
+    const s = stretches(span, t, vs);
     const table = byMinute ? 'atmosphere_minute' : 'atmosphere_hour';
     const key = byMinute ? 'minute' : 'hour';
     const rowMs = byMinute ? MINUTE : HOUR;
@@ -246,16 +267,16 @@ export function createSpanHandlers(deps: SpanDeps = {}) {
       };
     });
 
-    const all = live([s.before[0], s.now[1]]);
+    // each stretch's rows on their own: a stretch a cycle ago isn't next to this one (two months of hours is more than a page)
     let rows: Row[] = [];
-    if (all) {
-      try {
-        // two months of hours is more than a page of rows
-        const got = await getAll(db, `${table}?select=${key},seconds_covered,${SPAN_COUNTS.join(',')}&${between(key, all[0], all[1])}&order=${key}.asc`);
-        rows = got.map((r) => toRow(r, key)).filter((r): r is Row => r !== null);
-      } catch (error) {
-        return fail(error);
+    try {
+      for (const { w } of parts) {
+        if (!w) continue;
+        const got = await getAll(db, `${table}?select=${key},seconds_covered,${SPAN_COUNTS.join(',')}&${between(key, w[0], w[1])}&order=${key}.asc`);
+        rows.push(...got.map((r) => toRow(r, key)).filter((r): r is Row => r !== null));
       }
+    } catch (error) {
+      return fail(error);
     }
 
     const [current, before] = await Promise.all(
@@ -270,7 +291,7 @@ export function createSpanHandlers(deps: SpanDeps = {}) {
         return { since: at(w[0]), until: at(w[1]), ...sums, apps: await apps, active: a && a.seconds > 0 ? a.active : null, activeSeconds: a?.seconds ?? 0 };
       }),
     );
-    return json(request, 200, { span, now: current, before }, cache);
+    return json(request, 200, { span, vs, now: current, before }, cache);
   }
 
   return { GET, HEAD: GET, methodNotAllowed: async (request: Request) => methodNotAllowed(request) };

@@ -41,8 +41,8 @@ import {
   markdownToBlocks, enrichBlocks, draftRecord, metaProblems, recordSize, MAX_MARKDOWN_CHARS,
 } from './dispatch-markdown.js';
 import {
-  announce, answersProposal, defaultDeps as dispatchDeps, fitPostText, latestDocument, nextTid, ogContent, pageUrls,
-  parseIssueLink,
+  announce, answersProposal, checkMentions, defaultDeps as dispatchDeps, fitPostText, latestDocument, mentionSummary,
+  nextTid, ogContent, pageUrls, parseIssueLink, taggedLine,
 } from './dispatch.js';
 import { postTextProblem } from './operator-posts.js';
 import { splitDmText } from './operator-dm.js';
@@ -147,6 +147,9 @@ db.exec(`
     PRIMARY KEY (draft_id, kind)
   );
 `);
+// The accounts the announcement tags, as resolved when Poe proposed it and the
+// operator saw it: JSON [{ handle, did, displayName }], or null for none.
+try { db.exec('ALTER TABLE dispatch_publish ADD COLUMN mentions TEXT'); } catch { /* already there */ }
 
 const DAY_MS = 24 * 3600 * 1000;
 const ASK_ATTEMPTS = 3;
@@ -514,15 +517,23 @@ export async function handleDraftCall(body, deps = defaultDeps) {
     return { status: 200, body: { accepted: false, reason: 'you already proposed a correction in this reply; one proposal per reply, so a yes means one thing' } };
   }
   const announcement = call.announcement?.trim() || null;
+  let tagged = [];
   if (announcement) {
-    const problem = postTextProblem(announcement, 'newsletter');
+    const problem = postTextProblem(announcement, 'newsletter', { mentions: true });
     if (problem) return { status: 200, body: { accepted: false, reason: `the announcement: ${problem}` } };
+    const checked = await checkMentions(announcement, deps);
+    if (checked.problem) {
+      return { status: 200, body: { accepted: false,
+        reason: `the announcement: ${checked.problem}. check the handle with resolve_identity, or name them without the @` } };
+    }
+    tagged = checked.mentions;
   }
   db.exec('BEGIN IMMEDIATE');
   try {
     db.prepare(`UPDATE dispatch_publish SET status = 'superseded', decided_at = ? WHERE status IN ('proposed', 'attached')`).run(nowIso());
-    db.prepare(`INSERT INTO dispatch_publish (draft_id, version, dm_message_id, operator_did, announcement, status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'proposed', ?)`).run(draft.id, draft.version, caller.dmId, caller.operatorDid, announcement, nowIso());
+    db.prepare(`INSERT INTO dispatch_publish (draft_id, version, dm_message_id, operator_did, announcement, mentions, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?)`).run(draft.id, draft.version, caller.dmId, caller.operatorDid, announcement,
+      tagged.length ? JSON.stringify(tagged) : null, nowIso());
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
@@ -531,6 +542,7 @@ export async function handleDraftCall(body, deps = defaultDeps) {
   draftEvent(draft.id, 'publish_proposed', { version: draft.version, dmId: caller.dmId });
   return { status: 200, body: {
     accepted: true, version: draft.version,
+    ...(tagged.length ? { mentions: mentionSummary(tagged) } : {}),
     note: 'proposed, not published. the operator sees exactly what happens under your reply, and it is published only if they answer yes.',
   } };
 }
@@ -671,7 +683,8 @@ export function publishBlock(proposal, draft) {
     '',
     `1. it's published as a new issue on ${sites}, and leaflet emails it to every subscriber. that can't be taken back.`,
     proposal.announcement
-      ? '2. i post this from poe, with the issue\'s card:\n\n' + proposal.announcement
+      ? '2. i post this from poe, with the issue\'s card:\n\n' + proposal.announcement +
+        (proposal.mentions ? `\n\n${taggedLine(JSON.parse(proposal.mentions))}` : '')
       : '2. no announcement post: i only publish it.',
     '',
     'reply "yes" to make it live, or "no" to keep it a draft.',
@@ -796,7 +809,10 @@ async function publishDraft(proposal, deps) {
   const [page, other] = pageUrls(draft.document_rkey);
   const lines = [`it's live ⸜(｡˃ ᵕ ˂ )⸝ ${page}`, `(and ${other}). leaflet emails it to subscribers within a few minutes.`];
   if (proposal.announcement) {
-    const announced = await deps.announce({ rkey: draft.document_rkey, text: proposal.announcement });
+    const announced = await deps.announce({
+      rkey: draft.document_rkey, text: proposal.announcement,
+      mentions: proposal.mentions ? JSON.parse(proposal.mentions) : null,
+    });
     lines.push('', announced);
   }
   return lines.join('\n');
@@ -1261,6 +1277,7 @@ export const defaultDeps = {
   putDocument: dispatchDeps.putDocument,
   publisherConfigured: () => atproto.publisherConfigured(),
   announce: (args) => announce(args, dispatchDeps),
+  resolveMentions: dispatchDeps.resolveMentions,
   getDmConvoForMembers: (members) => atproto.getDmConvoForMembers(members),
   sendDmMessage: (convoId, messageId, text) => atproto.sendDmMessage(convoId, messageId, text),
 };

@@ -135,6 +135,11 @@ export interface App extends Rate {
   domain: string;
   /** Its busiest collections, busiest first (at most three). */
   collections: string[];
+  /**
+   * Different accounts that wrote to it, when the station counted them (a sample doesn't):
+   * forty records a second from one account is that account's batch, not a crowd.
+   */
+  accounts?: number;
 }
 
 export interface AccountApp {
@@ -631,6 +636,7 @@ export function fromStation(body: unknown): Reading | null {
       perSecond: a.perSecond as number,
       count: a.count as number,
       collections: (Array.isArray(a.collections) ? a.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
+      ...(isCount(a.accounts) ? { accounts: a.accounts as number } : {}),
     }));
   const bluesky = body.bluesky
     .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b.nsid === 'string' && isNsid(b.nsid) && isBluesky(b.nsid) && isCount(b.perSecond) && isCount(b.count))
@@ -742,6 +748,15 @@ export interface AtmosphereHandlers {
 
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff' } as const;
 
+/**
+ * The reading and the almanac are public and carry no cookies, so any page may read them
+ * from the browser: aturi.to's explorer shows the conditions from its own origin. A
+ * wildcard rather than a list of origins, so the CDN keeps one copy for everyone instead
+ * of one per Origin, and so aturi's previews and local dev can read them too. Their
+ * errors carry it as well, so a page can tell "down" from "not allowed".
+ */
+export const CROSS_ORIGIN = { 'access-control-allow-origin': '*' } as const;
+
 export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereHandlers {
   const open: OpenSocket = deps.open ?? ((url) => new WebSocket(url) as unknown as SocketLike);
   const now = deps.now ?? (() => Date.now());
@@ -819,12 +834,12 @@ export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereH
     } catch {
       return new Response(request.method === 'HEAD' ? null : '{"error":"unavailable"}', {
         status: 503,
-        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...BASE_HEADERS },
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...BASE_HEADERS, ...CROSS_ORIGIN },
       });
     }
     return new Response(request.method === 'HEAD' ? null : JSON.stringify(reading), {
       status: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': reading.source === 'station' ? CACHE_LIVE : CACHE_OK, ...BASE_HEADERS },
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': reading.source === 'station' ? CACHE_LIVE : CACHE_OK, ...BASE_HEADERS, ...CROSS_ORIGIN },
     });
   }
 

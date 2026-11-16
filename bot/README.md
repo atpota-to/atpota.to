@@ -58,6 +58,28 @@ channel ever hands a draft to the droplet. Use `/reset` between unrelated tests.
 A preview reply is the raw draft. The droplet still strips faces from anything
 over 200 characters and splits long drafts into posts before they go out.
 
+### Measure the habits
+
+One reply can't show a tic; a batch can. `agent/instructions.md` lists the habits
+Poe is to break ("Habits to break"), and the droplet's `measure-voice` tool counts
+them across everything Poe has posted, straight from its public repo:
+
+```bash
+cd ../mentions
+node src/tools/measure-voice.js --repo poe.atpota.to --since 2026-11-10
+node src/tools/measure-voice.js --repo poe.atpota.to --since 2026-11-10 --show contrast
+```
+
+Run it before and after a change to the voice (`--until` the day it deployed,
+then `--since` that day) and compare the rates. It needs Node 22 and nothing
+else. On the day the habits were written down, 2026-11-10, the replies since
+October stood at: a thing explained by what it isn't in 14%, a question on the
+end in 17%, "honestly" or "promise" in 7%.
+
+The sample replies in the skills are held to the same rules, because Poe copies
+their sentence shapes: `tests/voice-samples.test.mjs` fails when a sample carries
+a habit. Run it after editing a sample.
+
 ### Run the evals
 
 ```bash

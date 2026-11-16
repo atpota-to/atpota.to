@@ -91,7 +91,7 @@ describe('the forecast in words', () => {
   });
 
   it('says how it starts, the first change, and a storm with a fair chance', () => {
-    expect(forecastWords(FORECAST.hours, TZ)).toBe('breezy until about 4 pm, then picking up to gusty. a 30% chance of a storm around 4 pm.');
+    expect(forecastWords(FORECAST.hours, TZ)).toBe('breezy until about 4 pm, then picking up to gusty, easing off around 6 pm. a 30% chance of a storm around 4 pm.');
     expect(forecastWords([hour(1, 380, 'light'), hour(2, 300, 'light')], TZ)).toBe('a light breeze for the next 2 hours.');
     expect(forecastWords([hour(1, 520, 'gusty'), hour(2, 430, 'breezy')], TZ)).toBe('gusty until about 3 pm, then calming down to breezy.');
     // under STORM_SAID it doesn't bring it up
@@ -184,5 +184,14 @@ describe('the forecast tile', () => {
     }
     expect(iconFor('calm', true)).toContain('wf-moon');
     expect(iconFor('stormy', false)).toContain('wf-rain');
+  });
+});
+
+describe('the next sunrise and sunset', () => {
+  it("says tomorrow for one on the reader's next day, so it doesn't read as already past", async () => {
+    const { dayWord } = await import('../src/scripts/weather-forecast.js');
+    const now = Date.parse('2026-11-12T16:00:00.000Z'); // 11 am in new york
+    expect(dayWord('2026-11-13T12:10:00.000Z', now, 'America/New_York')).toBe('tomorrow');
+    expect(dayWord('2026-11-13T03:15:00.000Z', now, 'America/New_York')).toBe(''); // 10:15 pm tonight
   });
 });

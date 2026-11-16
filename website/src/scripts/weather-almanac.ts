@@ -25,7 +25,8 @@
  */
 
 import { rollText } from './roll';
-import { rateUnit, recordsPer, UNIT_INFO, wholeRate, type Lens, type RateUnit } from './weather-lens';
+import { patternUnit, recordsPer, UNIT_INFO, wholeRate, type Lens, type RateUnit } from './weather-lens';
+import { appName } from './weather';
 
 export const ALMANAC_ENDPOINT = '/api/weather-almanac';
 export const ALMANAC_REFRESH_MS = 60_000;
@@ -73,6 +74,8 @@ export interface NewApp {
   firstSeen: string;
   creates: number;
   collections: string[];
+  /** Different accounts that wrote to it, when the station's sketches had them. */
+  accounts?: number;
 }
 
 export interface HeatCell {
@@ -121,9 +124,9 @@ export function readAlmanac(body: unknown): Almanac | null {
       readyAt: date(na.readyAt) ? na.readyAt : null,
       warmingUp: na.warmingUp,
       heard: na.heard,
-      apps: na.apps.filter(
-        (a): a is NewApp => obj(a) && name(a.domain) && date(a.firstSeen) && n(a.creates) && Array.isArray(a.collections) && a.collections.every(name),
-      ),
+      apps: na.apps
+        .filter((a): a is NewApp => obj(a) && name(a.domain) && date(a.firstSeen) && n(a.creates) && Array.isArray(a.collections) && a.collections.every(name))
+        .map((a) => ({ domain: a.domain, firstSeen: a.firstSeen, creates: a.creates, collections: a.collections, ...(n(a.accounts) && a.accounts > 0 ? { accounts: a.accounts } : {}) })),
     };
   }
   const hm = body.heatmap;
@@ -450,10 +453,18 @@ export function aturiFor(domain: string): string {
   return ATURI_LEXICONS + encodeURIComponent(domain.split('.').reverse().join('.'));
 }
 
-/** "first heard at 3:14 pm · 4 records". */
-function heardText(app: NewApp, tz?: string): string {
-  return `first heard at ${clock(app.firstSeen, tz)} · ${app.creates.toLocaleString('en-US')} record${app.creates === 1 ? '' : 's'}`;
+/** The day a time falls on, in the reader's time zone. */
+const localDay = (ms: number, tz?: string) => new Date(ms).toLocaleDateString('en-CA', { timeZone: tz });
+
+/** "first heard today at 3:14 pm · 4 records, from 1 account": a day for each, since 24 hours reach into yesterday. */
+export function heardText(app: NewApp, tz?: string, nowMs = Date.now()): string {
+  const day = localDay(Date.parse(app.firstSeen), tz) === localDay(nowMs, tz) ? 'today' : 'yesterday';
+  const who = app.accounts === undefined ? '' : `, from ${app.accounts.toLocaleString('en-US')} account${app.accounts === 1 ? '' : 's'}`;
+  return `first heard ${day} at ${clock(app.firstSeen, tz)} · ${app.creates.toLocaleString('en-US')} record${app.creates === 1 ? '' : 's'}${who}`;
 }
+
+/** How big an app's name is in the cloud: its accounts when the station knows them (a crowd, not one account's batch), else its records. */
+export const cloudWeight = (app: NewApp): number => app.accounts ?? app.creates;
 
 export function renderNewApps(tile: HTMLElement, a: Almanac, nowMs = Date.now(), tz?: string): void {
   const na = a.newApps;
@@ -469,11 +480,20 @@ export function renderNewApps(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
     setText(tile, '[data-a-new-lede]', `nothing new in the last 24 hours: all ${na.heard} apps it heard, it had heard before. the sky's settled.`);
     setText(tile, '[data-a-new-count]', '');
   } else {
-    setText(tile, '[data-a-new-lede]', `${apps.length === 1 ? 'one app' : `${apps.length} apps`} blew in for the first time in the last 24 hours.`);
+    // one account trying something out isn't a crowd: say how many had more than that
+    const crowd = apps.filter((app) => app.accounts !== undefined && app.accounts > 1).length;
+    const known = apps.some((app) => app.accounts !== undefined);
+    const who = !known ? '' : crowd === 0 ? ' each one account so far.' : ` ${crowd === apps.length ? (crowd === 1 ? 'it has' : 'all have') : `${crowd} ${crowd === 1 ? 'has' : 'have'}`} more than one account writing.`;
+    setText(tile, '[data-a-new-lede]', `${apps.length === 1 ? 'one app' : `${apps.length} apps`} blew in for the first time in the last 24 hours.${who}`);
     setText(tile, '[data-a-new-count]', `${apps.length} new`);
   }
-  if (note) note.hidden = apps.length === 0;
-  if (list) renderCloud(tile, list, apps, tz);
+  if (note) {
+    note.hidden = apps.length === 0;
+    note.textContent = apps.some((app) => app.accounts !== undefined)
+      ? 'bigger names have more accounts writing; faded ones are one account so far. pick one to explore its lexicons in aturi.'
+      : 'bigger names have written more records. pick one to explore its lexicons in aturi.';
+  }
+  if (list) renderCloud(tile, list, apps, tz, nowMs);
   tile.dataset.state = 'ready';
 }
 
@@ -482,8 +502,9 @@ export function renderNewApps(tile: HTMLElement, a: Almanac, nowMs = Date.now(),
  * side of it. Wrapped into centred lines, the big names land on the middle lines and the
  * small ones top and bottom, so the cloud bulges in the middle like a cloud.
  */
-export function cloudOrder<T extends { domain: string; creates: number }>(apps: T[]): T[] {
-  const busiest = [...apps].sort((a, b) => b.creates - a.creates || (a.domain < b.domain ? -1 : 1));
+export function cloudOrder<T extends { domain: string; creates: number; accounts?: number }>(apps: T[]): T[] {
+  const weight = (x: T) => x.accounts ?? x.creates;
+  const busiest = [...apps].sort((a, b) => weight(b) - weight(a) || b.creates - a.creates || (a.domain < b.domain ? -1 : 1));
   const left = busiest.filter((_, i) => i % 2 === 1).reverse();
   const right = busiest.filter((_, i) => i % 2 === 0);
   return [...left, ...right];
@@ -495,30 +516,35 @@ export function cloudOrder<T extends { domain: string; creates: number }>(apps: 
  * Aturi, the busiest in the middle (cloudOrder). It's only redrawn when the apps or their
  * counts change, and a newcomer pops in.
  */
-function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: string): void {
-  const drawn = apps.map((app) => `${app.domain} ${app.creates} ${app.firstSeen}`).join('\n');
+function renderCloud(tile: HTMLElement, list: HTMLElement, apps: NewApp[], tz?: string, nowMs = Date.now()): void {
+  const drawn = apps.map((app) => `${app.domain} ${app.creates} ${app.accounts ?? ''} ${app.firstSeen}`).join('\n');
   if (list.dataset.drawn === drawn) return;
   const before = list.dataset.drawn === undefined ? null : new Set([...list.querySelectorAll<HTMLElement>('[data-domain]')].map((el) => el.dataset.domain));
   list.dataset.drawn = drawn;
   const tip = $(tile, '[data-a-new-tip]');
   if (tip) tip.hidden = true;
-  const most = Math.log(Math.max(1, ...apps.map((app) => app.creates)));
+  // by accounts when known: one account's batch of thousands stays small (log scale, so one busy app doesn't make the rest specks)
+  const most = Math.log(Math.max(2, ...apps.map(cloudWeight)));
   list.replaceChildren(
     ...cloudOrder(apps).map((app) => {
       const li = document.createElement('li');
       li.className = before && !before.has(app.domain) ? 'weather-new__app is-new' : 'weather-new__app';
-      li.style.setProperty('--w', (most > 0 ? Math.log(Math.max(1, app.creates)) / most : 0).toFixed(2));
+      if (app.accounts === 1) li.classList.add('is-solo');
+      li.style.setProperty('--w', (most > 0 ? Math.log(Math.max(1, cloudWeight(app))) / most : 0).toFixed(2));
       const link = document.createElement('a');
       link.className = 'weather-new__link';
-      link.href = aturiFor(app.domain);
+      // on a shared host, the app's own subdomain: its name, and its lexicons
+      const shown = appName(app.domain, app.collections);
+      li.style.setProperty('--len', String(Math.max(6, shown.length)));
+      link.href = aturiFor(shown);
       link.target = '_blank';
       link.rel = 'noopener';
       link.dataset.domain = app.domain;
-      link.dataset.heard = heardText(app, tz);
+      link.dataset.heard = heardText(app, tz, nowMs);
       link.dataset.collections = app.collections.join(', ');
       const name = document.createElement('span');
       name.className = 'weather-new__domain';
-      name.textContent = app.domain;
+      name.textContent = shown;
       // what the card shows, for screen readers
       const said = document.createElement('span');
       said.className = 'visually-hidden';
@@ -724,7 +750,8 @@ export function initAlmanac(root: ParentNode = document, fetchImpl: typeof fetch
   if (!today && !fresh && !heat) return;
   const tz = readerTimeZone();
   let shown: Almanac | null = null;
-  const unit = () => rateUnit(lens?.get().unit ?? 'second');
+  // the lens's unit, up to an hour: these are a minute's or an hour's pace
+  const unit = () => patternUnit(lens?.get().unit ?? 'second');
   const rates = (a: Almanac, now: number) => {
     if (today && (a.today || a.normal)) renderToday(today, a, now, tz, unit());
     if (today) renderRecords(today, a, tz, unit());

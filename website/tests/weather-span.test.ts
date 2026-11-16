@@ -144,11 +144,11 @@ describe('the chips', () => {
   it('a note says what they compare with, and how much of a long span the station has heard', () => {
     const now = figuresOf(stretch(440));
     expect(spanNote('hour', now, now)).toBe('arrows compare with the hour before.');
-    expect(spanNote('day', figuresOf(stretch(440, { seconds: 70_000 })), null)).toBe("once the station has heard the 24 hours before, arrows say what's up and down. the station has heard 19 hours of the last 24 hours so far.");
+    expect(spanNote('day', figuresOf(stretch(440, { seconds: 70_000 })), null)).toBe("once the station has heard the 24 hours before, arrows say what's up and down. these count only what the station heard live: 19 hours of the last 24 hours so far.");
     expect(spanNote('minute', now, null)).toBe('');
     expect(spanNote('week', null, null)).toBe('reading the last 7 days…');
     expect(spanNote('week', null, null, true)).toBe('the last 7 days is hard to read right now. try again in a bit.');
-    expect(spanNote('month', figuresOf(stretch(440)), figuresOf(stretch(400)))).toBe('arrows compare with the 30 days before. the station has heard 1 hour of the last 30 days so far.');
+    expect(spanNote('month', figuresOf(stretch(440)), figuresOf(stretch(400)))).toBe('arrows compare with the 30 days before. these count only what the station heard live: 1 hour of the last 30 days so far.');
   });
 });
 
@@ -173,7 +173,7 @@ describe('reading /api/weather-span', () => {
 describe('the tile', () => {
   it('has a chip for every number, and its title says the span', () => {
     for (const k of CHANGE_KEYS) expect(tile.querySelector(`[data-s-change="${k}"]`), k).not.toBeNull();
-    expect(text('#weather-minute-title')).toBe('the last hour'); // the lens's default
+    expect(text('#weather-minute-title')).toBe('conditions over the last hour'); // the lens's default
     // the lens moves it on; the tile has no control of its own
     expect(tile.querySelector('#weather-minute-title button')).toBeNull();
   });
@@ -257,7 +257,7 @@ describe('the tile', () => {
     expect(text('[data-s-note]')).toBe('arrows compare with the minute before.');
 
     span.setSpan('hour');
-    expect(text('#weather-minute-title')).toBe('the last hour');
+    expect(text('#weather-minute-title')).toBe('conditions over the last hour');
     expect(tile.dataset.state).toBe('loading');
     expect(text('[data-s-status]')).toBe('showing the last hour');
     await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
@@ -268,16 +268,16 @@ describe('the tile', () => {
     expect(text('[data-r-feels]')).toBe('44');
 
     span.setSpan('day');
-    expect(text('#weather-minute-title')).toBe('the last 24 hours');
+    expect(text('#weather-minute-title')).toBe('conditions over the last 24 hours');
     await vi.waitFor(() => expect(tile.dataset.state).toBe('ready'));
     expect(text('[data-s-note]')).toBe("once the station has heard the 24 hours before, arrows say what's up and down.");
     span.setSpan('week');
     await vi.waitFor(() => expect(text('[data-r-gusts-note]')).toBe('the busiest hour of the week'));
     span.setSpan('month');
-    expect(text('#weather-minute-title')).toBe('the last 30 days');
+    expect(text('#weather-minute-title')).toBe('conditions over the last 30 days');
     await vi.waitFor(() => expect(text('[data-r-gusts-note]')).toBe('the busiest hour of the 30 days'));
     span.setSpan('minute');
-    expect(text('#weather-minute-title')).toBe('the last minute');
+    expect(text('#weather-minute-title')).toBe('conditions over the last minute');
     // back on the minute: the last live reading, at once
     expect(text('[data-r-feels]')).toBe('99');
     // and a new unit redraws what's there

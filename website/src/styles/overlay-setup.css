@@ -254,6 +254,18 @@
   grid-column: 1 / -1;
 }
 
+/* the screen share's widget rows come in groups, each under its name */
+.ovs-widgets__head {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.ovs-widgets__head:first-child {
+  margin-top: 0;
+}
+
 .ovs-widget .ovs-field--row {
   font-size: 14px;
 }
@@ -706,10 +718,24 @@ html.ovs-full-open {
   background: rgba(0, 0, 0, 0.55);
 }
 
-.ovs-sketch__window { left: 2%; width: 75%; height: 75%; }
+.ovs-sketch__window { left: 2%; width: var(--w, 75%); height: var(--w, 75%); }
+.ovs-sketch--screen[data-size="medium"] { --w: 66.7%; }
+.ovs-sketch--screen[data-size="small"] { --w: 58.3%; }
 .ovs-sketch__cam { width: 19%; height: 34%; right: 2%; }
 .ovs-sketch__cam--left { right: auto; left: 2%; }
-.ovs-sketch--screen:has(.ovs-sketch__cam--left) .ovs-sketch__window { left: auto; right: 2%; }
+.ovs-sketch--screen:has(.ovs-sketch__cam--left) .ovs-sketch__window,
+.ovs-sketch--screen:has(.ovs-sketch__cam--left) .ovs-sketch__bar { left: auto; right: 2%; }
+
+/* the screen share's title bar, under its screen */
+.ovs-sketch__bar {
+  position: absolute;
+  top: calc(var(--w, 75%) + 7%);
+  left: 2%;
+  width: var(--w, 75%);
+  height: 10%;
+  border-radius: 4px;
+  background: var(--paper);
+}
 
 /* ---------- the editor: a bar on top, the form beside a preview that stays in view ---------- */
 

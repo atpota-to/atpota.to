@@ -14,7 +14,10 @@
  *            of the same hour on those days and weeks (readDiversity)
  *   newApps  apps outside Bluesky heard in the last 24 hours that the station had never
  *            heard before (atmosphere_new_apps). Until the station has listened for
- *            WARMUP_MS, every app is new to it, so it says it's warming up instead
+ *            WARMUP_MS, every app is new to it, so it says it's warming up instead. Each
+ *            says how many different accounts wrote to it (`accounts`, from the station's
+ *            hour sketches, readNewAppAccounts), when those could be read: 500 records
+ *            from one account is somebody's import, not an app blowing in
  *   heatmap  every hour of the week in `tz` over the last HEATMAP_MS (atmosphere_heatmap),
  *            each with its steady count too: its records with any one-minute burst taken
  *            out (atmosphere/sql/atmosphere_steady.sql), which is what "usual" goes by
@@ -25,11 +28,13 @@
  *
  * Each part is asked for at once and left out if it fails; only all of them failing is a
  * 503. `tz` is an IANA zone name (the page sends the reader's own); anything else is a 400.
- * Cached at the CDN for a minute per zone.
+ * Cached at the CDN for a minute per zone, and readable from any origin (atmosphere.ts
+ * CROSS_ORIGIN).
  */
 
-import { diversityOf } from './atmosphere.js';
+import { CROSS_ORIGIN, diversityOf } from './atmosphere.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
+import { countSketch, fromBytea, mergeSketch, type Registers } from './hll.js';
 import { getAll } from './weather-accounts.js';
 
 export const CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
@@ -107,6 +112,8 @@ export interface NewApp {
   firstSeen: string;
   creates: number;
   collections: string[];
+  /** Different accounts that wrote to it since `since`, when the station's sketches have it. */
+  accounts?: number;
 }
 
 export interface NewApps {
@@ -185,6 +192,32 @@ export function toNewApps(body: unknown, now: number): NewApps | null {
   return { historyStart, readyAt, warmingUp, heard: heard.heard, apps: apps.slice(0, NEW_APPS) };
 }
 
+/**
+ * How many different accounts wrote to each new app since `since`: its hour sketches
+ * (atmosphere_account_app_sketch, rewritten every 5 minutes) merged, never summed, so
+ * someone writing every hour counts once. An app with no sketch yet (heard only in the
+ * last few minutes) is left without a count: unknown, not nobody.
+ */
+export async function readNewAppAccounts(db: Supabase, apps: NewApp[], since: number): Promise<NewApp[]> {
+  const domains = apps.map((a) => a.domain).filter((d) => DOMAIN_RE.test(d));
+  if (!domains.length) return apps;
+  const from = new Date(Math.floor(since / HOUR) * HOUR).toISOString();
+  const rows = await getAll(db, `atmosphere_account_app_sketch?select=domain,sketch&period=eq.hour&t=gte.${from}&domain=in.(${domains.join(',')})&order=t.asc,domain.asc`);
+  const merged = new Map<string, Registers>();
+  for (const r of rows) {
+    if (!isRecord(r) || typeof r.domain !== 'string' || !domains.includes(r.domain)) continue;
+    const sketch = fromBytea(r.sketch);
+    if (!sketch) continue;
+    const into = merged.get(r.domain);
+    if (into) mergeSketch(into, sketch);
+    else merged.set(r.domain, sketch);
+  }
+  return apps.map((a) => {
+    const s = merged.get(a.domain);
+    return s ? { ...a, accounts: countSketch(s) } : a;
+  });
+}
+
 export function toHeatmap(body: unknown): Heatmap | null {
   if (!isRecord(body) || !Array.isArray(body.cells)) return null;
   const total = counts(body, ['seconds'] as const);
@@ -238,30 +271,58 @@ export async function readDiversity(db: Supabase, at: number): Promise<NormalDiv
   return { hour: new Date(hour).toISOString(), now, days: usual(USUAL_DAYS), weeks: usual(USUAL_WEEKS) };
 }
 
+/** How many of the busiest minutes (and the minutes with the most apps) to weigh for a record. */
+export const RECORD_CANDIDATES = 25;
+/** A minute past this many times its hour's typical minute is a burst, as atmosphere_steady.sql trims them. */
+export const BURST_TIMES = 3;
+
 /**
  * The station's records since it listened live: the whole minute with the most new records
- * a second, and the one with the most apps outside Bluesky. Straight off the minute rows
- * (the newest of any tie), no sums needed.
+ * a second, and the one with the most apps outside Bluesky. Only minutes that are weather: a
+ * minute more than BURST_TIMES its hour's typical one (the hour's steady count, a minute's
+ * worth) is a burst the hours already leave out (atmosphere_steady.sql), whether one account's
+ * import or a backlog let out after a pause. On 2026-10-22 22:19 to 22:25 a backlog packed
+ * up to 451,738 records and 89,617 accounts into a minute, against about 23,000 records in a
+ * usual minute that hour; neither it nor its 52 apps are a record.
  */
 export async function readRecords(db: Supabase): Promise<Records> {
   const since = new Date(LIVE_SINCE).toISOString();
-  const path = (select: string, order: string, extra = '') => `atmosphere_minute?select=${select}&minute=gte.${since}${extra}&order=${order},minute.desc&limit=1`;
-  const [busy, apps] = await Promise.all([
-    db.get(path('minute,creates,seconds_covered', 'creates.desc', '&seconds_covered=eq.60')),
-    db.get(path('minute,apps', 'apps.desc')),
-  ]);
-  const first = (rows: unknown) => (Array.isArray(rows) ? rows[0] : undefined);
-  const b = first(busy);
-  const bm = isRecord(b) ? iso(b.minute) : null;
-  const bc = counts(b, ['creates', 'seconds_covered'] as const);
-  const a = first(apps);
-  const am = isRecord(a) ? iso(a.minute) : null;
-  const ac = counts(a, ['apps'] as const);
+  const path = (order: string, extra = '') =>
+    `atmosphere_minute?select=minute,creates,seconds_covered,apps&minute=gte.${since}${extra}&order=${order},minute.desc&limit=${RECORD_CANDIDATES}`;
+  const [busy, apps] = await Promise.all([db.get(path('creates.desc', '&seconds_covered=eq.60')), db.get(path('apps.desc'))]);
   if (!Array.isArray(busy) || !Array.isArray(apps)) throw new Error('records did not check out');
+  type Minute = { minute: string; creates: number; seconds: number; apps: number };
+  const minutes = (rows: unknown[]): Minute[] =>
+    rows.flatMap((r) => {
+      const minute = isRecord(r) ? iso(r.minute) : null;
+      const c = counts(r, ['creates', 'seconds_covered', 'apps'] as const);
+      return minute && c && c.seconds_covered > 0 ? [{ minute, creates: c.creates, seconds: c.seconds_covered, apps: c.apps }] : [];
+    });
+  const [byRecords, byApps] = [minutes(busy), minutes(apps)];
+  // each candidate's hour, for its typical minute
+  const hourOf = (m: string) => `${m.slice(0, 13)}:00:00.000Z`;
+  const hours = [...new Set([...byRecords, ...byApps].map((m) => hourOf(m.minute)))];
+  const typical = new Map<string, number>();
+  if (hours.length) {
+    const rows = await db.get(`atmosphere_hour?select=hour,steady,seconds_covered&hour=in.(${hours.map((h) => `"${h}"`).join(',')})`);
+    if (!Array.isArray(rows)) throw new Error('records did not check out');
+    for (const r of rows) {
+      const hour = isRecord(r) ? iso(r.hour) : null;
+      const c = counts(r, ['steady', 'seconds_covered'] as const);
+      if (hour && c && c.seconds_covered > 0) typical.set(hourOf(hour), (c.steady / c.seconds_covered) * 60);
+    }
+  }
+  // a minute whose hour the station hasn't summed yet can't be checked, so it waits
+  const weather = (m: Minute) => {
+    const usual = typical.get(hourOf(m.minute));
+    return usual !== undefined && m.creates <= BURST_TIMES * usual;
+  };
+  const b = byRecords.find(weather);
+  const a = byApps.find(weather);
   return {
     since,
-    busiest: bm && bc && bc.seconds_covered > 0 ? { minute: bm, perSecond: Math.round((bc.creates / bc.seconds_covered) * 10) / 10 } : null,
-    mostApps: am && ac ? { minute: am, apps: ac.apps } : null,
+    busiest: b ? { minute: b.minute, perSecond: Math.round((b.creates / b.seconds) * 10) / 10 } : null,
+    mostApps: a ? { minute: a.minute, apps: a.apps } : null,
   };
 }
 
@@ -280,7 +341,7 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
 
   async function GET(request: Request): Promise<Response> {
     const tz = timeZone(new URL(request.url).searchParams.get('tz'));
-    if (!tz) return json(request, 400, { error: 'tz must be an IANA time zone, like Europe/London' }, 'no-store');
+    if (!tz) return json(request, 400, { error: 'tz must be an IANA time zone, like Europe/London' }, 'no-store', CROSS_ORIGIN);
     const db = supabase(env(), fetchImpl);
     const at = now();
     const part = async <T>(what: string, run: () => Promise<T | null>): Promise<T | undefined> => {
@@ -304,12 +365,21 @@ export function createAlmanacHandlers(deps: AlmanacDeps = {}) {
         const d = await diversity;
         return normal && d ? { ...normal, diversity: d } : normal;
       }),
-      part('new_apps', async () => toNewApps(await db.rpc('atmosphere_new_apps', { since: new Date(at - DAY).toISOString(), max_apps: 50 }), at)),
+      part('new_apps', async () => {
+        const fresh = toNewApps(await db.rpc('atmosphere_new_apps', { since: new Date(at - DAY).toISOString(), max_apps: 50 }), at);
+        if (!fresh?.apps.length) return fresh;
+        // the accounts are an extra: without them the new apps still come, just without a count
+        const apps = await readNewAppAccounts(db, fresh.apps, at - DAY).catch((error) => {
+          log({ event: 'almanac_new_app_accounts_error', tz, error: (error as Error)?.message ?? 'Error' });
+          return fresh.apps;
+        });
+        return { ...fresh, apps };
+      }),
       part('heatmap', async () => toHeatmap(await db.rpc('atmosphere_heatmap', { tz, since: new Date(at - HEATMAP_MS).toISOString() }))),
       part('records', () => readRecords(db)),
     ]);
-    if (!today && !normal && !newApps && !heatmap && !records) return json(request, 503, { error: 'unavailable' }, 'no-store');
-    return json(request, 200, { tz, today, normal, newApps, heatmap, records }, CACHE);
+    if (!today && !normal && !newApps && !heatmap && !records) return json(request, 503, { error: 'unavailable' }, 'no-store', CROSS_ORIGIN);
+    return json(request, 200, { tz, today, normal, newApps, heatmap, records }, CACHE, CROSS_ORIGIN);
   }
 
   return { GET, HEAD: GET, methodNotAllowed: async (request: Request) => methodNotAllowed(request) };

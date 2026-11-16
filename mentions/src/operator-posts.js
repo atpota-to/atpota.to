@@ -60,13 +60,18 @@ export const CARDS = {
   none: null,
 };
 
-/** Why the text can't go out as a post, or null. The reason goes back to Poe to fix. */
-export function postTextProblem(text, card) {
+/**
+ * Why the text can't go out as a post, or null. The reason goes back to Poe to fix.
+ * `mentions` lets @handles through, for a dispatch announcement, which looks them
+ * up and shows the operator who is tagged (dispatch.js checkMentions); a post
+ * from here tags nobody.
+ */
+export function postTextProblem(text, card, { mentions = false } = {}) {
   if (!text.trim()) return 'the post text is empty';
   const n = graphemeLength(text);
   if (n > POST_MAX_GRAPHEMES) return `the post is ${n} graphemes and a post holds ${POST_MAX_GRAPHEMES}`;
   if (byteLength(text) > POST_MAX_BYTES) return `the post is over ${POST_MAX_BYTES} bytes`;
-  if (detectHandles(text).length) return 'the post @-mentions someone; name people without the @, nobody is pinged by this post';
+  if (!mentions && detectHandles(text).length) return 'the post @-mentions someone; name people without the @, nobody is pinged by this post';
   if (detectLinks(text).length) {
     return card === 'none'
       ? 'leave the link out: a post without a card can\'t carry one. pick the weather or newsletter card instead'

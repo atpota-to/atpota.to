@@ -61,6 +61,20 @@ test("the prompt fences the facts and offers the skip", () => {
   assert.match(buildWeatherPrompt(WeatherMoment.parse({ ...moment, recent: [] })), /\(none yet\)/);
 });
 
+test("the prompt says who the post may tag only when the droplet offered somebody", () => {
+  assert.doesNotMatch(buildWeatherPrompt(WeatherMoment.parse(moment)), /tagging\.accounts/);
+  const none = { ...moment, facts: { ...moment.facts, tagging: { upTo: 2, accounts: [] } } };
+  assert.doesNotMatch(buildWeatherPrompt(WeatherMoment.parse(none)), /tagging\.accounts/);
+  const offered = { ...moment, facts: { ...moment.facts,
+    tagging: { upTo: 2, accounts: [{ handle: "cosmik.network", displayName: "Cosmik Network" }] } } };
+  assert.equal(WeatherMoment.safeParse(offered).success, true, "the facts stay a loose record, so the droplet can add to them");
+  const prompt = buildWeatherPrompt(WeatherMoment.parse(offered));
+  assert.match(prompt, /`tagging\.accounts` are apps' own accounts/);
+  assert.match(prompt, /not a person's/);
+  assert.match(prompt, /Any other @handle stops the post/);
+  assert.ok(prompt.includes('"handle":"cosmik.network"'));
+});
+
 test("sends the draft to the droplet's own callback URL, the one replies use", async () => {
   process.env.DROPLET_CALLBACK_URL = "https://droplet.example/callback";
   process.env.DROPLET_SHARED_SECRET = "shared";

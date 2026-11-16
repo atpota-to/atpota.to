@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axisRange, renderChart, segments } from '../src/scripts/weather-chart.js';
-import { activeStory, estimatedWords, hostStory, initHostPanel, toOneHost, type OneHost } from '../src/scripts/weather-host-panel.js';
+import { activeStory, estimatedWords, hostStory, initHostPanel, moveStory, toOneHost, type OneHost } from '../src/scripts/weather-host-panel.js';
 import { renderBars } from '../src/scripts/weather-page.js';
 
 // Tap a host, see its own weather.
@@ -19,6 +19,7 @@ const EUROSKY: OneHost = {
     { day: '2026-10-21', accounts: 37979, estimated: true },
     { day: '2026-10-22', accounts: 38036, estimated: false },
   ],
+  moves: [],
 };
 
 describe('the chart axis', () => {
@@ -86,9 +87,75 @@ describe('who is active on a host', () => {
   });
 });
 
+describe('who moved to a host and away', () => {
+  const NOW = Date.parse('2026-11-10T18:00:00.000Z');
+  // tophhie's accounts live on pds.tophhie.cloud
+  const TOPHHIE: OneHost = {
+    hostname: 'pds.tophhie.cloud',
+    bluesky: false,
+    days: [{ day: '2026-11-10', accounts: 611, estimated: false }],
+    movesSince: '2026-10-08',
+    moves: [
+      // before the last 30 days: not counted
+      { day: '2026-10-09', arrived: [], left: [{ to: 'bluesky', accounts: 5 }] },
+      { day: '2026-11-08', arrived: [{ from: 'bluesky', accounts: 1 }], left: [{ to: 'eurosky.social', accounts: 3 }] },
+      { day: '2026-11-09', arrived: [], left: [{ to: 'blacksky.app', accounts: 1 }, { to: 'eurosky.social', accounts: 1 }] },
+      { day: '2026-11-10', arrived: [], left: [{ to: 'bluesky', accounts: 1 }] },
+    ],
+  };
+
+  it('adds up the last 30 days by the other host, the most first', () => {
+    expect(moveStory(TOPHHIE, NOW)).toBe("over the last 30 days, 1 account moved here (1 from bluesky's hosts) and 6 moved away (4 to eurosky.social, 1 to blacksky.app and 1 to bluesky's hosts).");
+    const busy: OneHost = { ...TOPHHIE, moves: [{ day: '2026-11-10', arrived: [{ from: 'bluesky', accounts: 38 }, { from: 'a.example', accounts: 2 }, { from: 'b.example', accounts: 2 }, { from: 'c.example', accounts: 1 }, { from: 'd.example', accounts: 1 }], left: [] }] };
+    expect(moveStory(busy, NOW)).toBe("over the last 30 days, 44 accounts moved here (38 from bluesky's hosts, 2 from a.example, 2 from b.example and 2 from 2 other hosts) and nobody moved away.");
+  });
+
+  it('says from when, if the station has kept moves for less than that, and when nobody moved', () => {
+    expect(moveStory({ ...TOPHHIE, movesSince: '2026-11-09', moves: TOPHHIE.moves.slice(2) }, NOW)).toBe("since nov 9, nobody moved here and 3 moved away (1 to blacksky.app, 1 to bluesky's hosts and 1 to eurosky.social).");
+    expect(moveStory({ ...TOPHHIE, moves: [] }, NOW)).toBe('over the last 30 days, nobody moved here from another host, or away.');
+  });
+
+  it('says nothing when it does not know: no moves kept yet, or one of bluesky\'s own hosts', () => {
+    expect(moveStory({ ...TOPHHIE, movesSince: undefined }, NOW)).toBe('');
+    expect(moveStory({ ...TOPHHIE, bluesky: true }, NOW)).toBe('');
+  });
+
+  it('checks the moves in the answer', () => {
+    const h = toOneHost({ host: { ...TOPHHIE, movesSince: 'soon', moves: [{ day: '2026-11-10', arrived: [{ from: '<b>x</b>', accounts: 1 }, { from: 'bluesky', accounts: 2 }, { from: 'eurosky.social', accounts: 0 }], left: 'nope' }, { day: 'x', arrived: [], left: [] }] } })!;
+    expect(h.moves).toEqual([{ day: '2026-11-10', arrived: [{ from: 'bluesky', accounts: 2 }], left: [] }]);
+    expect('movesSince' in h).toBe(false);
+    // an answer from before moves were kept still makes a host
+    expect(toOneHost({ host: { hostname: 'eurosky.social', bluesky: false, days: [] } })).toEqual({ hostname: 'eurosky.social', bluesky: false, days: [], moves: [] });
+  });
+});
+
 describe('the host panel', () => {
   beforeEach(() => {
     document.body.innerHTML = MAIN;
+  });
+
+  it('says who moved in and away under the host\'s story, and hides the line when it has nothing', async () => {
+    const report = document.querySelector<HTMLElement>('[data-weather-report]')!;
+    const from = report.querySelector<HTMLElement>('[data-p-from]')!;
+    // the list of hosts movers left is one to tap, like the others
+    expect(from.hasAttribute('data-host-list')).toBe(true);
+    const today = new Date().toISOString().slice(0, 10);
+    const host = { hostname: 'pds.tophhie.cloud', bluesky: false, days: [{ day: today, accounts: 611, estimated: false }], movesSince: '2026-10-08', moves: [{ day: today, arrived: [], left: [{ to: 'eurosky.social', accounts: 2 }] }] };
+    const answers: Record<string, unknown> = { 'pds.tophhie.cloud': host, 'eurosky.social': EUROSKY };
+    initHostPanel(report, (async (url: string) => Response.json({ host: answers[new URL(url, 'https://atpota.to').searchParams.get('host')!] })) as unknown as typeof fetch);
+    renderBars(from, [{ label: 'pds.tophhie.cloud', perSecond: 2, count: 2, value: '2 movers' }, { label: 'eurosky.social', perSecond: 1, count: 1, value: '1 mover' }], undefined);
+    await Promise.resolve();
+    const dialog = document.querySelector<HTMLDialogElement>('[data-host-dialog]')!;
+    const line = dialog.querySelector<HTMLElement>('[data-hp-moves]')!;
+    from.querySelectorAll<HTMLElement>('li')[0]!.click();
+    await vi.waitFor(() => expect(line.textContent).toBe('over the last 30 days, nobody moved here and 2 moved away (2 to eurosky.social).'));
+    expect(line.hidden).toBe(false);
+    // a host with no moves kept: the line goes away again
+    from.querySelectorAll<HTMLElement>('li')[1]!.click();
+    expect(line.hidden).toBe(true);
+    await vi.waitFor(() => expect(dialog.querySelector('[data-hp-story]')!.textContent).toMatch(/^38,036 accounts/));
+    expect(line.hidden).toBe(true);
+    expect(line.textContent).toBe('');
   });
 
   it('opens on a tap or Enter on a host in a list, reads its history once, and fills in', async () => {

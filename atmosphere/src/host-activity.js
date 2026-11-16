@@ -303,6 +303,8 @@ export function createHostActivity({ upsert, getAll, log, file = null, fetchImpl
     see,
     onPlcEntry,
     onCensus,
+    /** The independent host the directory has an account on, or null: Bluesky's, or not known (plc-watch.js livedOn). */
+    hostOf: (did) => directory.hostOf(did),
     get directory() {
       return directory;
     },

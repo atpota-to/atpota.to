@@ -1,6 +1,6 @@
 import { defineChannel, POST } from "eve/channels";
 import { secretMatches } from "../lib/bluesky";
-import { OperatorDm, draftAttributes, postDmDraft } from "../lib/operator-dm";
+import { OperatorDm, buildDmInput, draftAttributes, postDmDraft } from "../lib/operator-dm";
 
 export default defineChannel({
   turnPolicy: "queue",
@@ -24,7 +24,13 @@ export default defineChannel({
       if (!parsed.success) return new Response(null, { status: 400 });
       const dm = parsed.data;
 
-      waitUntil(from(dm.dmId).send(dm.text, {
+      // One session per DM, addressed by the message. A session for the whole
+      // conversation would hold only Poe's own turns, not what the droplet adds
+      // (proposals under a reply, its answers to a yes or no, the drafting
+      // session's previews), and would keep growing toward the session's token
+      // budget. What came before arrives from the droplet as `history`, as the
+      // operator sees it in the app.
+      waitUntil(from(dm.dmId).send(buildDmInput(dm), {
         auth: {
           authenticator: "atpotato-droplet-dm",
           principalType: "user",

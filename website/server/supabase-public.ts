@@ -85,9 +85,9 @@ export function methodNotAllowed(request: Request): Response {
   });
 }
 
-export function json(request: Request, status: number, body: unknown, cache: string): Response {
+export function json(request: Request, status: number, body: unknown, cache: string, headers: Record<string, string> = {}): Response {
   return new Response(request.method === 'HEAD' ? null : JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'x-content-type-options': 'nosniff', 'cache-control': cache },
+    headers: { 'content-type': 'application/json; charset=utf-8', 'x-content-type-options': 'nosniff', 'cache-control': cache, ...headers },
   });
 }

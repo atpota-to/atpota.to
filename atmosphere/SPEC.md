@@ -147,7 +147,9 @@ have arrived) and answer with the same JSON shape as the website's `Reading`
   that wrote outside Bluesky, `spread` how many apps they're spread across as an
   effective number (e to the Shannon entropy of their accounts over apps), and
   `index = share × √spread`. `summarize` takes the window's accounts as a fourth
-  argument; `diversityOf` in the reference.)
+  argument; `diversityOf` in the reference.) Since 2026-11-07 the station also gives
+  each of `apps` its `accounts`, from the window's sketches, when it named the app
+  there (`summarize` itself doesn't).
 - `seconds < 30` → answer `503 {"error":"unavailable"}`. The website falls
   back to its own 5-second sampler.
 - Headers: `content-type: application/json; charset=utf-8`,

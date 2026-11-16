@@ -75,8 +75,10 @@ export function layoutSketch(doc: Document, c: OverlayConfig): HTMLElement {
 export function screenSketch(doc: Document, s: Scene): HTMLElement {
   const box = el(doc, 'div', { class: 'ovs-sketch ovs-sketch--screen', 'data-kind': s.kind, 'data-background': s.background, 'aria-hidden': 'true' });
   if (s.kind === 'screenshare') {
+    box.dataset.size = s.frame.size;
     box.append(el(doc, 'span', { class: 'ovs-sketch__window' }));
     if (s.camera.side !== 'none') box.append(el(doc, 'span', { class: `ovs-sketch__cam ovs-sketch__cam--${s.camera.side}` }));
+    if (s.frame.words) box.append(el(doc, 'span', { class: 'ovs-sketch__bar' }));
   } else {
     box.append(el(doc, 'span', { class: 'ovs-sketch__title' }, s.title || (s.kind === 'loading' ? 'anisota' : SCENE_NAMES[s.kind])));
     if (s.kind === 'clock') box.append(el(doc, 'span', { class: 'ovs-sketch__tid' }, '3m2tidclock22'));

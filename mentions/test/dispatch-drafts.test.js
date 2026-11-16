@@ -79,6 +79,10 @@ function desk({ publisher = true } = {}) {
     },
     publisherConfigured: () => publisher,
     announce: async (args) => { w.announced.push(args); return 'announced ⸜(｡˃ ᵕ ˂ )⸝ https://bsky.app/profile/poe.atpota.to/post/3abc'; },
+    resolveMentions: async (handles) => {
+      w.lookups = [...(w.lookups ?? []), handles];
+      return new Map(handles.filter((h) => h === 'tangled.org').map((h) => [h, { handle: h, did: 'did:plc:wshs7t2adsemcrrd4snkeqli', displayName: 'Tangled' }]));
+    },
     getDmConvoForMembers: async (members) => { assert.deepEqual(members, [admin]); return { convo: { id: 'poe-convo' } }; },
     sendDmMessage: async (convoId, replyTo, text) => { w.dms.push({ convoId, replyTo, text }); return { id: `s${w.dms.length}` }; },
   };
@@ -308,7 +312,7 @@ test('make it live: the exact steps, a yes, one document, then the announcement'
   assert.equal(record.site, config.dispatch.publicationUri);
   assert.ok(Date.parse(record.publishedAt) <= Date.now());
   assert.equal(record.bskyPostRef, undefined, 'linked later, once Leaflet has seen the create');
-  assert.deepEqual(w.announced, [{ rkey, text: "issue two is out: spaces is nearly here, and the weather was breezy (◕‿◕)" }]);
+  assert.deepEqual(w.announced, [{ rkey, text: "issue two is out: spaces is nearly here, and the weather was breezy (◕‿◕)", mentions: null }]);
   assert.match(reply, new RegExp(`^it's live ⸜\\(｡˃ ᵕ ˂ \\)⸝ https://atpota\\.to/blog/${rkey}\n\\(and https://poe\\.leaflet\\.pub/${rkey}\\)`));
   assert.match(reply, /announced/);
   assert.equal(getDraft(draft.id).status, 'published');
@@ -318,6 +322,26 @@ test('make it live: the exact steps, a yes, one document, then the announcement'
   assert.equal(await publishConfirmed(yes.message_id, w.deps), reply);
   assert.equal(w.creates.length, 1);
   assert.equal(currentDraft(), null);
+});
+
+test('the announcement can tag accounts: the steps say who, and the yes tags the accounts it showed', async () => {
+  const w = desk();
+  await readyDraft(w);
+  const dm = answering();
+  const unknown = await fromDm(dm, { action: 'propose_publish', version: 1, announcement: 'issue two! thanks @nobody.example' });
+  assert.equal(unknown.body.reason, "the announcement: @nobody.example isn't a bluesky account i can find. check the handle with resolve_identity, or name them without the @");
+  const announcement = 'issue two is out: tangled moved house, say hi to @tangled.org (◕‿◕)';
+  const proposed = await fromDm(dm, { action: 'propose_publish', version: 1, announcement });
+  assert.equal(proposed.body.accepted, true);
+  assert.deepEqual(proposed.body.mentions, [{ handle: 'tangled.org', displayName: 'Tangled' }]);
+  const shown = attachDraftReply(dm, 'ready!');
+  assert.ok(shown.text.includes(`card:\n\n${announcement}\n\nit tags @tangled.org (Tangled), so they get a notification.\n\nreply "yes"`), shown.text);
+
+  db.prepare(`UPDATE dispatch_publish SET status = 'confirmed', decision_message_id = 'yes-tags' WHERE dm_message_id = ?`).run(dm);
+  w.lookups = [];
+  await publishConfirmed('yes-tags', w.deps);
+  assert.equal(w.lookups.length, 0, 'no second lookup after the yes');
+  assert.deepEqual(w.announced.at(-1).mentions, [{ handle: 'tangled.org', did: 'did:plc:wshs7t2adsemcrrd4snkeqli', displayName: 'Tangled' }]);
 });
 
 test('a create that fails after it was written is found, not made twice', async () => {

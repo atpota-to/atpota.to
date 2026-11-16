@@ -194,17 +194,46 @@ test('operator text over 300 graphemes is refused, not cut', async () => {
   assert.equal(s.created[0].record.text, '🥔'.repeat(300));
 });
 
-test('the post has no mention facets; only the issue link is a facet', async () => {
+test('only the issue link and the tagged accounts are facets; other links stay text', async () => {
   const k = 'issuefacets1';
   const { s, deps } = network(k);
-  const text = `issue one, with @alice.example and @bob.example in it\nhttps://poe.leaflet.pub/${k}\nalso https://example.com/x`;
+  const text = `issue one 🥔, with @Tangled.org and @mu.social in it\nhttps://poe.leaflet.pub/${k}\nalso https://example.com/x`;
   await announce({ rkey: k, text }, deps);
   const { record } = s.created[0];
-  assert.equal(record.facets.length, 1);
-  const [facet] = record.facets;
-  assert.deepEqual(facet.features, [{ $type: 'app.bsky.richtext.facet#link', uri: `https://poe.leaflet.pub/${k}` }]);
-  assert.equal(Buffer.from(text).subarray(facet.index.byteStart, facet.index.byteEnd).toString(), `https://poe.leaflet.pub/${k}`);
-  assert.ok(!JSON.stringify(record).includes('#mention'));
+  assert.deepEqual(s.lookups, [['tangled.org', 'mu.social']], 'the operator\'s own handles are looked up once');
+  const shown = (f) => Buffer.from(text).subarray(f.index.byteStart, f.index.byteEnd).toString();
+  assert.deepEqual(record.facets.map((f) => [shown(f), f.features]), [
+    ['@Tangled.org', [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:wshs7t2adsemcrrd4snkeqli' }]],
+    ['@mu.social', [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:fivmz34azxgjafrk6ogns7k5' }]],
+    [`https://poe.leaflet.pub/${k}`, [{ $type: 'app.bsky.richtext.facet#link', uri: `https://poe.leaflet.pub/${k}` }]],
+  ]);
+});
+
+test('approved mentions are tagged at the DIDs the operator saw, with no second lookup', async () => {
+  const k = 'issuefacets2';
+  const { s, deps } = network(k);
+  const mentions = [{ handle: 'tangled.org', did: 'did:plc:approvedwhenshown00000000', displayName: 'Tangled' }];
+  await announce({ rkey: k, text: 'tangled moved house, thanks @tangled.org', mentions }, deps);
+  assert.equal(s.lookups.length, 0);
+  assert.deepEqual(s.created[0].record.facets, [{
+    index: { byteStart: 28, byteEnd: 40 },
+    features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:approvedwhenshown00000000' }],
+  }]);
+});
+
+test('an @handle that is not an account, or a lookup that fails, posts nothing', async () => {
+  const k = 'issuefacets3';
+  const { s, deps } = network(k);
+  const reply = await announce({ rkey: k, text: 'thanks @tangled.org and @nobody.example' }, deps);
+  assert.match(reply, /^@nobody\.example isn't a bluesky account i can find, so i didn't post\./);
+  s.failLookup = 'the appview answered 502';
+  assert.match(await announce({ rkey: k, text: 'thanks @tangled.org' }, deps), /couldn't look up @tangled\.org just now \(the appview answered 502\), so i didn't post/);
+  assert.equal(s.created.length, 0);
+  assert.equal(s.pageUrls.length, 0, 'said before waiting on the page');
+
+  // Text without a handle needs no lookup at all, so a broken AppView doesn't stop it.
+  assert.match(await announce({ rkey: k, text: 'issue one is out' }, deps), /^announced/);
+  assert.equal(s.created[0].record.facets, undefined);
 });
 
 test('buildAnnouncement links the blog URL too, and nothing else', () => {

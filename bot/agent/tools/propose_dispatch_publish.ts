@@ -10,8 +10,9 @@ export default defineTool({
     "Only in a private DM with the operator, when they tell you, in any words, to make the dispatch draft live, " +
     "publish it, or send it out. Read the draft first, and pass the `version` you read so the operator approves " +
     "exactly that one. Give `announcement`, the Bluesky post announcing the issue in your voice (under 280 " +
-    "characters, no @handles, no link, no markdown: the issue's card carries the link), unless they said not to " +
-    "announce it. This proposes; it never publishes. The operator sees every step under your reply, and the issue " +
+    "characters, no link, no markdown: the issue's card carries the link), unless they said not to announce it. " +
+    "It may tag up to six accounts the issue features, by their full @handle (@tangled.org); tag only an account " +
+    "you've checked is theirs, never a guessed handle, and the operator is shown who it tags. This proposes; it never publishes. The operator sees every step under your reply, and the issue " +
     "goes out (and Leaflet emails it to subscribers) only if they answer yes. If it returns a reason, fix it and call again.",
   inputSchema: z.object({
     version: z.number().int().min(1).describe("The draft version you read and are proposing"),

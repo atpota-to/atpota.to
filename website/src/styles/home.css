@@ -2155,6 +2155,10 @@ html[data-theme="dark"] {
   background: var(--card);
 }
 
+.home-project--rainshare {
+  background: var(--card);
+}
+
 .home-project__top {
   display: flex;
   align-items: flex-start;
@@ -2236,9 +2240,10 @@ html[data-theme="dark"] {
   border-color: transparent;
 }
 
-/* Four projects fill a row, so the "more" tile runs the full width as a strip beneath them. */
+/* Four projects fill the first row, so the fifth starts the second and the "more" tile runs
+   beside it as a strip across the rest. */
 .home-grid > .home-more {
-  grid-column: 1 / -1;
+  grid-column: span 3;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -3394,6 +3399,24 @@ html.js .home-latest[data-state="ready"] .home-feed__item:nth-child(6) {
   .home-project,
   .home-more {
     min-height: 260px;
+  }
+
+  /* Two to a row, so the fifth project and the "more" tile share the last one, and the strip
+     stacks like a project tile with its title at the bottom. */
+  .home-grid > .home-more {
+    grid-column: auto;
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .home-more__title,
+  .home-more__desc {
+    align-self: auto;
+  }
+
+  .home-more__title {
+    margin-top: auto;
+    padding-top: 14px;
   }
 
   .home-guide__stack {

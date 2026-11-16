@@ -163,9 +163,25 @@ export const GATE_DEFAULTS = {
   // A new app is worth asking about once it has written this many records. The
   // station hears a few new apps a day, most of them a handful of test records.
   weatherNewAppMinRecords: 250,
+  // ...and once at least this many different accounts have written them. One
+  // account's batch (an import, a backfill, a bot, a developer testing their own
+  // app) can be thousands of records and still isn't an app blowing in: on
+  // 2026-11-07 one account's 5,800 scrobbles went out as a new app. An app the
+  // station couldn't count accounts for yet waits until it can. 0 or null turns
+  // the check off. The same rule keeps one account's batch out of the new apps
+  // shown with every other moment.
+  weatherNewAppMinAccounts: 3,
   // The diversity index from which the sky counts as mixed: "high" on the page.
   // A usual minute in October 2026 was about 2.
   weatherMixedMinIndex: 6,
+  // A weather post may tag the accounts of the apps it names, up to this many, and
+  // only accounts that pass every check in gates/weather.js appAccountProblem (the
+  // app's own handle, the namespace's lexicon authority, enough accounts writing it,
+  // no pronouns, no labels). 0 turns tagging off.
+  weatherMaxTags: 2,
+  // An account a weather post tagged isn't offered again for this many days, so a
+  // busy app isn't notified every day it's busy.
+  weatherTagCooldownDays: 7,
 
   maxOtherMentions: 2,
   maxGraphemes: 300,            // from the live app.bsky.feed.post lexicon

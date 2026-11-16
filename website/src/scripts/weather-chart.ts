@@ -46,8 +46,20 @@ export interface ChartOptions {
   formatTipTime?: (t: number) => string;
   /** The time between points; a bigger gap breaks the line. */
   stepMs: number;
-  /** false fits the axis to the line instead of starting at zero, for a share that moves by hundredths. */
+  /**
+   * false fits the axis to the line instead of starting at zero, for a share that moves by
+   * hundredths. The axis then gets a break mark at its foot, so a small move doesn't read as a big one.
+   */
   fromZero?: boolean;
+  /** Stretches to set apart behind the line (a scripted wave of sign-ups, say): shaded, with a short label at the top. */
+  bands?: ReadonlyArray<ChartBand>;
+}
+
+/** A stretch of the time axis to mark, [from, to] in milliseconds. */
+export interface ChartBand {
+  from: number;
+  to: number;
+  label: string;
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -218,6 +230,22 @@ function draw(host: HTMLElement): void {
     const label = el('text', { class: 'weather-chart__tick', x: PAD.left - 8, y: y(v) + 4, 'text-anchor': 'end' });
     label.textContent = (opts.formatTick ?? opts.format)(v);
     svg.append(label);
+  }
+  // an axis that doesn't start at zero says so: a break mark where it would have
+  if (yMin > 0) svg.append(el('path', { class: 'weather-chart__break', d: `M${PAD.left - 5},${y(yMin) + 3}l4,-6M${PAD.left - 1},${y(yMin) + 3}l4,-6` }));
+  // stretches set apart, behind the line
+  for (const band of opts.bands ?? []) {
+    const from = Math.max(band.from, t0);
+    const to = Math.min(band.to, t1);
+    if (!(to > from) && !(t1 === t0 && band.from <= t0 && band.to >= t0)) continue;
+    const bx = x(from);
+    const bw = Math.max(2, x(to) - bx);
+    svg.append(el('rect', { class: 'weather-chart__band', x: bx, y: PAD.top, width: bw, height: innerH }));
+    if (bw >= 44) {
+      const label = el('text', { class: 'weather-chart__band-label', x: bx + 6, y: PAD.top + 13 });
+      label.textContent = band.label;
+      svg.append(label);
+    }
   }
   // time labels: the start, the middle and the end of the axis (no middle on a narrow chart, where they'd collide)
   const times = t1 === t0 ? [t0] : width < NARROW ? [t0, t1] : [t0, (t0 + t1) / 2, t1];
