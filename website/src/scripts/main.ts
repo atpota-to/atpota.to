@@ -2,7 +2,8 @@
  * Shared entry for every page (<script type="module" src="/src/scripts/main.ts">).
  *
  * 1. theme toggle wiring, tonight's moon in every moon on the page (./moon.ts), header nav (phone menu sheet), mascot expression swapping,
- *    the tab title that asks you to come back, the footer's changing tagline, and the
+ *    the tab title that now and then asks you to come back (./tab.ts says where and how often),
+ *    the footer's changing tagline, and the
  *    header's account button (./account.ts, which also opens sign-in for Poe's panel)
  * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
  *    "blog" -> ./blog.ts, "garden" -> ./garden-page.ts, "settings" -> ./settings.ts,
