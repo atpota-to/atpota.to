@@ -57,6 +57,30 @@ function hostAllowed(host, allowHosts) {
 }
 
 /**
+ * The @handles in a reply that tag the people who run Poe: [{ handle, did }].
+ *
+ * A reply may tag one of them, so Poe can call somebody in when a thread needs
+ * a person ("@dame.is this one's for you"). On 2026-11-16 a reader asked for a
+ * change to the website and Poe could only say it was "a good one for the
+ * people who run me", which notified nobody.
+ *
+ * The name decides nothing. `profiles` is the AppView's answer for these
+ * handles, Map(handle -> { did }), and a handle counts only when the account it
+ * belongs to is in `adminDids`, the same DIDs a post must be signed by to count
+ * as direction. A handle that moved to somebody else, or one that only looks
+ * like an operator's, is a third-party mention like any other.
+ */
+export function operatorMentions(handles, profiles, adminDids) {
+  const admins = new Set(adminDids ?? []);
+  const out = [];
+  for (const h of new Set((handles ?? []).map((x) => String(x).toLowerCase()))) {
+    const did = profiles?.get(h)?.did;
+    if (typeof did === 'string' && admins.has(did)) out.push({ handle: h, did });
+  }
+  return out;
+}
+
+/**
  * deps: {
  *   gates,                 thresholds
  *   replyingToDid,         the account being replied to
@@ -64,7 +88,8 @@ function hostAllowed(host, allowHosts) {
  *   lastReplyText,         the last reply we sent that account, or null
  *   allowedLinks,          Set of URLs seen in this turn's tool results, or null
  *   allowedLinkHosts,      host allowlist used when allowedLinks is null
- *   allowedHandles,        @handles the caller checked and will tag, or none
+ *   allowedHandles,        @handles the caller checked and will tag, or none:
+ *                          a weather post's app accounts, or a reply's operators
  *   killSwitch,            () => reason | null, re-read at call time
  * }
  */
@@ -227,11 +252,13 @@ export function evaluateOutbound(draft, deps) {
   }
 
   // 6. Mentions. The anti-mass-tagging gate, and it closes the ugliest
-  //    injection outcome. The poster never builds mention facets at all, so a
-  //    stray @handle notifies nobody -- but it still reads as a tag, so any
-  //    @handle that is not the account being replied to rejects the draft.
-  //    `allowedHandles` is for a weather post, whose caller has already checked
-  //    each one in code (gates/weather.js appAccountProblem); a reply has none.
+  //    injection outcome. The poster builds mention facets only for the
+  //    accounts in `allowedHandles`, so a stray @handle notifies nobody -- but
+  //    it still reads as a tag, so any @handle that is not the account being
+  //    replied to, or one of those, rejects the draft.
+  //    `allowedHandles` is for accounts the caller has already checked in code:
+  //    a weather post's app accounts (gates/weather.js appAccountProblem), and
+  //    in a reply, the people who run Poe (operatorMentions above). Nobody else.
   const handles = detectHandles(text);
   const selfHandles = new Set(
     [deps.replyingToHandle, deps.botHandle, ...(deps.allowedHandles ?? [])].filter(Boolean).map((h) => h.toLowerCase())

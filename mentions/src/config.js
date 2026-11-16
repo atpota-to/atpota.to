@@ -184,6 +184,10 @@ export const GATE_DEFAULTS = {
   weatherTagCooldownDays: 7,
 
   maxOtherMentions: 2,
+  // A reply may tag the people who run Poe (ADMIN_DIDS), checked by DID at post
+  // time (gates/outbound.js operatorMentions), so it can ask them for help.
+  // false: a reply tags nobody, as before 2026-11-16.
+  replyOperatorTags: true,
   maxGraphemes: 300,            // from the live app.bsky.feed.post lexicon
   maxBytes: 3000,               // ditto
   // How many posts one answer may become. 1 disables threading entirely.
