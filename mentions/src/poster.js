@@ -6,8 +6,8 @@
 import { config, gates, killSwitchEngaged } from './config.js';
 import { logger } from './logger.js';
 import * as db from './db.js';
-import { evaluateOutbound } from './gates/outbound.js';
-import { faceRules } from './richtext.js';
+import { evaluateOutbound, operatorMentions } from './gates/outbound.js';
+import { faceRules, detectHandles, mentionFacets } from './richtext.js';
 import { isNapping, pauseRow } from './nap.js';
 import { sendProposedLike } from './likes.js';
 
@@ -51,13 +51,44 @@ function retryNoteFor(verdict) {
     case 'markdown':
       return `${verdict.detail}. Bluesky has no markdown; write plain sentences.`;
     case 'third_party_mention':
-      return `${verdict.detail}. Name them without the @, or leave them out.`;
+      return `${verdict.detail}. Name them without the @, or leave them out. Only the people who run you can be tagged.`;
     case 'holding_note':
       return `${verdict.detail}. Finish the lookup in this turn and give the result, or say what you could not verify. Do not promise a later reply.`;
     case 'operational_meta':
       return `${verdict.detail}. Answer the person's original post directly. Never describe your draft, tool calls, likes, proposals, or whether anything was sent.`;
     default:
       return verdict.detail;
+  }
+}
+
+/** The @handles in `text` that could be operator tags, so need looking up. */
+function handlesToCheck(text, row, g) {
+  if (g.replyOperatorTags !== true || !config.adminDids.length) return [];
+  const own = new Set([row.author_handle, config.botHandle].filter(Boolean).map((h) => h.toLowerCase()));
+  return [...new Set(detectHandles(text))].filter((h) => !own.has(h));
+}
+
+/**
+ * The people who run Poe that `text` tags, [{ handle, did }], looked up as the
+ * draft is judged. Every @handle other than the asker's and Poe's own goes to
+ * the AppView in one call, and only one that belongs to an ADMIN_DIDS account
+ * comes back (gates/outbound.js operatorMentions). Never cached, like the
+ * dispatch's tags: a handle can move to somebody else between two replies.
+ *
+ * A failed lookup tags nobody, and the draft then fails third_party_mention
+ * like any other tag, which asks Poe to name them without the @.
+ */
+export async function operatorTagsIn(text, row, g, { lookup } = {}) {
+  const handles = handlesToCheck(text, row, g);
+  if (!handles.length) return [];
+  try {
+    const profilesByHandle = lookup ?? (await import('./atproto.js')).profilesByHandle;
+    return operatorMentions(handles, await profilesByHandle(handles), config.adminDids);
+  } catch (err) {
+    logger.warn('could not look up the @handles in a draft; it tags nobody', {
+      queueId: row.id, handles, err: err.message,
+    });
+    return [];
   }
 }
 
@@ -106,6 +137,14 @@ export async function postReply(row, draft, { allowedLinks = null, fallback = fa
   });
   if (draftText !== draft) logger.info('face left off', { queueId: row.id });
 
+  // The one kind of account a reply may tag. Only these get a mention facet
+  // below; any other @handle still fails the gate. Awaited only when there is a
+  // handle to look up: a draft with none goes on to the gates without yielding,
+  // and the kill switch is checked in them after the lookup either way.
+  const operatorTags = handlesToCheck(draftText, row, g).length
+    ? await operatorTagsIn(draftText, row, g)
+    : [];
+
   const verdict = evaluateOutbound(draftText, {
     gates: g,
     botHandle: config.botHandle,
@@ -114,6 +153,7 @@ export async function postReply(row, draft, { allowedLinks = null, fallback = fa
     lastReplyText: db.lastReplyTextTo(row.author_did),
     allowedLinks,
     allowedLinkHosts: g.allowedLinkHosts,
+    allowedHandles: operatorTags.map((t) => t.handle),
     killSwitch: killSwitchEngaged,
   });
 
@@ -232,7 +272,8 @@ export async function postReply(row, draft, { allowedLinks = null, fallback = fa
         pauseRow(row.id);
         return { posted: false, gate: 'nap' };
       }
-      const record = buildPostRecord(row, post.text, g.replyLangs, post.facets, parent);
+      const facets = post.facets.concat(mentionFacets(post.text, operatorTags));
+      const record = buildPostRecord(row, post.text, g.replyLangs, facets, parent);
       let res;
       try {
         res = await createPost(record);
@@ -275,6 +316,7 @@ export async function postReply(row, draft, { allowedLinks = null, fallback = fa
     logger.info('posted reply', {
       queueId: row.id, uri: sent[0].uri, posts: sent.length, inReplyTo: row.uri,
       author: row.author_handle ?? row.author_did, graphemes: verdict.graphemes,
+      ...(operatorTags.length ? { tagged: operatorTags.map((t) => t.handle) } : {}),
     });
     // Only now, with the whole reply public, may a like Poe proposed go out.
     const like = await sendProposedLike(row.id);

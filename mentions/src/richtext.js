@@ -97,17 +97,21 @@ export function linkFacets(text) {
   }));
 }
 
-// @handle-shaped tokens in a draft. The reply poster never builds mention
-// facets, so one of these in a reply notifies nobody — but it still reads as a
-// tag, and a reply that tags a third party is the ugliest thing a prompt
-// injection can talk the model into. The outbound gate rejects on this.
+// @handle-shaped tokens in a draft. The reply poster builds a mention facet
+// only for the people who run Poe, so any other one in a reply notifies nobody
+// — but it still reads as a tag, and a reply that tags a third party is the
+// ugliest thing a prompt injection can talk the model into. The outbound gate
+// rejects on this.
 //
-// A tag is real in two places. A dispatch announcement, which the operator
+// A tag is real in three places. A dispatch announcement, which the operator
 // approves by hand: the droplet resolves each handle when Poe proposes it, the
 // operator is shown who gets tagged, and only those accounts get a mention
-// facet (mentionFacets, dispatch.js checkMentions). And a weather post, which can
+// facet (mentionFacets, dispatch.js checkMentions). A weather post, which can
 // tag only the apps' own accounts the droplet checked in code before Poe was
 // asked (gates/weather.js appAccountProblem, weather-posts.js appAccountsFor).
+// And a reply, which can tag only an account the AppView says belongs to one of
+// ADMIN_DIDS, so Poe can call its operator in (gates/outbound.js
+// operatorMentions, poster.js operatorTagsIn).
 const HANDLE_RE = /(^|[\s(\[{<"'])@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)/gi;
 
 /**

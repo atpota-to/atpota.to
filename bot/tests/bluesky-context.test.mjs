@@ -49,3 +49,11 @@ test("the Bluesky workflow requires cursor exhaustion and honest partial results
   assert.match(skill, /promise to continue later/);
   assert.match(skill, /post status updates instead of the answer/);
 });
+
+test("a reply may tag @dame.is, and the skill says when", () => {
+  const prompt = buildPrompt(event);
+  assert.match(prompt, /Name anyone else without the @\. The one exception is @dame\.is/);
+  const skill = readFileSync(new URL("../agent/skills/bluesky-reply.md", import.meta.url), "utf8");
+  assert.match(skill, /## When a thread needs dame/);
+  assert.match(skill, /Any\nother @handle still gets the whole reply refused/);
+});
