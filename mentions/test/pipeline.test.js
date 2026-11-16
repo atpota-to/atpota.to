@@ -565,3 +565,75 @@ test('the poster leaves the face off when its last reply in the thread wore one'
   const judged = db.db.prepare(`select subject from rejections where queue_id = ? order by id desc limit 1`).get(row.id).subject;
   assert.equal(judged, '**lexicons** are schemas');
 });
+
+// Last in the file on purpose: it gives the poster a (fake) session, and the
+// tests above expect the PDS to be unreachable.
+test('a reply can tag the people who run Poe, checked by DID, and only they get a mention facet', async () => {
+  const ADMIN = 'did:plc:admin00000000000000000000';
+  const owners = { 'dame.is': ADMIN, 'impostor.bsky.social': 'did:plc:notanadmin0000000000000000' };
+  const records = [];
+  const lookups = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(String(url));
+    if (u.pathname.endsWith('/app.bsky.actor.getProfiles')) {
+      const actors = u.searchParams.getAll('actors');
+      lookups.push(actors);
+      return Response.json({ profiles: actors.filter((a) => owners[a]).map((a) => ({ handle: a, did: owners[a] })) });
+    }
+    if (u.pathname.endsWith('/com.atproto.server.createSession')) {
+      return Response.json({ accessJwt: 'a', refreshJwt: 'r', did: config.botDid, handle: 'atpota.to' });
+    }
+    if (u.pathname.endsWith('/com.atproto.repo.createRecord')) {
+      records.push(JSON.parse(init.body).record);
+      return Response.json({ uri: `at://${config.botDid}/app.bsky.feed.post/3mvstag${records.length}`, cid: `bafytag${records.length}` });
+    }
+    throw new Error(`unexpected fetch in a test: ${u}`);
+  };
+  const drafted = async (rkey) => {
+    await pipeline.processMatch(makeMatch({ rkey }), freshStats());
+    const row = db.db.prepare('SELECT * FROM queue WHERE rkey = ?').get(rkey);
+    db.setStatus(row.id, 'drafted', { draft_retries: 1 });
+    return db.getQueueRow(row.id);
+  };
+  try {
+    const text = 'good catch! keeping the title would fix it. @dame.is this one is for you';
+    const ok = await poster.postReply(await drafted('3mvsOPTAG00001'), text);
+    assert.equal(ok.posted, true, `the reply posts (${ok.gate}: ${ok.detail})`);
+    assert.deepEqual(lookups.at(-1), ['dame.is'], 'only the handle that is not the asker or Poe is looked up');
+    const record = records.at(-1);
+    const mention = record.facets.find((f) => f.features[0].$type === 'app.bsky.richtext.facet#mention');
+    assert.equal(mention.features[0].did, ADMIN, 'the tag notifies the admin DID');
+    const bytes = Buffer.from(record.text, 'utf8');
+    assert.equal(bytes.subarray(mention.index.byteStart, mention.index.byteEnd).toString('utf8'), '@dame.is');
+
+    // A handle that belongs to somebody else is a third party, however it is spelled.
+    const impostor = await poster.postReply(await drafted('3mvsOPTAG00002'), 'ask @impostor.bsky.social about it!');
+    assert.equal(impostor.posted, false);
+    assert.equal(impostor.gate, 'third_party_mention');
+
+    // The operator and a stranger in one reply: the stranger still stops it.
+    const both = await poster.postReply(await drafted('3mvsOPTAG00003'), '@dame.is and @impostor.bsky.social, look!');
+    assert.equal(both.gate, 'third_party_mention');
+    assert.equal(records.length, 1, 'nothing else was posted');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('operator tags are off with the switch, and a failed lookup tags nobody', async () => {
+  const { gates } = await import('../src/config.js');
+  const row = { id: 0, author_handle: 'asker.bsky.social' };
+  let called = 0;
+  const lookup = async () => { called++; return new Map([['dame.is', { did: 'did:plc:admin00000000000000000000' }]]); };
+
+  assert.deepEqual(await poster.operatorTagsIn('@dame.is hi', row, gates(), { lookup }),
+    [{ handle: 'dame.is', did: 'did:plc:admin00000000000000000000' }], 'on by default');
+  assert.deepEqual(await poster.operatorTagsIn('@dame.is hi', row, { ...gates(), replyOperatorTags: false }, { lookup }), []);
+  assert.equal(called, 1, 'switched off, nothing is looked up');
+  assert.deepEqual(await poster.operatorTagsIn('@asker.bsky.social and @atpota.to', row, gates(), { lookup }), []);
+  assert.equal(called, 1, 'the asker and Poe itself are never looked up');
+
+  const down = async () => { throw new Error('the appview answered 502'); };
+  assert.deepEqual(await poster.operatorTagsIn('@dame.is hi', row, gates(), { lookup: down }), []);
+});

@@ -248,8 +248,10 @@ export function buildPrompt(event: MentionEvent, described: (string | null)[] = 
     );
   }
   // Quotes and screenshots are full of handles now, and a draft that tags
-  // anyone but the asker is refused and costs a whole second turn.
-  lines.push("Name anyone else without the @.");
+  // anyone but the asker is refused and costs a whole second turn. The one
+  // exception is the person who runs Poe, whose account the droplet checks by
+  // DID before it tags them (mentions/src/poster.js operatorTagsIn).
+  lines.push("Name anyone else without the @. The one exception is @dame.is, when the thread needs dame.");
   // Not for a post from the people who run it: it is addressed to it by
   // definition, and "remember: ..." is not a question. With this line in
   // front of the acknowledgement below, a probe on 2026-09-24 replied

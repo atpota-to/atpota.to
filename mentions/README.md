@@ -444,15 +444,16 @@ and logs an error rather than silently reverting to something more permissive.
 
 ### Two places this is stricter than the brief
 
-**The poster never builds mention facets at all.** Only link facets. A stray
-`@handle` in a draft therefore notifies nobody even if the gate somehow missed
-it, which closes the mass-tagging hole at the record level rather than only at
-the check. The gate still rejects third-party handles, because it still *reads*
-as tagging. The posts that can tag anyone are a dispatch announcement, which
-the operator approves by hand after seeing who it tags (see
-[Tagging](#tagging-in-an-announcement)), and a weather post, which can tag only
-the apps' own accounts the droplet checked before Poe was asked (see
-[Tagging an app's account](#tagging-an-apps-account)).
+**The reply poster builds a mention facet only for the people who run Poe.**
+Every other facet is a link. A stray `@handle` in a draft therefore notifies
+nobody even if the gate somehow missed it, which closes the mass-tagging hole at
+the record level rather than only at the check. The gate still rejects
+third-party handles, because they still *read* as tagging. The posts that can
+tag anyone are a dispatch announcement, which the operator approves by hand
+after seeing who it tags (see [Tagging](#tagging-in-an-announcement)), a
+weather post, which can tag only the apps' own accounts the droplet checked
+before Poe was asked (see [Tagging an app's account](#tagging-an-apps-account)),
+and a reply, which can tag only the operator (below).
 
 **Opt-out phrases are matched as demands, not as words.** A denylisting is
 permanent with no appeal flow, so a false positive silently and forever stops
@@ -461,6 +462,23 @@ perfectly ordinary things to ask an atproto bot: *"how do I opt out of the
 firehose?"*, *"how do I make the PDS forget me?"*, *"does the error go away if I
 rebuild?"*. A question mark, a request word, or more than 80 characters means it
 is prose, not an opt-out. `go away` was dropped from the phrase list entirely.
+
+#### A reply can tag the operator
+
+So Poe can ask for help in public ("@dame.is, this one's for you!") instead of
+saying "a good one for the people who run me", which notifies nobody. At post
+time, every `@handle` in a draft other than the asker's and Poe's own goes to
+the AppView in one `getProfiles` call (`poster.js` `operatorTagsIn`). A handle
+passes `third_party_mention` only when the account it belongs to is one of
+`ADMIN_DIDS` (`gates/outbound.js` `operatorMentions`), and only those get a
+mention facet, at that DID. The name decides nothing: a handle that moved to
+somebody else is a third party like any other. A failed lookup tags nobody, so
+the draft is refused and Poe is asked to name them without the @.
+
+Poe's reply skill (`bot/agent/skills/bluesky-reply.md`, "When a thread needs
+dame") says when to tag, and the turn prompt names `@dame.is`. A draft with no
+`@handle` needs no lookup and reaches the gates without waiting on the network.
+`"replyOperatorTags": false` in `gates.json` turns it off without a deploy.
 
 ---
 
