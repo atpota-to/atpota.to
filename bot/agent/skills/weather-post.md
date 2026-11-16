@@ -92,6 +92,22 @@ A climb against the day before works the same way: "up 900%" from one account is
 one account having a busy day. And don't guess at who it is or what they're up to:
 the station counts accounts but keeps no names.
 
+## What an app wrote
+
+An app's `collections` are its busiest kinds of record in one minute: the minute you're
+reading for "now" or a burst, and for a day or a week its single busiest minute. They
+say what the app writes, not what most of its day was. Never write "most of it was git
+refs" from them. If the mix matters to the post, check it (get_lexicon_activity, a
+sample of recent records) or leave it out.
+
+Tangled's git repositories each write as an identity of their own: their refs, and the
+issues and comments people make on them. Since 2026-11-16 the station counts the person
+a record names, or nobody, so tangled.org's accounts are people. Before that day it
+counted the repositories as accounts too (about 900 a day in mid-November). So against a
+window from before it, a fall in tangled.org's accounts, in accounts writing elsewhere or
+in the diversity index is the station counting differently, not people leaving. Don't
+post it as news.
+
 ## Pick your angle
 
 Ask what stands out, the way a forecaster picks the one thing worth saying on air:

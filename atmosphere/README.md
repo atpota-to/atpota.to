@@ -79,6 +79,22 @@ thousand records a minute is a thousand records and one account.
   `app.bsky.*` / `chat.bsky.*` and otherwise for **elsewhere** and its app (the same
   rules as records). Someone who likes a post and stars a repo is one active account,
   on both sides, so bluesky + elsewhere can be more than active.
+- **Tangled's repositories aren't accounts** (since 2026-11-16). Each git repository on a
+  knot (below, "Tangled's knots aren't hosts") writes as an identity of its own: its refs
+  (`org.tangled.git.refs`), its manifest, and the issues, pull requests and comments
+  people make on it, each naming the person in `x-tngl-editor`. Before, every one of them
+  counted as an account: Poe posted on 2026-11-16 that 1,378 accounts wrote to
+  tangled.org in a day, and checked against Jetstream, 907 of the 1,433 identities that
+  wrote in that day were repositories. Now a Tangled record that names its editor counts
+  for the editor, and a repository's refs and manifest count for nobody: 538 for that
+  day, 9 of them still repositories (a collaborator added, a deletion: records that name
+  no editor). It reads only the message (`accountOf` in
+  [`src/accounts.js`](src/accounts.js), and the website's copy), so replays count the
+  same way. Earlier days aren't recounted: tangled.org's accounts, accounts elsewhere
+  and the diversity index all fall across the change (about 900 fewer accounts elsewhere
+  a day, of some 7,900, in mid-November) without anyone leaving. The archive backfill
+  gets records as raw bytes, so there a repository's issues and comments still count for
+  the repository.
 - **How:** [`src/hll.js`](src/hll.js) is a HyperLogLog sketch with 4096 registers:
   4 KB however many accounts it holds, within about 1.6% (2% to be safe in copy),
   counted with Ertl's improved estimator. Each DID is hashed with SHA-256 and only
@@ -211,7 +227,8 @@ answers in `atmosphere_host_kind`, read back on start. The census leaves knots o
 how many (`knots` in the reading and in `atmosphere_hosts`). `atmosphere_host_day` and
 `atmosphere_host_active_day` still have rows for them, as for any active host, and the
 trends leave them out by `atmosphere_host_kind`; a census from before (its `knots` null) has
-that day's knots taken out of it when it's read.
+that day's knots taken out of it when it's read. The repositories they hold don't count as
+active accounts either ("Active accounts", above).
 
 ### Who's active on each host
 

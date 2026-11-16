@@ -447,6 +447,7 @@ function appsOf(h: History, total: Point, earlier: string) {
       // its share of everything written outside Bluesky
       sharePercent: total.elsewhere > 0 ? round1((100 * a.creates) / total.elsewhere) : 0,
       ...(change ? { change } : {}),
+      // its busiest collections in its single busiest minute of the range: what it writes, not a breakdown of the range
       collections: a.collections,
     };
   });
@@ -462,6 +463,9 @@ function accountsOf(h: History, spanMs: number, earlier: string) {
     heardPercent: heardPercent(a.seconds, spanMs),
     apps: a.apps.map((x) => {
       const change = accountChange(x.active, x.prevActive, a.seconds, a.prevSeconds, earlier);
+      // collections: its busiest in its single busiest minute of the last two days, not what its accounts wrote over the range.
+      // tangled.org's accounts left its git repositories out from 2026-11-16 (atmosphere/src/accounts.js), so a change
+      // against a window before that runs low
       return { domain: x.domain, accounts: x.active, ...(change ? { change } : {}), collections: x.collections };
     }),
   };
