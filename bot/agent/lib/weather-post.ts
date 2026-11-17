@@ -45,7 +45,9 @@ export const WEATHER_PAGES = {
   trends: "new records and active accounts over the last hour, day, week or month, and the last hour's readouts",
   today: "today's high and low against usual, apps new today, the forecast for the next 12 hours, and the busiest times of the week",
   hosts: "where accounts live: independent pds hosts against bluesky's own, the hosting diversity, the biggest, newest and fastest growing hosts",
-  migration: "accounts moving house (out of bluesky's hosts, back in, or host to host, and where they went), sign-ups and air quality",
+  migration: "accounts moving house (out of bluesky's hosts, back in, or host to host, and where they went), sign-ups and air quality. " +
+    "Its picture is the last 7 days: each day's moves out of bluesky (today's so far), the week's moves back in and host to host, " +
+    "and where the week's movers out of bluesky went, so a post about today's moves says they're today's",
 } as const;
 
 export type WeatherPage = keyof typeof WEATHER_PAGES;

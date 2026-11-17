@@ -15,7 +15,7 @@
  *   hosts     where the atmosphere lives: the share of accounts on independent pds hosts,
  *             the hosting diversity on its scale, and the biggest independent hosts
  *   migration accounts moving house: out of bluesky over the last week, day by day, back in
- *             and host to host, and where they went
+ *             and host to host, and where the ones out of bluesky went
  *
  * A card is read at the size a feed shows it, so each says one thing big and a few things
  * small: no chips beyond the masthead's, no sentence longer than a line or two.
@@ -35,7 +35,7 @@ import { conditionFor, diversityLevel, hostingLevel, type Condition, type Divers
 import { NEW_APPS, type NewApps, type Normal, type Today } from './weather-almanac.js';
 import type { Accounts } from './weather-accounts.js';
 import type { App as HistoryApp, Point } from './weather-history.js';
-import type { HostHistory, IdentityDay } from './weather-hosts.js';
+import { BLUESKY, type HostHistory, type IdentityDay } from './weather-hosts.js';
 
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
@@ -981,10 +981,19 @@ export function weekOf(d: CardData): IdentityDay[] {
   return (d.day?.hosts?.identities ?? []).slice(-7);
 }
 
-/** Where the week's movers went, busiest first (weather-hosts.ts destinationsOf). */
-export function destinationsOf(week: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
+/**
+ * Where the week's movers out of Bluesky went, busiest first. The card's big number counts only
+ * them, so the list beside it does too: the page's list (weather-hosts.ts destinationsOf) takes
+ * in moves host to host as well, and one host renaming itself can move hundreds at once, which
+ * set against "moved out of bluesky" reads as hundreds leaving Bluesky. Each day's pairs from
+ * Bluesky (`moves`); a day with no pairs kept goes by its destinations, host to host and all.
+ */
+export function outOfBlueskyTo(week: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
   const by = new Map<string, number>();
-  for (const x of week) for (const h of x.destinations) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  for (const x of week) {
+    const went = x.moves.length ? x.moves.filter((m) => m.from === BLUESKY).map((m) => ({ hostname: m.to, accounts: m.accounts })) : x.destinations;
+    for (const h of went) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  }
   return [...by]
     .map(([hostname, accounts]) => ({ hostname, accounts }))
     .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1))
@@ -1002,7 +1011,7 @@ function migration(d: CardData, art: Art): El | null {
   if (!week.length) return null;
   const sum = (k: 'movedOut' | 'movedIn' | 'movedBetween') => week.reduce((t, x) => t + x[k], 0);
   const span = week.length > 1 ? `the last ${week.length} days` : 'today so far';
-  const went = destinationsOf(week);
+  const went = outOfBlueskyTo(week);
   const left = went.length ? 600 : 1144;
   const most = Math.max(1, ...week.map((x) => x.movedOut));
   const today = new Date(d.at).toISOString().slice(0, 10);
@@ -1016,13 +1025,14 @@ function migration(d: CardData, art: Art): El | null {
         h({ flexDirection: 'column', paddingBottom: 10 }, h({ fontSize: 30, fontWeight: 700 }, 'moved out of bluesky'), h({ fontSize: 22, color: C.soft, marginTop: 2 }, span)),
       ),
       h({ fontSize: 24, color: C.soft, marginTop: 12 }, `${int(sum('movedIn'))} moved back in · ${int(sum('movedBetween'))} host to host`),
-      // each day's moves out, today's (still counting) fainter
+      // each day's moves out, with its number, so a post about one day finds it here; today's (still counting) fainter
       week.length > 1
         ? h(
-            { alignItems: 'flex-end', gap: 10, height: 104, marginTop: 20 },
+            { alignItems: 'flex-end', gap: 10, height: 128, marginTop: 16 },
             ...week.map((x) =>
               h(
-                { flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, height: 104 },
+                { flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, height: 128 },
+                h({ fontSize: 18, fontWeight: 700, color: x.day === today ? C.muted : C.soft, marginBottom: 6 }, int(x.movedOut)),
                 h({ width: '100%', height: Math.max(4, Math.round((x.movedOut / most) * 72)), borderRadius: 8, background: C.leaf, opacity: x.day === today ? 0.45 : 1 }),
                 h({ fontSize: 18, color: C.muted, marginTop: 8 }, weekday(x.day, d.at)),
               ),
@@ -1035,7 +1045,7 @@ function migration(d: CardData, art: Art): El | null {
       ? tile(
           { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
           h({ fontSize: 30, fontWeight: 700, color: C.leaf }, 'where they moved to'),
-          h({ fontSize: 22, color: C.soft, marginTop: 4 }, span),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, `out of bluesky, ${span}`),
           barList(went.map((x) => ({ name: x.hostname, n: x.accounts, value: `${int(x.accounts)} ${x.accounts === 1 ? 'mover' : 'movers'}` })), 1144 - left - 16 - 80),
         )
       : null,

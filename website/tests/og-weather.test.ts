@@ -24,7 +24,7 @@ import {
   CONDITION_FACE,
   CONDITION_TEXT,
   DEFAULT_CARD,
-  destinationsOf,
+  outOfBlueskyTo,
   DIVERSITY_SCALE,
   drawCard,
   drawQuiet,
@@ -49,7 +49,6 @@ import {
 import type { HostHistory, IdentityDay } from '../server/weather-hosts.js';
 import type { Normal } from '../server/weather-almanac.js';
 import * as almanacPage from '../src/scripts/weather-almanac.js';
-import * as hostsPage from '../src/scripts/weather-hosts.js';
 import * as sky from '../src/scripts/weather-sky.js';
 import * as weatherPage from '../src/scripts/weather.js';
 
@@ -186,13 +185,34 @@ describe('og weather: the page\'s words', () => {
     }
   });
 
-  it('copies the hosting scale, and the movers, from the page', () => {
+  it('copies the hosting scale from the page', () => {
     expect(HOSTING_SCALE).toEqual(weatherPage.HOSTING_SCALE);
     expect(HOSTING_SCALE_MAX).toBe(weatherPage.HOSTING_SCALE_MAX);
     expect(HOSTING_TEXT).toEqual(weatherPage.HOSTING_TEXT);
     for (const index of [0, 7.43, 10, 60, 499, 900]) expect(hostingPosition(index), String(index)).toBe(weatherPage.hostingPosition(index));
-    const week = hostHistory().identities.slice(-7);
-    expect(destinationsOf(week)).toEqual(hostsPage.destinationsOf(week));
+  });
+
+  it('lists where the movers out of bluesky went, not the ones moving host to host', () => {
+    // nov 14 2026: atchan.net renamed itself pds.atchan.net and took its 214 accounts along, as moves host to host
+    const week = [
+      day('2026-11-14', {
+        movedOut: 29, movedBetween: 215,
+        destinations: [{ hostname: 'pds.atchan.net', accounts: 214 }, { hostname: 'blacksky.app', accounts: 17 }, { hostname: 'eurosky.social', accounts: 13 }],
+        moves: [
+          { from: 'atchan.net', to: 'pds.atchan.net', accounts: 214 },
+          { from: 'bluesky', to: 'blacksky.app', accounts: 17 },
+          { from: 'bluesky', to: 'eurosky.social', accounts: 12 },
+          { from: 'blacksky.app', to: 'eurosky.social', accounts: 1 },
+          { from: 'eurosky.social', to: 'bluesky', accounts: 1 },
+        ],
+      }),
+      // a day from before the station kept the pairs goes by its destinations
+      day('2026-11-15', { destinations: [{ hostname: 'eurosky.social', accounts: 6 }] }),
+    ];
+    expect(outOfBlueskyTo(week)).toEqual([{ hostname: 'eurosky.social', accounts: 18 }, { hostname: 'blacksky.app', accounts: 17 }]);
+    // what's listed never adds up to more than moved out
+    const listed = outOfBlueskyTo(week).reduce((n, x) => n + x.accounts, 0);
+    expect(listed).toBeLessThanOrEqual(week.reduce((n, x) => n + x.movedOut, 0));
   });
 
   it('says usual the way the almanac does', () => {
@@ -335,10 +355,10 @@ describe('og weather: the cards', () => {
   it('shows the migration winds over the last week, day by day, and where they went', async () => {
     const art = await cardArt();
     const words = texts(drawCard('migration', data(), art));
-    // the last seven days: 30 a day for five, then 32 and today's 65 so far
+    // the last seven days: 30 a day for five, then 32 and today's 65 so far, each day's number on its bar
     expect(words).toEqual(expect.arrayContaining([
-      '247', 'moved out of bluesky', 'the last 7 days', '6 moved back in · 38 host to host',
-      'where they moved to', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', 'atpota.to/weather/migration',
+      '247', 'moved out of bluesky', 'the last 7 days', '6 moved back in · 38 host to host', '30', '32', '65',
+      'where they moved to', 'out of bluesky, the last 7 days', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', 'atpota.to/weather/migration',
     ]));
     // sign-ups are the page's business, not the movers' card
     expect(words.join(' ')).not.toContain('started on an independent host');

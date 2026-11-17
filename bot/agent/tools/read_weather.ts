@@ -39,7 +39,9 @@ export default defineTool({
     "\"now\" and \"today\" also carry the page's last-hour readouts: feels like (new posts a second), " +
     "gusts (the busiest minute, records a second), humidity (edits and deletions as a share of everything " +
     "written) and visibility (apps outside Bluesky heard), each against the hour before. \"today\" adds " +
-    "the next few hours of the forecast and today's sign-ups and moves (utc). " +
+    "the next few hours of the forecast and today's sign-ups and moves (utc). Sign-ups and moves are counted by the " +
+    "whole utc day, never by the hour: today's are so far, and what another day had by this time isn't known, so never " +
+    "compare them \"by this hour\". " +
     "\"forecast\" is the next 12 hours: records a second, condition, a likely range and the chance of gusts " +
     "and of a storm each hour, the network's sunrise and sunset (when the usual day climbs past halfway " +
     "between its quietest and busiest hours, and falls back), and how far off its forecasts have been " +
@@ -60,7 +62,9 @@ export default defineTool({
     "backfill, not the station), and from the PLC directory's log: sign-ups on Bluesky's hosts and on " +
     "independent ones (and the percent of new accounts starting outside Bluesky), own-domain handles, " +
     "accounts moving house (out of Bluesky, back in, between independent hosts: the migration wind, the " +
-    "hosts they moved to, and which host each mover left for which: `routes` is every pair, and `movedFrom` " +
+    "hosts they moved to (`movedTo` takes in moves between independent hosts too, so one host renaming itself can top " +
+    "it; for where the movers out of Bluesky went, which is what the migration page's picture lists, go by the " +
+    "`routes` from \"bluesky\"), and which host each mover left for which: `routes` is every pair, and `movedFrom` " +
     "the independent hosts accounts left with where they went; \"bluesky\" there is any of Bluesky's own " +
     "hosts, as one place; a day with `routesNotKept` is from before the station kept that: say you don't " +
     "know where its movers came from, never none), deletions, who wrote anything each day (accounts on independent hosts against " +
