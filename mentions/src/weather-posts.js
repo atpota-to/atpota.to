@@ -86,21 +86,34 @@ const CARD_MAX_BYTES = 1_000_000;   // app.bsky.embed.external#external.thumb ma
 /**
  * Which of the weather card's designs (website/server/og-weather-cards.ts) goes
  * under each kind of post: the sky for a storm, the barometer for an hour off
- * usual, the other apps for a mixed sky or a new one, the day's chart for the
- * daily report. A post Poe said is about one page of the report gets that page's
- * design instead (WEATHER_PAGES), whatever the moment was.
+ * usual, the other apps for a mixed sky or a new one, and today so far (the last
+ * hour against usual, today's quietest and busiest minute) for the daily report,
+ * which is what it reads out. The day's chart showed the last 24 hours by the hour,
+ * so a report's "low 99 at 07:47" sat over a chart whose quietest hour was 232. A
+ * post Poe said is about one page of the report gets that page's design instead
+ * (WEATHER_PAGES), whatever the moment was.
  */
-export const CARD_FOR = { daily: 'trend', storm: 'forecast', unusual: 'today', mixed: 'mix', new_app: 'mix' };
+export const CARD_FOR = { daily: 'today', storm: 'forecast', unusual: 'today', mixed: 'mix', new_app: 'mix' };
+
+/** The design a post's card is drawn in: its page's, else its kind's. */
+export function cardDesign(kind, page = null) {
+  return weatherPageOf(page) ? WEATHER_PAGES[page] : CARD_FOR[kind] ?? null;
+}
+
+/** The app a moment is about, for the mix card to show on its own: a new app's moment names it. */
+export const appOf = (kind, subject) => (kind === 'new_app' && typeof subject === 'string' && DOMAIN.test(subject) ? subject : null);
 
 /**
  * The card as of this minute, in the design for this post: its page's, or its
  * kind's. The CDN keeps the bare URL for several minutes, and a storm post under a
- * card from before the storm would say the opposite of the post.
+ * card from before the storm would say the opposite of the post. `app` is the app
+ * the post is about, which the mix card shows on its own (when the station heard it).
  */
-export function freshCardUrl(url, kind, nowMs = Date.now(), page = null) {
+export function freshCardUrl(url, kind, nowMs = Date.now(), page = null, app = null) {
   const u = new URL(url);
-  const design = weatherPageOf(page) ? WEATHER_PAGES[page] : CARD_FOR[kind];
+  const design = cardDesign(kind, page);
   if (design) u.searchParams.set('card', design);
+  if (design === 'mix' && app) u.searchParams.set('app', app);
   u.searchParams.set('v', String(Math.floor(nowMs / 60_000)));
   return u.href;
 }
@@ -438,6 +451,33 @@ export const defaultDeps = {
   lexiconDids,
 };
 
+// --- the card as the moment saw it ------------------------------------------------
+
+/**
+ * Each moment's card, drawn when the moment came (id -> { design, card, at, createdAt }), so the
+ * post shows the sky Poe was told about rather than the sky once it has written: a
+ * storm at 606 new records a second that fell back to 597 while Poe wrote went out as
+ * "stormy!" over a card saying gusty. Kept in memory: after a restart, or when Poe
+ * picks a page drawn in another design, the post fetches its card fresh, as before.
+ */
+const captured = new Map();
+
+async function captureCard(id, createdAt, moment, nowMs, deps) {
+  try {
+    const card = await deps.fetchCard(freshCardUrl(WEATHER_CARD, moment.kind, nowMs, null, appOf(moment.kind, moment.subject)));
+    // with the row's created_at, so a card is only ever its own moment's
+    captured.set(id, { design: cardDesign(moment.kind), card, at: nowMs, createdAt });
+  } catch (err) {
+    logger.warn('weather card not drawn with the moment; the post fetches its own', { id, kind: moment.kind, error: err.message });
+  }
+}
+
+/** Cards kept longer than a draft can take, and its card after it: their moments are over. */
+function forgetOldCards(nowMs) {
+  const keep = config.weather.draftTimeoutMs + CARD_WAIT_MS;
+  for (const [id, c] of captured) if (nowMs - c.at > keep) captured.delete(id);
+}
+
 // --- asking Poe -------------------------------------------------------------------
 
 async function dispatchMoment(payload, fetcher) {
@@ -457,6 +497,7 @@ async function dispatchMoment(payload, fetcher) {
  * post whose fate is unknown is looked up under its record key.
  */
 async function settle(nowMs, deps) {
+  forgetOldCards(nowMs);
   db.prepare(`UPDATE weather_post SET status = 'expired', updated_at = ? WHERE status = 'dispatched' AND created_at < ?`)
     .run(nowIso(), new Date(nowMs - config.weather.draftTimeoutMs).toISOString());
   // A minute old, so the callback's own run of a fresh draft isn't raced.
@@ -516,9 +557,12 @@ export async function weatherTick({ nowMs = Date.now(), deps = defaultDeps } = {
   const id = Number(db.prepare(`INSERT INTO weather_post (kind, subject, facts, tag_accounts, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'dispatched', ?, ?)`).run(moment.kind, moment.subject, JSON.stringify(facts),
     accounts.length ? JSON.stringify(accounts) : null, at, at).lastInsertRowid);
+  // the card first, as the sky is now, before Poe takes its few minutes to write
+  await captureCard(id, at, moment, nowMs, deps);
   try {
     await dispatchMoment({ momentId: `wx-${id}`, kind: moment.kind, facts, recent: recentPosts() }, deps.fetcher);
   } catch (err) {
+    captured.delete(id);
     finish(id, 'failed', { detail: err.message }, 'dispatched');
     logger.error('weather moment not dispatched', { id, kind: moment.kind, error: err.message });
     return { skipped: 'dispatch_failed' };
@@ -617,12 +661,17 @@ export async function handleWeatherDraft(id, deps = defaultDeps) {
     return;
   }
 
-  // The card before anything is claimed: without it the draft stays drafted, and the
+  // The card before anything is claimed: the one drawn with the moment when the post
+  // keeps its design, else a fresh one. Without it the draft stays drafted, and the
   // next tick (settle) tries again, until CARD_WAIT_MS has passed since it came in.
   let thumb;
   try {
-    const card = await deps.fetchCard(freshCardUrl(WEATHER_CARD, row.kind, Date.now(), page));
+    const kept = captured.get(id);
+    const card = kept?.createdAt === row.created_at && kept.design === cardDesign(row.kind, page)
+      ? kept.card
+      : await deps.fetchCard(freshCardUrl(WEATHER_CARD, row.kind, Date.now(), page, appOf(row.kind, row.subject)));
     thumb = await deps.uploadBlob(card.bytes, card.mimeType);
+    captured.delete(id);
   } catch (err) {
     if (Date.now() - Date.parse(row.updated_at) < CARD_WAIT_MS) {
       logger.warn('weather card not ready; the post waits for it', { ...log, error: err.message });

@@ -9,7 +9,8 @@
  *   trend     the last 24 hours of new records a second as a chart, with the busiest and
  *             quietest hours marked
  *   mix       who else is in the sky: the diversity index on its scale, and the busiest apps
- *             outside Bluesky over the last 24 hours
+ *             outside Bluesky over the last 24 hours; with `app`, that app on its own above
+ *             them (a new one, or one of the day's), so a post about one app shows it
  *   today     the almanac: the last hour against usual on the barometer, today's range with
  *             the last hour on it, and today's totals
  *   hosts     where the atmosphere lives: the share of accounts on independent pds hosts,
@@ -76,6 +77,12 @@ export interface CardData {
   almanac: AlmanacData | null;
   /** The last hour's accounts (/api/weather-history?range=hour), for the default card's headline, as the page's header has it. */
   hour?: HourHistory | null;
+  /**
+   * The app a post is about (`?app=`, a domain), for the mix card to show on its own. Drawn
+   * only if the station heard it over the last 24 hours (focusOf), so the address can't
+   * put a name of its own on an atpota.to card.
+   */
+  focus?: string | null;
 }
 
 export interface HourHistory {
@@ -694,17 +701,60 @@ function scale(index: number, width: number): El {
   );
 }
 
+export interface Focus {
+  domain: string;
+  /** New records over the last 24 hours, or since it was first heard. */
+  records: number;
+  accounts: number | null;
+  /** When the station first heard it, for an app new in the last 24 hours. */
+  firstSeen: string | null;
+}
+
+/**
+ * The app `?app=` names, as the station heard it over the last 24 hours: one of the almanac's
+ * new apps, else one of the day's busiest. Null for an app it didn't hear, whatever the address says.
+ */
+export function focusOf(d: CardData): Focus | null {
+  if (!d.focus) return null;
+  const fresh = d.almanac?.newApps?.apps.find((a) => a.domain === d.focus && a.creates > 0);
+  if (fresh) return { domain: fresh.domain, records: fresh.creates, accounts: fresh.accounts ?? null, firstSeen: fresh.firstSeen };
+  const known = d.day?.apps?.find((a) => a.domain === d.focus && a.creates > 0);
+  if (known) return { domain: known.domain, records: known.creates, accounts: known.accounts ?? null, firstSeen: null };
+  return null;
+}
+
+/** "first heard 13:22 utc", "first heard 18:04 utc yesterday". */
+function firstHeard(iso: string, at: number): string {
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return `first heard ${utcClock(iso)} utc${day(Date.parse(iso)) === day(at) ? '' : ' yesterday'}`;
+}
+
+/** The app a post is about, on its own above the busiest: its name, and what the station heard from it. */
+function focusBlock(f: Focus, at: number): El {
+  const what = [`${int(f.records)} new ${f.records === 1 ? 'record' : 'records'}`, f.accounts ? `${int(f.accounts)} ${f.accounts === 1 ? 'account' : 'accounts'}` : null].filter(Boolean).join(' · ');
+  return h(
+    { flexDirection: 'column', padding: '22px 26px', borderRadius: 24, background: C.paper },
+    h({ fontSize: 20, fontWeight: 700, color: C.leaf }, f.firstSeen ? `new · ${firstHeard(f.firstSeen, at)}` : 'the last 24 hours'),
+    h({ fontSize: 34, fontWeight: 700, marginTop: 6, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: 400 }, f.domain),
+    h({ fontSize: 22, color: C.soft, marginTop: 6 }, what),
+  );
+}
+
 function mixCard(d: CardData, art: Art): El | null {
   const mix = mixOf(d);
   if (!mix) return null;
-  const daily = (d.day?.apps ?? []).filter((a) => a.creates > 0).slice(0, 5);
-  const live = (d.now?.apps ?? []).filter((a) => a.count > 0).slice(0, 5);
-  const apps = daily.length >= 3 ? daily.map((a) => ({ domain: a.domain, n: a.creates })) : live.map((a) => ({ domain: a.domain, n: a.count }));
+  const focus = focusOf(d);
+  const daily = (d.day?.apps ?? []).filter((a) => a.creates > 0);
+  const live = (d.now?.apps ?? []).filter((a) => a.count > 0);
+  // with an app on its own above them, room for three of the busiest, and never that app again
+  const apps = (daily.length >= 3 ? daily.map((a) => ({ domain: a.domain, n: a.creates })) : live.map((a) => ({ domain: a.domain, n: a.count })))
+    .filter((a) => a.domain !== focus?.domain)
+    .slice(0, focus ? 3 : 5);
   const appsSpan = daily.length >= 3 ? 'the last 24 hours' : 'the last minute';
   const top = Math.max(1, ...apps.map((a) => a.n));
   // the footer's time says when for the station's minute; an older reading says which stretch
   const who = `${mix.share.toFixed(2)}% of active accounts wrote with other apps${mix.span ? ` ${mix.span}` : ''}`;
-  const left = apps.length ? 600 : 1144;
+  const left = apps.length || focus ? 600 : 1144;
   return page(
     tile(
       { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
@@ -719,13 +769,14 @@ function mixCard(d: CardData, art: Art): El | null {
       h({ fontSize: 22, color: C.soft, marginTop: 18 }, who),
       h({ marginTop: 18 }, footer(d)),
     ),
-    apps.length
+    apps.length || focus
       ? tile(
           { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
-          h({ fontSize: 30, fontWeight: 700, color: C.leaf }, 'busiest elsewhere'),
-          h({ fontSize: 22, color: C.soft, marginTop: 4 }, `new records, ${appsSpan}`),
+          focus ? focusBlock(focus, d.at) : null,
+          apps.length ? h({ fontSize: 30, fontWeight: 700, color: C.leaf, marginTop: focus ? 'auto' : 0 }, 'busiest elsewhere') : null,
+          apps.length ? h({ fontSize: 22, color: C.soft, marginTop: 4 }, `new records, ${appsSpan}`) : null,
           h(
-            { flexDirection: 'column', gap: 18, marginTop: 'auto' },
+            { flexDirection: 'column', gap: 18, marginTop: focus ? 18 : 'auto' },
             ...apps.map((a) =>
               h(
                 { flexDirection: 'column' },

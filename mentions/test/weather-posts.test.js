@@ -8,7 +8,7 @@ import {
   postGate, weatherPageUrl,
 } from '../src/gates/weather.js';
 import {
-  parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft, freshCardUrl, CARD_WAIT_MS,
+  parseReading, parseAlmanac, factsFor, weatherTick, receiveWeatherDraft, handleWeatherDraft, freshCardUrl, cardDesign, appOf, CARD_WAIT_MS,
   parseHistoryApps, appsNamed, appAccountsFor,
 } from '../src/weather-posts.js';
 import { deny } from '../src/db.js';
@@ -327,11 +327,11 @@ test('a due daily report goes to Poe, comes back as a post, and is posted with t
   assert.equal(record.embed.external.title, 'the atmosphere weather report · atpotato');
   assert.equal(record.embed.external.thumb.ref.$link, 'bafythumb');
   // The weather card by its own address, never the page's og:image (the home page's card,
-  // mid-deploy), as of this minute and in the daily report's design.
+  // mid-deploy), drawn once, with the moment, in the daily report's design.
   assert.equal(w.cards.length, 1);
   const card = new URL(w.cards[0]);
   assert.equal(`${card.origin}${card.pathname}`, 'https://atpota.to/og/weather.png');
-  assert.equal(card.searchParams.get('card'), 'trend');
+  assert.equal(card.searchParams.get('card'), 'today');
   assert.match(card.searchParams.get('v'), /^\d+$/);
   assert.deepEqual(w.uploads, ['image/png']);
   const stored = db.prepare('SELECT * FROM weather_post WHERE id = ?').get(asked.id);
@@ -455,8 +455,54 @@ test('each kind of post gets its own card design, fresh to the minute', () => {
   // A page Poe named wins over the kind; one it doesn't know is no page at all.
   assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, 'migration')).searchParams.get('card'), 'migration');
   assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'storm', at, 'hosts')).searchParams.get('card'), 'hosts');
-  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, 'constructor')).searchParams.get('card'), 'trend');
-  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, null)).searchParams.get('card'), 'trend');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, 'constructor')).searchParams.get('card'), 'today');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'daily', at, null)).searchParams.get('card'), 'today');
+  // The app a post is about goes to the mix card, which shows it on its own; no other design takes one.
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'new_app', at, null, 'songnario.app')).searchParams.get('app'), 'songnario.app');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'new_app', at, 'diversity', 'songnario.app')).searchParams.get('app'), 'songnario.app');
+  assert.equal(new URL(freshCardUrl('https://atpota.to/og/weather.png', 'new_app', at, 'migration', 'songnario.app')).searchParams.get('app'), null);
+  assert.equal(cardDesign('daily'), 'today');
+  assert.equal(cardDesign('mixed', 'diversity'), 'mix');
+  assert.equal(appOf('new_app', 'songnario.app'), 'songnario.app');
+  assert.equal(appOf('new_app', 'not a domain'), null);
+  assert.equal(appOf('storm', '2026-10-21T17'), null);
+});
+
+test('a post goes out under the card drawn when its moment came, not the sky once Poe has written', async () => {
+  clear();
+  // 2026-11-04: a storm at 606 a second, under 600 again by the time the post went out
+  const w = fakeWorld({ atmosphereBody: atmosphere({ condition: 'stormy', records: { perSecond: 606, bluesky: 604, elsewhere: 2 } }) });
+  const drawn = [];
+  w.deps.fetchCard = async (url) => {
+    w.cards.push(url);
+    drawn.push(`card ${drawn.length + 1}`);
+    return { bytes: Buffer.from(drawn.at(-1)), mimeType: 'image/png' };
+  };
+  const uploaded = [];
+  const upload = w.deps.uploadBlob;
+  w.deps.uploadBlob = async (bytes, mimeType) => { uploaded.push(bytes.toString()); return upload(bytes, mimeType); };
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  assert.equal(asked.kind, 'storm');
+  assert.equal(new URL(w.cards[0]).searchParams.get('card'), 'forecast');
+  receiveWeatherDraft({ key: 'drawn:1', momentId: `wx-${asked.id}`, text: 'storm! about 606 new records a second' });
+  await handleWeatherDraft(asked.id, w.deps);
+  assert.equal(w.posts.length, 1);
+  assert.deepEqual(uploaded, ['card 1'], 'the card from the moment, not a second one');
+  assert.equal(w.cards.length, 1);
+});
+
+test("a new app's post shows that app on the mix card", async () => {
+  clear();
+  const w = fakeWorld({ almanacBodyValue: almanacBody() });
+  const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  assert.equal(asked.kind, 'new_app');
+  const card = new URL(w.cards[0]);
+  assert.equal(card.searchParams.get('card'), 'mix');
+  assert.equal(card.searchParams.get('app'), 'songnario.app');
+  receiveWeatherDraft({ key: 'app:1', momentId: `wx-${asked.id}`, text: '41 accounts started writing songnario.app records today', page: 'diversity' });
+  await handleWeatherDraft(asked.id, w.deps);
+  assert.equal(w.posts.length, 1);
+  assert.equal(w.cards.length, 1, 'the diversity page is drawn as the mix card too, so the moment\'s card stands');
 });
 
 test("the report's pages and their cards match the website's", (t) => {
@@ -486,7 +532,7 @@ test('a post Poe says is about one page of the report links that page, with its 
   const fetchPage = w.deps.fetchPage;
   w.deps.fetchPage = async (url) => { pages.push(url); return fetchPage(url); };
   const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
-  assert.equal(asked.kind, 'daily', 'a daily report, whose card would be the day\'s chart');
+  assert.equal(asked.kind, 'daily', 'a daily report, whose card would be today so far');
   const text = 'twenty-five accounts packed up and left bluesky\'s hosts today and not one came back';
   assert.equal(receiveWeatherDraft({ key: 'page:1', momentId: `wx-${asked.id}`, text, links: [], page: 'migration' }).status, 200);
   await handleWeatherDraft(asked.id, w.deps);
@@ -497,7 +543,8 @@ test('a post Poe says is about one page of the report links that page, with its 
   assert.equal(external.title, 'pds migration · the atmosphere weather report · atpotato');
   assert.equal(external.description, 'accounts moving house in the atmosphere');
   assert.deepEqual(pages, ['https://atpota.to/weather/migration']);
-  assert.equal(new URL(w.cards[0]).searchParams.get('card'), 'migration');
+  // the card drawn with the moment was today's; the page's is drawn in its own design, fresh
+  assert.deepEqual(w.cards.map((u) => new URL(u).searchParams.get('card')), ['today', 'migration']);
   assert.equal(db.prepare('SELECT page FROM weather_post WHERE id = ?').get(asked.id).page, 'migration');
 });
 
@@ -512,7 +559,7 @@ test("a page the droplet doesn't know leaves the card on the whole report; a mal
   await handleWeatherDraft(asked.id, w.deps);
   assert.equal(w.posts.length, 1);
   assert.equal(w.posts[0].record.embed.external.uri, WEATHER_PAGE);
-  assert.equal(new URL(w.cards[0]).searchParams.get('card'), 'trend');
+  assert.equal(new URL(w.cards[0]).searchParams.get('card'), 'today');
   assert.equal(db.prepare('SELECT page FROM weather_post WHERE id = ?').get(asked.id).page, null);
 });
 
@@ -559,9 +606,10 @@ test('a weather draft comes back on the reply callback URL, told apart by its mo
 test('without the weather card a post waits for it, a tick at a time, and is dropped after CARD_WAIT_MS', async () => {
   clear();
   const w = fakeWorld();
+  w.cardDown = true;   // the website mid-deploy, from the moment on
   const { asked } = await weatherTick({ nowMs: NOW, deps: w.deps });
+  assert.ok(asked, 'Poe is asked all the same');
   receiveWeatherDraft({ key: 'card:1', momentId: `wx-${asked.id}`, text: 'breezy skies today' });
-  w.cardDown = true;   // the website mid-deploy
   await handleWeatherDraft(asked.id, w.deps);
   assert.equal(w.posts.length, 0, 'never posted without the card');
   assert.equal(w.uploads.length, 0);
@@ -578,6 +626,7 @@ test('without the weather card a post waits for it, a tick at a time, and is dro
   // A card that never comes: dropped once the draft is CARD_WAIT_MS old, not posted bare.
   clear();
   const late = fakeWorld();
+  late.cardDown = true;
   const again = (await weatherTick({ nowMs: NOW, deps: late.deps })).asked;
   receiveWeatherDraft({ key: 'card:2', momentId: `wx-${again.id}`, text: 'breezy skies today' });
   db.prepare('UPDATE weather_post SET updated_at = ? WHERE id = ?').run(new Date(Date.now() - CARD_WAIT_MS - 60_000).toISOString(), again.id);

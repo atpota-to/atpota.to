@@ -504,6 +504,31 @@ describe('og weather: the function', () => {
     expect(drawn[0]).toContain('who else is in the sky');
   });
 
+  it("puts the app a post is about on the mix card, only when the station heard it", async () => {
+    // a new app's moment, as the droplet asks for it (mentions/src/weather-posts.js freshCardUrl)
+    const fresh = { domain: 'songnario.app', firstSeen: '2026-10-21T11:50:00.000Z', creates: 1500, collections: ['app.songnario.pack'], accounts: 60 };
+    const withNew = () => data({ almanac: { ...data().almanac!, newApps: { ...data().almanac!.newApps!, apps: [fresh] } } });
+    const drawn: string[][] = [];
+    const h = createOgWeatherHandlers({ read: async () => withNew(), render: async (card) => (drawn.push(texts(card)), PNG), log: () => undefined });
+    await get(h, '?card=mix&app=songnario.app');
+    expect(drawn[0]).toEqual(expect.arrayContaining(['songnario.app', 'new · first heard 11:50 utc', '1,500 new records · 60 accounts', 'busiest elsewhere']));
+    // one of the day's apps, with three of the busiest under it and never itself again
+    await get(h, '?card=mix&app=teal.fm');
+    expect(drawn[1]).toEqual(expect.arrayContaining(['teal.fm', 'the last 24 hours', '15,527 new records', 'new records, the last 24 hours', 'rocksky.app', 'standard.site']));
+    expect(drawn[1].filter((x) => x === 'teal.fm')).toHaveLength(1);
+    // an app the station didn't hear, or no domain at all, draws the card as it always is
+    await get(h, '?card=mix&app=never-heard.example');
+    await get(h, `?card=mix&app=${encodeURIComponent('<b>hi</b>')}`);
+    await get(h, '?card=mix');
+    expect(drawn[2]).toEqual(drawn[4]);
+    expect(drawn[3]).toEqual(drawn[4]);
+    expect(drawn[4]).not.toContain('never-heard.example');
+    // an app new since yesterday says so
+    const late = { ...fresh, firstSeen: '2026-10-20T18:04:00.000Z' };
+    const card = drawCard('mix', { ...withNew(), almanac: { ...withNew().almanac!, newApps: { ...withNew().almanac!.newApps!, apps: [late] } }, focus: 'songnario.app' }, await cardArt());
+    expect(texts(card)).toContain('new · first heard 18:04 utc yesterday');
+  });
+
   it('draws the default card for no card or one it does not know', async () => {
     const drawn: string[] = [];
     const h = createOgWeatherHandlers({ read: async () => data(), render: async (card) => (drawn.push(texts(card).join(' ')), PNG), log: () => undefined });

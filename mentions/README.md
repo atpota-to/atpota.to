@@ -988,12 +988,19 @@ it is posted with an `app.bsky.embed.external` card for the page Poe named
 page's title and description, and the caps are checked again first. The card's image
 is always the live weather card,
 `https://atpota.to/og/weather.png` (`WEATHER_CARD`), fetched by that address rather
-than from the page's og:image, fresh to the minute and in the design that suits the
+than from the page's og:image, in the design that suits the
 post: the named page's own (`WEATHER_PAGES`), or else the kind's (`CARD_FOR`): the
-sky for a storm, the barometer for an hour off usual, the other apps for a mixed sky
-or a new one, the day's chart for the daily report. Until Poe could name a page, a
+sky for a storm, the barometer and today so far for an hour off usual and for the
+daily report, the other apps for a mixed sky or a new one (a new app's card shows
+that app on its own, `&app=`). Until Poe could name a page, a
 daily report about accounts moving house (2026-10-30) went out under the whole
-report and the day's chart. A redirect
+report and the day's chart, and until 2026-11-17 a daily report's "low 99 at 07:47"
+went out over the last 24 hours by the hour, whose quietest hour was 232. The card is
+drawn when the moment comes, before Poe is asked, and that one goes under the post
+unless Poe names a page drawn in another design: a storm at 606 new records a second
+(2026-11-04) had fallen back to 597 by the time Poe had written, and went out as
+"stormy!" over a card saying gusty. The drawn card is kept in memory, so after a
+restart the post fetches its own, fresh to the minute. A redirect
 (the website's fallback to the home page's card) counts as no card. Without the card
 a post isn't posted bare: the draft waits, and each tick tries again, for up to 30
 minutes (`CARD_WAIT_MS`), then it is dropped as `rejected` (`no_card`). The first

@@ -268,6 +268,14 @@ mentions the weather after is a migration post. A post about the sky as a whole,
 or a little of everything, needs no page: the card links the whole report. Never
 mention the card or the page in the post itself.
 
+The card's picture has numbers of its own, and people read the two together. The
+moment tells you what the picture under it shows, and `choose_weather_page` says
+what each page's shows. It's drawn as the moment was, not when you finish writing.
+Where your post gives a number the picture shows too, make them agree. When yours
+comes from another window or measure (today against the picture's week, a minute
+against its hour, accounts against its records), say which, so the two don't read
+as a contradiction: "so far today", "this minute", "by accounts".
+
 ## Examples
 
 These show how different posts can be from each other. Don't copy their

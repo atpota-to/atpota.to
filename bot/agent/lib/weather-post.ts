@@ -41,10 +41,17 @@ export type WeatherMoment = z.infer<typeof WeatherMoment>;
  * card (mentions/src/gates/weather.js WEATHER_PAGES); otherwise the card is the whole report.
  */
 export const WEATHER_PAGES = {
-  diversity: "the diversity index, bluesky against everyone else, the busiest apps writing outside bluesky, and new ones",
-  trends: "new records and active accounts over the last hour, day, week or month, and the last hour's readouts",
-  today: "today's high and low against usual, apps new today, the forecast for the next 12 hours, and the busiest times of the week",
-  hosts: "where accounts live: independent pds hosts against bluesky's own, the hosting diversity, the biggest, newest and fastest growing hosts",
+  diversity: "the diversity index, bluesky against everyone else, the busiest apps writing outside bluesky, and new ones. " +
+    "Its picture is the diversity index and the five apps outside bluesky with the most new records over the last 24 hours " +
+    "(by records, not accounts); for a new app's moment, that app on its own above three of them",
+  trends: "new records and active accounts over the last hour, day, week or month, and the last hour's readouts. " +
+    "Its picture is the last 24 hours of new records a second, hour by hour, with the busiest and quietest hour and the rate right now",
+  today: "today's high and low against usual, apps new today, the forecast for the next 12 hours, and the busiest times of the week. " +
+    "Its picture is the last hour against usual, today's quietest and busiest minute since midnight utc, today's new records and " +
+    "the share from other apps, and how many apps were new in the last 24 hours",
+  hosts: "where accounts live: independent pds hosts against bluesky's own, the hosting diversity, the biggest, newest and fastest growing hosts. " +
+    "Its picture is the share of accounts on independent hosts, the hosting diversity, and the five biggest independent hosts " +
+    "by the accounts they hold, not the fastest growing",
   migration: "accounts moving house (out of bluesky's hosts, back in, or host to host, and where they went), sign-ups and air quality. " +
     "Its picture is the last 7 days: each day's moves out of bluesky (today's so far), the week's moves back in and host to host, " +
     "and where the week's movers out of bluesky went, so a post about today's moves says they're today's",
@@ -65,6 +72,19 @@ export function chosenWeatherPage(result: unknown): WeatherPage | null {
   if (!isRecord(out) || out.chosen !== true || typeof out.page !== "string") return null;
   return Object.hasOwn(WEATHER_PAGES, out.page) ? out.page as WeatherPage : null;
 }
+
+/**
+ * The card under a post about each kind of moment, when Poe names no page (the droplet's
+ * mentions/src/weather-posts.js CARD_FOR). It's drawn as the moment was, so Poe can make the
+ * post's numbers agree with it.
+ */
+const CARD_SHOWS: Record<WeatherMomentKind, string> = {
+  daily: "today so far (utc): the last hour against usual, today's quietest and busiest minute, today's new records and the share from other apps, and how many apps were new in the last 24 hours",
+  storm: "active accounts over the last hour, the condition as the storm was when it came, and the last hour against usual",
+  unusual: "today so far (utc): the last hour against usual, today's quietest and busiest minute, today's new records and the share from other apps, and how many apps were new in the last 24 hours",
+  mixed: "the diversity index as it was when the moment came, and the five apps outside bluesky with the most new records over the last 24 hours",
+  new_app: "the new app on its own (when it was first heard, its records and accounts), the diversity index, and three of the apps outside bluesky with the most new records over the last 24 hours",
+};
 
 const WHY: Record<WeatherMomentKind, string> = {
   daily: "it's time for today's weather report",
@@ -102,8 +122,10 @@ export function buildWeatherPrompt(moment: WeatherMoment): string {
       "open, list or end the way your recent posts did.",
     "",
     `Write the post, or answer exactly "skip" if it isn't worth one. The card under it links ${WEATHER_PAGE}, ` +
-      `the whole report; if the post is about one part of it, call ${CHOOSE_WEATHER_PAGE} first so the card ` +
-      "links that page and shows its picture.",
+      `the whole report, and its picture shows ${CARD_SHOWS[moment.kind]}. If the post is about one part of the ` +
+      `report, call ${CHOOSE_WEATHER_PAGE} first so the card links that page and shows its picture instead. ` +
+      "Where the post gives a number the picture shows too, they should agree; when yours is from another window " +
+      "or measure (today against its week, a minute against an hour, accounts against records), say which.",
     ...(tagging
       ? ["", "`tagging.accounts` are apps' own accounts, checked by the station. When the post names one of those " +
         "apps, you may write it as that @handle to tag it, up to `tagging.upTo` of them, if its profile is plainly " +

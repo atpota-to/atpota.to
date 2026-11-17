@@ -8,6 +8,8 @@
  *   GET /og/weather.png?card=<name>    forecast | trend | mix | today | hosts | migration
  *                                      (server/og-weather-cards.ts);
  *                                      anything else is the default card, never an error
+ *   &app=<domain>                      the app a post is about, which the mix card shows on
+ *                                      its own when the station heard it (focusOf)
  *   ->  image/png, 1200x630, cached at the CDN for CACHE_OK
  *
  * The numbers are read here, from the same places the page reads them, through the same
@@ -49,6 +51,7 @@ import {
 } from './og-weather-cards.js';
 import { createAlmanacHandlers } from './weather-almanac.js';
 import { createHistoryHandlers } from './weather-history.js';
+import { DOMAIN_RE } from './supabase-public.js';
 
 export const CACHE_OK = 'public, max-age=0, s-maxage=300, stale-while-revalidate=600';
 /** The quiet card: try again soon. */
@@ -212,8 +215,12 @@ export function createOgWeatherHandlers(deps: OgWeatherDeps = {}) {
     });
 
   async function GET(request: Request): Promise<Response> {
-    const asked = new URL(request.url).searchParams.get('card');
+    const params = new URL(request.url).searchParams;
+    const asked = params.get('card');
     const name = isCard(asked) ? asked : DEFAULT_CARD;
+    // the app a post is about (mentions/src/weather-posts.js freshCardUrl): a domain, drawn only if the station heard it
+    const app = params.get('app');
+    const focus = app && DOMAIN_RE.test(app) ? app : null;
     // A HEAD only wants to know there's an image here; drawing one is the expensive part.
     // Never cached, so an empty answer can't stand in for a card.
     if (request.method === 'HEAD') return png(request, null, 'no-store');
@@ -224,6 +231,7 @@ export function createOgWeatherHandlers(deps: OgWeatherDeps = {}) {
       log({ event: 'og_read_error', error: (error as Error)?.message ?? 'Error' });
       data = { at: (deps.now ?? Date.now)(), now: null, day: null, almanac: null };
     }
+    if (focus) data = { ...data, focus };
     try {
       const { card, quiet } = await cardFor(name, data);
       try {
