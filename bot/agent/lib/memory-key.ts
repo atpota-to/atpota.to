@@ -45,8 +45,16 @@ export function memoryKey(namespace: string, scope: string | readonly string[]):
   return digest("memscope1_", composite);
 }
 
+/**
+ * The key of a slot's document for one scope, outside any turn. Every slot's
+ * namespace is pinned to its name (lib/memory-access.ts pinnedNamespace), so
+ * this is the key a turn would use.
+ */
+export function slotKey(slot: string, scope: string | readonly string[]): string {
+  return memoryKey(defaultNamespace({ appRoot: process.cwd(), node: ROOT_NODE, slot }), scope);
+}
+
 /** The key of the document holding this DID's notes. Only for a DID a trusted caller asserted. */
 export function personNotesKey(did: string): string {
-  const namespace = defaultNamespace({ appRoot: process.cwd(), node: ROOT_NODE, slot: PERSON_SLOT });
-  return memoryKey(namespace, personScope(did));
+  return slotKey(PERSON_SLOT, personScope(did));
 }

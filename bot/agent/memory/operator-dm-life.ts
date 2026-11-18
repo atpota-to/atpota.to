@@ -1,30 +1,26 @@
 import { defineMemory, defineMemoryProvider } from "eve/memory";
-import { isChannelKind } from "../lib/channel-kind";
-import { JOURNAL_MAX_CHARACTERS, privateFileMemory } from "../lib/published-memory";
+import { journalMemory } from "../lib/journal";
+import { pinnedNamespace, recalls, writes } from "../lib/memory-access";
 
-const base = privateFileMemory({ maxCharacters: JOURNAL_MAX_CHARACTERS });
+const base = journalMemory();
 
 // DM-only journal. It cannot be recalled in a public reply or published to the PDS.
+// Who may read and write it: lib/memory-access.ts.
 export default defineMemory({
   description:
     "Private journal of meaningful moments, interests, and first-hand " +
     "observations from operator DMs. Save a note whenever something worth " +
     "revisiting happened, not on every greeting. Never save transcripts, " +
     "identities, other people's facts, secrets, or operational instructions.",
+  namespace: pinnedNamespace("operator-dm-life"),
   scope(ctx) {
-    return isChannelKind(ctx.channel.kind, "operator-dm") &&
-      ctx.session.auth.current?.authenticator === "atpotato-droplet-dm"
-      ? "poe-operator-dm-life" : null;
+    return recalls("operator-dm-life", ctx) ? "poe-operator-dm-life" : null;
   },
   visibility: "scope",
   provider: defineMemoryProvider({
     recall: base.recall,
     async tools(ctx) {
-      const caller = ctx.session.auth.current;
-      if (!isChannelKind(ctx.channel.kind, "operator-dm") ||
-          caller?.authenticator !== "atpotato-droplet-dm" ||
-          caller.principalId !== caller.attributes?.operatorDid) return null;
-      return (await base.tools?.(ctx)) ?? null;
+      return writes("operator-dm-life", ctx) ? (await base.tools?.(ctx)) ?? null : null;
     },
   }),
 });
