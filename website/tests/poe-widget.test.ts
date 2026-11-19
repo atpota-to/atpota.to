@@ -96,8 +96,10 @@ const bubbles = () => Array.from(document.querySelectorAll<HTMLElement>('.poe-ms
 
 let widget: PoeWidget;
 
-function mount(fetchImpl?: typeof fetch, opts: { nudgeDelayMs?: number } = {}) {
-  widget = mountPoe({ fetchImpl, ...opts })!;
+// The nudge's on-page minimum (20s) is off unless a test asks for it, so the idle-delay
+// tests stay short; the 'nudge' tests below cover it.
+function mount(fetchImpl?: typeof fetch, opts: { nudgeDelayMs?: number; nudgeMinVisibleMs?: number } = {}) {
+  widget = mountPoe({ fetchImpl, nudgeMinVisibleMs: 0, ...opts })!;
   return widget;
 }
 
@@ -897,6 +899,49 @@ describe('nudge', () => {
     mount(undefined, { nudgeDelayMs: 4000 });
     vi.advanceTimersByTime(10_000);
     expect($('.poe-nudge').hidden).toBe(true);
+  });
+
+  it('waits until the page has been open 20 seconds, however quiet the reader is', () => {
+    vi.useFakeTimers();
+    mountPoe({ nudgeDelayMs: 4000 }); // the real minimum, not the helper's 0
+    const nudge = $('.poe-nudge');
+    vi.advanceTimersByTime(19_900);
+    expect(nudge.hidden).toBe(true);
+    vi.advanceTimersByTime(200);
+    expect(nudge.hidden).toBe(false);
+  });
+
+  it('after 20 seconds still waits for a quiet spell', () => {
+    vi.useFakeTimers();
+    mountPoe({ nudgeDelayMs: 4000 });
+    vi.advanceTimersByTime(18_000);
+    window.dispatchEvent(new Event('wheel'));
+    vi.advanceTimersByTime(3_900);
+    expect($('.poe-nudge').hidden).toBe(true);
+    vi.advanceTimersByTime(200);
+    expect($('.poe-nudge').hidden).toBe(false);
+  });
+
+  it('does not count time in a hidden tab toward the 20 seconds', () => {
+    vi.useFakeTimers();
+    const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    mountPoe({ nudgeDelayMs: 4000 });
+    vi.advanceTimersByTime(60_000);
+    expect($('.poe-nudge').hidden).toBe(true);
+    state.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(10_000);
+    state.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(60_000);
+    expect($('.poe-nudge').hidden).toBe(true);
+    state.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(9_900);
+    expect($('.poe-nudge').hidden).toBe(true);
+    vi.advanceTimersByTime(200);
+    expect($('.poe-nudge').hidden).toBe(false);
+    state.mockRestore();
   });
 
   it('keeps a trailing kaomoji in the nudge out of the screen reader', () => {

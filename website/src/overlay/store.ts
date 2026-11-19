@@ -1,6 +1,6 @@
 /**
- * The streamer's overlay settings in their own repo: to.atpota.poe.overlay at "self"
- * (config.ts), and each screen's at to.atpota.poe.scene/<screen id> (scenes.ts). The overlay
+ * The streamer's overlay settings in their own repo: to.atpota.poe.overlay, a record per
+ * layout ("self" the main one, config.ts), and each screen's at to.atpota.poe.scene/<screen id> (scenes.ts). The overlay
  * reads them without credentials (repos are public), from the PDS the streamer's DID
  * document names; the setup page writes them with the signed-in session. Reading never
  * throws for a record that isn't there: that's a streamer with the defaults.
@@ -8,7 +8,7 @@
 
 import type { Session } from '../blog/auth';
 import { deleteRecord, putRecord } from '../blog/repo';
-import { fromRecord, OVERLAY_NSID, OVERLAY_RKEY, toRecord, type OverlayConfig } from './config';
+import { fromRecord, isLayoutId, layoutNameOf, MAX_LAYOUTS, OVERLAY_NSID, OVERLAY_RKEY, toRecord, type OverlayConfig } from './config';
 import { fromSceneRecord, isSceneKind, isScreenId, MAX_SCREENS, SCENE_NSID, toSceneRecord, type Scene, type SceneKind } from './scenes';
 
 export const PLC = 'https://plc.directory';
@@ -59,7 +59,7 @@ const recordQuery = (did: string, collection: string, rkey: string) => new URLSe
 
 /** The PDS a DID's document names, or null. */
 const pdsCache = new Map<string, Promise<string | null>>();
-function pdsFor(did: string, fetchImpl: typeof fetch): Promise<string | null> {
+export function pdsFor(did: string, fetchImpl: typeof fetch): Promise<string | null> {
   let pds = pdsCache.get(did);
   if (!pds) {
     const docUrl = didDocumentUrl(did);
@@ -83,6 +83,49 @@ async function readPublic(did: string, collection: string, rkey: string, fetchIm
   }
 }
 
+export interface PublicRecord {
+  uri: string;
+  rkey: string;
+  value: Record<string, unknown>;
+}
+
+/**
+ * Anyone's records in a collection, newest first, read publicly from their PDS: up to
+ * `max`, a page of at most 100 at a time, stopping early when `enough` says so. Undefined
+ * when they couldn't be read (a collection nobody has written is an empty list).
+ */
+export async function listPublic(did: string, collection: string, max: number, fetchImpl: typeof fetch = fetch, enough?: (got: PublicRecord[]) => boolean): Promise<PublicRecord[] | undefined> {
+  try {
+    const pds = await pdsFor(did, fetchImpl);
+    if (!pds) return undefined;
+    const out: PublicRecord[] = [];
+    let cursor: string | undefined;
+    while (out.length < max) {
+      const q = new URLSearchParams({ repo: did, collection, limit: String(Math.min(100, max - out.length)) });
+      if (cursor) q.set('cursor', cursor);
+      const res = await json(fetchImpl, `${pds}/xrpc/com.atproto.repo.listRecords?${q}`);
+      if (res.status !== 200 || !obj(res.body) || !Array.isArray(res.body.records)) return out.length ? out : undefined;
+      for (const r of res.body.records) {
+        if (!obj(r) || typeof r.uri !== 'string' || !obj(r.value)) continue;
+        out.push({ uri: r.uri, rkey: r.uri.slice(r.uri.lastIndexOf('/') + 1), value: r.value });
+      }
+      const nextCursor = typeof res.body.cursor === 'string' ? res.body.cursor : undefined;
+      // a PDS that hands back the same cursor would go round forever
+      if (!nextCursor || nextCursor === cursor || res.body.records.length === 0 || enough?.(out)) break;
+      cursor = nextCursor;
+    }
+    return out.slice(0, max);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Anyone's record at a key, read publicly: its value, null for none, undefined when it couldn't be read. */
+export async function getPublic(did: string, collection: string, rkey: string, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown> | null | undefined> {
+  const r = await readPublic(did, collection, rkey, fetchImpl);
+  return r ? (r.value as Record<string, unknown>) : r;
+}
+
 /** The signed-in streamer's own record, from their PDS. */
 async function readOwn(session: Session, collection: string, rkey: string, fetchImpl: typeof fetch) {
   try {
@@ -101,9 +144,9 @@ export interface SavedScene {
   createdAt: string;
 }
 
-/** Anyone's saved settings, read publicly: null when they have none, undefined when it couldn't be read. */
-export async function readPublicConfig(did: string, fetchImpl: typeof fetch = fetch): Promise<Saved | null | undefined> {
-  return asConfig(await readPublic(did, OVERLAY_NSID, OVERLAY_RKEY, fetchImpl));
+/** Anyone's saved layout ("self" unless named), read publicly: null when they have none, undefined when it couldn't be read. */
+export async function readPublicConfig(did: string, fetchImpl: typeof fetch = fetch, layout: string = OVERLAY_RKEY): Promise<Saved | null | undefined> {
+  return asConfig(await readPublic(did, OVERLAY_NSID, layout, fetchImpl));
 }
 
 /** The signed-in streamer's own saved settings, from their PDS. */
@@ -157,7 +200,37 @@ export async function deleteScene(session: Session, id: string): Promise<void> {
   await deleteRecord(session, `at://${session.did}/${SCENE_NSID}/${id}`);
 }
 
-/** Saves the settings to the signed-in streamer's repo (throws a RepoError when refused). */
-export async function saveConfig(session: Session, config: OverlayConfig, createdAt: string, now = new Date()): Promise<void> {
-  await putRecord(session, OVERLAY_NSID, OVERLAY_RKEY, toRecord(config, createdAt, now));
+export interface SavedLayout extends Saved {
+  id: string;
+  name: string;
+}
+
+/** All of the signed-in streamer's saved layouts, the main one first, then oldest first: undefined when they couldn't be read. */
+export async function listOwnLayouts(session: Session, fetchImpl: typeof fetch = fetch): Promise<SavedLayout[] | undefined> {
+  try {
+    const q = new URLSearchParams({ repo: session.did, collection: OVERLAY_NSID, limit: String(MAX_LAYOUTS * 2) });
+    const res = await json(fetchImpl, `${session.pds}/xrpc/com.atproto.repo.listRecords?${q}`);
+    if (res.status !== 200 || !obj(res.body) || !Array.isArray(res.body.records)) return undefined;
+    const out: SavedLayout[] = [];
+    for (const r of res.body.records) {
+      if (!obj(r) || typeof r.uri !== 'string') continue;
+      const id = r.uri.slice(r.uri.lastIndexOf('/') + 1);
+      const saved = isLayoutId(id) ? valueFrom(200, r) : undefined;
+      if (saved) out.push({ id, name: layoutNameOf(saved.value, id), config: fromRecord(saved.value), createdAt: saved.createdAt });
+    }
+    const main = (l: SavedLayout) => (l.id === OVERLAY_RKEY ? 0 : 1);
+    return out.sort((a, b) => main(a) - main(b) || a.createdAt.localeCompare(b.createdAt)).slice(0, MAX_LAYOUTS);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Saves a layout to the signed-in streamer's repo, at its id (throws a RepoError when refused). */
+export async function saveConfig(session: Session, config: OverlayConfig, createdAt: string, now = new Date(), id: string = OVERLAY_RKEY, name?: string): Promise<void> {
+  await putRecord(session, OVERLAY_NSID, id, toRecord(config, createdAt, now, name));
+}
+
+/** Removes a layout from the signed-in streamer's repo (throws a RepoError when refused). */
+export async function deleteLayout(session: Session, id: string): Promise<void> {
+  await deleteRecord(session, `at://${session.did}/${OVERLAY_NSID}/${id}`);
 }

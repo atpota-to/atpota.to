@@ -25,6 +25,12 @@
  * It does count them exactly, while it listens, for its diversity index (nothing is
  * kept), which therefore reads a little low: a few seconds hear fewer apps than a minute.
  *
+ * The station's reading also carries its last census of PDS hosts (`hosts`, from the
+ * relay's list of them; see atmosphere/src/hosts.js): how many are active, Bluesky's and
+ * independent, how many wrote lately, the accounts each side holds, and the hosting
+ * diversity (share × √spread, like the diversity index, but by accounts hosted). The
+ * sample has none.
+ *
  * If neither can be read, the answer is 503 and the tile says so.
  */
 
@@ -90,6 +96,27 @@ export const DIVERSITY_LEVELS = [
 
 export type DiversityLevel = 'low' | (typeof DIVERSITY_LEVELS)[number][0];
 
+/**
+ * The hosting diversity (the same sum, by where accounts live rather than who's writing)
+ * at which each level starts, on its own scale: it grows with both the share of accounts
+ * living off Bluesky's hosts and how many hosts they're spread across, so it can run to
+ * the hundreds (10% of accounts across 100 hosts' worth would be 100). It was about 7.5
+ * in October 2026. Below the first, 'early days'.
+ */
+export const HOSTING_LEVELS = [
+  ['flourishing', 200],
+  ['well spread', 75],
+  ['spreading', 25],
+  ['taking root', 10],
+] as const;
+
+export type HostingLevel = 'early days' | (typeof HOSTING_LEVELS)[number][0];
+
+export function hostingLevel(index: number): HostingLevel {
+  for (const [name, from] of HOSTING_LEVELS) if (index >= from) return name;
+  return 'early days';
+}
+
 /** How many apps and Bluesky collections the reading names. */
 export const TOP_APPS = 10;
 export const TOP_BLUESKY = 8;
@@ -108,6 +135,11 @@ export interface App extends Rate {
   domain: string;
   /** Its busiest collections, busiest first (at most three). */
   collections: string[];
+  /**
+   * Different accounts that wrote to it, when the station counted them (a sample doesn't):
+   * forty records a second from one account is that account's batch, not a crowd.
+   */
+  accounts?: number;
 }
 
 export interface AccountApp {
@@ -127,6 +159,44 @@ export interface Accounts {
   /** The apps outside Bluesky with the most accounts. */
   apps: AccountApp[];
 }
+
+export interface Hosts {
+  /** When the station last counted them (it does every 10 minutes). */
+  measuredAt: string;
+  /** Hosts the relay lists, in any state. */
+  listed: number;
+  /** Hosts the relay calls active: Bluesky's own (*.host.bsky.network) and everyone else's. */
+  active: number;
+  bluesky: number;
+  independent: number;
+  /** Active hosts that relayed anything in the last `minutes`, or null until the station has counted twice. */
+  writing: { bluesky: number; independent: number; minutes: number } | null;
+  /** Accounts on active hosts. */
+  accounts: { bluesky: number; independent: number };
+  /** share: percent of accounts on independent hosts; spread: how many hosts they're spread across, as an effective number; index: share × √spread. */
+  diversity: { index: number; share: number; spread: number };
+  /** The independent hosts with the most accounts. */
+  top: Array<{ hostname: string; accounts: number }>;
+  /** Every listed host by the relay's state for it, when the station sends it. */
+  statuses?: Record<HostStatus, number>;
+  /** Independent hosts by accounts: 0, 1, up to 10, 100, 1,000, 10,000, and more (HOST_SIZE_BOUNDS). */
+  sizes?: number[];
+  /** The accounts on the hosts in each of those sizes. */
+  sizeAccounts?: number[];
+  /** The top-level domains with the most independent hosts. */
+  tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
+  /** Tangled's knots left out of all of it: git servers the relay lists, whose "accounts" are repositories (atmosphere/src/knots.js). */
+  knots?: number;
+}
+
+export const HOST_STATUSES = ['active', 'idle', 'offline', 'throttled', 'banned', 'other'] as const;
+export type HostStatus = (typeof HOST_STATUSES)[number];
+/** The station's size buckets (atmosphere/src/hosts.js SIZE_BOUNDS): each holds hosts with at most this many accounts, then one for more. */
+export const HOST_SIZE_BOUNDS = [0, 1, 10, 100, 1000, 10000] as const;
+const TLD_RE = /^[a-z0-9-]{2,63}$/;
+
+/** How many hosts the reading names. */
+export const TOP_HOSTS = 10;
 
 /**
  * Who wrote in a stretch of the firehose, which is what the diversity index is worked out
@@ -175,10 +245,43 @@ export interface Reading {
   source: 'station' | 'sample';
   /** Who wrote, from the station only. */
   accounts?: Accounts;
+  /** The PDS hosts on the network, from the station only. */
+  hosts?: Hosts;
+  /** How the station is doing, from the station only (atmosphere/src/server.js stationHealth). */
+  health?: StationHealth;
   /** The station's window. */
   window?: { from: string; to: string };
   /** The station's window second by second, oldest first; null for a second it missed. */
   series?: Array<SeriesPoint | null>;
+}
+
+export interface StationHealth {
+  /** Connected, current and hearing most of the last minute. */
+  ok: boolean;
+  /** How far behind the stream it is, seconds; null before the first event. */
+  lagSeconds: number | null;
+  /** The seconds of the last 60 it heard. */
+  covered60: number;
+  /** Minutes of the last 30 hours it missed and can still hear again (atmosphere/src/repair.js); null before its first look. */
+  missing?: number | null;
+  /** Minutes it missed that Jetstream no longer has. */
+  lost?: number;
+  /** The minutes it's hearing again now. */
+  repairing?: { from: string; to: string } | null;
+}
+
+/** The station's health as it sent it, checked, or null. */
+export function healthOf(x: unknown): StationHealth | null {
+  if (!isRecord(x) || typeof x.ok !== 'boolean' || !isCount(x.covered60)) return null;
+  const h: StationHealth = { ok: x.ok, lagSeconds: isCount(x.lagSeconds) ? x.lagSeconds : null, covered60: Math.min(60, x.covered60) };
+  if (isCount(x.missing) || x.missing === null) h.missing = x.missing;
+  if (isCount(x.lost)) h.lost = x.lost;
+  if (isRecord(x.repairing)) {
+    const from = isoOrNull(x.repairing.from);
+    const to = isoOrNull(x.repairing.to);
+    h.repairing = from && to ? { from, to } : null;
+  } else if (x.repairing === null) h.repairing = null;
+  return h;
 }
 
 export interface SeriesPoint {
@@ -273,7 +376,7 @@ export type Event =
   | { kind: 'create'; collection: string }
   | { kind: 'update' | 'delete' | 'identity' | 'account' };
 
-type Message = { kind?: unknown; did?: unknown; commit?: { operation?: unknown; collection?: unknown } } | null;
+type Message = { kind?: unknown; did?: unknown; commit?: { operation?: unknown; collection?: unknown; record?: unknown } } | null;
 
 function parse(data: unknown): Message {
   if (typeof data !== 'string') return null;
@@ -307,6 +410,25 @@ export interface Account {
   app: string | null;
 }
 
+/** Tangled's collections: org.tangled.*, and sh.tangled.* from before it moved. */
+const TANGLED_RE = /^(org|sh)\.tangled\./;
+
+/** A Tangled repository's own records, which only the repository's identity writes. */
+const REPO_COLLECTIONS = new Set(['org.tangled.git.refs', 'org.tangled.repo.manifest']);
+
+/**
+ * Who a Tangled commit counts for. Each repository on a knot (a Tangled git server) has an
+ * identity of its own, which holds its refs and manifest and the issues, pull requests and
+ * comments people make on it, each naming the person in `x-tngl-editor`. So: the editor a
+ * record names, nobody for a repository's own records, else whoever wrote it
+ * (atmosphere/src/accounts.js has the numbers).
+ */
+function tangledWriter(did: string, collection: string, record: unknown): string | null {
+  const editor = record && typeof record === 'object' ? (record as Record<string, unknown>)['x-tngl-editor'] : undefined;
+  if (typeof editor === 'string' && DID_RE.test(editor)) return editor;
+  return REPO_COLLECTIONS.has(collection) ? null : did;
+}
+
 /** Whose a Jetstream message is: any commit to an NSID, by the station's rules (atmosphere/src/accounts.js accountOf); null for anything else. */
 export function accountOf(data: unknown): Account | null {
   return accountOfMessage(parse(data));
@@ -317,7 +439,9 @@ function accountOfMessage(m: Message): Account | null {
   const op = m.commit?.operation;
   const collection = m.commit?.collection;
   if ((op !== 'create' && op !== 'update' && op !== 'delete') || typeof collection !== 'string' || !isNsid(collection)) return null;
-  return { did: m.did, app: isBluesky(collection) ? null : appDomain(collection) };
+  const did = TANGLED_RE.test(collection) ? tangledWriter(m.did, collection, m.commit?.record) : m.did;
+  if (did === null) return null;
+  return { did, app: isBluesky(collection) ? null : appDomain(collection) };
 }
 
 /** Who wrote while a sample listens: different DIDs, exactly, kept only while it listens. */
@@ -464,6 +588,48 @@ function accountsOf(x: unknown): Accounts | undefined {
   };
 }
 
+export const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/** A station reading's `hosts`, checked, or undefined. The index is worked out here from its parts. */
+export function hostsOf(x: unknown): Hosts | undefined {
+  const n = counts(x, ['listed', 'active', 'bluesky', 'independent'] as const);
+  const measuredAt = isRecord(x) ? isoOrNull(x.measuredAt) : null;
+  const accounts = isRecord(x) ? counts(x.accounts, ['bluesky', 'independent'] as const) : null;
+  const parts = isRecord(x) ? counts(x.diversity, ['share', 'spread'] as const) : null;
+  if (!n || !measuredAt || !accounts || !parts || !isRecord(x) || !Array.isArray(x.top)) return undefined;
+  const writing = counts(x.writing, ['bluesky', 'independent', 'minutes'] as const);
+  const share = Math.min(parts.share, 100);
+  return {
+    measuredAt,
+    ...n,
+    writing: writing && writing.minutes > 0 ? writing : null,
+    accounts,
+    diversity: { index: diversityIndex(share, parts.spread), share, spread: parts.spread },
+    top: x.top
+      .filter((h): h is Record<string, unknown> => isRecord(h) && typeof h.hostname === 'string' && HOSTNAME_RE.test(h.hostname) && isCount(h.accounts))
+      .slice(0, TOP_HOSTS)
+      .map((h) => ({ hostname: h.hostname as string, accounts: h.accounts as number })),
+    ...hostExtras(x),
+  };
+}
+
+/** A census's statuses, sizes and top-level domains, each left out if it doesn't check out. */
+function hostExtras(x: Record<string, unknown>): Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds' | 'knots'> {
+  const out: Pick<Hosts, 'statuses' | 'sizes' | 'sizeAccounts' | 'tlds' | 'knots'> = {};
+  if (isCount(x.knots)) out.knots = x.knots;
+  const statuses = counts(x.statuses, HOST_STATUSES);
+  if (statuses) out.statuses = statuses;
+  if (Array.isArray(x.sizes) && x.sizes.length === HOST_SIZE_BOUNDS.length + 1 && x.sizes.every(isCount)) out.sizes = x.sizes as number[];
+  if (Array.isArray(x.sizeAccounts) && x.sizeAccounts.length === HOST_SIZE_BOUNDS.length + 1 && x.sizeAccounts.every(isCount)) out.sizeAccounts = x.sizeAccounts as number[];
+  if (Array.isArray(x.tlds)) {
+    out.tlds = x.tlds
+      .filter((t): t is Record<string, unknown> => isRecord(t) && typeof t.tld === 'string' && TLD_RE.test(t.tld) && isCount(t.hosts) && isCount(t.accounts))
+      .slice(0, 8)
+      .map((t) => ({ tld: t.tld as string, hosts: t.hosts as number, accounts: t.accounts as number }));
+  }
+  return out;
+}
+
 /**
  * A station answer as a Reading, or null if any required part is off. Rebuilt from known
  * fields only, names re-checked (they are someone else's text), condition, diversity
@@ -491,6 +657,7 @@ export function fromStation(body: unknown): Reading | null {
       perSecond: a.perSecond as number,
       count: a.count as number,
       collections: (Array.isArray(a.collections) ? a.collections : []).filter((c): c is string => typeof c === 'string' && isNsid(c)).slice(0, 3),
+      ...(isCount(a.accounts) ? { accounts: a.accounts as number } : {}),
     }));
   const bluesky = body.bluesky
     .filter((b): b is Record<string, unknown> => isRecord(b) && typeof b.nsid === 'string' && isNsid(b.nsid) && isBluesky(b.nsid) && isCount(b.perSecond) && isCount(b.count))
@@ -511,6 +678,10 @@ export function fromStation(body: unknown): Reading | null {
     source: 'station',
   };
   if (accounts) reading.accounts = accounts;
+  const hosts = hostsOf(body.hosts);
+  if (hosts) reading.hosts = hosts;
+  const health = healthOf(body.health);
+  if (health) reading.health = health;
   const w = isRecord(body.window) ? { from: isoOrNull(body.window.from), to: isoOrNull(body.window.to) } : null;
   if (w?.from && w.to) reading.window = { from: w.from, to: w.to };
   if (Array.isArray(body.series)) {
@@ -598,6 +769,15 @@ export interface AtmosphereHandlers {
 
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff' } as const;
 
+/**
+ * The reading and the almanac are public and carry no cookies, so any page may read them
+ * from the browser: aturi.to's explorer shows the conditions from its own origin. A
+ * wildcard rather than a list of origins, so the CDN keeps one copy for everyone instead
+ * of one per Origin, and so aturi's previews and local dev can read them too. Their
+ * errors carry it as well, so a page can tell "down" from "not allowed".
+ */
+export const CROSS_ORIGIN = { 'access-control-allow-origin': '*' } as const;
+
 export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereHandlers {
   const open: OpenSocket = deps.open ?? ((url) => new WebSocket(url) as unknown as SocketLike);
   const now = deps.now ?? (() => Date.now());
@@ -675,12 +855,12 @@ export function createAtmosphereHandlers(deps: AtmosphereDeps = {}): AtmosphereH
     } catch {
       return new Response(request.method === 'HEAD' ? null : '{"error":"unavailable"}', {
         status: 503,
-        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...BASE_HEADERS },
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...BASE_HEADERS, ...CROSS_ORIGIN },
       });
     }
     return new Response(request.method === 'HEAD' ? null : JSON.stringify(reading), {
       status: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': reading.source === 'station' ? CACHE_LIVE : CACHE_OK, ...BASE_HEADERS },
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': reading.source === 'station' ? CACHE_LIVE : CACHE_OK, ...BASE_HEADERS, ...CROSS_ORIGIN },
     });
   }
 

@@ -1,0 +1,1757 @@
+{
+ "version": 1,
+ "avatars": [
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-spring-normal.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "face": "normal",
+   "event": "none",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-spring-kawaii.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-spring-happy.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "face": "happy",
+   "event": "none",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-spring-wink.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "face": "wink",
+   "event": "none",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-spring-wow.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "face": "wow",
+   "event": "none",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-spring-sleepy.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-summer-normal.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "face": "normal",
+   "event": "none",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-summer-kawaii.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-summer-happy.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "face": "happy",
+   "event": "none",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-summer-wink.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "face": "wink",
+   "event": "none",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-summer-wow.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "face": "wow",
+   "event": "none",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-summer-sleepy.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-autumn-normal.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "face": "normal",
+   "event": "none",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-autumn-kawaii.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-autumn-happy.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "face": "happy",
+   "event": "none",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-autumn-wink.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "face": "wink",
+   "event": "none",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-autumn-wow.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "face": "wow",
+   "event": "none",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-autumn-sleepy.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-winter-normal.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "face": "normal",
+   "event": "none",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-winter-kawaii.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-winter-happy.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "face": "happy",
+   "event": "none",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-winter-wink.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "face": "wink",
+   "event": "none",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-winter-wow.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "face": "wow",
+   "event": "none",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/dawn-winter-sleepy.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-spring-normal.jpg",
+   "time": "day",
+   "season": "spring",
+   "face": "normal",
+   "event": "none",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-spring-kawaii.jpg",
+   "time": "day",
+   "season": "spring",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-spring-happy.jpg",
+   "time": "day",
+   "season": "spring",
+   "face": "happy",
+   "event": "none",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-spring-wink.jpg",
+   "time": "day",
+   "season": "spring",
+   "face": "wink",
+   "event": "none",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-spring-wow.jpg",
+   "time": "day",
+   "season": "spring",
+   "face": "wow",
+   "event": "none",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-spring-sleepy.jpg",
+   "time": "day",
+   "season": "spring",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-summer-normal.jpg",
+   "time": "day",
+   "season": "summer",
+   "face": "normal",
+   "event": "none",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-summer-kawaii.jpg",
+   "time": "day",
+   "season": "summer",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-summer-happy.jpg",
+   "time": "day",
+   "season": "summer",
+   "face": "happy",
+   "event": "none",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-summer-wink.jpg",
+   "time": "day",
+   "season": "summer",
+   "face": "wink",
+   "event": "none",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-summer-wow.jpg",
+   "time": "day",
+   "season": "summer",
+   "face": "wow",
+   "event": "none",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-summer-sleepy.jpg",
+   "time": "day",
+   "season": "summer",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-autumn-normal.jpg",
+   "time": "day",
+   "season": "autumn",
+   "face": "normal",
+   "event": "none",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-autumn-kawaii.jpg",
+   "time": "day",
+   "season": "autumn",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-autumn-happy.jpg",
+   "time": "day",
+   "season": "autumn",
+   "face": "happy",
+   "event": "none",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-autumn-wink.jpg",
+   "time": "day",
+   "season": "autumn",
+   "face": "wink",
+   "event": "none",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-autumn-wow.jpg",
+   "time": "day",
+   "season": "autumn",
+   "face": "wow",
+   "event": "none",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-autumn-sleepy.jpg",
+   "time": "day",
+   "season": "autumn",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-winter-normal.jpg",
+   "time": "day",
+   "season": "winter",
+   "face": "normal",
+   "event": "none",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-winter-kawaii.jpg",
+   "time": "day",
+   "season": "winter",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-winter-happy.jpg",
+   "time": "day",
+   "season": "winter",
+   "face": "happy",
+   "event": "none",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-winter-wink.jpg",
+   "time": "day",
+   "season": "winter",
+   "face": "wink",
+   "event": "none",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-winter-wow.jpg",
+   "time": "day",
+   "season": "winter",
+   "face": "wow",
+   "event": "none",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/day-winter-sleepy.jpg",
+   "time": "day",
+   "season": "winter",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-spring-normal.jpg",
+   "time": "golden",
+   "season": "spring",
+   "face": "normal",
+   "event": "none",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-spring-kawaii.jpg",
+   "time": "golden",
+   "season": "spring",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-spring-happy.jpg",
+   "time": "golden",
+   "season": "spring",
+   "face": "happy",
+   "event": "none",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-spring-wink.jpg",
+   "time": "golden",
+   "season": "spring",
+   "face": "wink",
+   "event": "none",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-spring-wow.jpg",
+   "time": "golden",
+   "season": "spring",
+   "face": "wow",
+   "event": "none",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-spring-sleepy.jpg",
+   "time": "golden",
+   "season": "spring",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-summer-normal.jpg",
+   "time": "golden",
+   "season": "summer",
+   "face": "normal",
+   "event": "none",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-summer-kawaii.jpg",
+   "time": "golden",
+   "season": "summer",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-summer-happy.jpg",
+   "time": "golden",
+   "season": "summer",
+   "face": "happy",
+   "event": "none",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-summer-wink.jpg",
+   "time": "golden",
+   "season": "summer",
+   "face": "wink",
+   "event": "none",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-summer-wow.jpg",
+   "time": "golden",
+   "season": "summer",
+   "face": "wow",
+   "event": "none",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-summer-sleepy.jpg",
+   "time": "golden",
+   "season": "summer",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-autumn-normal.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "face": "normal",
+   "event": "none",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-autumn-kawaii.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-autumn-happy.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "face": "happy",
+   "event": "none",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-autumn-wink.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "face": "wink",
+   "event": "none",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-autumn-wow.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "face": "wow",
+   "event": "none",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-autumn-sleepy.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-winter-normal.jpg",
+   "time": "golden",
+   "season": "winter",
+   "face": "normal",
+   "event": "none",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-winter-kawaii.jpg",
+   "time": "golden",
+   "season": "winter",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-winter-happy.jpg",
+   "time": "golden",
+   "season": "winter",
+   "face": "happy",
+   "event": "none",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-winter-wink.jpg",
+   "time": "golden",
+   "season": "winter",
+   "face": "wink",
+   "event": "none",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-winter-wow.jpg",
+   "time": "golden",
+   "season": "winter",
+   "face": "wow",
+   "event": "none",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/golden-winter-sleepy.jpg",
+   "time": "golden",
+   "season": "winter",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-spring-normal.jpg",
+   "time": "night",
+   "season": "spring",
+   "face": "normal",
+   "event": "none",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-spring-kawaii.jpg",
+   "time": "night",
+   "season": "spring",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-spring-happy.jpg",
+   "time": "night",
+   "season": "spring",
+   "face": "happy",
+   "event": "none",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-spring-wink.jpg",
+   "time": "night",
+   "season": "spring",
+   "face": "wink",
+   "event": "none",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-spring-wow.jpg",
+   "time": "night",
+   "season": "spring",
+   "face": "wow",
+   "event": "none",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-spring-sleepy.jpg",
+   "time": "night",
+   "season": "spring",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-summer-normal.jpg",
+   "time": "night",
+   "season": "summer",
+   "face": "normal",
+   "event": "none",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-summer-kawaii.jpg",
+   "time": "night",
+   "season": "summer",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-summer-happy.jpg",
+   "time": "night",
+   "season": "summer",
+   "face": "happy",
+   "event": "none",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-summer-wink.jpg",
+   "time": "night",
+   "season": "summer",
+   "face": "wink",
+   "event": "none",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-summer-wow.jpg",
+   "time": "night",
+   "season": "summer",
+   "face": "wow",
+   "event": "none",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-summer-sleepy.jpg",
+   "time": "night",
+   "season": "summer",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-autumn-normal.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "normal",
+   "event": "none",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-autumn-kawaii.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-autumn-happy.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "happy",
+   "event": "none",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-autumn-wink.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "wink",
+   "event": "none",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-autumn-wow.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "wow",
+   "event": "none",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-autumn-sleepy.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-winter-normal.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "normal",
+   "event": "none",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-winter-kawaii.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "kawaii",
+   "event": "none",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-winter-happy.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "happy",
+   "event": "none",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-winter-wink.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "wink",
+   "event": "none",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-winter-wow.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "wow",
+   "event": "none",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/night-winter-sleepy.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "sleepy",
+   "event": "none",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/halloween-sleepy.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "sleepy",
+   "event": "halloween",
+   "scene": "night,autumn,calm,none,hill,halloween"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/halloween-scawy.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "scawy",
+   "event": "halloween",
+   "scene": "night,autumn,calm,none,hill,halloween"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/halloween-wow.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "wow",
+   "event": "halloween",
+   "scene": "night,autumn,calm,none,hill,halloween"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/halloween-kawaii.jpg",
+   "time": "night",
+   "season": "autumn",
+   "face": "kawaii",
+   "event": "halloween",
+   "scene": "night,autumn,calm,none,hill,halloween"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/newyear-sleepy.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "sleepy",
+   "event": "newyear",
+   "scene": "night,winter,calm,none,hill,newyear"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/newyear-wow.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "wow",
+   "event": "newyear",
+   "scene": "night,winter,calm,none,hill,newyear"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/newyear-happy.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "happy",
+   "event": "newyear",
+   "scene": "night,winter,calm,none,hill,newyear"
+  },
+  {
+   "kind": "avatar",
+   "file": "avatars/newyear-wink.jpg",
+   "time": "night",
+   "season": "winter",
+   "face": "wink",
+   "event": "newyear",
+   "scene": "night,winter,calm,none,hill,newyear"
+  }
+ ],
+ "banners": [
+  {
+   "kind": "banner",
+   "file": "banners/dawn-spring-calm.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,spring,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-spring-gusty.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,spring,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-spring-wet.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,spring,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-spring-dispatch.jpg",
+   "time": "dawn",
+   "season": "spring",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "dawn,spring,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-summer-calm.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,summer,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-summer-gusty.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,summer,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-summer-wet.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,summer,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-summer-dispatch.jpg",
+   "time": "dawn",
+   "season": "summer",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "dawn,summer,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-autumn-calm.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,autumn,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-autumn-gusty.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,autumn,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-autumn-wet.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,autumn,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-autumn-dispatch.jpg",
+   "time": "dawn",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "dawn,autumn,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-winter-calm.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,winter,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-winter-gusty.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,winter,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-winter-wet.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "dawn,winter,snow,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/dawn-winter-dispatch.jpg",
+   "time": "dawn",
+   "season": "winter",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "dawn,winter,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-spring-calm.jpg",
+   "time": "day",
+   "season": "spring",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,spring,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-spring-gusty.jpg",
+   "time": "day",
+   "season": "spring",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,spring,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-spring-wet.jpg",
+   "time": "day",
+   "season": "spring",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,spring,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-spring-dispatch.jpg",
+   "time": "day",
+   "season": "spring",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "day,spring,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-summer-calm.jpg",
+   "time": "day",
+   "season": "summer",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,summer,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-summer-gusty.jpg",
+   "time": "day",
+   "season": "summer",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,summer,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-summer-wet.jpg",
+   "time": "day",
+   "season": "summer",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,summer,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-summer-dispatch.jpg",
+   "time": "day",
+   "season": "summer",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "day,summer,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-autumn-calm.jpg",
+   "time": "day",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,autumn,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-autumn-gusty.jpg",
+   "time": "day",
+   "season": "autumn",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,autumn,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-autumn-wet.jpg",
+   "time": "day",
+   "season": "autumn",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,autumn,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-autumn-dispatch.jpg",
+   "time": "day",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "day,autumn,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-winter-calm.jpg",
+   "time": "day",
+   "season": "winter",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,winter,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-winter-gusty.jpg",
+   "time": "day",
+   "season": "winter",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,winter,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-winter-wet.jpg",
+   "time": "day",
+   "season": "winter",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "day,winter,snow,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/day-winter-dispatch.jpg",
+   "time": "day",
+   "season": "winter",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "day,winter,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-spring-calm.jpg",
+   "time": "golden",
+   "season": "spring",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,spring,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-spring-gusty.jpg",
+   "time": "golden",
+   "season": "spring",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,spring,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-spring-wet.jpg",
+   "time": "golden",
+   "season": "spring",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,spring,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-spring-dispatch.jpg",
+   "time": "golden",
+   "season": "spring",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "golden,spring,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-summer-calm.jpg",
+   "time": "golden",
+   "season": "summer",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,summer,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-summer-gusty.jpg",
+   "time": "golden",
+   "season": "summer",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,summer,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-summer-wet.jpg",
+   "time": "golden",
+   "season": "summer",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,summer,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-summer-dispatch.jpg",
+   "time": "golden",
+   "season": "summer",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "golden,summer,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-autumn-calm.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,autumn,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-autumn-gusty.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,autumn,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-autumn-wet.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,autumn,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-autumn-dispatch.jpg",
+   "time": "golden",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "golden,autumn,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-winter-calm.jpg",
+   "time": "golden",
+   "season": "winter",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,winter,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-winter-gusty.jpg",
+   "time": "golden",
+   "season": "winter",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,winter,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-winter-wet.jpg",
+   "time": "golden",
+   "season": "winter",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "golden,winter,snow,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/golden-winter-dispatch.jpg",
+   "time": "golden",
+   "season": "winter",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "golden,winter,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-spring-calm.jpg",
+   "time": "night",
+   "season": "spring",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,spring,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-spring-gusty.jpg",
+   "time": "night",
+   "season": "spring",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,spring,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-spring-wet.jpg",
+   "time": "night",
+   "season": "spring",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,spring,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-spring-dispatch.jpg",
+   "time": "night",
+   "season": "spring",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "night,spring,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-summer-calm.jpg",
+   "time": "night",
+   "season": "summer",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,summer,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-summer-gusty.jpg",
+   "time": "night",
+   "season": "summer",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,summer,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-summer-wet.jpg",
+   "time": "night",
+   "season": "summer",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,summer,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-summer-dispatch.jpg",
+   "time": "night",
+   "season": "summer",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "night,summer,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-autumn-calm.jpg",
+   "time": "night",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,autumn,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-autumn-gusty.jpg",
+   "time": "night",
+   "season": "autumn",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,autumn,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-autumn-wet.jpg",
+   "time": "night",
+   "season": "autumn",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,autumn,rain,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-autumn-dispatch.jpg",
+   "time": "night",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "night,autumn,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-winter-calm.jpg",
+   "time": "night",
+   "season": "winter",
+   "weather": "calm",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,winter,calm,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-winter-gusty.jpg",
+   "time": "night",
+   "season": "winter",
+   "weather": "gusty",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,winter,gusty,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-winter-wet.jpg",
+   "time": "night",
+   "season": "winter",
+   "weather": "wet",
+   "event": "none",
+   "place": "hill",
+   "take": "",
+   "scene": "night,winter,snow,none,hill"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/night-winter-dispatch.jpg",
+   "time": "night",
+   "season": "winter",
+   "weather": "calm",
+   "event": "dispatch",
+   "place": "hill",
+   "take": "b",
+   "scene": "night,winter,calm,none,hill,dispatch-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/halloween-a.jpg",
+   "time": "night",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "halloween",
+   "place": "hill",
+   "take": "a",
+   "scene": "night,autumn,calm,none,hill,halloween-a"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/halloween-c.jpg",
+   "time": "night",
+   "season": "autumn",
+   "weather": "calm",
+   "event": "halloween",
+   "place": "hill",
+   "take": "c",
+   "scene": "night,autumn,calm,none,hill,halloween-c"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/newyear-a.jpg",
+   "time": "night",
+   "season": "winter",
+   "weather": "calm",
+   "event": "newyear",
+   "place": "hill",
+   "take": "a",
+   "scene": "night,winter,calm,none,hill,newyear-a"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/newyear-b.jpg",
+   "time": "night",
+   "season": "winter",
+   "weather": "calm",
+   "event": "newyear",
+   "place": "hill",
+   "take": "b",
+   "scene": "night,winter,calm,none,hill,newyear-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/moon.jpg",
+   "time": "night",
+   "season": null,
+   "weather": "calm",
+   "event": "none",
+   "place": "moon",
+   "take": "",
+   "scene": "night,plain,calm,none,moon,moon"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/beach-a.jpg",
+   "time": "day",
+   "season": "summer",
+   "weather": "calm",
+   "event": "none",
+   "place": "beach",
+   "take": "a",
+   "scene": "day,summer,calm,none,beach,beach-a"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/beach-b.jpg",
+   "time": "day",
+   "season": "summer",
+   "weather": "calm",
+   "event": "none",
+   "place": "beach",
+   "take": "b",
+   "scene": "day,summer,calm,none,beach,beach-b"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/cloud-dawn.jpg",
+   "time": "dawn",
+   "season": null,
+   "weather": "calm",
+   "event": "none",
+   "place": "cloud",
+   "take": "",
+   "scene": "dawn,plain,calm,none,cloud,cloud"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/cloud-day.jpg",
+   "time": "day",
+   "season": null,
+   "weather": "calm",
+   "event": "none",
+   "place": "cloud",
+   "take": "",
+   "scene": "day,plain,calm,none,cloud,cloud"
+  },
+  {
+   "kind": "banner",
+   "file": "banners/cloud-golden.jpg",
+   "time": "golden",
+   "season": null,
+   "weather": "calm",
+   "event": "none",
+   "place": "cloud",
+   "take": "",
+   "scene": "golden,plain,calm,none,cloud,cloud"
+  }
+ ]
+}

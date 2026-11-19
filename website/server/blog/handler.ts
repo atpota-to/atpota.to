@@ -8,6 +8,10 @@
  *                                                                   path or its record key
  *   /.well-known/site.standard.publication/blog    view=well-known  the publication's at:// URI
  *                                                                   (standard.site verification)
+ *   /blog/preview/<token>                          view=preview     a draft of the dispatch,
+ *                                                                   read from the droplet by
+ *                                                                   its private token, never
+ *                                                                   cached or indexed
  *   /receive_auth_callback                         view=email-return
  *                                                                   Leaflet's way back for an
  *                                                                   email subscriber: a redirect
@@ -17,7 +21,8 @@
  * so a new post shows up within about five minutes without a deploy. Records, identities
  * and the shell are also cached briefly in the function instance. A post also carries its
  * comments and recommend count (discussion.ts), on the same cache; the reader's own new
- * comment shows at once because the browser adds it (src/blog/).
+ * comment shows at once because the browser adds it (src/blog/). And the apps it can be
+ * shared from, Aturi's compose waypoints (share.ts), read about once an hour.
  */
 
 import type { Env } from '../config.js';
@@ -37,7 +42,8 @@ import {
   unavailablePage,
   type Page,
 } from './pages.js';
-import { documentPath, findDocument, findPublication, listDocuments, type BlogDocument, type Publication } from './records.js';
+import { documentPath, findDocument, findPublication, listDocuments, toDocument, type BlogDocument, type Publication } from './records.js';
+import { loadShareApps } from './share.js';
 import { bareDocument, fetchShell, fillShell, type Shell } from './shell.js';
 import { EMAIL_RETURN_COOKIE_CLEARED, emailReturnLocation } from './subscribe.js';
 
@@ -47,6 +53,15 @@ export const CACHE_MISSING = 'public, max-age=0, s-maxage=60';
 export const CACHE_WELL_KNOWN = 'public, max-age=3600, s-maxage=3600';
 export const DATA_TTL_MS = 60_000;
 export const SHELL_TTL_MS = 10 * 60_000;
+/** A draft is private and changes with every edit: never stored anywhere on the way. */
+export const CACHE_PREVIEW = 'private, no-store';
+export const PREVIEW_TIMEOUT_MS = 8000;
+const PREVIEW_TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
+
+interface DraftPreview {
+  draft: { status: string; version: number; savedAt: string | null; published?: string };
+  record: Record<string, unknown> | null;
+}
 
 /** If plc.directory is unreachable, the PDS for Poe's and atpota.to's repos is still known. */
 const KNOWN_PDS: Readonly<Record<string, string>> = {
@@ -74,6 +89,12 @@ export interface BlogHandlers {
 }
 
 const BASE_HEADERS = { 'x-content-type-options': 'nosniff' } as const;
+
+/** Keeps a page out of search engines, whatever its own tags say. */
+function privately(response: Response): Response {
+  response.headers.set('x-robots-tag', 'noindex, nofollow');
+  return response;
+}
 
 function respond(method: string, body: string, status: number, type: string, cache: string, extra: Record<string, string> = {}): Response {
   return new Response(method === 'HEAD' ? null : body, {
@@ -226,6 +247,8 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
       return page(request, e, 200, CACHE_OK, (shell) => indexPage(site, data.docs, shell.assets));
     }
 
+    if (view === 'preview') return preview(request, e, data, site, url.searchParams.get('token') ?? '', config.previewOrigin);
+
     if (view !== 'post') {
       return page(request, e, 404, CACHE_MISSING, (shell) => notFoundPage(site, shell.assets));
     }
@@ -241,9 +264,10 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
 
     const index = data.docs.indexOf(doc);
     const pages = leafletPages(doc.content);
-    const [embeds, discussion] = await Promise.all([
+    const [embeds, discussion, shareApps] = await Promise.all([
       loadEmbeds(doFetch, embedTargets(pages)),
       config.commentsEnabled ? loadDiscussion(doFetch, { document: doc.uri, owner: data.identity, hidden: config.hiddenComments }) : null,
+      loadShareApps(doFetch),
     ]);
     if (discussion?.status === 'unavailable') log({ event: 'discussion_error' });
     return page(request, e, 200, CACHE_OK, (shell) =>
@@ -262,8 +286,60 @@ export function createBlogHandlers(deps: BlogDeps = {}): BlogHandlers {
         assets: shell.assets,
         coverCid: doc.coverCid,
         discussion,
+        shareApps,
       }),
     );
+  }
+
+  /**
+   * A draft of the dispatch, from the droplet (mentions/src/dispatch-drafts.js), rendered as
+   * the issue will look. The token is the only key, so an unknown one is a plain not found,
+   * and a draft that has since gone out sends the reader to the issue.
+   */
+  async function preview(request: Request, e: Env, data: BlogData, site: ReturnType<typeof siteInfo>, token: string, origin: string): Promise<Response> {
+    const missing = () => page(request, e, 404, CACHE_PREVIEW, (shell) => notFoundPage(site, shell.assets)).then(privately);
+    if (!PREVIEW_TOKEN_RE.test(token)) return missing();
+    let found: DraftPreview;
+    try {
+      const res = await doFetch(`${origin}/dispatch/preview/${encodeURIComponent(token)}`, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS),
+      });
+      if (res.status === 404) return missing();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      found = (await res.json()) as DraftPreview;
+    } catch (error) {
+      log({ event: 'preview_error', error: (error as Error)?.message ?? 'Error' });
+      return page(request, e, 503, CACHE_PREVIEW, (shell) => unavailablePage(shell.assets)).then(privately);
+    }
+    if (found.draft?.published && /^https:\/\/(?:atpota\.to\/blog|poe\.leaflet\.pub)\/[A-Za-z0-9._~-]+$/.test(found.draft.published)) {
+      return new Response(null, { status: 302, headers: { location: found.draft.published, 'cache-control': CACHE_PREVIEW, ...BASE_HEADERS } });
+    }
+    const record = found.record;
+    const doc = record
+      ? toDocument({ uri: `at://${data.identity.did}/site.standard.document/preview`, cid: 'preview',
+        value: { ...record, publishedAt: found.draft.savedAt ?? new Date(now()).toISOString() } }, data.identity)
+      : null;
+    if (!doc) return missing();
+    const pages = leafletPages(doc.content);
+    const embeds = await loadEmbeds(doFetch, embedTargets(pages));
+    return page(request, e, 200, CACHE_PREVIEW, (shell) =>
+      postPage({
+        site,
+        doc,
+        pages,
+        text: pagesText(pages),
+        embeds,
+        did: data.identity.did,
+        pds: data.identity.pds,
+        newer: null,
+        older: null,
+        others: data.docs,
+        headingShift: headingShiftFor(pages),
+        assets: shell.assets,
+        preview: { version: found.draft.version, savedAt: found.draft.savedAt, status: found.draft.status },
+      }),
+    ).then(privately);
   }
 
   return {

@@ -3,32 +3,45 @@
  * the sky on a 1200x630 card, from the same numbers /weather shows, and a quiet card for when
  * there are no numbers to show.
  *
- *   forecast  the report's header as a card: new records a second, the condition, a sky
- *             that clouds over with the diversity index, and Poe on its hill saying how mixed
- *             the sky is
+ *   forecast  the report's header as a card, kept to a glance: active accounts over the last
+ *             hour (else new records a second), the condition and how it compares with usual,
+ *             a sky that clouds over with the diversity index, and Poe on its hill
  *   trend     the last 24 hours of new records a second as a chart, with the busiest and
  *             quietest hours marked
  *   mix       who else is in the sky: the diversity index on its scale, and the busiest apps
- *             outside Bluesky over the last 24 hours
+ *             outside Bluesky over the last 24 hours; with `app`, that app on its own above
+ *             them (a new one, or one of the day's), so a post about one app shows it
  *   today     the almanac: the last hour against usual on the barometer, today's range with
  *             the last hour on it, and today's totals
+ *   hosts     where the atmosphere lives: the share of accounts on independent pds hosts,
+ *             the hosting diversity on its scale, and the biggest independent hosts
+ *   migration accounts moving house: out of bluesky over the last week, day by day, back in
+ *             and host to host, and where the ones out of bluesky went
+ *
+ * A card is read at the size a feed shows it, so each says one thing big and a few things
+ * small: no chips beyond the masthead's, no sentence longer than a line or two.
  *
  * Each card is a satori element tree, built here from plain objects (no React). A card that
  * can't be drawn from what was read (its numbers didn't come) is null, and the caller draws
- * the quiet card. Words follow the page (src/scripts/weather.ts, weather-almanac.ts);
- * tests/og-weather.test.ts checks the copies against it. App names are other people's text:
- * they arrive checked against DOMAIN_RE and only ever become text, which satori draws as paths.
+ * the quiet card. Words follow the page (src/scripts/weather.ts, weather-almanac.ts,
+ * weather-hosts.ts); tests/og-weather.test.ts checks the copies against it. App names and
+ * hostnames are other people's text: they arrive checked (DOMAIN_RE, HOSTNAME_RE) and only
+ * ever become text, which satori draws as paths.
+ *
+ * Each of the report's pages (/weather/<topic>, src/scripts/weather-topics.ts) names one of
+ * these as its og:image.
  */
 
-import { conditionFor, diversityLevel, type Condition, type DiversityLevel, type Reading } from './atmosphere.js';
+import { conditionFor, diversityLevel, hostingLevel, type Condition, type DiversityLevel, type HostingLevel, type Reading } from './atmosphere.js';
 import { NEW_APPS, type NewApps, type Normal, type Today } from './weather-almanac.js';
 import type { Accounts } from './weather-accounts.js';
 import type { App as HistoryApp, Point } from './weather-history.js';
+import { BLUESKY, type HostHistory, type IdentityDay } from './weather-hosts.js';
 
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
 
-export const CARDS = ['forecast', 'trend', 'mix', 'today'] as const;
+export const CARDS = ['forecast', 'trend', 'mix', 'today', 'hosts', 'migration'] as const;
 export type CardName = (typeof CARDS)[number];
 /** The card /og/weather.png draws without ?card=. */
 export const DEFAULT_CARD: CardName = 'forecast';
@@ -44,6 +57,8 @@ export interface DayHistory {
   points: Point[];
   apps?: HistoryApp[];
   accounts?: Accounts;
+  /** The pds hosts over the day, and the plc directory's last week or so (server/weather-hosts.ts). */
+  hosts?: HostHistory | null;
 }
 
 /** /api/weather-almanac?tz=UTC, as its handler answers it. */
@@ -60,9 +75,22 @@ export interface CardData {
   now: Reading | null;
   day: DayHistory | null;
   almanac: AlmanacData | null;
+  /** The last hour's accounts (/api/weather-history?range=hour), for the default card's headline, as the page's header has it. */
+  hour?: HourHistory | null;
+  /**
+   * The app a post is about (`?app=`, a domain), for the mix card to show on its own. Drawn
+   * only if the station heard it over the last 24 hours (focusOf), so the address can't
+   * put a name of its own on an atpota.to card.
+   */
+  focus?: string | null;
 }
 
-export type MascotFace = 'happy' | 'sleepy' | 'wow' | 'scawy' | 'kawaii' | 'wink';
+export interface HourHistory {
+  accounts?: Accounts;
+}
+
+/** The faces a card may give Poe. Never the frowning one (scawy): a card is shared, and Poe on it should look glad to see you. */
+export type MascotFace = 'happy' | 'sleepy' | 'wow' | 'kawaii' | 'wink';
 
 /** The pictures the cards use, as data: URIs (server/og-weather.ts reads them from src/assets). */
 export interface Art {
@@ -99,6 +127,27 @@ export const DIVERSITY_SCALE: ReadonlyArray<readonly [DiversityLevel, number]> =
 ];
 /** Where the scale's last band ends on the card. */
 const SCALE_TOP = 14;
+
+/** Where each hosting diversity level starts (weather.ts HOSTING_SCALE), and the top of its logarithmic scale. */
+export const HOSTING_SCALE: ReadonlyArray<readonly [HostingLevel, number]> = [
+  ['early days', 0],
+  ['taking root', 10],
+  ['spreading', 25],
+  ['well spread', 75],
+  ['flourishing', 200],
+];
+export const HOSTING_SCALE_MAX = 500;
+
+export const HOSTING_TEXT: Record<HostingLevel, string> = {
+  'early days': "nearly every account still lives on bluesky's own servers",
+  'taking root': 'independent hosts are finding their feet',
+  spreading: 'a real share of the network lives elsewhere, across many hosts',
+  'well spread': 'lots of accounts live off bluesky, spread wide',
+  flourishing: 'the network lives all over the place',
+};
+
+/** Where an index sits on the hosting scale, 0 to 1 (weather.ts hostingPosition). */
+export const hostingPosition = (index: number): number => Math.log1p(Math.min(Math.max(index, 0), HOSTING_SCALE_MAX)) / Math.log1p(HOSTING_SCALE_MAX);
 
 /** Where "much quieter" ... "much busier" than usual meet (weather-almanac.ts USUAL_EDGES). */
 export const USUAL_EDGES = [0.8, 0.93, 1.08, 1.25] as const;
@@ -182,6 +231,21 @@ export function hoursOf(day: DayHistory | null): Hour[] {
   return (day?.points ?? []).filter((p) => p.seconds >= 120).map((p) => ({ t: Date.parse(p.t), rate: p.creates / p.seconds }));
 }
 
+/** "224k": active accounts as the page's header writes them (weather-headline.ts bigAmount). */
+export function compactAccounts(v: number): string {
+  if (v < 100_000) return int(v);
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumSignificantDigits: 3 }).format(v).toLowerCase();
+}
+
+/**
+ * Active accounts over the last hour, as the page's header leads with them. Null without the
+ * hour's accounts, and the card leads with records a second instead.
+ */
+export function accountsLastHour(d: CardData): number | null {
+  const a = d.hour?.accounts;
+  return a && a.seconds > 0 && a.total.active > 0 ? a.total.active : null;
+}
+
 /** New records a second right now: the station's 60 seconds, else the newest hour. */
 function recordsNow(d: CardData): { rate: number; live: boolean } | null {
   if (d.now) return { rate: d.now.records.perSecond, live: true };
@@ -193,25 +257,25 @@ interface Mix {
   index: number;
   level: DiversityLevel;
   share: number;
-  spread: number;
-  /** Active accounts, when known. */
-  active: number | null;
-  /** "just now" (the station's minute) or "over the last 24 hours". */
-  span: string;
+  /** When it isn't the station's minute: "in an average hour of the last 24", "over the last 24 hours". */
+  span: string | null;
 }
 
 /** The diversity index: the station's minute, else the last 24 hours' accounts. */
 function mixOf(d: CardData): Mix | null {
   const div = d.now?.diversity;
   if (div && div.share !== undefined && div.spread !== undefined) {
-    return { index: div.index, level: div.level, share: div.share, spread: div.spread, active: d.now?.accounts?.active ?? null, span: 'just now' };
+    return { index: div.index, level: div.level, share: div.share, span: null };
   }
-  const total = d.day?.accounts?.total;
-  if (total) return { index: total.index, level: diversityLevel(total.index), share: total.share, spread: total.spread, active: total.active, span: 'over the last 24 hours' };
+  // the day's average reading, as the page shows it (the whole day's own index climbs with its length)
+  const a = d.day?.accounts;
+  const reading = a?.typical ?? a?.total;
+  if (a && reading) return { index: reading.index, level: diversityLevel(reading.index), share: reading.share, span: a.typical ? 'in an average hour of the last 24' : 'over the last 24 hours' };
   return null;
 }
 
-const FACE: Record<Condition, MascotFace> = { calm: 'sleepy', light: 'happy', breezy: 'happy', gusty: 'wow', stormy: 'scawy' };
+/** Poe's face for each condition: dozing when it's calm, delighted when it's wild out. */
+export const CONDITION_FACE: Record<Condition, MascotFace> = { calm: 'sleepy', light: 'happy', breezy: 'happy', gusty: 'kawaii', stormy: 'wow' };
 
 /** "wed 21 oct, 12:11 utc" */
 export function stamp(ms: number): string {
@@ -295,13 +359,17 @@ function masthead(art: Art, label: string, color: string = C.brown, chipStyle: S
   return h({ alignItems: 'center', gap: 18 }, wordmark(art, color), chip(label, chipStyle));
 }
 
-/** The bottom line: where to look, and when the numbers are from. */
-function footer(d: CardData, color: string = C.muted): El {
+/**
+ * The bottom line: where to look (the card's own page, for the ones only a page of the report
+ * uses), and when the numbers are from. The two are told apart by colour, not a dot between
+ * them, so when a long address and a long date won't share a half-width tile, the date wraps
+ * to a line of its own instead of running off the edge.
+ */
+function footer(d: CardData, color: string = C.muted, where = 'atpota.to/weather'): El {
   return h(
-    { alignItems: 'center', gap: 12, fontSize: 22, color },
-    h({ fontWeight: 700, color: C.leaf }, 'atpota.to/weather'),
-    h({}, '·'),
-    h({}, `as of ${stamp(d.at)}`),
+    { alignItems: 'center', flexWrap: 'wrap', columnGap: 16, fontSize: 22, color },
+    h({ fontWeight: 700, color: C.leaf }, where),
+    h({}, stamp(d.at)),
   );
 }
 
@@ -335,18 +403,18 @@ function sun(size: number, style: Style = {}): El {
 
 /**
  * Where the clouds sit (the middle of each, as fractions of the sky, and their size), filled
- * in this order. Like the page's slots (weather-sky.ts), but kept off the big number, so it
- * reads at the size a feed shows the card.
+ * in this order. Like the page's slots (weather-sky.ts), but all in the right half and the top
+ * corner, off the words on the left, so nothing is drawn over the text.
  */
 const CLOUD_SLOTS: ReadonlyArray<{ x: number; y: number; s: number }> = [
   { x: 0.88, y: 0.05, s: 0.9 },
-  { x: 0.5, y: 0.22, s: 0.7 },
+  { x: 0.57, y: 0.3, s: 0.7 },
   { x: 0.87, y: 0.4, s: 0.65 },
-  { x: 0.62, y: 0.6, s: 0.6 },
-  { x: 0.66, y: 0.06, s: 0.5 },
+  { x: 0.63, y: 0.6, s: 0.6 },
+  { x: 0.66, y: 0.04, s: 0.5 },
   { x: 0.99, y: 0.58, s: 0.6 },
-  { x: 0.02, y: 0.3, s: 0.55 },
-  { x: 0.42, y: 0.66, s: 0.5 },
+  { x: 0.99, y: 0.25, s: 0.5 },
+  { x: 0.7, y: 0.45, s: 0.45 },
 ];
 
 /** `count` clouds over a sky of width x height, like the page's (a pill with two puffs on top). */
@@ -480,33 +548,33 @@ function forecast(d: CardData, art: Art): El | null {
   const usual = usualOf(d.almanac?.normal);
   const sky = { w: CARD_WIDTH - 56, h: CARD_HEIGHT - 56 };
   const [word, rest] = CONDITION_TEXT[condition].split('. ');
-  const number = int(now.rate);
-  const onSky: Style = { background: 'rgba(255, 255, 255, 0.8)', color: C.skyText, whiteSpace: 'nowrap' };
+  // the page leads with active accounts over the last hour, so the card does too; records a second when it has no accounts
+  const active = accountsLastHour(d);
+  const number = active !== null ? compactAccounts(active) : int(now.rate);
   return page(
     tile(
       { width: sky.w, height: sky.h, background: C.sky, color: C.skyText, padding: '46px 54px' },
       svgImage(cloudsSvg(cloudCount(mix?.index ?? 0), sky.w, sky.h), sky.w, sky.h, { position: 'absolute', left: 0, top: 0 }),
       sun(190, { position: 'absolute', right: 330, top: 26 }),
-      ...poeOnHill(art, FACE[condition], mix ? LEVEL_TEXT[mix.level] : null, sky.w, seasonOf(d.at)),
-      masthead(art, 'the atmosphere weather report', C.brownOnSky, { background: 'rgba(255, 255, 255, 0.8)', color: C.skyText }),
+      ...poeOnHill(art, CONDITION_FACE[condition], null, sky.w, seasonOf(d.at)),
       h(
-        { flexDirection: 'column', marginTop: 'auto', width: 640 },
+        { alignItems: 'center', gap: 18 },
+        wordmark(art, C.brownOnSky),
+        h({ fontSize: 26, fontWeight: 600, color: C.skyText, paddingTop: 4 }, 'the atmosphere weather report'),
+      ),
+      h(
+        { flexDirection: 'column', marginTop: 'auto', width: 600 },
         h(
           { alignItems: 'flex-end', gap: 14 },
-          big(number, number.length <= 3 ? 176 : number.length <= 5 ? 138 : 112, { color: C.ink }),
-          h({ fontSize: 42, fontWeight: 700, color: C.ink, paddingBottom: 14 }, 'rec/sec'),
+          big(number, number.length <= 3 ? 176 : number.length <= 5 ? 150 : 112, { color: C.ink }),
+          h({ fontSize: 42, fontWeight: 700, color: C.ink, paddingBottom: 14 }, active !== null ? 'accounts' : 'rec/sec'),
         ),
-        h({ fontSize: 44, fontWeight: 700, marginTop: 18, color: C.ink }, `${word}.`),
+        h({ fontSize: 30, marginTop: 10 }, active !== null ? 'active in the last hour' : now.live ? 'new records a second, right now' : 'new records a second, the last hour'),
+        h({ fontSize: 52, fontWeight: 700, marginTop: 30, color: C.ink, letterSpacing: '-0.01em' }, `${word}.`),
         // The measured comparison when there is one: the condition's stock phrase ("a quiet
         // spell") can read against it, a light breeze that is still busier than usual.
-        h({ fontSize: 30, marginTop: 4 }, usual
-          ? `${now.live ? '' : 'over the last hour, '}${usualChip(usual)} ${usual.when}`
-          : now.live ? `${rest}, right now` : `${rest}, over the last hour`),
-        h(
-          { flexWrap: 'wrap', gap: 12, marginTop: 26 },
-          mix ? chip(`diversity index ${formatIndex(mix.index)} · ${mix.level}`, onSky) : null,
-        ),
-        h({ marginTop: 22 }, footer(d, C.skyMono)),
+        h({ fontSize: 30, marginTop: 2 }, usual ? usualChip(usual) : rest!),
+        h({ marginTop: 30 }, footer(d, C.skyMono)),
       ),
     ),
   );
@@ -561,7 +629,6 @@ function trend(d: CardData, art: Art): El | null {
   const hi = at(busiest);
   const lo = at(quietest);
   const last = chart.pts.at(-1)!;
-  const mix = mixOf(d);
   const label = (q: { x: number; y: number }, text: string, above: boolean, color: string) =>
     h(
       {
@@ -611,11 +678,7 @@ function trend(d: CardData, art: Art): El | null {
         h({}, '12 hours ago'),
         h({}, 'now'),
       ),
-      h(
-        { justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
-        footer(d),
-        mix ? h({ fontSize: 22, color: C.soft }, `diversity index ${formatIndex(mix.index)} · ${mix.level}`) : null,
-      ),
+      h({ marginTop: 16 }, footer(d)),
     ),
   );
 }
@@ -638,19 +701,60 @@ function scale(index: number, width: number): El {
   );
 }
 
+export interface Focus {
+  domain: string;
+  /** New records over the last 24 hours, or since it was first heard. */
+  records: number;
+  accounts: number | null;
+  /** When the station first heard it, for an app new in the last 24 hours. */
+  firstSeen: string | null;
+}
+
+/**
+ * The app `?app=` names, as the station heard it over the last 24 hours: one of the almanac's
+ * new apps, else one of the day's busiest. Null for an app it didn't hear, whatever the address says.
+ */
+export function focusOf(d: CardData): Focus | null {
+  if (!d.focus) return null;
+  const fresh = d.almanac?.newApps?.apps.find((a) => a.domain === d.focus && a.creates > 0);
+  if (fresh) return { domain: fresh.domain, records: fresh.creates, accounts: fresh.accounts ?? null, firstSeen: fresh.firstSeen };
+  const known = d.day?.apps?.find((a) => a.domain === d.focus && a.creates > 0);
+  if (known) return { domain: known.domain, records: known.creates, accounts: known.accounts ?? null, firstSeen: null };
+  return null;
+}
+
+/** "first heard 13:22 utc", "first heard 18:04 utc yesterday". */
+function firstHeard(iso: string, at: number): string {
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return `first heard ${utcClock(iso)} utc${day(Date.parse(iso)) === day(at) ? '' : ' yesterday'}`;
+}
+
+/** The app a post is about, on its own above the busiest: its name, and what the station heard from it. */
+function focusBlock(f: Focus, at: number): El {
+  const what = [`${int(f.records)} new ${f.records === 1 ? 'record' : 'records'}`, f.accounts ? `${int(f.accounts)} ${f.accounts === 1 ? 'account' : 'accounts'}` : null].filter(Boolean).join(' · ');
+  return h(
+    { flexDirection: 'column', padding: '22px 26px', borderRadius: 24, background: C.paper },
+    h({ fontSize: 20, fontWeight: 700, color: C.leaf }, f.firstSeen ? `new · ${firstHeard(f.firstSeen, at)}` : 'the last 24 hours'),
+    h({ fontSize: 34, fontWeight: 700, marginTop: 6, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: 400 }, f.domain),
+    h({ fontSize: 22, color: C.soft, marginTop: 6 }, what),
+  );
+}
+
 function mixCard(d: CardData, art: Art): El | null {
   const mix = mixOf(d);
   if (!mix) return null;
-  const daily = (d.day?.apps ?? []).filter((a) => a.creates > 0).slice(0, 5);
-  const live = (d.now?.apps ?? []).filter((a) => a.count > 0).slice(0, 5);
-  const apps = daily.length >= 3 ? daily.map((a) => ({ domain: a.domain, n: a.creates })) : live.map((a) => ({ domain: a.domain, n: a.count }));
+  const focus = focusOf(d);
+  const daily = (d.day?.apps ?? []).filter((a) => a.creates > 0);
+  const live = (d.now?.apps ?? []).filter((a) => a.count > 0);
+  // with an app on its own above them, room for three of the busiest, and never that app again
+  const apps = (daily.length >= 3 ? daily.map((a) => ({ domain: a.domain, n: a.creates })) : live.map((a) => ({ domain: a.domain, n: a.count })))
+    .filter((a) => a.domain !== focus?.domain)
+    .slice(0, focus ? 3 : 5);
   const appsSpan = daily.length >= 3 ? 'the last 24 hours' : 'the last minute';
   const top = Math.max(1, ...apps.map((a) => a.n));
-  const who =
-    mix.active !== null
-      ? `${mix.share.toFixed(2)}% of the ${int(mix.active)} accounts active ${mix.span} wrote with other apps, spread across about ${Math.round(mix.spread)} apps' worth.`
-      : `${mix.share.toFixed(2)}% of active accounts wrote with other apps ${mix.span}, spread across about ${Math.round(mix.spread)} apps' worth.`;
-  const left = apps.length ? 600 : 1144;
+  // the footer's time says when for the station's minute; an older reading says which stretch
+  const who = `${mix.share.toFixed(2)}% of active accounts wrote with other apps${mix.span ? ` ${mix.span}` : ''}`;
+  const left = apps.length || focus ? 600 : 1144;
   return page(
     tile(
       { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
@@ -662,16 +766,17 @@ function mixCard(d: CardData, art: Art): El | null {
         h({ flexDirection: 'column' }, h({ fontSize: 40, fontWeight: 700 }, mix.level), h({ fontSize: 24, color: C.soft, marginTop: 4, maxWidth: 260 }, LEVEL_TEXT[mix.level])),
       ),
       h({ marginTop: 20 }, scale(mix.index, left - 100)),
-      h({ fontSize: 22, color: C.soft, marginTop: 18, lineHeight: 1.35 }, who),
+      h({ fontSize: 22, color: C.soft, marginTop: 18 }, who),
       h({ marginTop: 18 }, footer(d)),
     ),
-    apps.length
+    apps.length || focus
       ? tile(
           { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
-          h({ fontSize: 30, fontWeight: 700, color: C.leaf }, 'busiest elsewhere'),
-          h({ fontSize: 22, color: C.soft, marginTop: 4 }, `new records, ${appsSpan}`),
+          focus ? focusBlock(focus, d.at) : null,
+          apps.length ? h({ fontSize: 30, fontWeight: 700, color: C.leaf, marginTop: focus ? 'auto' : 0 }, 'busiest elsewhere') : null,
+          apps.length ? h({ fontSize: 22, color: C.soft, marginTop: 4 }, `new records, ${appsSpan}`) : null,
           h(
-            { flexDirection: 'column', gap: 18, marginTop: 'auto' },
+            { flexDirection: 'column', gap: 18, marginTop: focus ? 18 : 'auto' },
             ...apps.map((a) =>
               h(
                 { flexDirection: 'column' },
@@ -814,6 +919,190 @@ function today(d: CardData, art: Art): El | null {
   );
 }
 
+// ---------- where the atmosphere lives ----------
+
+/** A share of accounts: "1.51%", or "12.3%" once there's room for fewer decimals. */
+export function shareText(v: number): string {
+  return `${v < 10 ? v.toFixed(2) : v.toFixed(1)}%`;
+}
+
+/** "+726", "−12", "0" (weather-hosts.ts signed). */
+export function signed(v: number): string {
+  return v > 0 ? `+${int(v)}` : v < 0 ? `−${int(-v)}` : '0';
+}
+
+export interface Living {
+  /** Percent of accounts on independent hosts. */
+  share: number;
+  index: number;
+  level: HostingLevel;
+  independent: number;
+  active: number;
+  /** The biggest independent hosts, when the station's census came. */
+  top: Array<{ hostname: string; accounts: number }>;
+}
+
+/** Where accounts live: the station's census, else the day's last one. */
+export function livingOf(d: CardData): Living | null {
+  const last = d.day?.hosts?.points.at(-1);
+  const h = d.now?.hosts;
+  if (h) return { share: h.diversity.share, index: h.diversity.index, level: hostingLevel(h.diversity.index), independent: h.independent, active: h.active, top: h.top };
+  if (last) return { share: last.share, index: last.index, level: hostingLevel(last.index), independent: last.independent, active: last.active, top: [] };
+  return null;
+}
+
+/** The hosting scale's five bands, each as wide as its stretch of the logarithmic scale, with a marker at `index`. */
+function hostingScale(index: number, width: number): El {
+  const bands = HOSTING_SCALE.map(([name, from], i) => {
+    const to = HOSTING_SCALE[i + 1]?.[1] ?? HOSTING_SCALE_MAX;
+    return { name, w: (hostingPosition(to) - hostingPosition(from)) * width, o: [0.25, 0.45, 0.65, 0.85, 1][i]! };
+  });
+  const at = hostingPosition(index) * width;
+  return h(
+    { flexDirection: 'column', width },
+    h(
+      { position: 'relative', height: 30, gap: 4, alignItems: 'center' },
+      ...bands.map((b) => h({ width: b.w - 4, height: 18, borderRadius: 9, background: C.leaf, opacity: b.o })),
+      h({ position: 'absolute', left: Math.min(width - 10, Math.max(0, at - 5)), top: 0, width: 10, height: 30, borderRadius: 5, background: C.ink, border: `2px solid ${C.card}` }),
+    ),
+    // most bands are too narrow for their names at this size: the ends say which way is which
+    h({ justifyContent: 'space-between', marginTop: 8, fontSize: 18, color: C.muted }, h({}, bands[0]!.name), h({}, bands[bands.length - 1]!.name)),
+  );
+}
+
+/** A list of names with bars, as long as their share of the first (the mix card's apps). */
+function barList(rows: Array<{ name: string; n: number; value: string }>, width: number): El {
+  const top = Math.max(1, ...rows.map((r) => r.n));
+  return h(
+    { flexDirection: 'column', gap: 18, marginTop: 'auto' },
+    ...rows.map((r) =>
+      h(
+        { flexDirection: 'column' },
+        h(
+          { justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
+          h({ fontSize: 27, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: width - 120 }, r.name),
+          h({ fontSize: 23, color: C.soft, whiteSpace: 'nowrap' }, r.value),
+        ),
+        h(
+          { height: 14, marginTop: 6, borderRadius: 7, background: 'rgba(0, 104, 55, 0.14)' },
+          h({ width: `${Math.max(3, (r.n / top) * 100).toFixed(1)}%`, height: 14, borderRadius: 7, background: C.leaf }),
+        ),
+      ),
+    ),
+  );
+}
+
+function hostsCard(d: CardData, art: Art): El | null {
+  const l = livingOf(d);
+  if (!l) return null;
+  // the people who arrived (signed up, not in bulk, or moved in), not the relay's count, which goes up for scripts too
+  const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.people > 0);
+  const side = l.top.length
+    ? { title: 'the biggest independent hosts', sub: 'by the accounts they hold', rows: l.top.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts, value: int(x.accounts) })) }
+    : growing.length
+      ? { title: 'growing fastest', sub: 'people signing up or moving in, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.people, value: signed(x.people) })) }
+      : null;
+  const left = side ? 600 : 1144;
+  return page(
+    tile(
+      { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
+      masthead(art, 'where the atmosphere lives', C.brown, { background: C.bg }),
+      h({ fontSize: 30, fontWeight: 700, marginTop: 'auto' }, "accounts living off bluesky's servers"),
+      big(shareText(l.share), 128, { color: C.leaf, marginTop: 10 }),
+      h({ fontSize: 24, color: C.soft, marginTop: 14 }, `on ${int(l.independent)} independent pds hosts, of ${int(l.active)} active`),
+      h({ fontSize: 24, fontWeight: 700, marginTop: 22 }, `hosting diversity ${formatIndex(l.index)} · ${l.level}`),
+      h({ marginTop: 10 }, hostingScale(l.index, left - 100)),
+      h({ marginTop: 16 }, footer(d, C.muted, 'atpota.to/weather/hosts')),
+    ),
+    side
+      ? tile(
+          { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
+          h({ fontSize: 30, fontWeight: 700, color: C.leaf }, side.title),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, side.sub),
+          barList(side.rows, 1144 - left - 16 - 80),
+        )
+      : null,
+  );
+}
+
+// ---------- migration winds ----------
+
+/** The last week of the plc directory's days (weather-hosts.ts renderIdentities: the last is usually today, so far). */
+export function weekOf(d: CardData): IdentityDay[] {
+  return (d.day?.hosts?.identities ?? []).slice(-7);
+}
+
+/**
+ * Where the week's movers out of Bluesky went, busiest first. The card's big number counts only
+ * them, so the list beside it does too: the page's list (weather-hosts.ts destinationsOf) takes
+ * in moves host to host as well, and one host renaming itself can move hundreds at once, which
+ * set against "moved out of bluesky" reads as hundreds leaving Bluesky. Each day's pairs from
+ * Bluesky (`moves`); a day with no pairs kept goes by its destinations, host to host and all.
+ */
+export function outOfBlueskyTo(week: IdentityDay[]): Array<{ hostname: string; accounts: number }> {
+  const by = new Map<string, number>();
+  for (const x of week) {
+    const went = x.moves.length ? x.moves.filter((m) => m.from === BLUESKY).map((m) => ({ hostname: m.to, accounts: m.accounts })) : x.destinations;
+    for (const h of went) by.set(h.hostname, (by.get(h.hostname) ?? 0) + h.accounts);
+  }
+  return [...by]
+    .map(([hostname, accounts]) => ({ hostname, accounts }))
+    .sort((a, b) => b.accounts - a.accounts || (a.hostname < b.hostname ? -1 : 1))
+    .slice(0, 5);
+}
+
+/** "mon", or "today" for the day the card is drawn. */
+function weekday(day: string, at: number): string {
+  if (day === new Date(at).toISOString().slice(0, 10)) return 'today';
+  return new Date(`${day}T12:00:00Z`).toLocaleString('en-GB', { weekday: 'short', timeZone: 'UTC' }).toLowerCase();
+}
+
+function migration(d: CardData, art: Art): El | null {
+  const week = weekOf(d);
+  if (!week.length) return null;
+  const sum = (k: 'movedOut' | 'movedIn' | 'movedBetween') => week.reduce((t, x) => t + x[k], 0);
+  const span = week.length > 1 ? `the last ${week.length} days` : 'today so far';
+  const went = outOfBlueskyTo(week);
+  const left = went.length ? 600 : 1144;
+  const most = Math.max(1, ...week.map((x) => x.movedOut));
+  const today = new Date(d.at).toISOString().slice(0, 10);
+  return page(
+    tile(
+      { width: left, height: 574, background: C.paper, padding: '42px 50px 36px' },
+      masthead(art, 'migration winds', C.brown, { background: C.bg }),
+      h(
+        { alignItems: 'flex-end', gap: 20, marginTop: 'auto' },
+        big(int(sum('movedOut')), 132, { color: C.leaf }),
+        h({ flexDirection: 'column', paddingBottom: 10 }, h({ fontSize: 30, fontWeight: 700 }, 'moved out of bluesky'), h({ fontSize: 22, color: C.soft, marginTop: 2 }, span)),
+      ),
+      h({ fontSize: 24, color: C.soft, marginTop: 12 }, `${int(sum('movedIn'))} moved back in · ${int(sum('movedBetween'))} host to host`),
+      // each day's moves out, with its number, so a post about one day finds it here; today's (still counting) fainter
+      week.length > 1
+        ? h(
+            { alignItems: 'flex-end', gap: 10, height: 128, marginTop: 16 },
+            ...week.map((x) =>
+              h(
+                { flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, height: 128 },
+                h({ fontSize: 18, fontWeight: 700, color: x.day === today ? C.muted : C.soft, marginBottom: 6 }, int(x.movedOut)),
+                h({ width: '100%', height: Math.max(4, Math.round((x.movedOut / most) * 72)), borderRadius: 8, background: C.leaf, opacity: x.day === today ? 0.45 : 1 }),
+                h({ fontSize: 18, color: C.muted, marginTop: 8 }, weekday(x.day, d.at)),
+              ),
+            ),
+          )
+        : null,
+      h({ marginTop: 20 }, footer(d, C.muted, 'atpota.to/weather/migration')),
+    ),
+    went.length
+      ? tile(
+          { width: 1144 - left - 16, height: 574, background: C.leafTint, padding: '40px 40px 36px' },
+          h({ fontSize: 30, fontWeight: 700, color: C.leaf }, 'where they moved to'),
+          h({ fontSize: 22, color: C.soft, marginTop: 4 }, `out of bluesky, ${span}`),
+          barList(went.map((x) => ({ name: x.hostname, n: x.accounts, value: `${int(x.accounts)} ${x.accounts === 1 ? 'mover' : 'movers'}` })), 1144 - left - 16 - 80),
+        )
+      : null,
+  );
+}
+
 /** No numbers: what the report is, Poe dozing on its hill. */
 export function drawQuiet(d: CardData, art: Art): El {
   const sky = { w: CARD_WIDTH - 56, h: CARD_HEIGHT - 56 };
@@ -834,7 +1123,7 @@ export function drawQuiet(d: CardData, art: Art): El {
   );
 }
 
-const DRAW: Record<CardName, (d: CardData, art: Art) => El | null> = { forecast, trend, mix: mixCard, today };
+const DRAW: Record<CardName, (d: CardData, art: Art) => El | null> = { forecast, trend, mix: mixCard, today, hosts: hostsCard, migration };
 
 /** The card, or null when what it shows didn't come. */
 export function drawCard(name: CardName, d: CardData, art: Art): El | null {

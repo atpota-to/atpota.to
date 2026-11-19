@@ -7,13 +7,38 @@
 //
 // No inbound post is involved, but the readings carry other people's text: an
 // app's name is whatever namespace somebody wrote records under. Those reach Poe
-// only as validated domains, and the draft goes through the same outbound gates
-// as a reply, with a stricter link rule: the weather page, or nothing.
+// only as validated domains (and an app's account, offered for tagging, as its
+// handle and display name), and the draft goes through the same outbound gates
+// as a reply, with a stricter link rule: the weather report's pages, or nothing.
 
 import { evaluateOutbound } from './outbound.js';
+import { detectHandles } from '../richtext.js';
 
-/** The one link a weather post may carry. Its card links it whatever the text says. */
+/** The whole weather report: what a weather post's card links unless Poe names one of its pages. */
 export const WEATHER_PAGE = 'https://atpota.to/weather';
+
+/**
+ * The report's pages (website/src/scripts/weather-topics.ts), each one part of it at
+ * /weather/<page>, and the card design its og:image names. Poe says which one a post is
+ * about (bot/agent/tools/choose_weather_page.ts), and the card links that page and shows
+ * its design, so a post about accounts moving house doesn't unfurl as the whole sky.
+ */
+export const WEATHER_PAGES = Object.freeze({
+  diversity: 'mix',
+  trends: 'trend',
+  today: 'today',
+  hosts: 'hosts',
+  migration: 'migration',
+});
+
+/** A page Poe named, if it's one of the report's, or null for the whole report. */
+export const weatherPageOf = (page) => (typeof page === 'string' && Object.hasOwn(WEATHER_PAGES, page) ? page : null);
+
+/** The address a weather post's card links: the page Poe named, or the whole report. */
+export const weatherPageUrl = (page) => (weatherPageOf(page) ? `${WEATHER_PAGE}/${page}` : WEATHER_PAGE);
+
+/** The links a weather post may carry: the report and its pages. Its card links one whatever the text says. */
+const WEATHER_LINKS = new Set([WEATHER_PAGE, ...Object.keys(WEATHER_PAGES).map(weatherPageUrl)]);
 
 /** Every kind of moment, most newsworthy first: when two are due at once, the first is asked about. */
 export const MOMENT_KINDS = ['storm', 'unusual', 'new_app', 'mixed', 'daily'];
@@ -30,6 +55,18 @@ const ASKED = new Set(['dispatched', 'drafted', 'skipped', 'held', 'rejected', '
 const utcDate = (ms) => new Date(ms).toISOString().slice(0, 10);
 const utcHour = (ms) => new Date(ms).toISOString().slice(0, 13);
 const round1 = (n) => Math.round(n * 10) / 10;
+
+/**
+ * Whether enough different accounts wrote an app's records for it to be news
+ * (weatherNewAppMinAccounts): one account's batch is not an app blowing in. An
+ * app with no count (the station hadn't counted it yet) doesn't pass; the check
+ * is off when the minimum is 0 or not a number.
+ */
+export function enoughAccounts(app, g) {
+  const min = g.weatherNewAppMinAccounts;
+  if (!Number.isFinite(min) || min <= 0) return true;
+  return Number.isFinite(app?.accounts) && app.accounts >= min;
+}
 
 /**
  * The moments due in this reading, most newsworthy first, before any cap or
@@ -64,7 +101,7 @@ export function dueMoments({ reading, almanac, nowMs, gates: g }) {
   }
 
   const fresh = (almanac?.newApps ?? [])
-    .filter((a) => a.records >= g.weatherNewAppMinRecords && nowMs - Date.parse(a.firstSeen) <= DAY)
+    .filter((a) => a.records >= g.weatherNewAppMinRecords && enoughAccounts(a, g) && nowMs - Date.parse(a.firstSeen) <= DAY)
     .sort((a, b) => b.records - a.records);
   if (kinds.has('new_app')) {
     for (const app of fresh) out.push({ kind: 'new_app', subject: app.domain, trigger: { app } });
@@ -145,21 +182,85 @@ export function isSkip(text) {
   return /^skip[.!]?$/i.test(t) || (t.length <= 300 && /^skip\s*[:\-–—]/i.test(t));
 }
 
+// --- tagging an app's own account --------------------------------------------------
+// A weather post that names an app may tag that app's own account, so it gets the
+// notification, and nobody else. Before Poe is asked, the watcher looks up an
+// account for each app it might name (the moment's and the day's busiest), and
+// offers Poe only the ones that pass every check here. A draft may tag those and
+// no other: any other @handle still rejects it. Poe decides whether to tag one
+// at all, reading its profile: these decide who it can be.
+//
+// An app's name is its namespace as a domain (`org.tangled.*` is tangled.org), and
+// its account is the one whose handle is that domain: only whoever controls the
+// domain can hold that handle. That alone can be a person, though (a personal
+// domain is a common handle, and a person's own site can write records under it),
+// so it also has to be the account that claimed the namespace for its lexicons
+// (`_lexicon.<authority>` names its DID, for the collections the station heard),
+// be written by enough accounts that it isn't one person's project, have a name
+// and no pronouns, and carry no labels.
+
+/** The domain an NSID's lexicon authority answers on: its name dropped and the rest reversed ("org.tangled.feed.star" is feed.tangled.org). */
+export function lexiconAuthority(nsid) {
+  const parts = String(nsid ?? '').toLowerCase().split('.');
+  return parts.length >= 3 && parts.every(Boolean) ? parts.slice(0, -1).reverse().join('.') : null;
+}
+
+/** How many accounts a weather post may tag (weatherMaxTags): 0 when tagging is off. */
+export const maxTags = (g) => (Number.isInteger(g.weatherMaxTags) && g.weatherMaxTags > 0 ? g.weatherMaxTags : 0);
+
+/**
+ * Why an app's account can't be tagged in a weather post, or null when it can.
+ *
+ *   app          { domain, collections, accounts }: what the station heard of it
+ *   profile      the AppView's profile for the handle `domain`: { did, handle,
+ *                displayName, pronouns, labels }, or null when there is none
+ *   authorities  Map of each of the app's collections to the DIDs its
+ *                `_lexicon` record names ([] for none), or null when the lookup failed
+ *   ctx          { gates, botDid, isDenied(did), taggedRecently(did) }
+ */
+export function appAccountProblem(app, profile, authorities, ctx) {
+  // One person writing an app's records is somebody's project, whatever it's called.
+  if (!enoughAccounts(app, ctx.gates)) return 'few_accounts';
+  if (!profile || profile.handle !== app.domain || !/^did:(plc|web):/.test(String(profile.did))) return 'no_account';
+  if (!profile.displayName) return 'no_name';
+  // People say their pronouns on their profile; an app's account doesn't.
+  if (profile.pronouns) return 'pronouns';
+  if (profile.labels?.length) return 'labeled';
+  const claims = (app.collections ?? []).map((c) => authorities?.get(c));
+  if (!claims.length || claims.some((dids) => dids == null)) return 'lexicon_unknown';
+  if (!claims.some((dids) => dids.length)) return 'no_lexicon';
+  if (claims.some((dids) => dids.length && (dids.length !== 1 || dids[0] !== profile.did))) return 'not_lexicon_authority';
+  if (profile.did === ctx.botDid) return 'self';
+  if (ctx.isDenied(profile.did)) return 'opted_out';
+  if (ctx.taggedRecently(profile.did)) return 'tagged_recently';
+  return null;
+}
+
 /**
  * Whether a draft is safe to post: the reply gates (markdown, non-answers, length,
- * @handles, links) for a single post, with no @handle allowed at all and no link
- * but the weather page, plus not repeating the last weather post.
+ * @handles, links) for a single post, with no link but the weather report's own,
+ * plus not repeating the last weather post. The only @handles allowed are the app
+ * accounts the watcher offered (`taggable`, [{ handle, did, displayName }]), up to
+ * weatherMaxTags; on a pass, `mentions` is the ones it tags.
  */
-export function evaluateWeatherDraft(draft, { gates: g, killSwitch, lastPostText = null }) {
-  return evaluateOutbound(draft, {
+export function evaluateWeatherDraft(draft, { gates: g, killSwitch, lastPostText = null, taggable = [] }) {
+  const max = maxTags(g);
+  const offered = new Map(max ? taggable.map((a) => [String(a.handle).toLowerCase(), a]) : []);
+  const tags = [...new Set(detectHandles(String(draft ?? '')))].filter((h) => offered.has(h));
+  if (tags.length > max) {
+    return { ok: false, gate: 'too_many_tags', detail: `draft tags ${tags.length} accounts, cap ${max}` };
+  }
+  const verdict = evaluateOutbound(draft, {
     gates: { ...g, maxPosts: 1, maxLinks: 1 },
     replyingToDid: null,
     replyingToHandle: null,
     botHandle: null,
     lastReplyText: lastPostText,
-    allowedLinks: new Set([WEATHER_PAGE]),
+    allowedLinks: WEATHER_LINKS,
+    allowedHandles: tags,
     killSwitch,
   });
+  return verdict.ok ? { ...verdict, mentions: tags.map((h) => offered.get(h)) } : verdict;
 }
 
 /** Records a second over a span, one decimal. */

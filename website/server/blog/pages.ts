@@ -23,6 +23,7 @@ import type { BlogComment, Discussion } from './discussion.js';
 import { aturiUrl, escapeAttr, escapeHtml, jsonForScript } from './html.js';
 import { documentPath, type BlogDocument, type Publication } from './records.js';
 import { FootnoteList, renderRichText } from './richtext.js';
+import { BLUESKY_APP, shareHtml, shareText, type ShareApp } from './share.js';
 import { altLinksHtml, blueskySubscribeHtml, emailFormHtml, feedLinkHtml, type EmailSignup } from './subscribe.js';
 
 export const WORDS_PER_MINUTE = 200;
@@ -301,6 +302,27 @@ export interface PostInput {
   coverCid?: string | null;
   /** Comments and recommends; null when comments are switched off (BLOG_COMMENTS_DISABLED). */
   discussion?: Discussion | null;
+  /** Apps for "share this issue" (share.ts), Bluesky first; Bluesky alone when left out. */
+  shareApps?: readonly ShareApp[];
+  /**
+   * A draft of the dispatch (/blog/preview/<token>): the same page, kept out of search
+   * and unfurls, with a note that it isn't published and nothing for readers to do.
+   */
+  preview?: { version: number; savedAt: string | null; status: string } | null;
+}
+
+/** The note on a draft's page: which version this is and that it isn't out yet. */
+function previewNote(preview: NonNullable<PostInput['preview']>): string {
+  const when = preview.savedAt ? `, saved <time datetime="${escapeAttr(preview.savedAt)}">${escapeHtml(formatDate(preview.savedAt))}</time>` : '';
+  const state = preview.status === 'ready' ? 'waiting for review'
+    : preview.status === 'drafting' ? 'still being written'
+    : preview.status === 'publishing' ? 'being published'
+    : preview.status === 'superseded' ? 'replaced by a newer draft'
+    : 'not published';
+  return (
+    `<p class="post-preview" role="note"><strong>draft preview</strong>` +
+    `<span>version ${preview.version}${when} · ${escapeHtml(state)}. this isn't published, and the link is private.</span></p>`
+  );
 }
 
 /** The post body alone (blocks + footnotes), shared with the feed. */
@@ -371,13 +393,16 @@ export function postPage(input: PostInput): Page {
       : '';
 
   const discussion = input.discussion ?? null;
-  const main =
-    `<div class="post-layout"${site.publication ? ` data-blog-publication="${escapeAttr(site.publication.uri)}"` : ''} data-blog-document="${escapeAttr(doc.uri)}">` +
+  const preview = input.preview ?? null;
+  // "share this issue" (share.ts) sits in the comments' header; with comments switched off,
+  // at the bottom of the post. A draft isn't out yet, so there's nothing to share.
+  const share = preview ? '' : shareHtml(input.shareApps ?? [BLUESKY_APP], shareText(site.name, doc.title, here));
+  const article =
     `<article class="post" data-poe-askable aria-labelledby="post-title">` +
     `<header class="post__header">` +
+    (preview ? previewNote(preview) : '') +
     `<nav class="post__crumbs" aria-label="breadcrumb"><ol class="post__crumbs-list" role="list"><li><a href="${BLOG_PATH}">${escapeHtml(site.name)}</a></li><li aria-current="page"><time datetime="${escapeAttr(doc.publishedAt)}">${escapeHtml(formatDate(doc.publishedAt))}</time></li></ol></nav>` +
     `<h1 class="post__title" id="post-title">${escapeHtml(doc.title)}</h1>` +
-    (doc.description ? `<p class="post__subtitle">${escapeHtml(doc.description)}</p>` : '') +
     `<p class="post__meta"><span>${minutes} min read</span><span aria-hidden="true">·</span><span>by <a href="${escapeAttr(profileUrl(site.handle))}">${escapeHtml(bylineName(site.handle))}</a></span>` +
     (doc.updatedAt && doc.updatedAt.slice(0, 10) !== doc.publishedAt.slice(0, 10)
       ? `<span aria-hidden="true">·</span><span>updated <time datetime="${escapeAttr(doc.updatedAt)}">${escapeHtml(formatDate(doc.updatedAt))}</time></span>`
@@ -386,7 +411,25 @@ export function postPage(input: PostInput): Page {
     `</header>` +
     cover +
     `<div class="post__body">${body}</div>` +
-    `</article>` +
+    (share && !discussion ? `<footer class="post__share">${share}</footer>` : '') +
+    `</article>`;
+  if (preview) {
+    return {
+      head: headHtml({
+        title: `draft: ${doc.title} - ${site.name}`,
+        description,
+        canonical: null,
+        type: 'article',
+        image: DEFAULT_OG_IMAGE,
+        site,
+        robots: 'noindex, nofollow',
+      }),
+      main: `<div class="post-layout post-layout--preview">${article}</div>`,
+    };
+  }
+  const main =
+    `<div class="post-layout"${site.publication ? ` data-blog-publication="${escapeAttr(site.publication.uri)}"` : ''} data-blog-document="${escapeAttr(doc.uri)}">` +
+    article +
     `<aside class="post-end" aria-label="after the post">` +
     `<div class="tile post-end__card" data-mascot-trigger>` +
     potato(input.assets, 'wink', 'post-end__potato', 150, 122, true) +
@@ -399,7 +442,7 @@ export function postPage(input: PostInput): Page {
     `</div>` +
     NOTICE_LINE +
     `</div>` +
-    (discussion ? discussionHtml(site, doc, discussion) : '') +
+    (discussion ? discussionHtml(site, doc, discussion, share) : '') +
     nav +
     (record
       ? `<p class="post-end__record">this post is a <code>site.standard.document</code> record on ${escapeHtml(bylineName(site.owner))}'s pds. <a href="${escapeAttr(record)}">open the record</a></p>`
@@ -493,8 +536,8 @@ export function commentCountLabel(n: number): string {
   return n === 1 ? '1 comment' : `${n} comments`;
 }
 
-/** The comments section under a post. */
-export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion): string {
+/** The comments section under a post, with the share menu (share.ts) in its header. */
+export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion, share = ''): string {
   const ok = d.status === 'ok';
   const elsewhere = docUrl(site, doc);
   const leaflet = !elsewhere.startsWith(`${SITE_ORIGIN}/`) ? elsewhere : null;
@@ -510,7 +553,9 @@ export function discussionHtml(site: SiteInfo, doc: BlogDocument, d: Discussion)
   return (
     `<section class="tile post-talk" id="comments" aria-labelledby="comments-title" data-blog-comments${ok ? '' : ' data-comments-unavailable'}>` +
     `<div class="post-talk__head"><h2 class="post-talk__title" id="comments-title">comments</h2>` +
-    `<span class="post-talk__count" data-comment-count="${d.count}"${d.count ? '' : ' hidden'}>${escapeHtml(commentCountLabel(d.count))}</span></div>` +
+    `<span class="post-talk__count" data-comment-count="${d.count}"${d.count ? '' : ' hidden'}>${escapeHtml(commentCountLabel(d.count))}</span>` +
+    (share ? `<div class="post-talk__share">${share}</div>` : '') +
+    `</div>` +
     `<div class="post-talk__compose" data-comment-compose hidden></div>` +
     `<ol class="comment-list" role="list" data-comment-list${d.comments.length ? '' : ' hidden'}>${d.comments.map((c) => commentHtml(c)).join('')}</ol>` +
     note +

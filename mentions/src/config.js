@@ -163,11 +163,31 @@ export const GATE_DEFAULTS = {
   // A new app is worth asking about once it has written this many records. The
   // station hears a few new apps a day, most of them a handful of test records.
   weatherNewAppMinRecords: 250,
+  // ...and once at least this many different accounts have written them. One
+  // account's batch (an import, a backfill, a bot, a developer testing their own
+  // app) can be thousands of records and still isn't an app blowing in: on
+  // 2026-11-07 one account's 5,800 scrobbles went out as a new app. An app the
+  // station couldn't count accounts for yet waits until it can. 0 or null turns
+  // the check off. The same rule keeps one account's batch out of the new apps
+  // shown with every other moment.
+  weatherNewAppMinAccounts: 3,
   // The diversity index from which the sky counts as mixed: "high" on the page.
   // A usual minute in October 2026 was about 2.
   weatherMixedMinIndex: 6,
+  // A weather post may tag the accounts of the apps it names, up to this many, and
+  // only accounts that pass every check in gates/weather.js appAccountProblem (the
+  // app's own handle, the namespace's lexicon authority, enough accounts writing it,
+  // no pronouns, no labels). 0 turns tagging off.
+  weatherMaxTags: 2,
+  // An account a weather post tagged isn't offered again for this many days, so a
+  // busy app isn't notified every day it's busy.
+  weatherTagCooldownDays: 7,
 
   maxOtherMentions: 2,
+  // A reply may tag the people who run Poe (ADMIN_DIDS), checked by DID at post
+  // time (gates/outbound.js operatorMentions), so it can ask them for help.
+  // false: a reply tags nobody, as before 2026-11-16.
+  replyOperatorTags: true,
   maxGraphemes: 300,            // from the live app.bsky.feed.post lexicon
   maxBytes: 3000,               // ditto
   // How many posts one answer may become. 1 disables threading entirely.
@@ -279,7 +299,6 @@ function parseDispatch() {
   }
   return {
     enabled: flag('DISPATCH_ENABLED'),
-    publishEnabled: flag('DISPATCH_PUBLISH_ENABLED'),
     announceUrlBase,
     publicationUri,
     publisherDid: pub[1],
@@ -290,7 +309,60 @@ function parseDispatch() {
     publisherAppPassword: opt('DISPATCH_PUBLISHER_APP_PASSWORD', ''),
     pagePollMs: num('DISPATCH_PAGE_POLL_MS', 20000),
     pageTimeoutMs: num('DISPATCH_PAGE_TIMEOUT_MS', 600000),
+    // Leaflet emails subscribers when its job for a newly created document runs,
+    // about a minute after the last change it saw (a debounce of 60 s, at most
+    // 3 min). If the document changes again before that, the job sees an update
+    // instead of a create and sends nothing. So a document stays untouched this
+    // long after it was published before its announcement is linked to it.
+    leafletSettleMs: num('DISPATCH_LEAFLET_SETTLE_MS', 300000),
+    drafts: parseDispatchDrafts(),
   };
+}
+
+// --- weekly drafts ---------------------------------------------------------
+// Poe researching and writing each week's issue on its own (dispatch-drafts.js):
+//   on   once a week, at DISPATCH_DRAFT_DAY and DISPATCH_DRAFT_HOUR_UTC, the
+//        droplet asks Poe for a draft and DMs it to the operator for review.
+//        Needs DISPATCH_ENABLED and OPERATOR_DM_ENABLED, and stage 4.
+//   ask  no weekly draft; one is written only when an operator asks in a DM
+//   off  nothing runs, and "draft dispatch" in a DM goes to Poe as plain words
+// Publishing a draft also needs DISPATCH_PUBLISHER_APP_PASSWORD.
+const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function parseDispatchDrafts() {
+  const mode = opt('DISPATCH_DRAFTS', 'off').toLowerCase();
+  if (!['off', 'ask', 'on'].includes(mode)) throw new Error(`DISPATCH_DRAFTS must be off, ask or on, got ${mode}`);
+  const dayName = opt('DISPATCH_DRAFT_DAY', 'monday').toLowerCase();
+  const day = /^[0-6]$/.test(dayName) ? Number(dayName) : DAYS.indexOf(dayName);
+  if (day < 0) throw new Error(`DISPATCH_DRAFT_DAY must be a day of the week, got ${dayName}`);
+  const hour = num('DISPATCH_DRAFT_HOUR_UTC', 12);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error(`DISPATCH_DRAFT_HOUR_UTC must be 0 to 23, got ${hour}`);
+  const previewUrlBase = opt('DISPATCH_PREVIEW_URL_BASE', 'https://atpota.to/blog/preview').replace(/\/+$/, '');
+  if (!/^https:\/\/[^/]+(\/.*)?$/.test(previewUrlBase)) throw new Error(`DISPATCH_PREVIEW_URL_BASE must be an https URL: ${previewUrlBase}`);
+  return {
+    mode,
+    day,
+    hour,
+    previewUrlBase,
+    tickMs: Math.max(num('DISPATCH_DRAFT_TICK_MS', 300000), 60000),
+    // A drafting turn that hasn't finished in this long is settled with what it saved.
+    turnTimeoutMs: num('DISPATCH_DRAFT_TIMEOUT_MS', 5400000),
+  };
+}
+
+// --- the memory digest -------------------------------------------------------
+// Once a week, a DM to the first ADMIN_DIDS operator saying what Poe remembered
+// and forgot, from the backup log (memory-digest.js). On unless MEMORY_DIGEST=off.
+// Needs OPERATOR_DM_ENABLED and stage 4, like every DM the droplet starts.
+function parseMemoryDigest() {
+  const mode = opt('MEMORY_DIGEST', 'on').toLowerCase();
+  if (!['off', 'on'].includes(mode)) throw new Error(`MEMORY_DIGEST must be on or off, got ${mode}`);
+  const dayName = opt('MEMORY_DIGEST_DAY', 'sunday').toLowerCase();
+  const day = /^[0-6]$/.test(dayName) ? Number(dayName) : DAYS.indexOf(dayName);
+  if (day < 0) throw new Error(`MEMORY_DIGEST_DAY must be a day of the week, got ${dayName}`);
+  const hour = num('MEMORY_DIGEST_HOUR_UTC', 18);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error(`MEMORY_DIGEST_HOUR_UTC must be 0 to 23, got ${hour}`);
+  return { enabled: mode === 'on', day, hour };
 }
 
 // --- weather posts ---------------------------------------------------------
@@ -311,6 +383,26 @@ function parseWeatherPosts() {
     pollMs: Math.max(num('WEATHER_POLL_MS', 300000), 60000),
     // A moment with no draft after this long is given up on.
     draftTimeoutMs: num('WEATHER_DRAFT_TIMEOUT_MS', 900000),
+  };
+}
+
+// --- Poe's profile look ----------------------------------------------------
+// Poe's avatar and banner changing with the sky over New York (profile-look.js),
+// picked from the library the website serves (website/scripts/poe-profile.ts).
+//   on       the avatar and banner are changed (the default, chosen by the
+//            operator on 2026-10-22; stage 4 only)
+//   dry-run  each change is worked out and logged, and nothing is written: read
+//            them with `npm run profile-look`
+//   off      nothing runs
+function parseProfileLook() {
+  const mode = opt('PROFILE_LOOK', 'on').toLowerCase();
+  if (!['off', 'dry-run', 'on'].includes(mode)) throw new Error(`PROFILE_LOOK must be off, dry-run or on, got ${mode}`);
+  const base = opt('PROFILE_LOOK_BASE', 'https://atpota.to/poe-profile').replace(/\/+$/, '');
+  if (!/^https:\/\/[^/]+(\/.*)?$/.test(base)) throw new Error(`PROFILE_LOOK_BASE must be an https URL: ${base}`);
+  return {
+    mode,
+    base,
+    pollMs: Math.max(num('PROFILE_LOOK_POLL_MS', 300000), 60000),
   };
 }
 
@@ -374,7 +466,12 @@ export const config = {
   // signed record, which a post cannot fake by saying who it is from.
   // Comma-separated; empty means nobody.
   adminDids: opt('ADMIN_DIDS', '').split(',').map((s) => s.trim()).filter((s) => s.startsWith('did:')),
+  // The website's admin proxy (website/server/admin.ts) presents this on /admin/.
+  // Never the same as DROPLET_SHARED_SECRET; unset, /admin/ answers 503.
+  adminSecret: opt('ADMIN_SHARED_SECRET', ''),
+  memoryDigest: parseMemoryDigest(),
 
   dispatch: parseDispatch(),
   weather: parseWeatherPosts(),
+  profileLook: parseProfileLook(),
 };

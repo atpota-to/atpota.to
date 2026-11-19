@@ -85,6 +85,13 @@ function callerAddress(ctx: { session: { id: string; auth: { initiator?: Caller;
         return { sessionId };
       throw new Error("search_bluesky_posts requires an authenticated caller");
     }
+    // The dispatch's drafting session (channels/dispatch.ts), on the session budget.
+    if (caller?.authenticator === "atpotato-droplet-dispatch") {
+      const draftId = caller.attributes?.draftId;
+      if (caller.principalType === "service" && typeof draftId === "string" && /^dd-[A-Za-z0-9-]{8,48}$/.test(draftId))
+        return { sessionId };
+      throw new Error("search_bluesky_posts requires an authenticated caller");
+    }
   }
   for (const caller of callers) {
     if (caller?.authenticator === "oidc" &&
@@ -138,7 +145,7 @@ const pageSchema = z.object({
 export default defineTool({
   description: "Search one page of Bluesky posts with app.bsky.feed.searchPostsV2 filters. " +
     "Requires a query or substantive filter; defaults to 10 results, at most 25. " +
-    "Runs through the authenticated droplet search callback for signed posts, operator DMs, or authenticated eve sessions, not website chats. " +
+    "Runs through the authenticated droplet search callback for signed posts, operator DMs, the dispatch's drafting session, or authenticated eve sessions, not website chats. " +
     "A cursor requests another page but does not guarantee the entire index can be paged; " +
     "hitsTotal is an estimate, not a completeness claim. Stop on 429 and honor retryAfter.",
   inputSchema,

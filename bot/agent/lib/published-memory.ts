@@ -1,4 +1,4 @@
-import { defineMemoryProvider, type MemoryProvider, type MemoryScope } from "eve/memory";
+import { defineMemoryProvider, type MemoryProvider, type MemoryScope, type MemoryToolDefinition, type MemoryToolSet } from "eve/memory";
 import { fileMemory, inMemory, MemoryDocumentConflictError, type MemoryDocumentBackend } from "eve/memory/file";
 import { vercelBlob } from "eve/memory/file/vercel";
 import { PERSON_SLOT, personNotesKey } from "./memory-key";
@@ -81,7 +81,7 @@ function didOf(scope: MemoryScope): string | undefined {
  * up quickly: the note is already safe in Blob, and the droplet retries its
  * own publishing. True when the droplet took it.
  */
-async function handOver(did: string, content: string, timeoutMs: number): Promise<boolean> {
+export async function handOver(did: string, content: string, timeoutMs: number): Promise<boolean> {
   const callback = process.env.DROPLET_CALLBACK_URL;
   const secret = process.env.DROPLET_SHARED_SECRET;
   if (!callback || !secret) return false;
@@ -177,38 +177,198 @@ export function datedNote(text: string, now = Date.now()): string {
 }
 
 /**
- * Room for a journal Poe writes in most days: about 80 notes of the usual
- * length, against eve's default of 4,000 characters, about 25. A full journal
- * refuses the save until Poe removes a note.
+ * Room for the newest pages of a journal Poe writes in most days: about 80
+ * notes of the usual length, against eve's default of 4,000 characters, about
+ * 25. A full journal moves its oldest notes to the archive (lib/journal.ts)
+ * rather than refusing the save.
  */
 export const JOURNAL_MAX_CHARACTERS = 12_000;
 
-// Both slots use the existing private Blob store, but only person memory
-// hands writes to the droplet. The slot namespace keeps their documents apart.
-export function privateFileMemory(options: { maxCharacters?: number } = {}): MemoryProvider {
+/** The private Blob store every slot keeps its documents in, for code outside a turn. */
+export const memoryStore: MemoryDocumentBackend = store;
+
+export interface Note { readonly index: number; readonly text: string }
+
+/** The notes in a fileMemory document, and the counter, or null when it isn't one. */
+export function parseNotes(content: string): { lastIndex: number; notes: Note[] } | null {
+  const header = HEADER.exec(content);
+  if (!header) return null;
+  const notes = content.slice(header[0].length).split("\n").flatMap((line) => {
+    const entry = /^(\d+): (.+)$/.exec(line);
+    return entry ? [{ index: Number(entry[1]), text: entry[2] }] : [];
+  });
+  return { lastIndex: Number(header[1]), notes };
+}
+
+/** A fileMemory document, exactly as eve writes one. */
+export function formatNotes(lastIndex: number, notes: readonly Note[]): string {
+  const head = `<!-- eve-memory-file-v1 lastAllocatedIndex=${lastIndex} -->\n`;
+  const body = [...notes].sort((a, b) => a.index - b.index).map((n) => `${n.index}: ${n.text}`).join("\n");
+  return body ? `${head}${body}\n` : head;
+}
+
+/** eve stores a note trimmed, with each run of whitespace made one space. */
+export const normalizedNote = (text: string) => text.trim().replaceAll(/\s+/g, " ");
+
+/** The notes stored under one key, each with the index Poe recalls and removes it by. */
+export async function readNotes(key: string, signal: AbortSignal): Promise<Note[]> {
+  const doc = await store.read({ key, signal });
+  return doc ? parseNotes(doc.content)?.notes ?? [] : [];
+}
+
+/**
+ * Hand one version of a private memory document to the droplet's backup log
+ * (mentions/src/memory-log.js), which keeps its history for the admin page,
+ * undo and the weekly digest. It never publishes any of it. Never throws, and
+ * gives up quickly: Blob already holds the note.
+ */
+export async function logVersion(entry: { slot: string; scope: string; content: string; source: string }, timeoutMs = 3000): Promise<boolean> {
+  const callback = process.env.DROPLET_CALLBACK_URL;
+  const secret = process.env.DROPLET_SHARED_SECRET;
+  if (!callback || !secret) return false;
+  try {
+    const res = await fetch(new URL("/memory", callback), {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-atpotato-secret": secret },
+      body: JSON.stringify({ log: entry }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) console.error("memory version not logged", res.status);
+    return res.ok;
+  } catch (err) {
+    console.error("memory version not logged", String(err));
+    return false;
+  }
+}
+
+/** The scope a version is logged under: a DID for per-person slots, else the slot's one scope. */
+export function scopeLabel(scope: MemoryScope): string {
+  return didOf(scope) ?? (typeof scope.value === "string" ? scope.value : scope.value.join(" "));
+}
+
+/** A backend that hands every write to the backup log, for one slot and scope. */
+function loggedBackend(slot: string, scope: MemoryScope): MemoryDocumentBackend {
+  return {
+    read: (input) => store.read(input),
+    async write(input) {
+      const saved = await store.write(input);
+      await logVersion({ slot, scope: scopeLabel(scope), content: input.content, source: "poe" });
+      return saved;
+    },
+  };
+}
+
+const FULL = /would exceed the configured [\d,]+-character limit/;
+
+export interface PrivateMemoryOptions {
+  readonly maxCharacters?: number;
+  /**
+   * Called when a save would go over maxCharacters, with the document's key.
+   * Resolve true once room has been made, and the save is tried once more;
+   * false lets eve's "remove a memory" error through to Poe.
+   */
+  readonly onFull?: (key: string, slot: string, scope: MemoryScope, signal: AbortSignal) => Promise<boolean>;
+  /** Extra recalled messages after the notes themselves (the journal's archive). */
+  readonly recallMore?: (ctx: Parameters<MemoryProvider["recall"]["turn.started"]>[0]) => Promise<{ content: string; id: string } | null>;
+}
+
+// Every private slot uses the same Blob store; the slot namespace keeps their
+// documents apart. Only person memory publishes, but every write here is
+// handed to the droplet's backup log.
+export function privateFileMemory(options: PrivateMemoryOptions = {}): MemoryProvider {
   const base = fileMemory({ backend: store, maxCharacters: options.maxCharacters });
+  const more = options.recallMore;
   return defineMemoryProvider({
     recall: {
       async "turn.started"(ctx) {
-        return withDatesHint(await base.recall["turn.started"](ctx));
+        const recalled = withDatesHint(await base.recall["turn.started"](ctx));
+        const extra = more ? await more(ctx).catch(() => null) : null;
+        return extra ? { messages: [...(recalled?.messages ?? []), extra] } : recalled;
       },
       async "compaction.completed"(ctx) {
         return withDatesHint(await base.recall["compaction.completed"]!(ctx));
       },
     },
     async tools(ctx) {
-      const tools = await base.tools?.(ctx);
+      // Built per turn, around a backend that knows which slot and scope it writes.
+      const backend = loggedBackend(ctx.memory.slot, ctx.memory.scope);
+      const tools = await fileMemory({ backend, maxCharacters: options.maxCharacters }).tools?.(ctx);
       if (!tools?.save_memory) return tools ?? null;
       const save = tools.save_memory;
-      return {
+      const onFull = options.onFull;
+      const roomy: MemoryToolSet = onFull ? {
         ...tools,
         save_memory: {
           ...save,
-          execute: (input: { text: string }, context) => save.execute({ ...input, text: datedNote(input.text) } as never, context),
+          async execute(input: never, context: ToolContext) {
+            try {
+              return await save.execute(input, context);
+            } catch (err) {
+              if (!(err instanceof Error) || !FULL.test(err.message)) throw err;
+              if (!(await onFull(ctx.memory.scope.key, ctx.memory.slot, ctx.memory.scope, context.abortSignal))) throw err;
+              return save.execute(input, context);
+            }
+          },
         },
-      };
+      } : tools;
+      return confirmingTools(roomy, ctx.memory.scope.key, (text) => datedNote(text));
     },
   });
+}
+
+type ToolContext = Parameters<MemoryToolDefinition["execute"]>[1];
+
+const storedNotes = readNotes;
+
+const stored = (count: number) => `${count} note${count === 1 ? "" : "s"} stored here now.`;
+
+/**
+ * eve's save_memory and remove_memory return nothing when they work and throw
+ * when they don't. On 2026-11-02 that silence had Poe tell the operator it was
+ * only "assuming" a round of dispatch notes stuck. These read the notes back
+ * after writing (eve's Blob backend reads past the cache, so the read sees the
+ * write) and answer with what is stored now, or fail when it isn't so.
+ * `asSaved` is the note as it goes to eve, so the read-back looks for that.
+ */
+export function confirmingTools(tools: MemoryToolSet, key: string, asSaved = (text: string) => text): MemoryToolSet {
+  const { save_memory: save, remove_memory: remove } = tools;
+  return {
+    ...tools,
+    ...(save ? {
+      save_memory: {
+        ...save,
+        async execute(input: { text: string }, context: ToolContext) {
+          const text = asSaved(input.text);
+          await save.execute({ ...input, text } as never, context);
+          const note = normalizedNote(text);
+          const notes = await storedNotes(key, context.abortSignal);
+          const saved = notes.find((n) => n.text === note);
+          if (!saved) {
+            throw new Error("Not saved: the save gave no error, but the note isn't there when read back. " +
+              "Try once more, and if this happens again, say it didn't save.");
+          }
+          return `Saved as note ${saved.index}. ${stored(notes.length)}`;
+        },
+      },
+    } : {}),
+    ...(remove ? {
+      remove_memory: {
+        ...remove,
+        async execute(input: { index: number }, context: ToolContext) {
+          const before = await storedNotes(key, context.abortSignal);
+          if (!before.some((n) => n.index === input.index)) {
+            return `There is no note ${input.index}, so nothing was removed. ${stored(before.length)}`;
+          }
+          await remove.execute(input as never, context);
+          const after = await storedNotes(key, context.abortSignal);
+          if (after.some((n) => n.index === input.index)) {
+            throw new Error(`Not removed: note ${input.index} is still there when read back.`);
+          }
+          return `Removed note ${input.index}. ${stored(after.length)}`;
+        },
+      },
+    } : {}),
+  };
 }
 
 type Recalled = Awaited<ReturnType<MemoryProvider["recall"]["turn.started"]>>;
@@ -262,7 +422,7 @@ export function publishedFileMemory(): MemoryProvider {
       const tools = await fileMemory({ backend: publishing }).tools?.(ctx);
       if (!tools?.save_memory) return tools ?? null;
       const save = tools.save_memory;
-      return {
+      return confirmingTools({
         ...tools,
         save_memory: {
           ...save,
@@ -272,7 +432,7 @@ export function publishedFileMemory(): MemoryProvider {
             return save.execute(input as never, context);
           },
         },
-      };
+      }, ctx.memory.scope.key);
     },
   });
 }

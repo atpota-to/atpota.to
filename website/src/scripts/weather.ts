@@ -33,7 +33,8 @@
 
 import { rollText } from './roll';
 import { cloudCount, renderClouds } from './weather-sky';
-import { renderSpark } from './weather-spark';
+import { bigAmount, headlineOf, readHeadline, tileLens, type Headline } from './weather-headline';
+import { renderSpark, renderSparkline } from './weather-spark';
 
 export const ATMOSPHERE_ENDPOINT = '/api/atmosphere';
 export const REFRESH_MS = 60_000;
@@ -73,6 +74,37 @@ export const LEVEL_TEXT: Record<DiversityLevel, string> = {
   extreme: 'bluesky is barely the weather today',
 };
 
+export type HostingLevel = 'early days' | 'taking root' | 'spreading' | 'well spread' | 'flourishing';
+
+/** Where each hosting diversity level starts (server/atmosphere.ts HOSTING_LEVELS; tests/weather-hosts.test.ts checks they match). */
+export const HOSTING_SCALE: ReadonlyArray<readonly [HostingLevel, number]> = [
+  ['early days', 0],
+  ['taking root', 10],
+  ['spreading', 25],
+  ['well spread', 75],
+  ['flourishing', 200],
+];
+
+/** The top of the hosting diversity scale, which is logarithmic: each level spans a bigger stretch than the one before. */
+export const HOSTING_SCALE_MAX = 500;
+
+export const HOSTING_TEXT: Record<HostingLevel, string> = {
+  'early days': "nearly every account still lives on bluesky's own servers",
+  'taking root': 'independent hosts are finding their feet',
+  spreading: 'a real share of the network lives elsewhere, across many hosts',
+  'well spread': 'lots of accounts live off bluesky, spread wide',
+  flourishing: 'the network lives all over the place',
+};
+
+export function hostingLevelOf(index: number): HostingLevel {
+  let level: HostingLevel = 'early days';
+  for (const [name, from] of HOSTING_SCALE) if (index >= from) level = name;
+  return level;
+}
+
+/** Where an index sits on the hosting scale, 0 to 1: log(1 + index) against log(1 + the top). */
+export const hostingPosition = (index: number): number => Math.log1p(Math.min(Math.max(index, 0), HOSTING_SCALE_MAX)) / Math.log1p(HOSTING_SCALE_MAX);
+
 export interface Rate {
   perSecond: number;
   count: number;
@@ -108,6 +140,40 @@ export interface Reading {
     index: number;
     apps: Array<{ domain: string; accounts: number; collections: string[] }>;
   };
+  /** The PDS hosts on the network, from the station's census of the relay's list (server/atmosphere.ts Hosts). */
+  hosts?: Hosts;
+  /** How the station is doing (server/atmosphere.ts StationHealth). */
+  health?: StationHealth;
+}
+
+export interface StationHealth {
+  ok: boolean;
+  lagSeconds: number | null;
+  covered60: number;
+  missing?: number | null;
+  lost?: number;
+  repairing?: { from: string; to: string } | null;
+}
+
+export interface Hosts {
+  measuredAt: string;
+  listed: number;
+  active: number;
+  bluesky: number;
+  independent: number;
+  writing: { bluesky: number; independent: number; minutes: number } | null;
+  accounts: { bluesky: number; independent: number };
+  diversity: { index: number; share: number; spread: number };
+  top: Array<{ hostname: string; accounts: number }>;
+  /** Every listed host by the relay's state for it. */
+  statuses?: { active: number; idle: number; offline: number; throttled: number; banned: number; other: number };
+  /** Independent hosts by accounts: 0, 1, up to 10, 100, 1,000, 10,000, and more. */
+  sizes?: number[];
+  /** The accounts on the hosts in each size. */
+  sizeAccounts?: number[];
+  tlds?: Array<{ tld: string; hosts: number; accounts: number }>;
+  /** Tangled's knots left out of all of it: git servers whose "accounts" are repositories (server/atmosphere.ts). */
+  knots?: number;
 }
 
 const num = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
@@ -143,6 +209,28 @@ function clean(r: Reading): Reading {
   const a = r.accounts;
   if (nums(a, ['active', 'bluesky', 'elsewhere', 'index']) && Array.isArray(a?.apps)) {
     out.accounts = { ...a, apps: a.apps.filter((x) => nums(x, ['accounts']) && name(x.domain) && Array.isArray(x.collections)).map((x) => ({ ...x, collections: x.collections.filter(name).slice(0, 3) })) };
+  }
+  const sh = r.health;
+  if (obj(sh) && typeof sh.ok === 'boolean' && num(sh.covered60)) {
+    out.health = { ok: sh.ok, lagSeconds: num(sh.lagSeconds) ? sh.lagSeconds : null, covered60: Math.min(60, sh.covered60) };
+    if (num(sh.missing)) out.health.missing = sh.missing;
+    if (num(sh.lost)) out.health.lost = sh.lost;
+    const rep = sh.repairing;
+    if (obj(rep) && typeof rep.from === 'string' && typeof rep.to === 'string' && Number.isFinite(Date.parse(rep.from)) && Number.isFinite(Date.parse(rep.to))) out.health.repairing = { from: rep.from, to: rep.to };
+  }
+  const h = r.hosts;
+  if (h && nums(h, ['listed', 'active', 'bluesky', 'independent']) && typeof h.measuredAt === 'string' && Number.isFinite(Date.parse(h.measuredAt)) && nums(h.accounts, ['bluesky', 'independent']) && nums(h.diversity, ['index', 'share', 'spread']) && Array.isArray(h.top)) {
+    const { statuses, sizes, sizeAccounts, tlds, knots, ...rest } = h;
+    out.hosts = {
+      ...rest,
+      writing: nums(h.writing, ['bluesky', 'independent', 'minutes']) ? h.writing : null,
+      top: h.top.filter((x) => nums(x, ['accounts']) && name(x.hostname)).slice(0, 10),
+    };
+    if (nums(statuses, ['active', 'idle', 'offline', 'throttled', 'banned', 'other'])) out.hosts.statuses = statuses;
+    if (Array.isArray(sizes) && sizes.length === 7 && sizes.every(num)) out.hosts.sizes = sizes;
+    if (Array.isArray(sizeAccounts) && sizeAccounts.length === 7 && sizeAccounts.every(num)) out.hosts.sizeAccounts = sizeAccounts;
+    if (Array.isArray(tlds)) out.hosts.tlds = tlds.filter((t) => nums(t, ['hosts', 'accounts']) && typeof t.tld === 'string' && /^[a-z0-9-]{2,63}$/.test(t.tld)).slice(0, 8);
+    if (num(knots)) out.hosts.knots = knots;
   }
   return out;
 }
@@ -239,6 +327,20 @@ export function coverageWords(seconds: number): string {
 }
 
 /** The index as people read it: two decimals under 1, one under 10, whole after that. */
+/**
+ * Hosting domains many apps share. An app's NSIDs are its domain the other way round, so
+ * one served from a shared host reads as the host: app.web.trackbrowser.* is
+ * trackbrowser.web.app, not web.app, which belongs to everyone on Firebase.
+ */
+export const SHARED_HOSTS: ReadonlySet<string> = new Set(['web.app', 'firebaseapp.com', 'github.io', 'pages.dev', 'vercel.app', 'netlify.app', 'workers.dev', 'fly.dev', 'onrender.com', 'deno.dev', 'herokuapp.com', 'glitch.me', 'surge.sh']);
+
+/** An app's name as people would know it: on a shared host, the subdomain its collections all share; else its domain. */
+export function appName(domain: string, collections: readonly string[]): string {
+  if (!SHARED_HOSTS.has(domain)) return domain;
+  const subs = new Set(collections.map((c) => c.split('.')[2]).filter((x): x is string => !!x && /^[a-z0-9-]+$/i.test(x)));
+  return subs.size === 1 ? `${[...subs][0]!.toLowerCase()}.${domain}` : domain;
+}
+
 export function formatIndex(index: number): string {
   return index < 1 ? index.toFixed(2) : index < 10 ? index.toFixed(1) : String(Math.round(index));
 }
@@ -247,16 +349,16 @@ export function formatIndex(index: number): string {
 export function ratioText(records: NonNullable<Reading['records']>): string {
   if (records.elsewhere <= 0) return 'every new record just now was a bluesky one';
   const n = Math.max(1, Math.round(records.perSecond / records.elsewhere));
-  return n <= 1 ? 'most new records came from outside bluesky' : `1 in ${n.toLocaleString('en-US')} new records came from outside bluesky`;
+  return n <= 1 ? 'most new records came from apps other than bluesky' : `1 in ${n.toLocaleString('en-US')} new records came from apps other than bluesky`;
 }
 
-/** "1 in 190 accounts active just now wrote outside bluesky, spread across about 10 apps' worth", or that nobody did. */
+/** "1 in 190 accounts active just now wrote outside bluesky, across about 10 apps", or that nobody did. */
 export function diversityText(d: { share: number; spread: number }): string {
-  if (d.share <= 0) return 'nobody active just now wrote outside bluesky';
+  if (d.share <= 0) return 'nobody active just now wrote with an app other than bluesky';
   const n = Math.round(100 / d.share);
   const apps = Math.max(1, Math.round(d.spread));
   const who = n <= 1 ? 'most accounts' : `1 in ${n.toLocaleString('en-US')} accounts`;
-  return `${who} active just now wrote outside bluesky, ${apps === 1 ? 'all in about one app' : `spread across about ${apps} apps' worth`}`;
+  return `${who} active just now wrote with apps other than bluesky, ${apps === 1 ? 'nearly all in one app' : `as spread out as ${apps} apps the same size`}`;
 }
 
 /** Sizes a two-part bar (bluesky, elsewhere) for elsewhere's share, in percent. A sliver of "elsewhere" stays visible. */
@@ -314,21 +416,29 @@ export function recordsPerSecond(r: Reading): number {
   return r.records?.perSecond ?? r.perSecond.posts;
 }
 
+/** The home tile's line on where the atmosphere lives: "1.5% of accounts live off bluesky, on 1,799 independent hosts". */
+export function hostsLine(h: Hosts): string {
+  return `${formatIndex(h.diversity.share)}% of accounts live off bluesky, on ${h.independent.toLocaleString('en-US')} independent hosts`;
+}
+
 export function renderReading(tile: HTMLElement, reading: Reading): void {
   const set = (name: string, value: number) => {
     const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
     if (el) countTo(el, value);
   };
-  set('records', recordsPerSecond(reading));
+  // a tile following the report's lens has its number, words and line from the history (renderHeadline)
+  if (tile.dataset.weatherHeadline !== 'history') {
+    set('records', recordsPerSecond(reading));
+    const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
+    if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
+    const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+    if (spark) renderSpark(spark, reading);
+  }
   set('posts', reading.perSecond.posts);
   set('likes', reading.perSecond.likes);
   set('reposts', reading.perSecond.reposts);
   set('follows', reading.perSecond.follows);
-  const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
-  if (cond) cond.textContent = CONDITION_TEXT[reading.condition];
   spinRays(tile, recordsPerSecond(reading));
-  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
-  if (spark) renderSpark(spark, reading);
   const sky = tile.querySelector<HTMLElement>('[data-weather-sky]');
   if (sky && reading.diversity) renderClouds(sky, cloudCount(reading.diversity.index));
   // its room is kept while the tile loads; a reading from before the diversity index has none
@@ -341,8 +451,52 @@ export function renderReading(tile: HTMLElement, reading: Reading): void {
     if (level) level.textContent = reading.diversity.level;
     renderMix(tile.querySelector('[data-weather-mix-text]'), tile.querySelector('[data-weather-bar-bsky]'), tile.querySelector('[data-weather-bar-else]'), reading);
   }
+  const hosts = tile.querySelector<HTMLElement>('[data-weather-hosts]');
+  if (hosts) {
+    hosts.hidden = !reading.hosts;
+    if (reading.hosts) {
+      const h = reading.hosts;
+      const index = tile.querySelector<HTMLElement>('[data-weather-hosting-index]');
+      if (index) countTo(index, h.diversity.index, formatIndex);
+      const level = tile.querySelector<HTMLElement>('[data-weather-hosting-level]');
+      if (level) level.textContent = hostingLevelOf(h.diversity.index);
+      const marker = tile.querySelector<HTMLElement>('[data-weather-hosting-marker]');
+      if (marker) marker.style.left = `${hostingPosition(h.diversity.index) * 100}%`;
+      const text = tile.querySelector<HTMLElement>('[data-weather-hosts-text]');
+      if (text) text.textContent = hostsLine(h);
+    }
+  }
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'ready';
+}
+
+/**
+ * The home tile's reading as the weather report's header has it (weather-headline.ts):
+ * over the lens's window, by accounts or records, with the header's line under it. The
+ * live reading keeps the sun, the clouds and the indexes.
+ */
+export function renderHeadline(tile: HTMLElement, h: Headline): void {
+  const text = (name: string, value: string) => {
+    const el = tile.querySelector<HTMLElement>(`[data-weather-${name}]`);
+    if (el) el.textContent = value;
+  };
+  text('period', h.period);
+  const records = tile.querySelector<HTMLElement>('[data-weather-records]');
+  if (records) {
+    countTo(records, h.value, bigAmount);
+    records.removeAttribute('data-waiting');
+  }
+  text('unit', h.unit);
+  text('unit-words', h.unitWords);
+  text('cond', h.cond);
+  const cond = tile.querySelector<HTMLElement>('[data-weather-cond]');
+  if (cond) cond.hidden = !h.cond;
+  const spark = tile.querySelector<HTMLElement>('[data-weather-spark]');
+  if (spark) {
+    delete spark.dataset.end;
+    spark.hidden = h.line.filter((v) => v !== null).length < 2;
+    if (!spark.hidden) renderSparkline(spark, h.line, undefined, h.projected);
+  }
 }
 
 export function renderWeatherError(tile: HTMLElement): void {
@@ -353,6 +507,10 @@ export function renderWeatherError(tile: HTMLElement): void {
   tile.removeAttribute('aria-busy');
   tile.dataset.state = 'error';
 }
+
+/** How often the home tile reads the lens's history: a minute's steps over the hour, longer ones less often. */
+export const HEADLINE_HOUR_MS = 60_000;
+export const HEADLINE_MS = 5 * 60_000;
 
 export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch = fetch): void {
   const tile = root.querySelector<HTMLElement>('[data-weather-tile]');
@@ -367,6 +525,16 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
   let checkedAt = -Infinity;
   let checking = false;
   let timer: number | undefined;
+  // The home tile says what the report's header would, over the lens's window (weather-headline.ts);
+  // on now, or when the history can't be read, it's the live reading's.
+  const lens = tile.querySelector('[data-weather-period]') ? tileLens() : null;
+  let last: Reading | null = stored;
+  let headlineAt = -Infinity;
+  const headlineEvery = lens?.window === 'hour' ? HEADLINE_HOUR_MS : HEADLINE_MS;
+  if (lens) {
+    tile.dataset.weatherHeadline = 'history';
+    tile.querySelector('[data-weather-records]')?.setAttribute('data-waiting', '');
+  }
   const due = () => onScreen && document.visibilityState !== 'hidden';
   const check = async () => {
     if (checking) return;
@@ -375,8 +543,27 @@ export function initWeather(root: ParentNode = document, fetchImpl: typeof fetch
     checkedAt = Date.now();
     const reading = await readAtmosphere(fetchImpl);
     checking = false;
+    if (reading) last = reading;
     if (reading) renderReading(tile, reading);
     else renderWeatherError(tile);
+    // the history after the reading, so the reading comes first
+    if (lens && tile.dataset.weatherHeadline === 'history' && Date.now() - headlineAt >= headlineEvery) {
+      headlineAt = Date.now();
+      void readHeadline(lens.window, fetchImpl).then((h) => {
+        if (h) return renderHeadline(tile, headlineOf(h, lens));
+        if (tile.querySelector('[data-weather-records][data-waiting]') === null) return;
+        // never had one: back to the live reading
+        delete tile.dataset.weatherHeadline;
+        tile.querySelector('[data-weather-records]')?.removeAttribute('data-waiting');
+        const period = tile.querySelector<HTMLElement>('[data-weather-period]');
+        if (period) period.textContent = 'right now';
+        const unit = tile.querySelector<HTMLElement>('[data-weather-unit]');
+        if (unit) unit.textContent = 'rec/sec';
+        const words = tile.querySelector<HTMLElement>('[data-weather-unit-words]');
+        if (words) words.textContent = 'new records a second';
+        if (last) renderReading(tile, last);
+      });
+    }
     every = reading?.source === 'station' ? LIVE_REFRESH_MS : REFRESH_MS;
     timer = window.setTimeout(() => {
       if (due()) void check();

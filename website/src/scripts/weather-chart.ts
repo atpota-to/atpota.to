@@ -7,6 +7,10 @@
  * The curve is monotone (smoothPath): it bends between points but never overshoots
  * them, so a smooth line never shows a peak or a dip that isn't in the data.
  *
+ * The newest step is often still filling up (today, this hour), which would draw as a dip
+ * that isn't there. projectLast turns it into an estimate for the whole step, drawn as a
+ * dashed line to a hollow dot; the tooltip has what's in so far and the estimate.
+ *
  * Hover, touch or the arrow keys move a crosshair to the nearest point and show its value
  * and time, read out politely for the arrow keys, so no value needs a mouse to reach.
  * Labels only reach the DOM through textContent.
@@ -17,7 +21,17 @@ export interface ChartPoint {
   t: number;
   /** null for a step with no data. */
   v: number | null;
+  /** A step still filling up: what's in so far, with `v` the estimate for the whole step (projectLast). */
+  soFar?: number;
+  /**
+   * Estimated rather than measured (the hosts' backfill: one a day, from before the station
+   * kept count). The line reaches across the gap from one to the next point, dashed.
+   */
+  estimated?: boolean;
 }
+
+/** How far the line reaches across a gap that starts or ends at an estimated point: a day and a half. */
+export const ESTIMATED_REACH_MS = 36 * 3600_000;
 
 export interface ChartOptions {
   /** What the line is, for the accessible name ("new records a second"). */
@@ -32,11 +46,27 @@ export interface ChartOptions {
   formatTipTime?: (t: number) => string;
   /** The time between points; a bigger gap breaks the line. */
   stepMs: number;
+  /**
+   * false fits the axis to the line instead of starting at zero, for a share that moves by
+   * hundredths. The axis then gets a break mark at its foot, so a small move doesn't read as a big one.
+   */
+  fromZero?: boolean;
+  /** Stretches to set apart behind the line (a scripted wave of sign-ups, say): shaded, with a short label at the top. */
+  bands?: ReadonlyArray<ChartBand>;
+}
+
+/** A stretch of the time axis to mark, [from, to] in milliseconds. */
+export interface ChartBand {
+  from: number;
+  to: number;
+  label: string;
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
 const HEIGHT = 180;
 const PAD = { top: 12, right: 10, bottom: 24, left: 46 };
+/** Narrower than this, a chart labels only the start and end of its time axis. */
+const NARROW = 320;
 
 /** A round number at or above `max` (1, 2, 2.5 or 5 times a power of ten). */
 export function niceMax(max: number): number {
@@ -44,6 +74,23 @@ export function niceMax(max: number): number {
   const power = 10 ** Math.floor(Math.log10(max));
   for (const step of [1, 2, 2.5, 5, 10]) if (step * power >= max) return step * power;
   return 10 * power;
+}
+
+/**
+ * The axis's bottom and top: from zero to a round number, or (not fromZero) a round
+ * range just around the values, three gridlines a round step apart.
+ */
+export function axisRange(values: number[], fromZero = true): [number, number] {
+  const hi = Math.max(0, ...values);
+  if (fromZero || values.length === 0) return [0, niceMax(hi)];
+  const lo = Math.min(...values);
+  let step = niceMax((hi - lo) / 2 || Math.abs(hi) * 0.01 || 1);
+  for (;;) {
+    const round = (v: number) => Number(v.toPrecision(12)); // 1.45, not 1.4500000000000002
+    const bottom = round(Math.max(0, Math.floor(lo / step) * step));
+    if (bottom + 2 * step >= hi) return [bottom, round(bottom + 2 * step)];
+    step = niceMax(step * 1.000001);
+  }
 }
 
 const f = (v: number) => (Math.round(v * 10) / 10).toString();
@@ -85,13 +132,37 @@ export function smoothPath(pts: ReadonlyArray<readonly [number, number]>): strin
   return d;
 }
 
+/** Too little of a step heard to say where it's going: under this share, no estimate. */
+export const MIN_PROJECT = 0.1;
+
+/**
+ * The last point, when its step (starting at its `t`) is still under way at `now`, as an
+ * estimate for the whole step: what's in so far, scaled by how much of the step was heard
+ * (`heardMs`, the station's own seconds, since a cached history is a little behind the
+ * clock; or the time gone since the step began). A count that adds up (records) scales
+ * straight; one that doesn't (active accounts, who come back through the day) grows as
+ * the share heard to the power `exponent` (accountsExponent). `scale: false` keeps the
+ * value as it is and only marks it as so far (a share, or the apps heard, which mostly
+ * turn up early on). Too early in a step to guess (MIN_PROJECT), the point has no value,
+ * only what's in so far.
+ */
+export function projectLast(points: ChartPoint[], now: number, stepMs: number, opts: { scale?: boolean; heardMs?: number; exponent?: number } = {}): ChartPoint[] {
+  const last = points[points.length - 1];
+  if (!last || last.v === null || now < last.t || now - last.t >= stepMs) return points;
+  const gone = Math.min(1, (opts.heardMs ?? now - last.t) / stepMs);
+  const v = opts.scale === false ? last.v : gone >= MIN_PROJECT ? last.v / gone ** (opts.exponent ?? 1) : null;
+  return [...points.slice(0, -1), { t: last.t, v, soFar: last.v }];
+}
+
 /** Runs of consecutive points with data, split wherever a step is missing. */
 export function segments(points: ChartPoint[], stepMs: number): ChartPoint[][] {
   const runs: ChartPoint[][] = [];
   let run: ChartPoint[] = [];
   let last: number | null = null;
   for (const p of points) {
-    if (p.v === null || (last !== null && p.t - last > stepMs * 1.5)) {
+    const prev = run[run.length - 1];
+    const reach = p.estimated || prev?.estimated ? Math.max(stepMs * 1.5, ESTIMATED_REACH_MS) : stepMs * 1.5;
+    if (p.v === null || (last !== null && p.t - last > reach)) {
       if (run.length) runs.push(run);
       run = [];
     }
@@ -100,6 +171,11 @@ export function segments(points: ChartPoint[], stepMs: number): ChartPoint[][] {
   }
   if (run.length) runs.push(run);
   return runs;
+}
+
+/** A step still filling up, in the tooltip: "1,234 so far", and "on pace for about 5,678" when there's an estimate. */
+export function soFarWords(p: ChartPoint, format: (v: number) => string): { value: string; pace: string } {
+  return { value: `${format(p.soFar!)} so far`, pace: p.v === null || p.v === p.soFar ? '' : `on pace for about ${format(p.v)}` };
 }
 
 function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
@@ -138,25 +214,41 @@ function draw(host: HTMLElement): void {
   const known = points.filter((p): p is ChartPoint & { v: number } => p.v !== null);
   const t0 = points[0]?.t ?? 0;
   const t1 = points[points.length - 1]?.t ?? t0;
-  const yMax = niceMax(Math.max(0, ...known.map((p) => p.v)));
+  const [yMin, yMax] = axisRange(known.map((p) => p.v), opts.fromZero ?? true);
   const innerW = width - PAD.left - PAD.right;
   const innerH = HEIGHT - PAD.top - PAD.bottom;
   const x = (t: number) => PAD.left + (t1 === t0 ? innerW / 2 : ((t - t0) / (t1 - t0)) * innerW);
-  const y = (v: number) => PAD.top + innerH - (v / yMax) * innerH;
+  const y = (v: number) => PAD.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
 
   const svg = el('svg', { class: 'weather-chart__svg', width, height: HEIGHT, viewBox: `0 0 ${width} ${HEIGHT}`, tabindex: 0, role: 'img' });
   svg.setAttribute('aria-label', `${opts.label}: a chart. use the arrow keys to read each point.`);
   svg.style.setProperty('--chart-color', opts.color);
 
-  // gridlines and their labels: zero, half, the top
-  for (const v of [0, yMax / 2, yMax]) {
+  // gridlines and their labels: the bottom (usually zero), half way, the top
+  for (const v of [yMin, (yMin + yMax) / 2, yMax]) {
     svg.append(el('line', { class: 'weather-chart__grid', x1: PAD.left, x2: width - PAD.right, y1: y(v), y2: y(v) }));
     const label = el('text', { class: 'weather-chart__tick', x: PAD.left - 8, y: y(v) + 4, 'text-anchor': 'end' });
     label.textContent = (opts.formatTick ?? opts.format)(v);
     svg.append(label);
   }
-  // time labels: the start, the middle and the end of the axis
-  const times = t1 === t0 ? [t0] : [t0, (t0 + t1) / 2, t1];
+  // an axis that doesn't start at zero says so: a break mark where it would have
+  if (yMin > 0) svg.append(el('path', { class: 'weather-chart__break', d: `M${PAD.left - 5},${y(yMin) + 3}l4,-6M${PAD.left - 1},${y(yMin) + 3}l4,-6` }));
+  // stretches set apart, behind the line
+  for (const band of opts.bands ?? []) {
+    const from = Math.max(band.from, t0);
+    const to = Math.min(band.to, t1);
+    if (!(to > from) && !(t1 === t0 && band.from <= t0 && band.to >= t0)) continue;
+    const bx = x(from);
+    const bw = Math.max(2, x(to) - bx);
+    svg.append(el('rect', { class: 'weather-chart__band', x: bx, y: PAD.top, width: bw, height: innerH }));
+    if (bw >= 44) {
+      const label = el('text', { class: 'weather-chart__band-label', x: bx + 6, y: PAD.top + 13 });
+      label.textContent = band.label;
+      svg.append(label);
+    }
+  }
+  // time labels: the start, the middle and the end of the axis (no middle on a narrow chart, where they'd collide)
+  const times = t1 === t0 ? [t0] : width < NARROW ? [t0, t1] : [t0, (t0 + t1) / 2, t1];
   times.forEach((t, i) => {
     const anchor = times.length === 1 ? 'middle' : i === 0 ? 'start' : i === times.length - 1 ? 'end' : 'middle';
     const label = el('text', { class: 'weather-chart__tick', x: x(t), y: HEIGHT - 6, 'text-anchor': anchor });
@@ -164,14 +256,32 @@ function draw(host: HTMLElement): void {
     svg.append(label);
   });
 
-  for (const run of segments(points, opts.stepMs)) {
+  for (const all of segments(points, opts.stepMs)) {
+    // a step still filling up: a dashed line out to its estimate, a hollow dot at the end
+    const end = all[all.length - 1]!;
+    const run = end.soFar === undefined ? all : all.slice(0, -1);
+    if (run !== all) {
+      const from = run[run.length - 1];
+      if (from) svg.append(el('path', { class: 'weather-chart__line weather-chart__line--projected', d: `M${x(from.t).toFixed(1)},${y(from.v!).toFixed(1)}L${x(end.t).toFixed(1)},${y(end.v!).toFixed(1)}` }));
+      svg.append(el('circle', { class: 'weather-chart__dot weather-chart__dot--projected', cx: x(end.t), cy: y(end.v!), r: 4 }));
+    }
+    if (!run.length) continue;
     const line = smoothPath(run.map((p) => [x(p.t), y(p.v!)] as const));
     if (run.length === 1) {
-      svg.append(el('circle', { class: 'weather-chart__dot', cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
+      svg.append(el('circle', { class: `weather-chart__dot${run[0]!.estimated ? ' weather-chart__dot--projected' : ''}`, cx: x(run[0]!.t), cy: y(run[0]!.v!), r: 4 }));
       continue;
     }
-    const area = `${line}L${x(run[run.length - 1]!.t).toFixed(1)},${y(0)}L${x(run[0]!.t).toFixed(1)},${y(0)}Z`;
-    svg.append(el('path', { class: 'weather-chart__area', d: area }), el('path', { class: 'weather-chart__line', d: line }));
+    // estimates come first (the backfill, before the station kept count): straight and dashed up to the first measured point, smooth after
+    const measured = run.findIndex((p) => !p.estimated);
+    const guessed = measured === 0 ? [] : measured < 0 ? run : run.slice(0, measured + 1);
+    const live = measured < 0 ? [] : run.slice(measured);
+    const straight = guessed.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v!).toFixed(1)}`).join('');
+    const smooth = live.length > 1 ? smoothPath(live.map((p) => [x(p.t), y(p.v!)] as const)) : '';
+    const outline = guessed.length ? straight + smooth.replace(/^M[^LC]*/, '') : line;
+    const area = `${outline}L${x(run[run.length - 1]!.t).toFixed(1)},${y(yMin)}L${x(run[0]!.t).toFixed(1)},${y(yMin)}Z`;
+    svg.append(el('path', { class: 'weather-chart__area', d: area }));
+    if (guessed.length) svg.append(el('path', { class: 'weather-chart__line weather-chart__line--projected', d: straight }));
+    if (smooth) svg.append(el('path', { class: 'weather-chart__line', d: smooth }));
   }
 
   const cross = el('line', { class: 'weather-chart__cross', x1: 0, x2: 0, y1: PAD.top, y2: PAD.top + innerH, visibility: 'hidden' });
@@ -185,7 +295,9 @@ function draw(host: HTMLElement): void {
   tip.setAttribute('aria-hidden', 'true');
   const tipValue = document.createElement('strong');
   const tipTime = document.createElement('span');
-  tip.append(tipValue, tipTime);
+  const tipPace = document.createElement('span');
+  tipPace.hidden = true;
+  tip.append(tipValue, tipTime, tipPace);
 
   const live = document.createElement('p');
   live.className = 'visually-hidden';
@@ -200,7 +312,8 @@ function draw(host: HTMLElement): void {
     cross.setAttribute('x1', String(px));
     cross.setAttribute('x2', String(px));
     cross.setAttribute('visibility', 'visible');
-    const value = p.v === null ? 'no reading' : opts.format(p.v);
+    const words = p.soFar !== undefined ? soFarWords(p, opts.format) : { value: p.v === null ? 'no reading' : p.estimated ? `≈ ${opts.format(p.v)}` : opts.format(p.v), pace: p.estimated ? 'estimated, from before i kept count' : '' };
+    const value = words.value;
     if (p.v === null) mark.setAttribute('visibility', 'hidden');
     else {
       mark.setAttribute('cx', String(px));
@@ -209,9 +322,13 @@ function draw(host: HTMLElement): void {
     }
     tipValue.textContent = value;
     tipTime.textContent = (opts.formatTipTime ?? opts.formatTime)(p.t);
+    tipPace.textContent = words.pace;
+    tipPace.hidden = !words.pace;
     tip.hidden = false;
-    tip.style.left = `${Math.min(Math.max(px, 70), width - 70)}px`;
-    if (announce) live.textContent = `${(opts.formatTipTime ?? opts.formatTime)(p.t)}: ${value}`;
+    // centred on the point, but never past either edge
+    const half = (tip.offsetWidth || 140) / 2;
+    tip.style.left = `${Math.min(Math.max(px, half), width - half)}px`;
+    if (announce) live.textContent = `${(opts.formatTipTime ?? opts.formatTime)(p.t)}: ${value}${words.pace ? `, ${words.pace}` : ''}`;
   };
   const hide = () => {
     at = -1;

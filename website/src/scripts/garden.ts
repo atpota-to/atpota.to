@@ -293,9 +293,9 @@ export function freePlotFrom(plot: number, taken: ReadonlySet<number>, plots: nu
 const RKEY_RE = /^[A-Za-z0-9._:~-]{1,512}$/;
 const HANDLE_RE = /^(?=.{3,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 
-/** Someone's garden page (/garden/dame.is), or their flowers (…/flowers). */
-export function gardenPath(actor: string, level: 'garden' | 'flowers' = 'garden'): string {
-  return `/garden/${actor}${level === 'flowers' ? '/flowers' : ''}`;
+/** Someone's garden page (/garden/dame.is), their flowers (…/flowers), or their tending (…/tending). */
+export function gardenPath(actor: string, level: 'garden' | 'flowers' | 'tending' = 'garden'): string {
+  return `/garden/${actor}${level === 'garden' ? '' : `/${level}`}`;
 }
 
 /** The address segment for someone: their handle, or their DID when the handle is broken. */
@@ -918,13 +918,20 @@ export async function initGarden(opts: GardenOptions = {}): Promise<GardenContro
       f.thirsty = false;
       f.lastTended = new Date(now()).toISOString();
       // Filling the card again takes the tapped button away: move focus to the card first, and
-      // keep the page where it was, since Safari scrolls it when a focused button goes.
+      // keep the page where it was, since Safari jumps it as the card and plots are redrawn.
       const y = win.scrollY;
       card?.focus({ preventScroll: true });
       render();
       fillCard();
-      if (win.scrollY !== y) win.scrollTo(0, y);
       cardSay(COPY.watered(isMine(f) ? COPY.yours(nameOf(f)) : COPY.theirs(f.handle, nameOf(f))));
+      if (win.scrollY !== y) {
+        // Back at once, before it's drawn: the page scrolls smoothly (base.css), and easing
+        // back would show the jump.
+        const root = doc.documentElement;
+        root.style.scrollBehavior = 'auto';
+        win.scrollTo(0, y);
+        root.style.removeProperty('scroll-behavior');
+      }
       burst(plots?.querySelector(`[data-plot="${f.plot}"]`) ?? button, 'drops', win);
     } catch (error) {
       failed(error);

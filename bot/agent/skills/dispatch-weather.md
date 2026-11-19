@@ -33,28 +33,47 @@ with no `change`. Leave it out rather than guess at it.
 
 ## What goes in
 
-Keep it short. Most weeks the weather is two or three sentences, and that's fine:
-readers came for the rest of the issue. Go into detail only when something actually
-stood out, and then give the one number that makes it interesting. No lists of
-routine numbers.
+Keep it short: two short paragraphs at most, under the weather page's link card.
+Readers came for the rest of the issue, and the full report is a tap away. Go into
+detail only when something actually stood out, and then give the one number that
+makes it interesting. No lists of routine numbers. The parts below are what you may
+draw from, not a paragraph each: the headline and the one or two things that stood
+out most, and leave the rest to the report.
 
-1. **The headline**, always: the week's condition and new records a second against
+1. **The weather page's link**, first, right under the heading: exactly as `page`
+   returned it, on a line of its own, so it turns into a link card in Leaflet.
+2. **The headline**, always: the week's condition and new records a second against
    the week before (`weekBefore.changePercent`), and the diversity index with its
    level (and `weekBefore.mix`, how mixed a sky it was against the week before, when
    it's there). Round the way a person would: "about 450 new records a second", "an
    index of 1.7". A bare index means nothing to most readers, so give its range
    whenever you give it: it works like the uv index, low under 3 and extreme at 11
    or more.
-2. **What stood out**, only if something did, in a sentence or two: a storm and what
+3. **What stood out**, only if something did, in a sentence or two: a storm and what
    drove it, an app that blew in or is way up (`apps`, `change`), a sky much more or
    less mixed than usual, a week well above or below usual. The busiest and
    quietest hours are news only when they break the usual daily rhythm. A burst
    (`bursts`: one app writing a flood of records in a minute, a bulk import) is left
    out of the weather, so it's never the busiest hour or a forecast, but a big one can
    be the thing that stood out: name the app, how many records, and how fast.
-3. **The outlook**, only when it says something worth knowing. See below.
-4. **The weather page's link**, exactly as `page` returned it, on a line of its own,
-   so it turns into a link card in Leaflet.
+   Before you call an app way up or say it blew in, look at its `accounts` (on a
+   burst, `accountsThatMinute`): thousands of records from one or two accounts is one
+   person's import, backfill or bot, not an app taking off. Leave it out of what
+   stood out, or, for a burst big enough to mention, say it was one account.
+4. **Where the atmosphere lives**, only if something there stood out
+   (`whereTheAtmosphereLives`): a week when the migration wind blew hard out of
+   Bluesky (`thisWeek.movingHouse`), a burst of new independent hosts or one growing
+   fast, or the hosting diversity moving (`overTheWeek`). One sentence, one number.
+   The hosting diversity is its own scale (about 7.5 in October 2026); never put it
+   next to the diversity index as if they compare. Days marked `estimated` came from a
+   backfill: don't make news of their day-to-day wiggles. Air quality (new identities
+   pointing at hosts nobody relays, not sign-ups: mostly scripts) is dust, not the
+   network's weather: mention it only if it changed a lot, never call those identities
+   sign-ups or people, and never name a host as spam. For more than the week has, call
+   read_weather with `report: "hosts"`.
+5. **The outlook**, only when it says something worth knowing. See below.
+6. **Point to the full report**, at the end, in a few words of your own: the hours,
+   the apps and the rest of the week are on the weather page up top.
 
 The first issue with a weather section explains it in a sentence: the station on
 atpota.to counts every new record in the firehose, Bluesky's and every other app's,
@@ -80,11 +99,12 @@ Skip it unless it tells readers something: an app on the rise worth watching, or
 usual week that this one broke. When you give one, it's a sentence, built only from
 `outlook`: the usual week (`weekdays`, `busiestHours`, `quietestHours`,
 `hoursByCondition`), how this week compared with usual (`perSecond` against
-`outlook.usualPerSecond`), and `appsToWatch`. Say it like a forecast:
-"expect the gustiest skies on thursday afternoons around 15:00 utc and a calm sunday
-morning", "keep an eye on tangled.sh, up 200% on the week before".
+`outlook.usualPerSecond`), and `appsToWatch`. Say it like a forecast, in new
+words each issue: the gustiest skies fall on thursday afternoons around 15:00 utc,
+sunday mornings are calm, tangled.sh is up 200% on the week before and worth
+watching. Your last issue's outlook is the one wording you can't use.
 
-- It is a pattern, not a promise. Say "usually" or "if the usual week holds" once.
+- It is a pattern and it can break. Say so once ("usually", "most weeks").
 - Never forecast an event, a launch, an outage or a spike the numbers don't show,
   and give no number for a day beyond what `weekdays` says.
 - If `outlook.ready` is false, say cheerfully that the station is still learning

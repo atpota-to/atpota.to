@@ -15,7 +15,7 @@ import { CONDITION_TEXT, formatIndex, formatRate, recordsPerSecond, type Reading
 import type { Who } from './chat';
 import type { OverlayLine } from './poe';
 
-const ALERT_FACE: Record<AlertKind, MascotFace> = { record: 'wow', storm: 'wow', new: 'happy', clear: 'happy', mixed: 'wink', arrival: 'kawaii' };
+const ALERT_FACE: Record<AlertKind, MascotFace> = { record: 'wow', storm: 'wow', new: 'happy', newhost: 'happy', clear: 'happy', mixed: 'wink', moving: 'wink', host: 'kawaii', arrival: 'kawaii' };
 
 /** A weather alert, at most once every COOLDOWN_MS per kind (arrivals every ARRIVAL_EVERY_MS). */
 export const COOLDOWN_MS = 10 * 60_000;

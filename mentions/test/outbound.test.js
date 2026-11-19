@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateOutbound, DEFAULT_LINK_HOSTS } from '../src/gates/outbound.js';
+import { evaluateOutbound, operatorMentions, DEFAULT_LINK_HOSTS } from '../src/gates/outbound.js';
 import { GATE_DEFAULTS } from '../src/config.js';
 import { graphemeLength } from '../src/richtext.js';
 
@@ -103,6 +103,18 @@ test('an empty or whitespace draft is rejected', () => {
   }
 });
 
+test('a draft of only markup or invisible characters is rejected as empty', () => {
+  for (const d of ['<br>', '<br/>', ' <br> <BR /> ', '<p></p>', '&nbsp;', '&#8203;', '​', '<!-- -->']) {
+    assert.equal(evaluateOutbound(d, deps()).gate, 'empty', `should reject ${JSON.stringify(d)}`);
+  }
+});
+
+test('a tag-shaped placeholder inside an answer, or a face on its own, still passes', () => {
+  for (const d of ['the record key goes where <rkey> is in the uri', '(◕‿◕)', 'i <3 that feed']) {
+    assert.equal(evaluateOutbound(d, deps()).ok, true, `should pass ${JSON.stringify(d)}`);
+  }
+});
+
 test('a draft tagging a third party is rejected', () => {
   const r = evaluateOutbound('Ask @someoneelse.bsky.social about it.', deps());
   assert.equal(r.ok, false);
@@ -112,6 +124,29 @@ test('a draft tagging a third party is rejected', () => {
 test('a draft tagging many third parties is rejected (the mass-tagging case)', () => {
   const draft = 'cc @a.bsky.social @b.bsky.social @c.bsky.social';
   assert.equal(evaluateOutbound(draft, deps()).gate, 'third_party_mention');
+});
+
+test('only a handle whose account is an admin DID counts as an operator tag', () => {
+  const ADMIN = 'did:plc:admin00000000000000000000';
+  const profiles = new Map([
+    ['dame.is', { did: ADMIN }],
+    ['impostor.bsky.social', { did: 'did:plc:someoneelse' }],
+  ]);
+  assert.deepEqual(
+    operatorMentions(['Dame.is', 'dame.is', 'impostor.bsky.social', 'missing.example'], profiles, [ADMIN]),
+    [{ handle: 'dame.is', did: ADMIN }],
+    'the DID decides, once per handle, whatever its case',
+  );
+  assert.deepEqual(operatorMentions(['dame.is'], profiles, []), [], 'no admins, no operator tags');
+  assert.deepEqual(operatorMentions(['dame.is'], new Map(), [ADMIN]), [], 'an unresolved handle is nobody');
+});
+
+test('an operator tag the caller checked passes; a second, unchecked one still fails', () => {
+  const tagged = { ...deps(), allowedHandles: ['dame.is'] };
+  assert.equal(evaluateOutbound('ooh, @dame.is this one is for you!', tagged).ok, true);
+  assert.equal(evaluateOutbound('@dame.is and @someoneelse.bsky.social, look!', tagged).gate, 'third_party_mention');
+  assert.equal(evaluateOutbound('ooh, @dame.is this one is for you!', deps()).gate, 'third_party_mention',
+    'without the check, the operator is a third party like anyone else');
 });
 
 test('a draft naming the person being replied to is allowed', () => {

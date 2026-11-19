@@ -57,6 +57,8 @@ export function createJetstream({
   maxReplaySeconds = 1800,
   /** Where the first connection starts (a time_us), or null for the live tail. */
   startCursorUs = null,
+  /** Each parsed message, after the station has it (host-activity.js). */
+  observe = null,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
   setRepeat = setInterval,
@@ -133,6 +135,7 @@ export function createJetstream({
         return;
       }
       station.ingest(m?.time_us, eventOfMessage(m), happenedUs(m), accountOf(m));
+      observe?.(m);
     };
 
     sock.onerror = (e) => fail('error', e?.message ?? e?.error?.message);

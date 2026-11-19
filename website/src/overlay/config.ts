@@ -3,9 +3,11 @@
  * big, which bottom corner Poe sits in and how big, and what Poe reacts to. The same shape
  * three ways:
  *
- *   the record   to.atpota.poe.overlay at "self" in the streamer's repo
+ *   the record   to.atpota.poe.overlay in the streamer's repo
  *                (lexicons/to/atpota/poe/overlay.json), saved by /overlay/setup and read
- *                by the overlay, which follows it live (store.ts)
+ *                by the overlay, which follows it live (store.ts). A streamer can keep
+ *                several, each a layout with a name: "self" is the main one, which
+ *                /overlay?streamer= shows; &layout=<id> picks another
  *   the URL      settings in /overlay's address (params.ts) override the record, field by
  *                field; the setup page's preview passes the whole draft that way
  *   defaults     DEFAULT_CONFIG, for a streamer with no record and no settings in the URL
@@ -15,13 +17,77 @@
  */
 
 export const OVERLAY_NSID = 'to.atpota.poe.overlay';
+/** The main layout's record key, and its id in the studio. */
 export const OVERLAY_RKEY = 'self';
+export const MAIN_LAYOUT_NAME = 'main layout';
+export const LAYOUT_NAME_MAX = 40;
+export const MAX_LAYOUTS = 24;
+/** A layout's id: its record key and its name in the URL ("self", "coding"). */
+const LAYOUT_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
 
-export const WIDGET_KINDS = ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse'] as const;
+export function isLayoutId(v: unknown): v is string {
+  return typeof v === 'string' && LAYOUT_ID_RE.test(v);
+}
+
+/** A new layout's id from its name ("Just Chatting" is "just-chatting"), not one of `taken` nor the main one's. */
+export function newLayoutId(name: string, taken: Iterable<string>): string {
+  const used = new Set([...taken, OVERLAY_RKEY]);
+  const slug =
+    name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || 'layout';
+  if (!used.has(slug)) return slug;
+  for (let n = 2; ; n++) if (!used.has(`${slug}-${n}`)) return `${slug}-${n}`;
+}
+
+/** A layout's name from its record: one line, at most LAYOUT_NAME_MAX characters. */
+export function layoutNameOf(value: unknown, id: string): string {
+  const raw = obj(value) && typeof value.name === 'string' ? value.name : '';
+  const name = [...raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()].slice(0, LAYOUT_NAME_MAX).join('');
+  return name || (id === OVERLAY_RKEY ? MAIN_LAYOUT_NAME : id);
+}
+
+export const WIDGET_KINDS = ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse', 'moon', 'mark', 'loader', 'tid', 'flushes', 'status', 'music', 'chat'] as const;
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
 export const SLOTS = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const;
 export type Slot = (typeof SLOTS)[number];
 export type Side = 'left' | 'right';
+
+/**
+ * The setup page's groups of widgets: atpotato's weather, Anisota's (anisota.ts), the TID
+ * clock (tid.ts), the streamer's own records from around the atmosphere (flushes.ts,
+ * status.ts, music.ts), and their stream chat on screen (onscreen.ts).
+ */
+export const WIDGET_GROUPS: Record<'weather' | 'anisota' | 'clock' | 'records' | 'chat', readonly WidgetKind[]> = {
+  weather: ['card', 'strip', 'badge', 'apps', 'forecast', 'pulse'],
+  anisota: ['moon', 'mark', 'loader'],
+  clock: ['tid'],
+  records: ['flushes', 'status', 'music'],
+  chat: ['chat'],
+};
+
+/**
+ * The ways a widget can look, for the kinds that have more than one: each id with its
+ * name on the setup page, the first the default. The overlay sets data-style on the widget.
+ */
+export const WIDGET_STYLES: Partial<Record<WidgetKind, Readonly<Record<string, string>>>> = {
+  tid: { ticking: 'with the time', mini: 'just the TID' },
+  flushes: { count: 'the count', stats: 'the stats', latest: 'the latest flush' },
+  status: { both: 'status and vitals', status: 'just the status', vitals: 'just the vitals' },
+  music: { now: 'now playing', history: 'the last few plays', stats: 'listening stats', mini: 'one line' },
+  chat: { corner: 'a little corner chat', side: 'a strip down the side', pop: 'messages that pop up and fade' },
+};
+
+/** A widget's style, when its kind has styles: `style` if it's one of them, else the default. */
+export function styleFor(kind: WidgetKind, style: unknown): string | undefined {
+  const styles = WIDGET_STYLES[kind];
+  if (!styles) return undefined;
+  return typeof style === 'string' && Object.hasOwn(styles, style) ? style : Object.keys(styles)[0];
+}
 
 /** What each widget is, for the setup page. */
 export const WIDGET_NAMES: Record<WidgetKind, string> = {
@@ -31,6 +97,14 @@ export const WIDGET_NAMES: Record<WidgetKind, string> = {
   apps: 'busiest apps',
   forecast: 'the forecast',
   pulse: 'the pulse',
+  moon: "anisota's moon",
+  mark: 'the anisota mark',
+  loader: 'the anisota loader',
+  tid: 'the TID clock',
+  flushes: 'your flushes',
+  status: 'your status',
+  music: 'your music',
+  chat: 'stream chat',
 };
 export const WIDGET_HINTS: Record<WidgetKind, string> = {
   card: 'records a second, the sky, bluesky numbers and the diversity index',
@@ -39,6 +113,14 @@ export const WIDGET_HINTS: Record<WidgetKind, string> = {
   apps: 'the five busiest apps outside bluesky, with bars',
   forecast: 'the next six hours of the atmosphere',
   pulse: 'the last minute of the firehose as a big line',
+  moon: "tonight's moon as anisota draws it, with its phase",
+  mark: "anisota's brand mark, its moon at tonight's phase",
+  loader: "anisota's brand mark, its moon running through its phases",
+  tid: "the time right now as an atproto record key, ticking: anisota's clock in atpotato's mono",
+  flushes: 'how many times you have flushed on flushes.app, your streak, your latest',
+  status: 'your latest is.dame.now status and is.dame.state vitals, as on dame.is',
+  music: 'what you are scrobbling to teal.fm: now playing, the last few, your stats',
+  chat: 'your stream.place chat on screen',
 };
 /** Where a new widget goes first. */
 export const WIDGET_HOME: Record<WidgetKind, Slot> = {
@@ -48,6 +130,14 @@ export const WIDGET_HOME: Record<WidgetKind, Slot> = {
   apps: 'top-right',
   forecast: 'top-left',
   pulse: 'top-center',
+  moon: 'top-right',
+  mark: 'bottom-left',
+  loader: 'bottom-left',
+  tid: 'top-center',
+  flushes: 'top-left',
+  status: 'top-left',
+  music: 'bottom-left',
+  chat: 'top-right',
 };
 
 export const MIN_SCALE = 50;
@@ -58,6 +148,8 @@ export interface Widget {
   slot: Slot;
   /** Percent of its usual size. */
   scale: number;
+  /** How it looks, for a kind with WIDGET_STYLES; absent for the rest. */
+  style?: string;
 }
 
 export interface OverlayConfig {
@@ -111,22 +203,30 @@ export function clampScale(n: unknown, fallback = 100): number {
   return typeof n === 'number' && Number.isFinite(n) ? Math.round(Math.max(MIN_SCALE, Math.min(MAX_SCALE, n))) : fallback;
 }
 
-/** The strip runs along an edge: any top slot is the top, any bottom slot the bottom. */
-export function slotFor(kind: WidgetKind, slot: Slot): Slot {
+/**
+ * The strip runs along an edge: any top slot is the top, any bottom slot the bottom. The
+ * chat's side strip runs down a side, the right unless its slot is on the left.
+ */
+export function slotFor(kind: WidgetKind, slot: Slot, style?: string): Slot {
+  if (kind === 'chat' && style === 'side') return slot.endsWith('left') ? 'top-left' : 'top-right';
   if (kind !== 'strip') return slot;
   return slot.startsWith('top') ? 'top-center' : 'bottom-center';
 }
+
+/** How many widgets a layout can have: one of each kind. */
+export const MAX_WIDGETS = 16;
 
 /** Widgets as the overlay draws them: known kinds, each once (the first wins), in a slot that suits it. */
 export function cleanWidgets(list: unknown): Widget[] {
   if (!Array.isArray(list)) return [];
   const seen = new Set<WidgetKind>();
   const out: Widget[] = [];
-  for (const w of list.slice(0, 12)) {
+  for (const w of list.slice(0, MAX_WIDGETS)) {
     if (!obj(w) || !isKind(w.kind) || seen.has(w.kind)) continue;
     seen.add(w.kind);
     const slot = isSlot(w.slot) ? w.slot : WIDGET_HOME[w.kind];
-    out.push({ kind: w.kind, slot: slotFor(w.kind, slot), scale: clampScale(w.scale) });
+    const style = styleFor(w.kind, w.style);
+    out.push({ kind: w.kind, slot: slotFor(w.kind, slot, style), scale: clampScale(w.scale), ...(style ? { style } : {}) });
   }
   return out;
 }
@@ -159,9 +259,10 @@ export function fromRecord(value: unknown): OverlayConfig {
 }
 
 /** The record to save, keeping when it was first made. */
-export function toRecord(c: OverlayConfig, createdAt: string, now: Date): Record<string, unknown> {
+export function toRecord(c: OverlayConfig, createdAt: string, now: Date, name?: string): Record<string, unknown> {
   return {
     $type: OVERLAY_NSID,
+    ...(name ? { name: layoutNameOf({ name }, '') } : {}),
     poe: { ...c.poe, scale: clampScale(c.poe.scale) },
     widgets: cleanWidgets(c.widgets),
     chat: c.chat,

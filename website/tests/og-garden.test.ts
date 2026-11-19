@@ -230,6 +230,8 @@ describe('the garden page function', () => {
     const m = gardenMeta(community, 'flowers', NOW);
     expect(m).toMatchObject({ title: 'the community garden · atpotato', url: 'https://atpota.to/garden', image: 'https://atpota.to/og/garden/atpota.to.png' });
     expect(gardenMeta(garden(), 'flowers', NOW)).toMatchObject({ title: "dame's flowers · atpotato", url: 'https://atpota.to/garden/dame.is/flowers' });
+    expect(gardenMeta(community, 'tending', NOW)).toMatchObject({ url: 'https://atpota.to/garden' });
+    expect(gardenMeta(garden(), 'tending', NOW)).toMatchObject({ title: "dame's tending · atpotato", url: 'https://atpota.to/garden/dame.is/tending' });
   });
 
   it('only swaps tags the page has', () => {

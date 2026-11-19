@@ -9,6 +9,7 @@ import { config } from './config.js';
 import { logger } from './logger.js';
 import { isNapping } from './nap.js';
 import { killSwitchEngaged } from './config.js';
+import { linkFacets } from './richtext.js';
 
 let session = null;          // { accessJwt, refreshJwt, did, handle }
 let sessionPromise = null;
@@ -378,6 +379,36 @@ export async function uploadBlob(bytes, mimeType) {
   return res.json.blob;
 }
 
+// --- Poe's profile ------------------------------------------------------------
+// Only profile-look.js writes it, and only its avatar and banner change.
+export const PROFILE_COLLECTION = 'app.bsky.actor.profile';
+
+/** Poe's profile record ({ uri, cid, value }), or null when there is none. */
+export function getOwnProfile() {
+  return getPublicRecord(config.botDid, PROFILE_COLLECTION, 'self');
+}
+
+/**
+ * Replace Poe's profile record, only if it is still the one read (swapRecord), so
+ * an edit made in between is never written over. The kill switch stops it; a nap
+ * doesn't, since a nap is what gives Poe its sleepy face.
+ */
+export async function putOwnProfile(record, swapRecord) {
+  if (typeof swapRecord !== 'string' || !swapRecord) throw new Error('putOwnProfile needs the cid it read');
+  const res = await authed((t) => {
+    if (killSwitchEngaged()) throw new Error('profile change paused by kill switch');
+    return rawPost('com.atproto.repo.putRecord', {
+      repo: config.botDid, collection: PROFILE_COLLECTION, rkey: 'self', record, swapRecord,
+    }, t);
+  });
+  if (!res.ok) {
+    const err = new Error(`putRecord (profile) failed: ${res.status} ${res.json?.error ?? res.text.slice(0, 300)}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json;   // { uri, cid }
+}
+
 // --- the publisher credential -------------------------------------------------
 // Dispatch issues are site.standard.document records in atpota.to's repo, so
 // linking an issue to its announcement needs atpota.to's credential. It gets
@@ -452,6 +483,34 @@ export async function putPublisherDocument(rkey, record, swapRecord) {
   return res.json;   // { uri, cid }
 }
 
+/**
+ * Create a new dispatch document in atpota.to's repo, at a record key the
+ * caller stored first, so a retry after an ambiguous failure can look for it
+ * instead of making a second issue. A create, never a put: Leaflet emails the
+ * publication's subscribers when it sees a new document created, and only then.
+ */
+export async function createPublisherDocument(rkey, record) {
+  if (record?.$type !== 'site.standard.document' || record.site !== config.dispatch.publicationUri) {
+    throw new Error('refusing to write a document outside the dispatch publication');
+  }
+  if (typeof rkey !== 'string' || !/^[a-z2-7]{13}$/.test(rkey)) throw new Error('createPublisherDocument needs a TID record key');
+  const res = await publisherAuthed((t) => {
+    if (killSwitchEngaged()) throw new Error('publishing paused by kill switch');
+    return rawPost('com.atproto.repo.createRecord', {
+      repo: config.dispatch.publisherDid,
+      collection: 'site.standard.document',
+      rkey, record,
+    }, t);
+  });
+  if (!res.ok) {
+    const err = new Error(`createRecord site.standard.document failed: ${res.status} ${res.json?.error ?? res.text.slice(0, 300)}`);
+    err.status = res.status;
+    err.error = res.json?.error;
+    throw err;
+  }
+  return res.json;   // { uri, cid }
+}
+
 // --- handle resolution ----------------------------------------------------
 // Jetstream commits carry a DID and no handle. The agent's payload contract
 // includes authorHandle, and omitting it is rejected with a 400 -- so a mention
@@ -503,6 +562,36 @@ export async function resolveHandleForDid(did, { timeoutMs = 8000 } = {}) {
   return handle;
 }
 
+/**
+ * The Bluesky accounts behind some handles, for tagging them in an announcement:
+ * Map(handle -> { did, handle, displayName }). One public AppView call for up to
+ * 25. A handle that doesn't resolve, or whose account no longer verifies it
+ * (handle.invalid), is left out. Throws only when the AppView can't be read.
+ * Never cached: each proposal is checked against the network as it is.
+ */
+export async function profilesByHandle(handles, { timeoutMs = 8000 } = {}) {
+  const out = new Map();
+  if (!handles.length) return out;
+  const url = new URL('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfiles');
+  for (const h of handles.slice(0, 25)) url.searchParams.append('actors', h);
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`the appview answered ${res.status}`);
+  const body = await res.json();
+  for (const p of Array.isArray(body?.profiles) ? body.profiles : []) {
+    const handle = typeof p?.handle === 'string' ? p.handle.toLowerCase() : null;
+    if (!handle || handle === 'handle.invalid' || typeof p.did !== 'string' || !/^did:(plc|web):/.test(p.did)) continue;
+    const name = typeof p.displayName === 'string' ? p.displayName.replace(/\s+/g, ' ').trim().slice(0, 64) : '';
+    // For a weather post's app accounts (gates/weather.js appAccountProblem): pronouns say a
+    // person, and a label (a moderation label, or the account's own) says leave it be.
+    const labels = Array.isArray(p.labels) ? p.labels.flatMap((l) => (typeof l?.val === 'string' ? [l.val] : [])) : [];
+    out.set(handle, {
+      did: p.did, handle, displayName: name || null,
+      pronouns: typeof p.pronouns === 'string' && p.pronouns.trim() !== '', labels,
+    });
+  }
+  return out;
+}
+
 // Chat is a separate service; the PDS signs/proxies these requests with the
 // service DID. The app password remains on the droplet, never in the agent.
 async function chatRequest(nsid, { params, body } = {}) {
@@ -543,9 +632,20 @@ export const acceptDmConvo = (convoId) => chatRequest('chat.bsky.convo.acceptCon
 export const getDmMessages = (convoId, cursor) => chatRequest('chat.bsky.convo.getMessages', {
   params: { convoId, cursor, limit: 100 },
 });
-/** A messageId makes it a reply to that message; null sends it plain. */
-export const sendDmMessage = (convoId, messageId, text) => chatRequest('chat.bsky.convo.sendMessage', {
-  body: { convoId, message: { text, ...(messageId ? { replyTo: { messageId } } : {}) } },
+/**
+ * A messageId makes it a reply to that message; null sends it plain. Links get
+ * link facets, as a post's do: the app doesn't find links in a DM's text by
+ * itself, so without them a URL arrives as words you can't tap.
+ */
+export function sendDmMessage(convoId, messageId, text) {
+  const facets = linkFacets(text);
+  return chatRequest('chat.bsky.convo.sendMessage', {
+    body: { convoId, message: { text, ...(facets.length ? { facets } : {}), ...(messageId ? { replyTo: { messageId } } : {}) } },
+  });
+}
+/** The one-to-one conversation with these members, found or started: { convo }. */
+export const getDmConvoForMembers = (members) => chatRequest('chat.bsky.convo.getConvoForMembers', {
+  params: { members },
 });
 export const addDmReaction = (convoId, messageId, value) => chatRequest('chat.bsky.convo.addReaction', {
   body: { convoId, messageId, value },

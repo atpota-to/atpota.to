@@ -10,6 +10,8 @@ import { evaluateInbound, lessonIn } from './gates/inbound.js';
 import { sendMention } from './agent.js';
 import { parseContext, readPostContext } from './thread.js';
 import { forgetMemory, publishLesson } from './memory.js';
+import { forgetOnAgent } from './agent-memory.js';
+import { forgetInLog } from './memory-log.js';
 import { parseNapCommand } from './nap-time.js';
 import { applyNapCommand, isNapping, pauseRow, deferNapRow } from './nap.js';
 import { killSwitchEngaged } from './config.js';
@@ -146,23 +148,34 @@ export async function processQueuedMatch(queueId, match, stats, { napReplay = fa
     if (verdict.optOut) {
       db.deny(match.authorDid, 'opt_out', verdict.detail);
 
-      // Forgetting includes the public record, and that is done here, in code,
-      // rather than trusted to the farewell turn below.
+      // Forgetting is done here, in code, rather than trusted to the farewell
+      // turn below: the public record and the droplet's copy, then the agent's
+      // own copy and every journal note naming them (bot/agent/channels/memory.ts),
+      // then every version of either in the backup log.
       if (verdict.forgetMemory) {
         const api = await import('./atproto.js');
         await forgetMemory(match.authorDid, { api });
+        // Journal notes may name them by handle; a Jetstream match doesn't carry one yet.
+        const handle = match.authorHandle ??
+          await api.resolveHandleForDid(match.authorDid, { timeoutMs: 4000 }).catch(() => null) ?? null;
+        const forgotten = await forgetOnAgent(match.authorDid, handle);
+        if (forgotten.ok) {
+          logger.warn('forget-me: agent memory wiped', { did: match.authorDid, ...forgotten.body });
+        } else {
+          // The farewell turn below still asks the model to clear its notes.
+          logger.error('forget-me: agent memory NOT wiped in code; check it by hand', {
+            did: match.authorDid, status: forgotten.status,
+          });
+        }
+        forgetInLog(match.authorDid, handle);
       }
 
-      // "forget me" is the one opt-out that gets a reply, because it asks for
-      // something the droplet cannot do on its own. Agent memory is keyed and
-      // stored on the eve side, its backend exposes no delete, and the scope key
-      // is derived by internals this service should not reconstruct. The model
-      // holds the only clean handle on it: person__remove_memory.
-      //
-      // So one final turn goes out, the model clears its notes and says goodbye,
-      // and the denylist above means nothing after this is ever answered. A
-      // repeat of "forget me" is refused at the denylist gate, so this cannot
-      // become a way to make it talk.
+      // "forget me" is the one opt-out that gets a reply. One final turn goes
+      // out: the model says goodbye (and clears any note the wipe above
+      // missed, with person__remove_memory), and the denylist above means
+      // nothing after this is ever answered. A repeat of "forget me" is
+      // refused at the denylist gate, so this cannot become a way to make it
+      // talk.
       if (verdict.forgetMemory && config.stage >= 3) {
         logger.warn('forget-me: dispatching a final turn to clear agent memory', {
           did: match.authorDid, queueId,
@@ -273,16 +286,15 @@ export async function dispatch(queueId, stats, retryNote) {
   row = db.getQueueRow(row.id);
 
   // Direction from the people who run it: whether this post is from one of
-  // them, the lesson it just taught if it taught one, and every standing lesson.
+  // them, and the lesson it just taught if it taught one. Standing guidance
+  // (lessons, style notes, rules) the agent reads itself, for every arena
+  // (guidance.js, bot/agent/instructions/guidance.ts).
   const operator = isAdmin(row.author_did);
   const res = await sendMention(row, {
     retryNote,
     context,
     operator,
     lessonSaved: operator ? db.lessonFromPost(row.uri) : null,
-    lessons: db.activeLessons().map((l) => l.text),
-    styleNotes: db.db.prepare(`SELECT text FROM style_feedback WHERE removed_at IS NULL
-      ORDER BY added_at DESC LIMIT 30`).all().reverse().map((note) => note.text),
   });
   if (res.ok) {
     stats.dispatched++;

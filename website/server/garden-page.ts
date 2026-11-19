@@ -1,6 +1,6 @@
 /**
- * /garden/<actor> and /garden/<actor>/flowers (vercel.json rewrites them to
- * /api/garden-page?actor=<actor>[&level=flowers]): the garden page (garden/index.html) as
+ * /garden/<actor>, /garden/<actor>/flowers and /garden/<actor>/tending (vercel.json rewrites
+ * them to /api/garden-page?actor=<actor>[&level=flowers|tending]): the garden page (garden/index.html) as
  * built, with its title, description and Open Graph tags made this garden's, so a link to
  * someone's garden unfurls as theirs, with its card (/og/garden/<actor>.png,
  * server/og-garden.ts). The page itself is unchanged: it reads the garden in the browser,
@@ -47,13 +47,15 @@ export interface GardenMeta {
   alt: string;
 }
 
+export type GardenLevel = 'garden' | 'flowers' | 'tending';
+
 /** The tags for a garden, in the page's words (src/scripts/garden-page.ts COPY). */
-export function gardenMeta(g: Garden, level: 'garden' | 'flowers', now: number): GardenMeta {
+export function gardenMeta(g: Garden, level: GardenLevel, now: number): GardenMeta {
   const words = gardenWords(g);
   const who = g.owner.displayName || `@${g.owner.handle}`;
   const community = g.owner.did === ATPOTATO_DID;
-  // The community garden is /garden, and its "flowers" are just the garden (garden-page.ts).
-  const path = community ? '/garden' : `/garden/${encodeURIComponent(addressOf(g.owner))}${level === 'flowers' ? '/flowers' : ''}`;
+  // The community garden is /garden, and its "flowers" and "tending" are just the garden (garden-page.ts).
+  const path = community ? '/garden' : `/garden/${encodeURIComponent(addressOf(g.owner))}${level === 'garden' ? '' : `/${level}`}`;
   const n = g.flowers.length;
   const { blooming } = placeFlowers(g, now);
   const patch = !g.patch
@@ -62,7 +64,7 @@ export function gardenMeta(g: Garden, level: 'garden' | 'flowers', now: number):
       ? 'its patch from above, waiting for its first flower'
       : `its patch from above, with ${n} ${n === 1 ? 'flower' : 'flowers'}${blooming ? `, ${blooming} in bloom` : ' coming up'}`;
   return {
-    title: community ? 'the community garden · atpotato' : `${who}'s ${level === 'flowers' ? 'flowers' : 'garden'} · atpotato`,
+    title: community ? 'the community garden · atpotato' : `${who}'s ${level} · atpotato`,
     description: words.lede,
     url: `${SITE_ORIGIN}${path}`,
     image: `${SITE_ORIGIN}/og/garden/${encodeURIComponent(addressOf(g.owner))}.png`,
@@ -123,7 +125,8 @@ export function createGardenPageHandlers(deps: GardenPageDeps = {}) {
   async function GET(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const actor = (url.searchParams.get('actor') ?? '').trim();
-    const level = url.searchParams.get('level') === 'flowers' ? 'flowers' : 'garden';
+    const asked = url.searchParams.get('level');
+    const level: GardenLevel = asked === 'flowers' || asked === 'tending' ? asked : 'garden';
     const [html, g] = await Promise.all([
       page(request)
         .then((text) => {

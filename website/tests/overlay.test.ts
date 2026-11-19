@@ -2,17 +2,18 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHAT, FOLLOW, HANDLE_MAX, LIVESTREAM, OVERLAY, SCENE, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
+import { CHAT, FOLLOW, GATE, HANDLE_MAX, LIVESTREAM, OVERLAY, SCENE, NOBODY, atHandle, avatarUrl, commandOf, createNames, eventFor, jetstreamUrl, listen, resolveActor } from '../src/overlay/chat.js';
 import { appsLine, createGate, endedLine, followLine, forecastLine, helloLine, liveLine, petLine, weatherLine } from '../src/overlay/lines.js';
 import { readParams, readWidgets, toSearch, writeWidgets } from '../src/overlay/params.js';
 import { DEFAULT_CONFIG, fromRecord, OVERLAY_NSID, SLOTS, toRecord, WIDGET_HOME, WIDGET_KINDS, withOverrides, type OverlayConfig } from '../src/overlay/config.js';
 import { createLayout } from '../src/overlay/layout.js';
+import { RECORD_COLLECTIONS } from '../src/overlay/records.js';
 import { AT_CENTER_X, mirrorSvg, VIEW_WIDTH } from '../src/overlay/mirror.js';
 import { didDocumentUrl, pdsOf, readPublicConfig } from '../src/overlay/store.js';
 import { createVisitors, pathFor, place, VISITOR_KINDS, visitorsFor } from '../src/overlay/visitors.js';
 import { LINE_GAP_MS, LINE_MS, MAX_LINES, bobMs, enqueue, mountOverlayPoe } from '../src/overlay/poe.js';
 import { AGAIN_MS, createRegulars } from '../src/overlay/regulars.js';
-import { buildWidgetRows, configFrom, fillForm, init as initSetup, SAVE_DELAY_MS } from '../src/overlay/setup.js';
+import { buildAllWidgetRows, configFrom, fillForm, init as initSetup } from '../src/overlay/setup.js';
 import { TUNES } from '../src/overlay/sounds.js';
 import { WAKE_MS } from '../src/poe/idle.js';
 import { MASCOT_URLS } from '../src/scripts/mascot.js';
@@ -27,7 +28,7 @@ const who = (handle: string | null, avatar: string | null = null) => ({ handle, 
 describe('overlay config and its address', () => {
   it('has no overrides without settings, so the record or the defaults rule', () => {
     const p = readParams('');
-    expect(p).toEqual({ streamer: null, demo: false, overrides: {} });
+    expect(p).toEqual({ streamer: null, layout: 'self', demo: false, who: null, overrides: {} });
     expect(withOverrides(DEFAULT_CONFIG, p.overrides)).toEqual(DEFAULT_CONFIG);
   });
 
@@ -90,7 +91,7 @@ describe('overlay config and its address', () => {
   it("saves a record the lexicon's required fields are all in", () => {
     const lexicon = JSON.parse(read('../lexicons/to/atpota/poe/overlay.json'));
     expect(lexicon.id).toBe(OVERLAY_NSID);
-    expect(lexicon.defs.main.key).toBe('literal:self');
+    expect(lexicon.defs.main.key).toBe('any');
     const record = toRecord(DEFAULT_CONFIG, '2026-10-21T00:00:00.000Z', new Date('2026-10-22T00:00:00Z'));
     for (const field of lexicon.defs.main.record.required) expect(record).toHaveProperty(field);
     expect(record).toMatchObject({ $type: OVERLAY_NSID, createdAt: '2026-10-21T00:00:00.000Z', updatedAt: '2026-10-22T00:00:00.000Z' });
@@ -207,8 +208,8 @@ describe('the stream', () => {
   });
 
   it("keeps chat in the streamer's chat and follows of the streamer", () => {
-    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', command: null });
-    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: '!pet' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', command: 'pet' });
+    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', rkey: '3m4abc', text: 'hi', command: null });
+    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: '!pet' }), STREAMER)).toEqual({ kind: 'chat', did: 'did:plc:a', rkey: '3m4abc', text: '!pet', command: 'pet' });
     expect(eventFor(commit('did:plc:a', FOLLOW, { subject: STREAMER }), STREAMER)).toEqual({ kind: 'follow', did: 'did:plc:a' });
   });
 
@@ -216,10 +217,21 @@ describe('the stream', () => {
     expect(eventFor(commit('did:plc:a', CHAT, { streamer: 'did:plc:other', text: 'hi' }), STREAMER)).toBeNull();
     expect(eventFor(commit('did:plc:a', FOLLOW, { subject: 'did:plc:other' }), STREAMER)).toBeNull();
     expect(eventFor(commit(STREAMER, FOLLOW, { subject: STREAMER }), STREAMER)).toBeNull();
-    expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }, 'delete'), STREAMER)).toBeNull();
+    expect(eventFor(commit('did:plc:a', FOLLOW, { subject: STREAMER }, 'delete'), STREAMER)).toBeNull();
     expect(eventFor(commit('did:plc:a', CHAT, { streamer: STREAMER }), STREAMER)).toBeNull();
     expect(eventFor({ kind: 'identity', did: 'did:plc:a' }, STREAMER)).toBeNull();
     expect(eventFor('nope', STREAMER)).toBeNull();
+  });
+
+  it('hears chat taken back, messages the streamer hides, and changes to their own records', () => {
+    expect(eventFor({ kind: 'commit', did: 'did:plc:a', commit: { operation: 'delete', collection: CHAT, rkey: 'm1' } }, STREAMER)).toEqual({ kind: 'unchat', did: 'did:plc:a', rkey: 'm1' });
+    expect(eventFor(commit(STREAMER, GATE, { hiddenMessage: 'at://did:plc:a/place.stream.chat.message/m1' }), STREAMER)).toEqual({ kind: 'hide', did: 'did:plc:a', rkey: 'm1' });
+    // only the streamer hides messages in their chat
+    expect(eventFor(commit('did:plc:other', GATE, { hiddenMessage: 'at://did:plc:a/place.stream.chat.message/m1' }), STREAMER)).toBeNull();
+    expect(eventFor(commit(STREAMER, GATE, { hiddenMessage: 'at://did:plc:a/app.bsky.feed.post/m1' }), STREAMER)).toBeNull();
+    expect(eventFor(commit(STREAMER, 'im.flushing.right.now', { text: 'x', emoji: 'y' }), STREAMER)).toEqual({ kind: 'record', collection: 'im.flushing.right.now' });
+    expect(eventFor({ kind: 'commit', did: STREAMER, commit: { operation: 'delete', collection: 'fm.teal.feed.play', rkey: 'p' } }, STREAMER)).toEqual({ kind: 'record', collection: 'fm.teal.feed.play' });
+    expect(eventFor(commit('did:plc:other', 'im.flushing.right.now', { text: 'x', emoji: 'y' }), STREAMER)).toBeNull();
   });
 
   it("hears the streamer's stream start and end, and nobody else's", () => {
@@ -232,17 +244,18 @@ describe('the stream', () => {
 
   it('asks Jetstream for chat, streams and overlay settings, and follows only when wanted', () => {
     const both = new URL(jetstreamUrl('wss://j.example/subscribe', true, 42));
-    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, FOLLOW]);
+    expect(both.searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, GATE, ...RECORD_COLLECTIONS, FOLLOW]);
     expect(both.searchParams.get('cursor')).toBe('42');
-    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE]);
+    expect(new URL(jetstreamUrl('wss://j.example/subscribe', false)).searchParams.getAll('wantedCollections')).toEqual([CHAT, LIVESTREAM, OVERLAY, SCENE, GATE, ...RECORD_COLLECTIONS]);
   });
 
   it("hears the streamer's own saved settings, and nobody else's", () => {
     const value = { poe: { show: true, side: 'left', scale: 100 } };
-    expect(eventFor(commit(STREAMER, OVERLAY, value, 'update', 'self'), STREAMER)).toEqual({ kind: 'config', value });
-    expect(eventFor(commit(STREAMER, OVERLAY, value, 'create', 'self'), STREAMER)).toEqual({ kind: 'config', value });
+    expect(eventFor(commit(STREAMER, OVERLAY, value, 'update', 'self'), STREAMER)).toEqual({ kind: 'config', rkey: 'self', value });
+    expect(eventFor(commit(STREAMER, OVERLAY, value, 'create', 'self'), STREAMER)).toEqual({ kind: 'config', rkey: 'self', value });
     expect(eventFor(commit('did:plc:other', OVERLAY, value, 'update', 'self'), STREAMER)).toBeNull();
-    expect(eventFor(commit(STREAMER, OVERLAY, value, 'update', 'other'), STREAMER)).toBeNull();
+    // another of their layouts: the overlay showing that one follows it (index.ts)
+    expect(eventFor(commit(STREAMER, OVERLAY, value, 'update', 'other'), STREAMER)).toEqual({ kind: 'config', rkey: 'other', value });
   });
 
   it('listens, hands over events, and reconnects to the other host after a drop', () => {
@@ -266,7 +279,7 @@ describe('the stream', () => {
     const l = listen(STREAMER, true, (e) => events.push(e), FakeSocket as unknown as new (url: string) => WebSocket);
     sockets[0]!.onmessage?.({ data: JSON.stringify({ ...commit('did:plc:a', CHAT, { streamer: STREAMER, text: 'hi' }), time_us: 99 }) });
     sockets[0]!.onmessage?.({ data: 'not json' });
-    expect(events).toEqual([{ kind: 'chat', did: 'did:plc:a', command: null }]);
+    expect(events).toEqual([{ kind: 'chat', did: 'did:plc:a', rkey: '3m4abc', text: 'hi', command: null }]);
     sockets[0]!.close();
     vi.advanceTimersByTime(2000);
     expect(sockets).toHaveLength(2);
@@ -438,8 +451,8 @@ describe('the setup page', () => {
 
   it('puts a config in the form and reads the same one back', () => {
     page();
-    buildWidgetRows(document.querySelector<HTMLElement>('[data-ovs-widgets]')!);
     const form = document.querySelector<HTMLFormElement>('[data-ovs-form]')!;
+    buildAllWidgetRows(form);
     const c: OverlayConfig = { ...DEFAULT_CONFIG, poe: { show: true, side: 'left', scale: 120 }, widgets: [{ kind: 'card', slot: 'top-right', scale: 90 }, { kind: 'strip', slot: 'top-center', scale: 100 }], follows: false, ignore: ['bot.bsky.social'], volume: 0, nap: 10, theme: 'dark' };
     fillForm(form, c);
     expect(configFrom(form)).toEqual(c);
@@ -453,47 +466,6 @@ describe('the setup page', () => {
     await initSetup({ auth: { eager: false } as never });
     expect(again.dataset.state).toBe('signed-out');
     expect(document.querySelector<HTMLElement>('[data-ovs-editor]')!.hidden).toBe(true);
-  });
-
-  it('signed in, loads the saved settings, gives the URL, and saves changes to the repo', async () => {
-    const root = page();
-    const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
-    const fetchImpl = vi.fn(async (url: string) =>
-      url.includes('getRecord')
-        ? new Response(JSON.stringify({ value: { poe: { show: true, side: 'left', scale: 100 }, widgets: [{ kind: 'badge', slot: 'top-right', scale: 100 }], createdAt: '2026-10-01T00:00:00.000Z' } }))
-        : new Response(JSON.stringify({ did: STREAMER, handle: 'dame.is', displayName: 'dame' })),
-    ) as unknown as typeof fetch;
-    const save = vi.fn(async () => undefined);
-    await initSetup({ auth: { eager: true, start: async () => ({ session, callback: false, error: null }) } as never, fetchImpl, save });
-    expect(root.dataset.state).toBe('signed-in');
-    expect(document.querySelector<HTMLTextAreaElement>('[data-ovs-url]')!.value).toBe(`${location.origin}/overlay?streamer=dame.is`);
-    const form = document.querySelector<HTMLFormElement>('[data-ovs-form]')!;
-    expect(configFrom(form).poe.side).toBe('left');
-    expect(configFrom(form).widgets).toEqual([{ kind: 'badge', slot: 'top-right', scale: 100 }]);
-    vi.useFakeTimers();
-    form.querySelector<HTMLInputElement>('[name="w-pulse"]')!.checked = true;
-    form.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(save).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
-    expect(save).toHaveBeenCalledTimes(1);
-    const [, config, createdAt] = save.mock.calls[0] as unknown as [unknown, OverlayConfig, string];
-    expect(config.widgets.map((w) => w.kind)).toEqual(['badge', 'pulse']);
-    expect(createdAt).toBe('2026-10-01T00:00:00.000Z');
-    expect(document.querySelector('[data-ovs-saved]')!.textContent).toContain('saved');
-  });
-
-  it('asks to sign in again when the sign-in is from before it could save', async () => {
-    page();
-    const session = { did: STREAMER, pds: 'https://pds.atpota.to', fetch: vi.fn(), signOut: vi.fn() };
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: 'RecordNotFound' }), { status: 400 })) as unknown as typeof fetch;
-    const save = vi.fn(async () => {
-      throw Object.assign(new Error('forbidden'), { status: 403 });
-    });
-    await initSetup({ auth: { eager: true, start: async () => ({ session, callback: false, error: null }) } as never, fetchImpl, save });
-    vi.useFakeTimers();
-    document.querySelector<HTMLFormElement>('[data-ovs-form]')!.dispatchEvent(new Event('input', { bubbles: true }));
-    await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
-    expect(document.querySelector<HTMLElement>('[data-ovs-reconsent]')!.hidden).toBe(false);
   });
 
   it('opens the preview full screen, and closes it with the button, a tap or Escape', async () => {

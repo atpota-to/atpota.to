@@ -52,6 +52,21 @@ npm run review               # matches next to the posts that prompted them
 npm run review -- 50 drafted # only drafts, for milestone 3
 ```
 
+Reading how Poe sounds, across a batch (the tells are in `src/voice-tells.js`):
+
+```bash
+npm run measure-voice -- --posted                     # replies and weather posts that went out
+npm run measure-voice -- --posted --since 2026-11-10  # only since a UTC date (--until works too)
+npm run measure-voice -- --posted --show contrast     # the lines behind one number
+npm run measure-voice -- 120 180                      # voice-sample drafts 120 to 180 (src/tools/sample.js)
+node src/tools/measure-voice.js --repo poe.atpota.to  # from the public repo: no db, no .env, runs anywhere
+```
+
+Each line is a habit that reads as machine-written when it repeats (a thing
+explained by what it isn't, a question on the end of every reply, the same
+opening word), as a share of the batch. To see whether a change to the voice rules
+in `bot/agent/` did anything, compare the same kind of batch before and after it.
+
 ### Going quiet
 
 Three levers, and only the first two are safe to reach for during an incident.
@@ -341,6 +356,7 @@ is worth more than the convenience of a client library.
 | `src/richtext.js` | grapheme counting and UTF-8 byte offsets |
 | `src/weather-posts.js` | Poe's weather posts: the watcher, the draft callback, the poster |
 | `src/gates/weather.js` | every decision about a weather post |
+| `src/profile-look.js` | Poe's avatar and banner changing with the sky |
 
 ---
 
@@ -428,11 +444,16 @@ and logs an error rather than silently reverting to something more permissive.
 
 ### Two places this is stricter than the brief
 
-**The poster never builds mention facets at all.** Only link facets. A stray
-`@handle` in a draft therefore notifies nobody even if the gate somehow missed
-it, which closes the mass-tagging hole at the record level rather than only at
-the check. The gate still rejects third-party handles, because it still *reads*
-as tagging.
+**The reply poster builds a mention facet only for the people who run Poe.**
+Every other facet is a link. A stray `@handle` in a draft therefore notifies
+nobody even if the gate somehow missed it, which closes the mass-tagging hole at
+the record level rather than only at the check. The gate still rejects
+third-party handles, because they still *read* as tagging. The posts that can
+tag anyone are a dispatch announcement, which the operator approves by hand
+after seeing who it tags (see [Tagging](#tagging-in-an-announcement)), a
+weather post, which can tag only the apps' own accounts the droplet checked
+before Poe was asked (see [Tagging an app's account](#tagging-an-apps-account)),
+and a reply, which can tag only the operator (below).
 
 **Opt-out phrases are matched as demands, not as words.** A denylisting is
 permanent with no appeal flow, so a false positive silently and forever stops
@@ -441,6 +462,23 @@ perfectly ordinary things to ask an atproto bot: *"how do I opt out of the
 firehose?"*, *"how do I make the PDS forget me?"*, *"does the error go away if I
 rebuild?"*. A question mark, a request word, or more than 80 characters means it
 is prose, not an opt-out. `go away` was dropped from the phrase list entirely.
+
+#### A reply can tag the operator
+
+So Poe can ask for help in public ("@dame.is, this one's for you!") instead of
+saying "a good one for the people who run me", which notifies nobody. At post
+time, every `@handle` in a draft other than the asker's and Poe's own goes to
+the AppView in one `getProfiles` call (`poster.js` `operatorTagsIn`). A handle
+passes `third_party_mention` only when the account it belongs to is one of
+`ADMIN_DIDS` (`gates/outbound.js` `operatorMentions`), and only those get a
+mention facet, at that DID. The name decides nothing: a handle that moved to
+somebody else is a third party like any other. A failed lookup tags nobody, so
+the draft is refused and Poe is asked to name them without the @.
+
+Poe's reply skill (`bot/agent/skills/bluesky-reply.md`, "When a thread needs
+dame") says when to tag, and the turn prompt names `@dame.is`. A draft with no
+`@handle` needs no lookup and reaches the gates without waiting on the network.
+`"replyOperatorTags": false` in `gates.json` turns it off without a deploy.
 
 ---
 
@@ -468,9 +506,14 @@ within one session, so the oldest turn still waiting gets the next draft. This
 is inference from the agent's behaviour rather than a guarantee from the
 contract; a postUri in the callback would make it exact.
 
-**`forget me` cannot wipe agent memory yet.** The denylist half works and is
-tested. The memory half logs a warning recording the obligation, because agent
-memory does not exist yet.
+**`forget me` wipes agent memory in code, but journals are matched by name.**
+The droplet denylists the author, deletes the public record and its own copy,
+then calls the agent's `/memory/forget`, which empties the person's notes and
+removes every journal note (archived ones too) that names their DID or handle,
+and finally drops every backup-log version that does. A journal note that
+describes someone without naming them is not found; Poe's instructions keep
+people out of the journals, and the farewell turn still asks the model to clear
+anything left.
 
 **The agent contract is implemented from the brief, not read from the source.**
 `bot/agent/channels/bluesky.ts` and `bot/agent/lib/bluesky.ts` are not on this
@@ -584,11 +627,26 @@ A chat message holds 1000 graphemes and 10000 bytes. A longer reply is sent as u
 (`splitDmText`); the first answers the operator's message and the rest follow it, and past
 the fourth the reply ends with an ellipsis. `parts_sent` records how far a reply got: a part
 that fails leaves the row in `sending` for review, like a single send, and is never resent.
+
+Each DM is its own agent session (the bot addresses it by the message, not the
+conversation), so Poe knows what was said before only because the droplet tells it. When
+a DM is handed over, the droplet reads the conversation from chat and sends the messages
+before it as `history`: `{ you, text, sentAt }`, oldest first, where `you` marks
+anything from Poe's account. That includes what never went through the agent: the
+proposals and preview links put under its replies, the answers to a yes or no, and the
+drafting session's previews. It is the last `DM_HISTORY_MAX_MESSAGES` (30) messages from
+the past 7 days, at most `DM_HISTORY_MAX_CHARS` (16000) characters, dropping the oldest
+first (`dmHistory`). It is context only: if chat can't be read, the DM goes without it,
+and if the bot answers 400 (a bot deployed before it accepted `history`), the DM is sent
+again without it, which can't answer twice because a 400 starts no turn.
 An operator-confirmed fact about Poe may go into shared self memory only if it
-is safe to recall in public conversation. Prefix `style:` to store a private,
-standing voice note in droplet SQLite; future public Bluesky turns receive up
-to 30 active notes. The notes are never published as PDS records. Private
-memory uses the bot's Vercel Blob store; Eve also keeps DM session history.
+is safe to recall in public conversation. A DM starting `style:`, `dispatch:`,
+`weather:`, `website:` or `bluesky:` is saved as standing guidance, in code,
+before Poe reads it (see [Poe's memory](#poes-memory-guidance-the-backup-log-the-digest-and-the-admin-page)).
+Private memory uses the bot's Vercel Blob store, with a backup of every version
+here. Eve also keeps each DM's session, with the conversation history sent
+alongside it. The droplet reads that history from chat for each hand-off and
+does not store it.
 Inbound message text and drafts are held in local SQLite. Anyone with access
 to those stores can read them. The DM bridge does not log message text; review
 Vercel and Eve telemetry separately before sending sensitive material.
@@ -598,14 +656,16 @@ leaves a row in `sending`, inspect the DM conversation before manually retrying;
 a timeout might mean the chat service accepted the message. `dispatched` with no
 callback also needs manual review. The kill switch and `STAGE` gate outgoing DMs.
 
-## Weekly dispatch: `announce` (phase 0)
+## Weekly dispatch: `announce`
 
 Issues of "poe's atmosphere dispatch" are `site.standard.document` records in
 **atpota.to's** repo, in the Leaflet publication
 `at://did:plc:qntsxa2i4sb24noi45fx4np2/site.standard.publication/3myar4h4pls2n`.
-They are published by hand (`npm run publish:dispatch` in the website repo).
-Posting the announcement from Poe is the one step an operator cannot do by
-hand, so an operator DMs Poe:
+Poe drafts them and publishes them on the operator's yes (see
+[Weekly dispatch: Poe writes it](#weekly-dispatch-poe-writes-it-dispatch_drafts)),
+or they are published in Leaflet by hand. Posting the announcement for one
+published by hand is the step an operator can't do themselves, so an operator
+DMs Poe:
 
 ```
 announce https://poe.leaflet.pub/<rkey>
@@ -652,8 +712,14 @@ the next DM poll (its `operator_dm` row waits in status `command`). Sending the
 same command again is always safe: it resumes, never reposts. The kill switch,
 a nap and `STAGE` below 4 all stop it before the page check.
 
-Needs `DISPATCH_ENABLED=true` (off: `announce` DMs go to the agent as before)
-but not `DISPATCH_PUBLISH_ENABLED`, which is for the later review flow.
+Needs `DISPATCH_ENABLED=true` (off: `announce` DMs go to the agent as before).
+
+Linking waits until the issue has been up for `DISPATCH_LEAFLET_SETTLE_MS`
+(5 minutes) after its `publishedAt`. Leaflet emails subscribers from a job that
+runs about a minute after the last change it sees to a new document (a 60 s
+debounce, at most 3 minutes), and only if that change is the create: putting
+`bskyPostRef` on the document inside that window would make the job see an
+update, and send nothing. The post itself goes out at once.
 
 ### Asking in plain words: Poe proposes, the operator confirms
 
@@ -670,10 +736,11 @@ DM goes to Poe like any other. Poe calls the agent tool
 The droplet accepts it only while that DM is `dispatched` to the agent, from an
 `ADMIN_DIDS` sender, at most ten calls per DM. Without `text` it only looks the
 issue up and returns its title, description and opening for Poe to write from.
-With `text` it checks the post (300 graphemes, no @handles, no link but the
-issue's own page, no markdown) and answers `accepted: false` with the reason
-when one fails, so Poe can fix it in the same turn. An accepted proposal goes
-in `dispatch_proposal` and replaces any earlier one.
+With `text` it checks the post (300 graphemes, no link but the issue's own
+page, no markdown, and every @handle a real account, as below) and answers
+`accepted: false` with the reason when one fails, so Poe can fix it in the same
+turn. An accepted proposal goes in `dispatch_proposal` and replaces any earlier
+one.
 
 When Poe's reply arrives on `/dm-draft`, the exact post is added under it with
 "reply yes to post it, or no to drop it". The reply is cut to make room; the
@@ -686,6 +753,22 @@ under six hours old. Otherwise "yes" is ordinary conversation and goes to Poe.
 `announce` followed by a link is still the direct command. `announce` followed
 by plain words ("announce that one please") goes to Poe instead of getting the
 usage.
+
+#### Tagging in an announcement
+
+An announcement can tag the accounts behind what the issue features ("tangled
+moved house, hi @tangled.org"). Each `@handle` in Poe's proposed post is looked
+up when it is proposed, in one call to the public AppView
+(`app.bsky.actor.getProfiles`), and the proposal is refused with the reason if a
+handle isn't an account, the lookup fails, or it tags more than six. The DIDs
+found are stored with the proposal (`dispatch_proposal.mentions`,
+`dispatch_publish.mentions`), and the operator's confirmation names every one,
+with its display name: "it tags @tangled.org (Tangled) and @mu.social (mu), so
+each gets a notification." The yes posts mention facets for exactly those DIDs,
+with no second lookup, so a handle that moved in between can't change who is
+tagged. Any other `@handle` in the text stays plain text. The operator's own
+`announce <link>` text is looked up the same way when it runs, and a handle that
+isn't an account stops the post.
 
 ### Any post, in plain words: `propose_post`
 
@@ -705,7 +788,7 @@ blog's own card) or `none`. The proposal comes on the callback URL, told apart b
 It is accepted only while that DM is `dispatched` to the agent, from an `ADMIN_DIDS`
 sender, at most ten calls per DM, and the text is checked (300 graphemes, no
 @handles, no link since the card carries it, no markdown), with the reason back to
-Poe when it fails. The exact post and its card go under Poe's reply, and a whole-message
+Poe when it fails. These posts tag nobody: only a dispatch announcement and a weather post can. The exact post and its card go under Poe's reply, and a whole-message
 yes to that message posts it; the rules for what counts as that yes are the dispatch
 announcement's above. The card must load, or nothing is posted and the reply says
 why: a weather card is fetched by its own address, as weather posts do.
@@ -714,6 +797,137 @@ The operator's yes is the approval, so these posts are not held to the weather
 posts' caps. A weather one is then recorded in `weather_post` (kind `operator`), so
 the automatic weather posts keep their 2-hour gap from it. The kill switch, a nap
 and `STAGE` below 4 stop it. Needs `OPERATOR_DM_ENABLED=true`, nothing more.
+
+## Weekly dispatch: Poe writes it (`DISPATCH_DRAFTS`)
+
+Poe researches and drafts each issue itself, the operator reviews and edits it
+in DMs, and it is published on their yes (`src/dispatch-drafts.js`, with the
+markdown turned into the record by `src/dispatch-markdown.js`).
+
+```
+droplet tick ──► POST <AGENT_URL>/dispatch/draft ──► Poe researches the week
+                                                     └─ save_dispatch_draft ──► /callback (versions)
+Poe's last word ──► /callback ──► DM to the operator: title, preview link, Poe's note
+operator: "cut the tokimeki bit" ──► Poe (in the DM) ──► save_dispatch_draft (edits)
+operator: "make it live" ──► propose_dispatch_publish ──► the steps under Poe's reply
+operator: "yes" ──► create the document in atpota.to's repo ──► announce() ──► "it's live"
+```
+
+1. **Asking.** With `DISPATCH_DRAFTS=on`, the five-minute tick asks for a draft
+   at `DISPATCH_DRAFT_DAY` and `DISPATCH_DRAFT_HOUR_UTC` (Monday 12:00 UTC by
+   default), up to 20 hours late, once per week: the draft's id is
+   `dd-<that date>`. It is skipped (kept as `skipped`, with the reason) when a
+   draft from the last three days is still in play, or an issue was published in
+   the last three days. An operator can also DM `draft dispatch` (or "write this
+   week's newsletter", with what to cover on the lines after) at any time, and
+   with `DISPATCH_DRAFTS=ask` that is the only way. The issue covers the time
+   since the last issue (when that was a day to two weeks ago) or the last seven
+   days. A failed ask is retried on the next two ticks, then given up on with a DM.
+2. **Drafting.** The agent's drafting session (its own session per draft, the
+   `dispatch` channel) researches with Aturi and `read_weather` and saves the
+   issue with `save_dispatch_draft`. Each save arrives on the callback URL as
+   `{ draftingId, dispatchDraft: { action: "save", title, description, tags,
+   markdown | edits } }`, is turned into the exact `site.standard.document` it
+   would publish (Leaflet's `pub.leaflet.content` blocks, with link, bold,
+   italic, code and strikethrough facets and never a mention facet), and is kept
+   as a new version in `dispatch_draft_version`. Link cards are filled in here:
+   a page's title and description (public https hosts only), or a Bluesky post's
+   cid for an embed. What didn't come out right goes back to Poe as `notes`.
+3. **The DM.** When the drafting turn ends, its last message comes back as
+   `{ key, dispatchDraftDone: { draftId, text } }` and the droplet DMs the first
+   `ADMIN_DIDS` operator: the title, the preview link, Poe's note. This is a DM
+   Poe starts, not a reply, so it goes through `dispatch_outbox`
+   (`chat.bsky.convo.getConvoForMembers`, then the message): a send that might
+   have gone out is never sent again, like any DM here. A drafting turn that
+   hasn't reported back in 90 minutes is settled with the last version it saved.
+4. **Reviewing.** The preview is `atpota.to/blog/preview/<token>`, the issue as it
+   will look, rendered by the website from `GET /dispatch/preview/<token>` here.
+   The token is 24 random characters, one per draft, and the only key: the
+   endpoint is public, `no-store`, `noindex`. While `DISPATCH_DRAFTS` is on, every
+   operator DM handed to Poe carries `dispatchDrafts: true`, and while a draft is
+   in play `dispatchDraft: { id, status, version, title }` too, so Poe knows to
+   read it (`read_dispatch_draft`) and save the operator's
+   changes as `edits`, each a find (found exactly once) and its replacement. A
+   save from a DM puts the preview link under Poe's reply. Saves are serialized
+   per draft, at most 40 from a drafting turn and 15 calls per DM.
+5. **Making it live.** When the operator says so, Poe calls
+   `propose_dispatch_publish` with the version it read and an announcement post
+   (checked like any post: 300 graphemes, no links, no markdown; its @handles are
+   looked up and shown as an announcement's are, under
+   [Tagging](#tagging-in-an-announcement)).
+   The steps go under its reply: the issue goes up on poe.leaflet.pub and
+   atpota.to/blog, Leaflet emails every subscriber, and the exact announcement.
+   A whole-message yes to that message, by the same rules as an announcement's,
+   publishes exactly that version; anything else keeps it a draft, and so does a
+   draft that changed since.
+6. **Publishing.** The yes runs beside the poll (its DM waits in `issue`, so a
+   restart finishes it). The document's record key (a TID) and `publishedAt` are
+   claimed first; the document is looked up under that key and only created if
+   it isn't there, with `com.atproto.repo.createRecord`, never a put: Leaflet
+   emails subscribers when it sees a new document created in a publication with
+   Newsletter Mode on, whoever wrote it. Then `announce()` posts and links it as
+   above, with the link held back until Leaflet has seen the create. Asking again
+   is always safe: it never makes a second issue or a second post.
+
+**What Poe learns from the edits.** Feedback in a DM on how issues should be
+written ("lead the weather with the link", "check the code before framing an
+argument") becomes standing guidance for the `dispatch` arena: Poe saves it with
+`save_guidance` when the operator asks it to remember, or the operator DMs
+`dispatch: ...` directly. Every drafting session follows it. When a few pile up,
+fold them into `bot/agent/skills/dispatch-issue.md` (or `dispatch-weather.md`)
+and retire them on the admin page.
+
+Publishing needs `DISPATCH_PUBLISHER_APP_PASSWORD`. Without it the drafts are
+still written and reviewed, and Poe tells the operator it can't publish. The kill
+switch, a nap and `STAGE` below 4 stop publishing; a nap also stops the weekly
+ask. `npm run drafts` lists the drafts (`npm run drafts -- <id>` shows one with
+every version and its log).
+
+Before turning it on: deploy the bot (it adds `POST /dispatch/draft` and the
+draft tools), add the nginx block for `/dispatch/preview/` (below), then set
+`DISPATCH_DRAFTS=on` (it needs `DISPATCH_ENABLED=true` and
+`OPERATOR_DM_ENABLED=true`) and restart. Until `DISPATCH_DRAFTS` is set, DMs are
+handed to Poe exactly as before.
+
+### Fixing a typo once it's live (`propose_dispatch_correction`)
+
+An issue Poe published from a draft keeps its markdown on the draft, so a typo
+found after it went out is fixed the same way a draft is edited, with one more
+yes:
+
+1. The operator says what's wrong, in any words. Poe reads the issue as
+   published (`read_dispatch_draft` with `issue: "latest"` or the issue's link),
+   then calls `propose_dispatch_correction` with the version it read and
+   find/replace edits, and a new title or description if that's what's wrong.
+   A correction is small: at most 10 edits and 1,500 characters in all, so every
+   change fits in the DM it's approved from.
+2. The droplet builds the corrected record the way a save does, except that
+   every block the edits left alone is kept exactly as published: a card is
+   looked up again only if its own line changed. Under Poe's reply go each
+   change, word for word, and what it does: the pages change, nobody is emailed
+   again, and a post that already links the issue keeps its old card if the
+   title or description changed.
+3. A whole-message yes to that reply makes it, by the same rules as a publish
+   (`dispatch_correction` holds it; the yes waits in `issue` like a publish, so
+   a restart finishes it). The live record is read and checked against what Poe
+   published: if someone changed it elsewhere, nothing is written. Otherwise the
+   corrected title, description, tags, `textContent` and `content` are put over
+   it with `com.atproto.repo.putRecord` and `swapRecord`, keeping `path`,
+   `publishedAt`, `bskyPostRef` and anything else on it, and setting
+   `updatedAt`. A lost swap (the announcement's link landing at the same time) is
+   read again and retried once; a put whose answer was lost is recognised on the
+   live record. The draft gets the fix as a new version (`saved_by` is
+   `correction:<the yes>`), so a later fix builds on it.
+
+Leaflet emails subscribers only when the first thing its job sees for a new
+document is the create; an update never sends anything. So a correction is
+refused until `DISPATCH_LEAFLET_SETTLE_MS` after `publishedAt`, when that job has
+run, and the email that went out keeps the typo. The blog reads the record
+directly, so the fix shows there within its five-minute cache, and Leaflet
+re-renders its page when it sees the update. An issue published another way
+(issue one was) has no draft here, so Poe says it can't correct it. Corrections
+need nothing new on the droplet: no env var and no nginx route (the tools come on
+`/callback`).
 
 ## Likes Poe proposes (`appreciate_post`)
 
@@ -744,12 +958,16 @@ atpota.to's public endpoints, the ones `/weather` reads (`/api/atmosphere` and
 | --- | --- | --- |
 | `storm` | the station's last minute is stormy (600+ new records a second) | 12 hours |
 | `unusual` | the last hour is 1.4x busier or 0.65x as busy as usual for it, when the station heard at least 45 minutes of it | 12 hours |
-| `new_app` | an app the station never heard before has written 250+ records in its first day | 24 hours, and an app once |
+| `new_app` | an app the station never heard before has written 250+ records in its first day, from 3 or more different accounts | 24 hours, and an app once |
 | `mixed` | the diversity index is 6 or more ("high") | 24 hours |
 | `daily` | the day's report, from 16:00 UTC | UTC day |
 
 Only the station's own readings count; a website sample is too short to call a
-storm on. App names are checked as domains and collections as NSIDs before Poe
+storm on. A new app needs a crowd, not just records (`weatherNewAppMinAccounts`):
+one account's batch (an import, a backfill, a bot) can write thousands of records
+and still isn't an app blowing in, so it is never asked about, and it's left out of
+the new apps shown beside any other moment. An app the station hasn't counted
+accounts for yet waits until it has. App names are checked as domains and collections as NSIDs before Poe
 sees them. Poe is asked about one moment at a time, and not at all while
 3 weather posts went out in the last 24 hours (`weatherPostsPerDay`), one went
 out in the last 2 hours (`weatherMinGapMin`), or it has been asked 8 times in
@@ -761,16 +979,32 @@ A moment goes to the agent as `POST /weather/moment` (shared secret) with the
 station's numbers and Poe's last five weather posts. Poe reads the station and
 answers with the post, or `skip`, on `DROPLET_CALLBACK_URL`, the URL a reply's
 draft comes back on; its `momentId` tells it from a reply, so nginx needs nothing
-new. The draft goes through
+new. When the post is about one part of the report, Poe names that page
+(`choose_weather_page`), and the draft carries it as `page`: `diversity`, `trends`,
+`today`, `hosts` or `migration` (`WEATHER_PAGES` in `gates/weather.js`, checked
+against the website's `weather-topics.ts` by the tests). A page the droplet doesn't
+know is ignored, and the card stays on the whole report. The draft goes through
 the reply gates as a single post (length, markdown, non-answers, `@handles`), with
-no `@handle` allowed at all, no link but `https://atpota.to/weather`, and not the
-same text as the last weather post. With `WEATHER_POSTS=post` at stage 4 it is
-posted with an `app.bsky.embed.external` card for the weather page, and the caps
-are checked again first. The card's image is always the live weather card,
+no `@handle` allowed but the app accounts it was offered (below), no link but
+`https://atpota.to/weather` and its pages, and not the same text as the last weather post. With `WEATHER_POSTS=post` at stage 4
+it is posted with an `app.bsky.embed.external` card for the page Poe named
+(`https://atpota.to/weather/migration`, say) or for the whole report, with that
+page's title and description, and the caps are checked again first. The card's image
+is always the live weather card,
 `https://atpota.to/og/weather.png` (`WEATHER_CARD`), fetched by that address rather
-than from the page's og:image, fresh to the minute and in the design that suits the
-post (`CARD_FOR`): the sky for a storm, the barometer for an hour off usual, the other
-apps for a mixed sky or a new one, the day's chart for the daily report. A redirect
+than from the page's og:image, in the design that suits the
+post: the named page's own (`WEATHER_PAGES`), or else the kind's (`CARD_FOR`): the
+sky for a storm, the barometer and today so far for an hour off usual and for the
+daily report, the other apps for a mixed sky or a new one (a new app's card shows
+that app on its own, `&app=`). Until Poe could name a page, a
+daily report about accounts moving house (2026-10-30) went out under the whole
+report and the day's chart, and until 2026-11-17 a daily report's "low 99 at 07:47"
+went out over the last 24 hours by the hour, whose quietest hour was 232. The card is
+drawn when the moment comes, before Poe is asked, and that one goes under the post
+unless Poe names a page drawn in another design: a storm at 606 new records a second
+(2026-11-04) had fallen back to 597 by the time Poe had written, and went out as
+"stormy!" over a card saying gusty. The drawn card is kept in memory, so after a
+restart the post fetches its own, fresh to the minute. A redirect
 (the website's fallback to the home page's card) counts as no card. Without the card
 a post isn't posted bare: the draft waits, and each tick tries again, for up to 30
 minutes (`CARD_WAIT_MS`), then it is dropped as `rejected` (`no_card`). The first
@@ -794,6 +1028,116 @@ at once, without a restart, along with everything else Poe posts. Until the bot'
 weather channel is deployed, the agent refuses each moment and the watcher backs
 off for 15 minutes and asks again.
 
+### Tagging an app's account
+
+A weather post that names an app can tag the app's own account ("49 accounts
+filled @cosmik.network with cards"), so it gets the notification. Who it may tag is
+settled in code before Poe is asked (`appAccountsFor` in `src/weather-posts.js`,
+every rule in `appAccountProblem` in `src/gates/weather.js`). The candidates are the
+apps Poe might name: the moment's own, and the last day's busiest by records and by
+accounts (`/api/weather-history?range=day`). An app's account is offered only when:
+
+- enough different accounts wrote its records (`weatherNewAppMinAccounts`, 3): an app
+  one person writes is that person's project, whatever it's called;
+- the AppView has an account whose handle is exactly the app's domain
+  (`app.bsky.actor.getProfiles`, one call), so whoever holds it controls the domain;
+- that account's DID is the lexicon authority for the app's namespace: every one of
+  the app's collections the station heard whose `_lexicon.<authority>` TXT record
+  (DNS, the [lexicon resolution](https://atproto.com/specs/lexicon) method) names a
+  DID names this one, and at least one does. A domain anybody can write records
+  under, a shared host (`web.app`) or a namespace somebody else claimed fails here;
+- it has a display name, no pronouns (people set them, apps don't) and no labels;
+- it isn't Poe, isn't on the denylist, and no weather post tagged it in the last
+  `weatherTagCooldownDays` (7), so a busy app isn't notified every day.
+
+No record says an account is an app rather than a person, and the checks above
+narrow it but can't settle it: a person who publishes lexicons for their own site
+under their own domain, with a few friends writing records, passes them. So the
+last call is Poe's. Poe is shown the accounts as `tagging: { upTo, accounts: [{
+handle, displayName }] }` in the moment's facts (handles, never DIDs), and the
+weather skill (`bot/agent/skills/weather-post.md`) tells it to read each profile and
+tag only one that plainly speaks as the app, never a person's own account. A draft
+may tag at most `weatherMaxTags` (2) of the offered accounts (more is
+`too_many_tags`); any other `@handle` is still `third_party_mention`. The post tags
+the DIDs as they were checked when Poe was asked (`weather_post.tag_accounts`), with
+no second lookup, except that an account that opted out in between is dropped.
+What it tagged is kept in `weather_post.tagged`, and `npm run weather` shows both.
+
+A lookup that fails (the AppView, DNS, the history) leaves the post with nobody to
+tag, and the moment goes to Poe as before. `weatherMaxTags: 0` in `gates.json` turns
+tagging off without a deploy.
+
+## Poe's profile look (`PROFILE_LOOK`)
+
+Poe's avatar and banner change with the sky over New York (`src/profile-look.js`).
+The day is cut in four at sunrise and sunset, worked out in code: dawn from half an
+hour before sunrise, day from an hour and a half after it, golden hour from an hour
+and a half before sunset, night from half an hour after it. Each slot gets one look,
+from a roll seeded on the slot, so a restart picks the same one:
+
+- **Avatar:** the season and the time of day, with a face that is usually the time
+  of day's own and sometimes another (sleepy on about 7 nights in 10). While Poe
+  naps, the face is sleepy.
+- **Banner:** the same time of day and season, with the weather station's weather.
+  It switches to dispatch day for a day after an announcement, to Halloween week's
+  nights or New Year's Eve, or now and then (one slot in forty) to the moon, the
+  beach or a cloud.
+
+The pictures come from the website's library (`atpota.to/poe-profile`, named in its
+`manifest.json`, made by `website/scripts/poe-profile.ts`), so nothing is drawn
+here. A picture is fetched only from there, without following redirects, and must
+be a JPEG under 1 MB.
+
+A write changes only `avatar` and `banner` in `app.bsky.actor.profile/self`, and is
+swapped against the record as read, so an edit made in between is never written
+over. If the avatar or banner isn't the one this service last set, someone changed
+it by hand, and the profile is left alone for the rest of that day. A failed write
+waits 30 minutes before the same look is tried again. The kill switch stops every
+write; a nap doesn't, since a nap is what gives Poe the sleepy face.
+
+It is on by default (`PROFILE_LOOK=on`, stage 4 only), so it starts with the
+deploy; the first write replaces whatever avatar and banner the profile has.
+`npm run profile-look` shows today's slots, the look each was given, and every
+change made. To stop it, add `PROFILE_LOOK=off` to `/root/atpotato-mentions/.env`
+and `systemctl restart atpotato-mentions`; `PROFILE_LOOK=dry-run` keeps working
+each look out and logging it without writing anything. The kill switch stops it
+at once, without a restart.
+
+## Poe's memory: guidance, the backup log, the digest and the admin page
+
+Poe's memory lives in the agent (`bot/agent/memory/`, in Vercel Blob); who may
+read and write each slot, in which arena, is one table,
+`bot/agent/lib/memory-access.ts`. The droplet keeps four things beside it:
+
+- **Guidance** (`src/guidance.js`, the `guidance` table): standing rules for
+  Poe, each naming the arenas it applies to (`bluesky`, `website`, `weather`,
+  `dispatch`, `operator-dm`). Lessons from an admin's `remember:` post (public,
+  published as `to.atpota.poe.lesson` records, `npm run lessons`), private
+  `style:` voice notes, and rules: a DM starting `dispatch:`, `weather:`,
+  `website:` or `bluesky:`, one Poe saved with `save_guidance` when the operator
+  asked it to remember, or one added on the admin page. The agent reads them
+  all through `POST /memory` (`{ guidance: "list" }`) and gives every turn the
+  ones for its arena, as instructions. Until 2026-11-02 lessons and style notes
+  were two tables sent only with Bluesky replies; both were copied in.
+- **The backup log** (`src/memory-log.js`, `memory_versions`): every version
+  of every private memory, handed over by the agent on each write
+  (`POST /memory`, `{ log: ... }`), and of person notes from `storeMemory`.
+  Kept 180 days, always keeping each document's newest. Forgetting someone
+  drops every version that names them. It was seeded once from the agent's
+  `/memory/snapshot`, which also moved the old dispatch-notes slot into guidance.
+- **The weekly digest** (`src/memory-digest.js`): at `MEMORY_DIGEST_DAY` and
+  `MEMORY_DIGEST_HOUR_UTC` (Sunday 18:00 UTC by default), a DM to the first
+  `ADMIN_DIDS` operator saying what Poe remembered and forgot that week.
+  `MEMORY_DIGEST=off` stops it. The same tick prunes the log daily and, on the
+  first three days of a month, asks the agent's `/memory/rollup` to sum up the
+  journals' last month.
+- **The admin API** (`src/admin.js`, `/admin/` on the callback server): the
+  website's admin page (`website/server/admin.ts`) reads state, guidance,
+  people and the backup log, changes guidance, and naps or wakes Poe. Every
+  request needs `ADMIN_SHARED_SECRET` (never `DROPLET_SHARED_SECRET`; unset, it
+  answers 503) and `x-atpotato-admin-did` naming an `ADMIN_DIDS` admin or Poe.
+  Memory itself is edited through the agent's `/admin/memory`.
+
 ## nginx
 
 `/etc/nginx/sites-available/hook.atpota.to` forwards only exact paths to this
@@ -802,6 +1146,9 @@ its own `location =` block, or the agent's call fails without reaching here:
 `/callback`, `/dm-draft`, `/memory`, `/health`, `/like-proposal`,
 `/dispatch/announce-proposal`, `/internal/bluesky-search`,
 `/internal/scan-budget/claim`, `/internal/list-records-budget/claim` and
-`/internal/scan-approval/request`. `/like-proposal` and the four `/internal/`
+`/internal/scan-approval/request`. The dispatch's draft previews need a prefix
+block, since each has its own token: `location ^~ /dispatch/preview/`. So does the
+admin page's API (from the website, not the agent): `location ^~ /admin/`. Everything
+else the drafts use comes on `/callback`. `/like-proposal` and the four `/internal/`
 routes were missing until 2026-10-19, so Poe's Bluesky search, list_records,
 collection scans and like proposals all failed in production before then.

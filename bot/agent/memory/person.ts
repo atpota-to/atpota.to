@@ -1,9 +1,8 @@
-import { defineMemory } from "eve/memory";
+import { defineMemory, defineMemoryProvider } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
-import { isChannelKind } from "../lib/channel-kind";
+import { callerOf, pinnedNamespace, recalls, writes } from "../lib/memory-access";
 import { personScope } from "../lib/person-scope";
 import { publishedFileMemory } from "../lib/published-memory";
-import { isWebsiteTurn, signedInVisitor } from "../lib/website";
 
 /**
  * Durable notes about one person, keyed on their DID.
@@ -46,12 +45,17 @@ import { isWebsiteTurn, signedInVisitor } from "../lib/website";
  * Key on the DID and never the handle: handles move between people, DIDs do
  * not. A handle is a fact worth storing, and a fact that can go stale.
  *
- * This is the only memory slot, deliberately. `eve add memory/file` scaffolds a
+ * Which arenas and callers get it is lib/memory-access.ts; the scope below is
+ * only about which document.
+ *
+ * This is the only per-person slot, deliberately. `eve add memory/file` scaffolds a
  * generic one at agent/memory/file.ts scoped straight to byPrincipal; running
  * both would give the model two save tools and two remove tools, write two
  * documents per person, and leave the generic slot without the guards below.
  * If that file reappears after a future `eve add`, delete it again.
  */
+const base = publishedFileMemory();
+
 export default defineMemory({
   description:
     "Durable facts about this person that make future answers shorter: what " +
@@ -62,27 +66,27 @@ export default defineMemory({
   // fileMemory on the same Vercel Blob store as before, with each saved
   // version also handed to the droplet to publish. The Blob copy is what is
   // recalled, so publishing can fail without costing a note or a reply.
-  provider: publishedFileMemory(),
+  provider: defineMemoryProvider({
+    recall: base.recall,
+    async tools(ctx) {
+      return writes("person", ctx) ? (await base.tools?.(ctx)) ?? null : null;
+    },
+  }),
+
+  namespace: pinnedNamespace("person"),
 
   scope(ctx) {
-    const caller = ctx.session.auth.current;
+    if (!recalls("person", ctx)) return null;
+    const caller = callerOf(ctx);
+    if (!caller.did) return null;
 
     // A signed-in visitor on atpota.to: their Bluesky notes, by DID.
-    if (isWebsiteTurn(ctx)) {
-      const visitor = signedInVisitor(caller);
-      return visitor ? personScope(visitor.did) : null;
-    }
+    if (caller.arena === "website") return personScope(caller.did);
 
-    // DM turns must never recall, write, or publish a person's notes.
-    const did = caller?.attributes?.did;
-    if (!isChannelKind(ctx.channel.kind, "bluesky") || caller?.authenticator !== "atpotato-droplet" ||
-        caller.principalType !== "user") return null;
-    if (typeof did !== "string" || !did.startsWith("did:")) return null;
-
+    // On Bluesky, eve's own principal scope, which personScope spells out.
     const principal = byPrincipal(ctx);
     if (principal === null) return null;
-
-    return [principal, did];
+    return [principal, caller.did];
   },
 
   visibility: "scope",

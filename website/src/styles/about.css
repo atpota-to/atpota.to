@@ -237,13 +237,6 @@
   font-size: 40px;
 }
 
-.timeline__layer {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--on-soil-soft);
-}
-
 .timeline__items {
   display: flex;
   flex-wrap: wrap;

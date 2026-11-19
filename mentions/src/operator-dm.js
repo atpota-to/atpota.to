@@ -13,16 +13,15 @@ import {
 import {
   attachPostProposal, livePostProposalFor, decidePostProposal, publishPostProposal,
 } from './operator-posts.js';
+import { addGuidance, isGuidanceDm, parseGuidanceDm } from './guidance.js';
+import {
+  attachDraftReply, currentDraft, decideCorrection, decidePublish, liveCorrectionFor, livePublishFor, parseDraftCommand,
+  runConfirmed, runDraftCommand,
+} from './dispatch-drafts.js';
 
+// "style:" DMs were kept in a style_feedback table until 2026-11-02; they are
+// guidance now (guidance.js), and db.js copied the old rows in.
 db.exec(`
-  CREATE TABLE IF NOT EXISTS style_feedback (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    text TEXT NOT NULL,
-    author_did TEXT NOT NULL,
-    source_uri TEXT NOT NULL UNIQUE,
-    added_at TEXT NOT NULL,
-    removed_at TEXT
-  );
   CREATE TABLE IF NOT EXISTS operator_dm_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     started_at TEXT NOT NULL
@@ -171,10 +170,16 @@ export function acceptMessage(convo, message, cutoff) {
       message.id, convo.id, message.sender.did, message.sentAt, convo.status === 'request' ? 'request' : null, nowIso(),
     ).changes > 0;
   if (inserted) {
-    const match = /^style:\s*(\S[\s\S]*)$/i.exec(message.text.trim());
-    if (match) db.prepare(`INSERT INTO style_feedback (text, author_did, source_uri, added_at)
-      VALUES (?, ?, ?, ?)`).run(match[1].slice(0, 600), message.sender.did,
-        `dm:${message.id}`, nowIso());
+    // "style: ...", "dispatch: ..." and the like are standing guidance, saved
+    // here, in code, before the agent ever reads the DM.
+    const guidance = parseGuidanceDm(message.text);
+    if (guidance) {
+      try {
+        addGuidance({ ...guidance, authorDid: message.sender.did, sourceUri: `dm:${message.id}`, oncePerSource: true });
+      } catch (err) {
+        logger.warn('guidance DM not saved', { error: err.message });
+      }
+    }
   }
   return inserted;
 }
@@ -191,13 +196,18 @@ export function receiveDraft(body) {
   const accepted = db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_key = ?, draft_text = ?, updated_at = ?
     WHERE message_id = ? AND status = 'dispatched'`).run(body.key, text, nowIso(), body.dmId).changes > 0;
   if (accepted) {
-    // An announcement or a post Poe proposed in this turn goes under its reply,
-    // verbatim. One per reply, so a yes always means one thing.
-    const withProposal = (config.dispatch.enabled ? attachProposal(body.dmId, text) : null) ??
-      attachPostProposal(body.dmId, text);
-    if (withProposal) {
+    // What Poe did to the dispatch draft in this turn (dispatch-drafts.js) goes
+    // under its reply: the preview link for a new version, and the steps of
+    // making it live when it proposed that. Then an announcement or a post it
+    // proposed, verbatim. One proposal per reply, so a yes always means one thing.
+    const withDraft = attachDraftReply(body.dmId, text);
+    const base = withDraft?.text ?? text;
+    const withProposal = withDraft?.proposal ? null
+      : (config.dispatch.enabled ? attachProposal(body.dmId, base) : null) ?? attachPostProposal(body.dmId, base);
+    const final = withProposal ?? withDraft?.text;
+    if (final) {
       db.prepare(`UPDATE operator_dm SET draft_text = ? WHERE message_id = ? AND status = 'drafted'`)
-        .run(withProposal, body.dmId);
+        .run(final, body.dmId);
     }
   }
   return accepted ? 'accepted' : 'ignored';
@@ -252,32 +262,128 @@ function startCommand(messageId, api, dispatchDeps) {
   return job;
 }
 
+/**
+ * Publishing a draft the operator said yes to (dispatch-drafts.js) runs beside
+ * the poll the same way: it waits for the issue's page and for Leaflet. So does
+ * correcting a live issue. The yes is left in 'issue' until the reply is ready,
+ * so a restart finishes it.
+ */
+function startIssueJob(messageId, api, draftDeps) {
+  if (commandJobs.has(messageId)) return commandJobs.get(messageId);
+  const job = runConfirmed(messageId, draftDeps)
+    .then(async (reply) => {
+      db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, updated_at = ?
+        WHERE message_id = ? AND status = 'issue'`).run(reply ?? "that's no longer waiting.", nowIso(), messageId);
+      const row = db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(messageId);
+      if (row?.status === 'drafted') await deliverDm(row, api);
+    })
+    .catch((err) => logger.error('dispatch publish job failed', { messageId, error: err.message }))
+    .finally(() => commandJobs.delete(messageId));
+  commandJobs.set(messageId, job);
+  return job;
+}
+
 /** Wait for every running dispatch command. For tests and shutdown. */
 export function settleCommands() {
   return Promise.all(commandJobs.values());
 }
 
-async function dispatchDm(row, fetcher = fetch) {
+/**
+ * What Poe should know about the dispatch's drafts in this DM: that it writes them
+ * (only said while DISPATCH_DRAFTS is on), and the draft waiting on the operator.
+ */
+function draftContext() {
+  if (config.dispatch.drafts.mode === 'off' || !config.dispatch.enabled) return {};
+  const draft = currentDraft();
+  return {
+    dispatchDrafts: true,
+    ...(draft ? { dispatchDraft: { id: draft.id, status: draft.status, version: draft.version, title: (draft.title ?? '').slice(0, 300) } } : {}),
+  };
+}
+
+// How much of the conversation goes with each DM. Each DM is its own agent
+// session, so this is all Poe knows of what came before, its own replies
+// included. Read from chat when the DM is handed over and never stored here.
+export const DM_HISTORY_MAX_MESSAGES = 30;
+export const DM_HISTORY_MAX_CHARS = 16000;
+export const DM_HISTORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DM_HISTORY_MAX_MESSAGE_CHARS = 4000;
+
+/**
+ * The conversation before `row`'s message, oldest first, as { you, text, sentAt }.
+ * `messages` is a page of chat.bsky.convo.getMessages. Only the operator and Poe
+ * count (the convo has just the two of them); deleted messages and anything
+ * older than DM_HISTORY_MAX_AGE_MS are left out, and past the caps the oldest go.
+ */
+export function dmHistory(messages, row, now = Date.now()) {
+  const before = Date.parse(row.received_at);
+  if (!Array.isArray(messages) || !Number.isFinite(before)) return [];
+  const picked = messages
+    .filter((m) => m && m.id !== row.message_id && typeof m.text === 'string' &&
+      (m.sender?.did === config.botDid || m.sender?.did === row.operator_did))
+    .map((m) => ({ m, at: Date.parse(m.sentAt) }))
+    .filter(({ at }) => Number.isFinite(at) && at < before && now - at <= DM_HISTORY_MAX_AGE_MS)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, DM_HISTORY_MAX_MESSAGES)
+    .map(({ m }) => {
+      const full = [expandLinks(m.text, m.facets), describeShared(m.embed)].filter((t) => t?.trim()).join('\n\n');
+      const text = full.length > DM_HISTORY_MAX_MESSAGE_CHARS ? `${full.slice(0, DM_HISTORY_MAX_MESSAGE_CHARS)}…` : full;
+      return { you: m.sender.did === config.botDid, text, sentAt: m.sentAt };
+    })
+    .filter((m) => m.text.trim());
+  const kept = [];
+  let chars = 0;
+  for (const m of picked) {
+    chars += m.text.length;
+    if (chars > DM_HISTORY_MAX_CHARS) break;
+    kept.push(m);
+  }
+  return kept.reverse();
+}
+
+async function readHistory(row, api) {
+  if (!api?.getDmMessages) return [];
+  try {
+    return dmHistory((await api.getDmMessages(row.convo_id))?.messages, row);
+  } catch (err) {
+    // Context only: a DM without it still gets its answer.
+    logger.warn('operator DM history unavailable', { messageId: row.message_id, error: err.message });
+    return [];
+  }
+}
+
+async function dispatchDm(row, fetcher = fetch, api = chat) {
   if (config.stage < 4 || killSwitchEngaged() || !config.dmEnabled) return;
   // A retried dispatch may launch another agent turn; only the first accepted
   // draft wins. Avoid automatic re-dispatch after a successful 202.
   db.prepare(`UPDATE operator_dm SET status = 'dispatched', updated_at = ?
     WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
-  const ac = AbortSignal.timeout(15000);
-  const response = await fetcher(`${config.agentUrl}/operator/dm`, {
+  const drafts = draftContext();
+  const history = await readHistory(row, api);
+  const body = {
+    dmId: row.message_id, operatorDid: row.operator_did,
+    text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
+    guidance: isGuidanceDm(row.text),
+    ...drafts,
+  };
+  const send = (payload) => fetcher(`${config.agentUrl}/operator/dm`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-atpotato-secret': config.sharedSecret },
-    body: JSON.stringify({
-      dmId: row.message_id, operatorDid: row.operator_did,
-      text: [row.text, row.shared_text].filter((t) => t?.trim()).join('\n\n'),
-      guidance: /^(?:remember|style):\s*\S/i.test(row.text),
-    }),
-    signal: ac,
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000),
   });
+  let response = await send(history.length ? { ...body, history } : body);
+  // A 400 is the bot refusing the payload before any turn starts, so sending it
+  // again can't answer twice. The history is the optional part, and a bot that
+  // doesn't take it yet (a deploy ahead of the bot's) still gets the message.
+  if (response.status === 400 && history.length) {
+    logger.warn('operator DM history refused; sending the message without it', { messageId: row.message_id });
+    response = await send(body);
+  }
   if (!response.ok) throw new Error(`operator DM dispatch failed: ${response.status}`);
 }
 
-export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDeps, postDeps } = {}) {
+export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDeps, postDeps, draftDeps } = {}) {
   if (!config.dmEnabled || config.stage < 4 || !config.adminDids.length || killSwitchEngaged()) return;
   const cutoff = baseline();
   let cursor;
@@ -325,11 +431,57 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
     for (const row of db.prepare(`SELECT message_id FROM operator_dm WHERE status = 'command'`).all()) {
       startCommand(row.message_id, api, dispatchDeps);
     }
+    for (const row of db.prepare(`SELECT message_id FROM operator_dm WHERE status = 'issue'`).all()) {
+      startIssueJob(row.message_id, api, draftDeps);
+    }
   }
   const queued = db.prepare(`SELECT *, draft_text AS text FROM operator_dm
     WHERE status = 'queued' ORDER BY received_at LIMIT 10`).all();
+  const draftsOn = config.dispatch.enabled && config.dispatch.drafts.mode !== 'off';
   for (const row of queued) {
     try {
+      // "draft dispatch": Poe writes an issue in a session of its own and DMs
+      // the preview when it's done, so this message only gets an "on it".
+      const draftCommand = draftsOn && isAdmin(row.operator_did) ? parseDraftCommand(row.text) : null;
+      if (draftCommand) {
+        db.prepare(`UPDATE operator_dm SET status = 'publishing', updated_at = ? WHERE message_id = ? AND status = 'queued'`)
+          .run(nowIso(), row.message_id);
+        const reply = await runDraftCommand(row, draftCommand, draftDeps) ?? "i can't write drafts right now.";
+        db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
+          WHERE message_id = ? AND status = 'publishing'`).run(reply, nowIso(), row.message_id);
+        await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
+        continue;
+      }
+      // A plain yes or no straight back to Poe's proposal to make the draft live.
+      const publishAnswer = draftsOn && isAdmin(row.operator_did) ? parseConfirmation(row.text) : null;
+      const publishProposal = publishAnswer ? livePublishFor(row) : null;
+      if (publishProposal && decidePublish(publishProposal.id, publishAnswer, row.message_id)) {
+        if (publishAnswer === 'yes') {
+          db.prepare(`UPDATE operator_dm SET status = 'issue', draft_text = NULL, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
+          startIssueJob(row.message_id, api, draftDeps);
+        } else {
+          db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`)
+            .run("ok, it stays a draft. tell me what to change, or ask me to make it live when it's ready.", nowIso(), row.message_id);
+          await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
+        }
+        continue;
+      }
+      // Or to Poe's proposed fix to an issue that's already live.
+      const correction = publishAnswer ? liveCorrectionFor(row) : null;
+      if (correction && decideCorrection(correction.id, publishAnswer, row.message_id)) {
+        if (publishAnswer === 'yes') {
+          db.prepare(`UPDATE operator_dm SET status = 'issue', draft_text = NULL, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
+          startIssueJob(row.message_id, api, draftDeps);
+        } else {
+          db.prepare(`UPDATE operator_dm SET status = 'drafted', draft_text = ?, shared_text = NULL, updated_at = ?
+            WHERE message_id = ? AND status = 'queued'`).run("ok, i'll leave the issue as it is.", nowIso(), row.message_id);
+          await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
+        }
+        continue;
+      }
       // Dispatch commands are handled here and never forwarded to the agent.
       const dispatchCommand = config.dispatch.enabled && isAdmin(row.operator_did)
         ? parseAnnounceCommand(row.text) : null;
@@ -346,7 +498,7 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
       if (proposal && decideProposal(proposal.id, answer, row.message_id)) {
         if (answer === 'yes') {
           recordCommand(row.message_id, row.operator_did,
-            { kind: 'announce', rkey: proposal.document_rkey, text: proposal.text });
+            { kind: 'announce', rkey: proposal.document_rkey, text: proposal.text, mentions: proposal.mentions });
           db.prepare(`UPDATE operator_dm SET status = 'command', draft_text = NULL, shared_text = NULL, updated_at = ?
             WHERE message_id = ? AND status = 'queued'`).run(nowIso(), row.message_id);
           startCommand(row.message_id, api, dispatchDeps);
@@ -385,7 +537,7 @@ export async function pollOperatorDms({ api = chat, fetcher = fetch, dispatchDep
         await deliverDm(db.prepare('SELECT * FROM operator_dm WHERE message_id = ?').get(row.message_id), api);
         continue;
       }
-      await dispatchDm(row, fetcher);
+      await dispatchDm(row, fetcher, api);
       db.prepare('UPDATE operator_dm SET draft_text = NULL, shared_text = NULL WHERE message_id = ? AND status = ?')
         .run(row.message_id, 'dispatched');
     } catch (err) {

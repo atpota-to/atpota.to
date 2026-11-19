@@ -1,17 +1,19 @@
 import { defineChannel, POST } from "eve/channels";
 import { MAX_TRACKED_LINKS, linksFromToolResult, secretMatches } from "../lib/bluesky";
-import { WeatherMoment, buildWeatherPrompt, postWeatherDraft } from "../lib/weather-post";
+import {
+  WEATHER_AUTHENTICATOR, WeatherMoment, type WeatherPage, buildWeatherPrompt, chosenWeatherPage, postWeatherDraft,
+} from "../lib/weather-post";
 
 /**
  * Weather moments from the droplet's weather watcher (mentions/src/weather-posts.js):
  * one session per moment, nobody on the other end but the droplet, and the answer is
- * a draft post for Poe's own Bluesky account (or "skip"). The droplet gates it and
- * posts it; see lib/weather-post.ts.
+ * a draft post for Poe's own Bluesky account (or "skip"), with the page of the report
+ * Poe chose for its card, if any. The droplet gates it and posts it; see lib/weather-post.ts.
  */
 export default defineChannel({
   turnPolicy: "queue",
   audience: () => "public",
-  state: { draft: "", links: [] as string[] },
+  state: { draft: "", links: [] as string[], page: null as WeatherPage | null },
   context(state) {
     return { state };
   },
@@ -32,7 +34,7 @@ export default defineChannel({
 
       waitUntil(from(moment.momentId).send(buildWeatherPrompt(moment), {
         auth: {
-          authenticator: "atpotato-droplet-weather",
+          authenticator: WEATHER_AUTHENTICATOR,
           principalType: "service",
           principalId: "atpotato-weather-watch",
           attributes: { momentId: moment.momentId, kind: moment.kind },
@@ -45,10 +47,14 @@ export default defineChannel({
     "turn.started"(_event, channel) {
       channel.state.draft = "";
       channel.state.links = [];
+      channel.state.page = null;
     },
-    // The droplet allows one link in a weather post, the weather page's, and checks it
-    // against these: every URL a tool returned this turn.
     "action.result"(event, channel) {
+      // The page of the report Poe chose for the card (tools/choose_weather_page.ts); the last choice counts.
+      const page = event.status === "completed" ? chosenWeatherPage(event.result) : null;
+      if (page) channel.state.page = page;
+      // The droplet allows one link in a weather post, the weather report's, and checks it
+      // against these: every URL a tool returned this turn.
       if (channel.state.links.length >= MAX_TRACKED_LINKS) return;
       const merged = new Set(channel.state.links);
       for (const url of linksFromToolResult(event)) merged.add(url);
@@ -60,7 +66,7 @@ export default defineChannel({
     async "turn.completed"(event, channel, ctx) {
       const caller = ctx.session.auth.current;
       const momentId = caller?.attributes?.momentId;
-      if (caller?.authenticator !== "atpotato-droplet-weather" || typeof momentId !== "string" ||
+      if (caller?.authenticator !== WEATHER_AUTHENTICATOR || typeof momentId !== "string" ||
           channel.continuation?.token !== momentId) return;
       const text = channel.state.draft.trim();
       if (!text) return;
@@ -69,6 +75,7 @@ export default defineChannel({
         momentId,
         text,
         links: channel.state.links,
+        page: channel.state.page,
       });
     },
   },

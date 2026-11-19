@@ -211,8 +211,13 @@ html.js .garden[data-state="loading"] .garden-skeleton {
 }
 
 .garden-skeleton .garden-skeleton__hero,
-.garden-skeleton[data-level="flowers"] .garden-skeleton__patch {
+.garden-skeleton .garden-skeleton__list,
+.garden-skeleton:is([data-level="flowers"], [data-level="tending"]) .garden-skeleton__patch {
   display: none;
+}
+
+.garden-skeleton[data-level="tending"] .garden-skeleton__list {
+  display: flex;
 }
 
 .garden-skeleton[data-level="flowers"] .garden-skeleton__hero {
@@ -298,7 +303,7 @@ html.js .garden[data-state="loading"] [data-head-title] {
   }
 }
 
-/* ---------- levels: garden | flowers ---------- */
+/* ---------- levels: garden | flowers | tending ---------- */
 
 .garden-levels {
   display: flex;
@@ -1263,4 +1268,84 @@ html.js .garden[data-state="loading"] [data-head-title] {
 
 .garden-how__bed--pressed {
   background: var(--patch-press-mound);
+}
+
+/* ---------- the tending level: who's tended their flowers, and theirs ---------- */
+
+.garden-tends__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.garden-tend-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 10px;
+  border-radius: 18px;
+  background: var(--bg);
+}
+
+.garden-tend-item__words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.garden-tend-item__what {
+  font-size: 15px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.garden-tend-item__who {
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.garden-tend-item__who:hover {
+  text-decoration: underline;
+}
+
+.garden-tend-item__who:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.garden-tend-item__when {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.garden-tend-item__when svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.garden-tend-item__bed {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--patch-mound);
+}
+
+.garden-tend-item__bed .home-flower {
+  width: 86%;
+  height: 86%;
 }

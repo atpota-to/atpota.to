@@ -13,6 +13,14 @@ function fail(gate, detail) {
 }
 const PASS = { ok: true };
 
+// Tags, comments and entities, then whitespace and the zero-width characters
+// trim() leaves behind. True when nothing is left.
+function isBlankMarkup(draft) {
+  return !draft
+    .replace(/<!--[\s\S]*?-->|<\/?[a-z][^<>]*>|&(?:[a-z]+|#\d+|#x[0-9a-f]+);/gi, '')
+    .replace(/[\s​-‍⁠﻿]/g, '');
+}
+
 /**
  * Hosts a link may point at when the turn did not tell us where its links came
  * from. See the note on `allowedLinks` below for why this exists.
@@ -49,6 +57,30 @@ function hostAllowed(host, allowHosts) {
 }
 
 /**
+ * The @handles in a reply that tag the people who run Poe: [{ handle, did }].
+ *
+ * A reply may tag one of them, so Poe can call somebody in when a thread needs
+ * a person ("@dame.is this one's for you"). On 2026-11-16 a reader asked for a
+ * change to the website and Poe could only say it was "a good one for the
+ * people who run me", which notified nobody.
+ *
+ * The name decides nothing. `profiles` is the AppView's answer for these
+ * handles, Map(handle -> { did }), and a handle counts only when the account it
+ * belongs to is in `adminDids`, the same DIDs a post must be signed by to count
+ * as direction. A handle that moved to somebody else, or one that only looks
+ * like an operator's, is a third-party mention like any other.
+ */
+export function operatorMentions(handles, profiles, adminDids) {
+  const admins = new Set(adminDids ?? []);
+  const out = [];
+  for (const h of new Set((handles ?? []).map((x) => String(x).toLowerCase()))) {
+    const did = profiles?.get(h)?.did;
+    if (typeof did === 'string' && admins.has(did)) out.push({ handle: h, did });
+  }
+  return out;
+}
+
+/**
  * deps: {
  *   gates,                 thresholds
  *   replyingToDid,         the account being replied to
@@ -56,6 +88,8 @@ function hostAllowed(host, allowHosts) {
  *   lastReplyText,         the last reply we sent that account, or null
  *   allowedLinks,          Set of URLs seen in this turn's tool results, or null
  *   allowedLinkHosts,      host allowlist used when allowedLinks is null
+ *   allowedHandles,        @handles the caller checked and will tag, or none:
+ *                          a weather post's app accounts, or a reply's operators
  *   killSwitch,            () => reason | null, re-read at call time
  * }
  */
@@ -69,6 +103,15 @@ export function evaluateOutbound(draft, deps) {
 
   // 2. Empty. Never post a blank record.
   if (typeof draft !== 'string' || !draft.trim()) return fail('empty', 'draft is empty or whitespace');
+  //    A draft of nothing but markup is blank too, and worse: Bluesky shows
+  //    "<br>" as those four characters. Asked to stay quiet about a post that
+  //    only tried to steer it, the agent answered with a bare "<br>" in local
+  //    evals on 2026-10-30, and nothing here stopped it. Whole drafts only: a
+  //    tag inside a real answer is left alone, because "at://<did>/..." is how
+  //    an explanation writes a placeholder.
+  if (isBlankMarkup(draft)) {
+    return fail('empty', `draft is only markup or invisible characters: ${JSON.stringify(draft.trim().slice(0, 40))}`);
+  }
   const text = draft.trim();
 
   // 3. Length. Both limits, from the live app.bsky.feed.post lexicon
@@ -209,12 +252,16 @@ export function evaluateOutbound(draft, deps) {
   }
 
   // 6. Mentions. The anti-mass-tagging gate, and it closes the ugliest
-  //    injection outcome. The poster never builds mention facets at all, so a
-  //    stray @handle notifies nobody -- but it still reads as a tag, so any
-  //    @handle that is not the account being replied to rejects the draft.
+  //    injection outcome. The poster builds mention facets only for the
+  //    accounts in `allowedHandles`, so a stray @handle notifies nobody -- but
+  //    it still reads as a tag, so any @handle that is not the account being
+  //    replied to, or one of those, rejects the draft.
+  //    `allowedHandles` is for accounts the caller has already checked in code:
+  //    a weather post's app accounts (gates/weather.js appAccountProblem), and
+  //    in a reply, the people who run Poe (operatorMentions above). Nobody else.
   const handles = detectHandles(text);
   const selfHandles = new Set(
-    [deps.replyingToHandle, deps.botHandle].filter(Boolean).map((h) => h.toLowerCase())
+    [deps.replyingToHandle, deps.botHandle, ...(deps.allowedHandles ?? [])].filter(Boolean).map((h) => h.toLowerCase())
   );
   const foreign = handles.filter((h) => !selfHandles.has(h));
   if (foreign.length) {

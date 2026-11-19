@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { niceMax, segments } from '../src/scripts/weather-chart.js';
+import { niceMax, projectLast, segments, soFarWords } from '../src/scripts/weather-chart.js';
+import { renderSparkline } from '../src/scripts/weather-spark.js';
 import {
   APPS_EMPTY,
   APPS_TRICKLE,
@@ -13,11 +14,11 @@ import {
   renderHeadlineChange,
   renderSky,
   accountSummary,
+  accountsExponent,
   bigAmount,
   bindExplainers,
   diversityParts,
   EXPLAINERS,
-  BLUESKY_NAMES,
   compactCount,
   coverageWords,
   createHistoryFeed,
@@ -25,6 +26,9 @@ import {
   formatRate,
   levelOf,
   ratesOf,
+  renderHosts,
+  hostsAge,
+  hostsShare,
   renderReport,
   renderReportError,
   renderTrends,
@@ -38,7 +42,7 @@ import {
 import { CONDITION_TEXT, DIVERSITY_SCALE, ERROR_TEXT, LEVEL_TEXT, type Reading } from '../src/scripts/weather.js';
 import { setExplainer, type PoeExplanation } from '../src/poe/say.js';
 import { bindLens, createLens, LENS_DEFAULT, LENS_KEY, type LensState } from '../src/scripts/weather-lens.js';
-import { dockSummary, initLensDock } from '../src/scripts/weather-dock.js';
+import { dockSummary, initLensDock, punctuate } from '../src/scripts/weather-dock.js';
 
 /** The live reading, counting records, unless the test says otherwise (the page's own default is the last hour, by accounts). */
 const lens = (change: Partial<LensState> = {}): LensState => ({ ...LENS_DEFAULT, window: 'now', measure: 'records', ...change });
@@ -95,7 +99,7 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-r-index]')).toBe('1.8');
     expect(text('[data-r-level]')).toBe('low');
     expect(text('[data-r-level-text]')).toBe(LEVEL_TEXT.low);
-    expect(text('[data-r-ratio]')).toBe('1 in 56 new records came from outside bluesky');
+    expect(text('[data-r-ratio]')).toBe('1 in 56 new records came from apps other than bluesky');
     expect(text('[data-r-else-share]')).toBe('(1.8%)');
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 2');
     expect(text('[data-r-event="deletes"]')).toBe('810'); // 13.5 a second, counted over the minute
@@ -103,15 +107,57 @@ describe('the atmosphere weather report', () => {
     expect(report.querySelector<HTMLElement>('[data-r-marker]')!.style.left).toMatch(/^13\.8/);
   });
 
-  it('draws the apps and bluesky collections as bars, longest for the busiest', () => {
+  it('keeps where accounts live hidden until a reading carries the hosts, then fills it', () => {
+    const tile = report.querySelector<HTMLElement>('[data-r-hosts]')!;
+    renderReport(report, READING, lens());
+    expect(tile.hidden).toBe(true);
+    const hosts = {
+      measuredAt: '2026-10-20T16:11:00.000Z',
+      listed: 6442,
+      active: 1887,
+      bluesky: 90,
+      independent: 1797,
+      writing: { bluesky: 90, independent: 610, minutes: 30 },
+      accounts: { bluesky: 23767508, independent: 363866 },
+      diversity: { index: 7.48, share: 1.51, spread: 24.54 },
+      top: [
+        { hostname: 'blacksky.app', accounts: 42366 },
+        { hostname: 'eurosky.social', accounts: 38029 },
+      ],
+    };
+    renderHosts(report, hosts, Date.parse('2026-10-20T16:18:00.000Z'));
+    expect(tile.hidden).toBe(false);
+    expect(text('[data-h-active]')).toBe('1,887');
+    expect(text('[data-h-index]')).toBe('7.5');
+    // on its own scale, in words: early days, a third of the way along the first band
+    expect(text('[data-h-level]')).toBe('early days');
+    expect(text('[data-h-level-text]')).toBe("nearly every account still lives on bluesky's own servers.");
+    const marker = report.querySelector<HTMLElement>('[data-h-marker]')!;
+    expect(marker.hidden).toBe(false);
+    expect(parseFloat(marker.style.left)).toBeCloseTo(34.4, 0);
+    expect(text('[data-h-writing]')).toBe('700');
+    expect(text('[data-h-writing-words]')).toBe('hosts that wrote in the last 30 minutes');
+    expect(text('[data-h-age]')).toBe('counted 7 minutes ago');
+    expect(text('[data-h-share]')).toBe('1.5% of 24.1m accounts live on independent hosts, as spread out as 25 hosts the same size.');
+    expect([...report.querySelectorAll('[data-h-top] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'eurosky.social']);
+    renderHosts(report, { ...hosts, writing: null });
+    expect(report.querySelector<HTMLElement>('[data-h-writing-wrap]')!.hidden).toBe(true);
+  });
+
+  it('says where accounts live in words', () => {
+    expect(hostsAge('2026-10-20T16:18:00.000Z', Date.parse('2026-10-20T16:18:20.000Z'))).toBe('counted just now');
+    expect(hostsAge('2026-10-20T16:17:00.000Z', Date.parse('2026-10-20T16:18:00.000Z'))).toBe('counted 1 minute ago');
+    const none = { measuredAt: '', listed: 1, active: 1, bluesky: 1, independent: 0, writing: null, accounts: { bluesky: 10, independent: 0 }, diversity: { index: 0, share: 0, spread: 0 }, top: [] };
+    expect(hostsShare(none)).toBe("all 10 accounts live on bluesky's hosts.");
+  });
+
+  it('draws the apps as bars, longest for the busiest', () => {
     renderReport(report, READING, lens());
     const apps = [...report.querySelectorAll('[data-r-apps] li')];
     expect(apps.map((li) => li.querySelector('.weather-bars__label')!.textContent)).toEqual(['tangled.sh', 'whtwnd.com']);
     expect(apps[0]!.querySelector('.weather-bars__sub')!.textContent).toBe('sh.tangled.repo, sh.tangled.feed.star');
     expect(apps.map((li) => li.querySelector<HTMLElement>('.weather-bars__fill')!.style.width)).toEqual(['100%', '25%']);
     expect(apps[0]!.getAttribute('title')).toBe('20 in 5 seconds');
-    const bsky = [...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent);
-    expect(bsky).toEqual([BLUESKY_NAMES['app.bsky.feed.like'], 'app.bsky.feed.newthing']);
     expect(report.querySelector<HTMLElement>('[data-r-apps-empty]')!.hidden).toBe(true);
   });
 
@@ -281,6 +327,33 @@ describe('trends', () => {
     );
     expect(runs.map((r) => r.map((p) => p.v))).toEqual([[1, 2], [3], [4]]);
   });
+
+  it('a step still filling up is an estimate for the whole step, so it never draws as a dip', () => {
+    const pts = [
+      { t: 0, v: 100 },
+      { t: 60_000, v: 30 },
+    ];
+    // a quarter of the way in by the clock, or a third by the seconds heard
+    expect(projectLast(pts, 75_000, 60_000)[1]).toEqual({ t: 60_000, v: 120, soFar: 30 });
+    expect(projectLast(pts, 75_000, 60_000, { heardMs: 20_000 })[1]).toEqual({ t: 60_000, v: 90, soFar: 30 });
+    // not scaled, only marked; too early to guess; and a step that's over is left alone
+    expect(projectLast(pts, 75_000, 60_000, { scale: false })[1]).toEqual({ t: 60_000, v: 30, soFar: 30 });
+    expect(projectLast(pts, 63_000, 60_000)[1]).toEqual({ t: 60_000, v: null, soFar: 30 });
+    expect(projectLast(pts, 120_000, 60_000)).toBe(pts);
+    expect(soFarWords({ t: 0, v: 120, soFar: 30 }, String)).toEqual({ value: '30 so far', pace: 'on pace for about 120' });
+    expect(soFarWords({ t: 0, v: null, soFar: 30 }, String)).toEqual({ value: '30 so far', pace: '' });
+    // a count that doesn't add up grows slower than the time heard: a quarter in, ×4^0.5
+    expect(projectLast(pts, 75_000, 60_000, { exponent: 0.5 })[1]).toEqual({ t: 60_000, v: 60, soFar: 30 });
+  });
+
+  it("the header's line goes out dashed to an estimate, and solid when there's none", () => {
+    const host = document.createElement('div');
+    renderSparkline(host, [10, 20, 30], undefined, true);
+    expect(host.querySelectorAll('path:not(.weather-spark__projected)')).toHaveLength(1);
+    expect(host.querySelector('.weather-spark__projected')!.getAttribute('d')).toMatch(/^M120\.0,[\d.]+L240\.0,[\d.]+$/);
+    renderSparkline(host, [10, 20, 30]);
+    expect(host.querySelector('.weather-spark__projected')).toBeNull();
+  });
 });
 
 describe('records or accounts', () => {
@@ -316,18 +389,18 @@ describe('records or accounts', () => {
     const minute = report.querySelector<HTMLElement>('[data-r-minute-accounts]')!;
     expect(minute.hidden).toBe(false);
     expect(text('[data-r-active]')).toBe('21,345');
-    expect(text('[data-r-acct-index]')).toBe('0.52% of 21,345 active accounts wrote outside bluesky, across about 12 apps.');
+    expect(text('[data-r-acct-index]')).toBe('0.52% of 21,345 active accounts wrote with apps other than bluesky, as spread out as 12 apps the same size.');
     renderReport(report, READING, lens());
     expect(minute.hidden).toBe(true);
-    expect(text('[data-r-acct-index]')).toBe('0.52% of the accounts heard just now wrote outside bluesky, across about 12 apps.');
+    expect(text('[data-r-acct-index]')).toBe('0.52% of the accounts heard just now wrote with apps other than bluesky, as spread out as 12 apps the same size.');
     // a reading from before the index went by accounts
     renderReport(report, { ...READING, diversity: { index: 1.8, level: 'low', apps: 12, collections: 40 } }, lens());
     expect(report.querySelector<HTMLElement>('[data-r-acct-index]')!.hidden).toBe(true);
   });
 
   it('words what an index is made of', () => {
-    expect(diversityParts(0, 0, 100)).toBe('none of 100 active accounts wrote outside bluesky.');
-    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote outside bluesky, all in about one app.');
+    expect(diversityParts(0, 0, 100)).toBe('none of 100 active accounts wrote with apps other than bluesky.');
+    expect(diversityParts(0.4, 1.2, 100)).toBe('0.40% of 100 active accounts wrote with apps other than bluesky, nearly all in one app.');
   });
 
   it('ranks the apps elsewhere by accounts, or by records when the reading has no accounts', () => {
@@ -349,9 +422,9 @@ describe('records or accounts', () => {
     renderTrends(section(), HISTORY, NOW, 'accounts');
     const s = section();
     expect(s.dataset.measure).toBe('accounts');
-    expect(s.querySelector('[data-t-summary]')!.textContent).toBe('the last hour (from 3 minutes of counting so far): 40,000 different accounts wrote something, 2.3% of them somewhere other than bluesky.');
+    expect(s.querySelector('[data-t-summary]')!.textContent).toBe('the last hour (from 3 minutes of counting so far): 40,000 different accounts wrote something, 2.3% of them with apps other than bluesky.');
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('active accounts each minute');
-    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('share of accounts writing elsewhere');
+    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('share of accounts using other apps');
     expect(s.querySelector('[data-t-chart="records"] svg')!.getAttribute('aria-label')).toMatch(/^active accounts each minute/);
     // focusing a chart reads its newest point
     const newest = (chart: string) => {
@@ -361,15 +434,27 @@ describe('records or accounts', () => {
     };
     expect(newest('records')[0]).toBe('22,000');
     expect(newest('index')[0]).toBe('2.7%');
-    expect(newest('records')[1]).not.toMatch(/so far/); // 16:59 is over at 17:00
+    expect(newest('records')[0]).not.toMatch(/so far/); // 16:59 is over at 17:00
+    expect(s.querySelector('.weather-chart__line--projected')).toBeNull();
+    // still filling up: what's in so far, and where it's going by the seconds heard of it
     renderTrends(section(), HISTORY, NOW - 30_000, 'accounts');
-    expect(newest('records')[1]).toMatch(/\(so far\)$/);
+    expect(newest('records')).toEqual(['22,000 so far', '4:59 pm', '']);
+    const half = { ...acct, points: [...acct.points.slice(0, -1), point('2026-10-20T16:59:00.000Z', 22_000, 600, 9.2, 30)] };
+    renderTrends(section(), { ...HISTORY, accounts: half }, NOW - 30_000, 'accounts');
+    // half heard, and 40,000 over three minutes of about 20,500 each says accounts grow as time^0.61: not 44,000
+    expect(accountsExponent(acct)).toBeCloseTo(0.608, 3);
+    expect(accountsExponent({ ...acct, points: acct.points.slice(-2) })).toBe(1); // one full bucket says nothing
+    expect(accountsExponent({ ...acct, total: { ...acct.total, active: 100 } })).toBe(0.3); // never wilder than that
+    expect(newest('records')).toEqual(['22,000 so far', '4:59 pm', 'on pace for about 33,542']);
+    expect(newest('index')).toEqual(['2.7% so far', '4:59 pm', '']); // a share isn't scaled
+    expect(s.querySelector('[data-t-chart="records"] .weather-chart__line--projected')).not.toBeNull();
+    expect(s.querySelector('[data-t-chart="records"] .weather-chart__dot--projected')).not.toBeNull();
 
     // and back: records put their own titles back, and the diversity index comes from the accounts
     renderTrends(section(), HISTORY, NOW, 'records');
     expect(s.querySelector('[data-t-chart-title="records"]')!.textContent).toBe('new records a second');
     expect(newest('records')[0]).toBe('440');
-    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('diversity index');
+    expect(s.querySelector('[data-t-chart-title="index"]')!.textContent).toBe('diversity index each minute');
     expect(newest('index')[0]).toBe('9.2');
   });
 
@@ -403,11 +488,11 @@ describe('records or accounts', () => {
     renderSky(report, skyOfHistory({ ...HISTORY, accounts: { ...acct, total: { ...acct.total, index: 6.6 }, prev } }), lens({ window: 'hour', measure: 'accounts' }));
     const chipEl = report.querySelector<HTMLElement>('[data-r-index-change]')!;
     expect(chipEl.dataset.trend).toBe('up');
-    expect(chipEl.textContent).toBe('↑ 10%up 10% on the same hour yesterday');
-    expect(chipEl.title).toBe('up 10% on the same hour yesterday');
+    expect(chipEl.textContent).toBe('↑ 10%up 10% on the hour before');
+    expect(chipEl.title).toBe('up 10% on the hour before');
     const note = report.querySelector<HTMLElement>('[data-r-index-note]')!;
     expect(note.hidden).toBe(false);
-    expect(note.textContent).toBe('the arrow compares with the same hour yesterday.');
+    expect(note.textContent).toBe('the arrow compares with the hour before.');
     expect(indexChange({ ...acct, total: { ...acct.total, index: 6.2 }, prev }, 'x')).toEqual({ text: '→', words: 'about the same as x', trend: 'steady' });
     // no earlier window to compare with: no chip, no note
     renderSky(report, skyOfHistory(HISTORY), lens({ window: 'hour', measure: 'accounts' }));
@@ -456,6 +541,8 @@ describe("what's this? Poe explains", () => {
     expect(button.getAttribute('aria-label')).toBe("what's the diversity index? ask poe");
     expect(button.getAttribute('aria-haspopup')).toBe('dialog');
     expect(tile.textContent).not.toMatch(/square root/);
+    // but what it measures is on the tile, in plain words
+    expect(tile.textContent).toMatch(/read it like the uv index/);
   });
 
   it('opens Poe on the question and its answer, back to the button after', () => {
@@ -495,7 +582,9 @@ describe("what's this? Poe explains", () => {
       expect(answer.trim()).toMatch(/\(◕‿◕\)$|[.?!]$/);
     }
     const levels = EXPLAINERS.diversity!.answer;
-    expect(levels).toContain('0 to 2 is low, 3 to 5 moderate, 6 and 7 high, 8 to 10 very high, and 11 and up extreme');
+    expect(levels).toContain('under 3 is low, 3 to 6 moderate, 6 to 8 high, 8 to 11 very high, and 11 and up extreme');
+    // and for a longer stretch, that it's the average reading
+    expect(levels).toContain('i show the average reading');
     expect(DIVERSITY_SCALE.map(([, from]) => from)).toEqual([0, 3, 6, 8, 11]);
   });
 });
@@ -520,7 +609,6 @@ describe('the lists', () => {
     }, lens());
     expect(report.querySelectorAll('[data-r-apps] li')).toHaveLength(5);
     expect(text('[data-r-apps-count]')).toBe('12 apps heard, top 5');
-    expect([...report.querySelectorAll('[data-r-bsky-list] .weather-bars__label')].map((el) => el.textContent)).toEqual([BLUESKY_NAMES['app.bsky.feed.like']]);
   });
 
   it("says when other apps only wrote a trickle, rather than that nobody did", () => {
@@ -566,8 +654,8 @@ describe('the lens', () => {
   it("the dock's strip says it in the controls' words", () => {
     const bar = report.querySelector<HTMLElement>('.weather-dock__panel')!;
     expect(dockSummary(bar, LENS_DEFAULT)).toBe('1h · accounts');
-    expect(dockSummary(bar, { window: 'day', measure: 'records', unit: 'hour' })).toBe('24h · records · per hour');
-    expect(dockSummary(bar, { window: 'now', measure: 'records', unit: 'total' })).toBe('now · records · in all');
+    expect(dockSummary(bar, { window: 'day', measure: 'records', unit: 'hour', compare: 'before' })).toBe('24h · records · per hour');
+    expect(dockSummary(bar, { window: 'now', measure: 'records', unit: 'total', compare: 'before' })).toBe('now · records · in all');
   });
 
   it('the dock shows once bound, opens to the controls with a tap on its strip, and a tap elsewhere puts it away', () => {
@@ -580,7 +668,29 @@ describe('the lens', () => {
     bindLens(report, l);
     expect(dock.hidden).toBe(false);
     expect(panel.hasAttribute('inert')).toBe(true);
-    expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('1h · accounts');
+    // jsdom lays every section at the top, so the strip is in the last one, where it lives: the measure doesn't reach it
+    const visible = () => [...dock.querySelectorAll<HTMLElement>('[data-dock-now] [data-part]')].filter((s) => !s.hidden).map((s) => s.textContent).join('');
+    expect(dock.dataset.section).toBe('hosts');
+    expect(visible()).toBe('1h');
+    const now = dock.querySelector<HTMLElement>('[data-dock-now]')!;
+    punctuate(now, '');
+    expect(visible()).toBe('1h · accounts');
+    // all of it off would leave the strip blank: it says it all instead
+    punctuate(now, 'window measure');
+    expect(visible()).toBe('1h · accounts');
+    punctuate(now, 'measure');
+    expect(visible()).toBe('1h');
+    // the header says what the number is over, and a tap on it opens the controls too
+    const period = report.querySelector<HTMLButtonElement>('[data-r-period]')!;
+    expect(period.textContent).toBe('the last hour');
+    period.click();
+    expect(panel.hasAttribute('inert')).toBe(false);
+    expect(report.ownerDocument.activeElement).toBe(panel.querySelector('[data-lens-window="hour"]'));
+    l.set({ window: 'now' });
+    expect(period.textContent).toBe('right now');
+    l.set({ window: 'hour' });
+    strip.click();
+    expect(panel.hasAttribute('inert')).toBe(true);
     strip.click();
     expect(panel.hasAttribute('inert')).toBe(false);
     expect(dock.dataset.open).toBe('');
@@ -588,7 +698,7 @@ describe('the lens', () => {
     // a choice keeps it open, to make another
     panel.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
     expect(l.get().window).toBe('week');
-    expect(dock.querySelector('[data-dock-now]')!.textContent).toBe('7d · accounts');
+    expect(visible()).toBe('7d'); // still where it lives: the window shows, the measure doesn't
     panel.querySelector<HTMLButtonElement>('[data-lens-measure="records"]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(panel.hasAttribute('inert')).toBe(false);
     report.querySelector('[data-weather-hero]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
@@ -598,14 +708,16 @@ describe('the lens', () => {
   });
 
   it('starts from the address, else this browser, else the last hour, accounts, a second', () => {
-    expect(LENS_DEFAULT).toEqual({ window: 'hour', measure: 'accounts', unit: 'second' });
+    expect(LENS_DEFAULT).toEqual({ window: 'hour', measure: 'accounts', unit: 'second', compare: 'before' });
     expect(createLens('?w=now').get().window).toBe('now');
     expect(createLens('').get()).toEqual(LENS_DEFAULT);
     expect(createLens('?m=records').get().measure).toBe('records');
-    expect(createLens('?w=24h&m=records&u=hour').get()).toEqual({ window: 'day', measure: 'records', unit: 'hour' });
+    expect(createLens('?w=24h&m=records&u=hour').get()).toEqual({ window: 'day', measure: 'records', unit: 'hour', compare: 'before' });
+    expect(createLens('?vs=cycle').get().compare).toBe('cycle');
+    expect(createLens('?vs=sideways').get().compare).toBe('before');
     expect(createLens('?w=lots&u=fortnight').get()).toEqual(LENS_DEFAULT);
     localStorage.setItem(LENS_KEY, JSON.stringify({ window: 'week', measure: 'records', unit: 'nope' }));
-    expect(createLens('').get()).toEqual({ window: 'week', measure: 'records', unit: 'second' });
+    expect(createLens('').get()).toEqual({ window: 'week', measure: 'records', unit: 'second', compare: 'before' });
     expect(createLens('?w=1h').get().window).toBe('hour');
   });
 
@@ -618,7 +730,11 @@ describe('the lens', () => {
     l.set({ unit: 'total' });
     expect(seen).toEqual(['hour→day second', 'day→day total']);
     expect(location.search).toBe('?w=24h&u=total');
-    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'accounts', unit: 'total' });
+    expect(JSON.parse(localStorage.getItem(LENS_KEY)!)).toEqual({ window: 'day', measure: 'accounts', unit: 'total', compare: 'before' });
+    l.set({ compare: 'cycle' });
+    expect(new URLSearchParams(location.search).get('vs')).toBe('cycle');
+    l.set({ compare: 'before' });
+    expect(new URLSearchParams(location.search).get('vs')).toBeNull();
     l.set({ measure: 'records' });
     expect(new URLSearchParams(location.search).get('m')).toBe('records');
     l.set({ measure: 'accounts' });
@@ -700,7 +816,8 @@ describe('in the lens', () => {
     renderReport(report, LIVE, lens({ measure: 'accounts', unit: 'hour' }));
     expect(text('[data-r-records]')).toBe('21,345');
     expect([bigAmount(99_999), bigAmount(222_380), bigAmount(1_234_567), bigAmount(38_400_000)]).toEqual(['99,999', '222k', '1.23m', '38.4m']);
-    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.hidden).toBe(true); // the line under it says accounts
+    expect(text('[data-r-unit]')).toBe('accounts'); // live, the line under it is the weather, not what's counted
+    expect(report.querySelector<HTMLButtonElement>('[data-r-unit]')!.disabled).toBe(true);
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(true); // its line is records
   });
 
@@ -711,11 +828,16 @@ describe('in the lens', () => {
     expect(text('[data-r-total-words]')).toBe('new records an hour in all');
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(false);
     renderReport(report, LIVE, lens({ measure: 'accounts' }));
-    expect(text('[data-r-ratio]')).toBe('1 in 34 active accounts wrote outside bluesky');
+    expect(text('[data-r-ratio]')).toBe('1 in 34 active accounts wrote with an app other than bluesky');
     expect(text('[data-r-else]')).toBe('620');
     expect(text('[data-r-else-share]')).toBe('(2.9%)');
     expect([...report.querySelectorAll('[data-r-mix-unit]')].map((u) => u.textContent)).toEqual(['accounts', 'accounts']);
     expect(text('[data-r-total]')).toBe('21,345');
+    // only bluesky and other apps add up to everyone, even though some wrote to both
+    const only = Number(text('[data-r-bsky]')!.replace(/,/g, ''));
+    expect(only + 620).toBe(21_345);
+    expect(text('[data-r-bsky-label]')).toBe('only the bluesky app');
+    expect(Number(text('[data-r-bsky-share]')!.replace(/[()%]/g, '')) + 2.9).toBeCloseTo(100, 0);
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
   });
 
@@ -725,8 +847,6 @@ describe('in the lens', () => {
     expect([tag.hidden, tag.textContent]).toEqual([false, 'by accounts']);
     renderReport(report, LIVE, lens({ measure: 'accounts' }));
     expect(tag.hidden).toBe(true);
-    // bluesky's collections are always records
-    expect(report.querySelector<HTMLElement>('.weather-bsky [data-tag]')!.hidden).toBe(false);
   });
 
   it('a window: the whole of it, from its history', () => {
@@ -742,43 +862,41 @@ describe('in the lens', () => {
     expect(text('[data-r-records]')).toBe('–');
     renderWindow(report, DAY, lens({ window: 'day' }));
     expect(text('[data-r-records]')).toBe('440');
-    expect(text('[data-r-cond]')).toBe('on average over the last 24 hours');
+    expect(text('[data-r-cond]')).toBe('on average');
     expect(report.querySelector<HTMLElement>('[data-r-spark]')!.hidden).toBe(false);
     expect(text('[data-r-index]')).toBe('4.2');
     expect(text('[data-r-level]')).toBe('moderate');
-    expect(text('[data-r-acct-index]')).toBe('3.0% of 2,000,000 active accounts over the last 24 hours wrote outside bluesky.');
+    expect(text('[data-r-acct-index]')).toBe('3.0% of 2,000,000 active accounts over the last 24 hours wrote with apps other than bluesky.');
     expect(report.querySelector<HTMLElement>('[data-r-collections-wrap]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')).toEqual([
       ['tangled.sh', '1'],
       ['whtwnd.com', '0.1'],
     ]);
     expect(report.querySelector('[data-r-apps] .weather-bars__change')!.getAttribute('data-trend')).toBe('up');
-    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the day before.');
+    expect(text('[data-r-apps-note]')).toBe('new records a second. arrows compare with the 24 hours before.');
     expect(text('[data-r-apps-count]')).toBe('top 2');
-    expect(bars('[data-r-bsky-list]')[0]).toEqual(['likes', '231']);
-    expect(text('[data-r-bsky-note]')).toBe('posts, likes, reposts and follows over the last 24 hours, a second.');
 
     renderWindow(report, DAY, lens({ window: 'day', unit: 'total' }));
     expect(text('[data-r-records]')).toBe('38m');
-    expect(text('[data-r-cond]')).toBe('new records in the last 24 hours');
+    expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')[0]).toEqual(['tangled.sh', '86,400']);
 
     renderWindow(report, DAY, lens({ window: 'day', measure: 'accounts' }));
     expect(text('[data-r-records]')).toBe('2m');
-    expect(text('[data-r-cond]')).toBe('different accounts wrote something in the last 24 hours');
+    expect(report.querySelector<HTMLElement>('[data-r-cond]')!.hidden).toBe(true);
     expect(bars('[data-r-apps]')).toEqual([['tangled.sh', '9,000']]);
-    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the day before.');
+    expect(text('[data-r-apps-note]')).toBe('active accounts. arrows compare with the 24 hours before.');
   });
 
   it('says how much of a window the station has heard, and when there are no account counts for it', () => {
     const young: History = { ...DAY, total: { ...DAY.total, seconds: 7200, creates: 3_168_000 }, accounts: undefined };
     renderWindow(report, young, lens({ window: 'day' }));
-    expect(text('[data-r-cond]')).toBe('on average over the last 24 hours (from 2 hours of readings so far)');
+    expect(text('[data-r-cond]')).toBe('on average, 2 hours heard so far');
     expect(text('[data-r-index]')).toBe('–');
     expect(text('[data-r-level-text]')).toBe('no account counts for the last 24 hours yet.');
     // accounts asked for, none to give: records, and the tiles say so
     renderWindow(report, young, lens({ window: 'day', measure: 'accounts' }));
-    expect(text('[data-r-cond]')).toMatch(/^on average over/);
+    expect(text('[data-r-cond]')).toMatch(/^on average/);
     expect(report.querySelector('.weather-mix [data-tag]')!.textContent).toBe('by records');
   });
 
@@ -791,5 +909,22 @@ describe('in the lens', () => {
     expect(asked).toBe(1);
     await feed.get('day', 0);
     expect(asked).toBe(2);
+  });
+});
+
+describe('names and rises', () => {
+  it("names an app on a shared host by its own subdomain, when its collections agree on one", async () => {
+    const { appName } = await import('../src/scripts/weather.js');
+    expect(appName('web.app', ['app.web.trackbrowser.scoreSnapshot', 'app.web.trackbrowser.scoreProfile'])).toBe('trackbrowser.web.app');
+    expect(appName('web.app', ['app.web.one.a', 'app.web.two.b'])).toBe('web.app');
+    expect(appName('web.app', [])).toBe('web.app');
+    expect(appName('tangled.org', ['org.tangled.repo'])).toBe('tangled.org');
+  });
+
+  it('says a rise past tripling in times, not percent', async () => {
+    const { rise } = await import('../src/scripts/weather-page.js');
+    expect(rise(57, 'the hour before')).toEqual({ text: '↑ 57%', words: 'up 57% on the hour before', trend: 'up' });
+    expect(rise(1100, 'the week before')).toEqual({ text: '↑ 12×', words: 'up 12 times on the week before', trend: 'up' });
+    expect(rise(250_000, 'the week before').text).toBe('↑ 999+×');
   });
 });

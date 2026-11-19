@@ -21,16 +21,23 @@ import {
   changeText,
   chartTop,
   cloudCount,
+  CONDITION_FACE,
   CONDITION_TEXT,
   DEFAULT_CARD,
+  outOfBlueskyTo,
   DIVERSITY_SCALE,
   drawCard,
   drawQuiet,
   formatIndex,
   gaugeAt,
   hillSvg,
+  HOSTING_SCALE,
+  HOSTING_SCALE_MAX,
+  HOSTING_TEXT,
+  hostingPosition,
   isCard,
   LEVEL_TEXT,
+  livingOf,
   MAX_CLOUDS,
   seasonOf,
   stamp,
@@ -39,6 +46,7 @@ import {
   USUAL_EDGES,
   type CardData,
 } from '../server/og-weather-cards.js';
+import type { HostHistory, IdentityDay } from '../server/weather-hosts.js';
 import type { Normal } from '../server/weather-almanac.js';
 import * as almanacPage from '../src/scripts/weather-almanac.js';
 import * as sky from '../src/scripts/weather-sky.js';
@@ -77,6 +85,52 @@ function points(hours = 24) {
   });
 }
 
+/** The station's census of pds hosts, as a reading carries it. */
+const HOSTS = {
+  measuredAt: '2026-10-21T12:05:00Z',
+  listed: 6442,
+  active: 1888,
+  bluesky: 89,
+  independent: 1799,
+  writing: null,
+  accounts: { bluesky: 23_790_404, independent: 363_931 },
+  diversity: { share: 1.51, spread: 24.22 },
+  top: [
+    { hostname: 'pds.wsocial.network', accounts: 50662 },
+    { hostname: 'eurosky.social', accounts: 38177 },
+    { hostname: 'blacksky.app', accounts: 31220 },
+  ],
+};
+
+const day = (d: string, over: Partial<IdentityDay> = {}): IdentityDay => ({
+  day: d, ops: 266_000, createdBluesky: 17_000, createdIndependent: 1000, createdUnlisted: 245_000, createdCustomHandle: 300,
+  createdBulk: 0, bulk: [], createdUnnamed: 0, createdScripted: 0, scripted: [], movedOut: 30, movedIn: 1, movedBetween: 6, deleted: 2, destinations: [], moves: [], ...over,
+});
+
+/** The day's hosts, as /api/weather-history?range=day has them: two censuses, and the plc directory's last eight days. */
+function hostHistory(): HostHistory {
+  const point = (t: string, accountsIndependent: number) => ({ t, active: 1888, bluesky: 89, independent: 1799, writing: 234, accountsBluesky: 23_790_404, accountsIndependent, share: 1.51, spread: 24.22, index: 7.43 });
+  return {
+    bucket: 'hour',
+    since: '2026-10-01',
+    points: [point('2026-10-20T13:00:00.000Z', 363_205), point('2026-10-21T12:00:00.000Z', 363_931)],
+    newHosts: 3,
+    new: [],
+    // goodmkt.id's accounts were made in bulk: nobody arrived there, so it isn't growing
+    growing: [{ hostname: 'eurosky.social', accounts: 38177, prevAccounts: 38074, people: 98 }, { hostname: 'goodmkt.id', accounts: 4165, prevAccounts: 2880, people: 0 }],
+    daily: [],
+    identities: [
+      day('2026-10-14', { movedOut: 999 }), // more than a week ago: not on the card
+      day('2026-10-15'), day('2026-10-16'), day('2026-10-17'), day('2026-10-18'),
+      day('2026-10-19', { destinations: [{ hostname: 'blacksky.app', accounts: 4 }] }),
+      day('2026-10-20', { movedOut: 32, movedIn: 1, destinations: [{ hostname: 'eurosky.social', accounts: 21 }, { hostname: 'blacksky.app', accounts: 2 }] }),
+      day('2026-10-21', { movedOut: 65, movedIn: 0, movedBetween: 2, destinations: [{ hostname: 'eurosky.social', accounts: 52 }] }),
+    ],
+    activeDaily: [],
+    liveliest: null,
+  };
+}
+
 const SUMS = { seconds: 3600, posts: 150_000, creates: 1_250_000, elsewhere: 7000 };
 const NORMAL: Normal = { historyStart: '2026-10-06T14:00:00.000Z', now: SUMS, days: { ...SUMS, windows: 6 }, weeks: { ...SUMS, creates: 1_000_000, windows: 2 } };
 
@@ -91,6 +145,7 @@ function data(over: Partial<CardData> = {}): CardData {
         { domain: 'teal.fm', creates: 15527, prevCreates: 0, collections: [] },
         { domain: 'standard.site', creates: 13070, prevCreates: 0, collections: [] },
       ],
+      hosts: hostHistory(),
     },
     almanac: {
       normal: NORMAL,
@@ -101,7 +156,7 @@ function data(over: Partial<CardData> = {}): CardData {
   };
 }
 
-const EMPTY: CardData = { at: NOW, now: null, day: null, almanac: null };
+const EMPTY: CardData = { at: NOW, now: null, day: null, almanac: null, hour: null };
 
 /** A PNG's width and height, from its IHDR chunk. */
 function pngSize(bytes: Uint8Array): { width: number; height: number } {
@@ -128,6 +183,36 @@ describe('og weather: the page\'s words', () => {
       expect(cloudCount(index), String(index)).toBe(sky.cloudCount(index));
       expect(formatIndex(index), String(index)).toBe(weatherPage.formatIndex(index));
     }
+  });
+
+  it('copies the hosting scale from the page', () => {
+    expect(HOSTING_SCALE).toEqual(weatherPage.HOSTING_SCALE);
+    expect(HOSTING_SCALE_MAX).toBe(weatherPage.HOSTING_SCALE_MAX);
+    expect(HOSTING_TEXT).toEqual(weatherPage.HOSTING_TEXT);
+    for (const index of [0, 7.43, 10, 60, 499, 900]) expect(hostingPosition(index), String(index)).toBe(weatherPage.hostingPosition(index));
+  });
+
+  it('lists where the movers out of bluesky went, not the ones moving host to host', () => {
+    // nov 14 2026: atchan.net renamed itself pds.atchan.net and took its 214 accounts along, as moves host to host
+    const week = [
+      day('2026-11-14', {
+        movedOut: 29, movedBetween: 215,
+        destinations: [{ hostname: 'pds.atchan.net', accounts: 214 }, { hostname: 'blacksky.app', accounts: 17 }, { hostname: 'eurosky.social', accounts: 13 }],
+        moves: [
+          { from: 'atchan.net', to: 'pds.atchan.net', accounts: 214 },
+          { from: 'bluesky', to: 'blacksky.app', accounts: 17 },
+          { from: 'bluesky', to: 'eurosky.social', accounts: 12 },
+          { from: 'blacksky.app', to: 'eurosky.social', accounts: 1 },
+          { from: 'eurosky.social', to: 'bluesky', accounts: 1 },
+        ],
+      }),
+      // a day from before the station kept the pairs goes by its destinations
+      day('2026-11-15', { destinations: [{ hostname: 'eurosky.social', accounts: 6 }] }),
+    ];
+    expect(outOfBlueskyTo(week)).toEqual([{ hostname: 'eurosky.social', accounts: 18 }, { hostname: 'blacksky.app', accounts: 17 }]);
+    // what's listed never adds up to more than moved out
+    const listed = outOfBlueskyTo(week).reduce((n, x) => n + x.accounts, 0);
+    expect(listed).toBeLessThanOrEqual(week.reduce((n, x) => n + x.movedOut, 0));
   });
 
   it('says usual the way the almanac does', () => {
@@ -175,7 +260,7 @@ describe('og weather: the page\'s words', () => {
 
 describe('og weather: the cards', () => {
   it('knows its cards, and the default is one of them', () => {
-    expect(CARDS).toEqual(['forecast', 'trend', 'mix', 'today']);
+    expect(CARDS).toEqual(['forecast', 'trend', 'mix', 'today', 'hosts', 'migration']);
     expect(isCard(DEFAULT_CARD)).toBe(true);
     expect(isCard('nope')).toBe(false);
     expect(isCard(null)).toBe(false);
@@ -194,15 +279,99 @@ describe('og weather: the cards', () => {
     const art = await cardArt();
     // the measured comparison, not the condition's stock "a quiet spell" beside a busier-than-usual hour
     const forecast = texts(drawCard('forecast', data(), art));
-    expect(forecast).toEqual(expect.arrayContaining(['362', 'a light breeze.', 'diversity index 1.9 · low', 'mostly bluesky out there', '+25% busier than usual for this time of the week']));
+    expect(forecast).toEqual(expect.arrayContaining(['362', 'rec/sec', 'new records a second, right now', 'a light breeze.', '+25% busier than usual', 'atpota.to/weather']));
     expect(forecast.join(' ')).not.toContain('a quiet spell');
     // without a usual yet, the condition's own words
-    expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a quiet spell, right now']));
-    expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'rocksky.app', '16,836', 'low']));
+    expect(texts(drawCard('forecast', data({ almanac: null }), art))).toEqual(expect.arrayContaining(['a light breeze.', 'a quiet spell']));
+    expect(texts(drawCard('mix', data(), art))).toEqual(expect.arrayContaining(['1.9', 'low', '0.53% of active accounts wrote with other apps', 'rocksky.app', '16,836']));
     expect(texts(drawCard('today', data(), art))).toEqual(expect.arrayContaining([
       'the last hour', 'much busier than usual', '+25%', 'today in numbers', '212', '446', 'new records', '11.4 million', 'from other apps',
     ]));
     expect(texts(drawCard('trend', data(), art))).toEqual(expect.arrayContaining(['busiest hour 450', '362']));
+  });
+
+  it("leads the default card with the last hour's active accounts, as the page's header does, and records a second without them", async () => {
+    const art = await cardArt();
+    const crowd = (active: number, seconds: number) => ({ seconds, active, bluesky: active - 900, elsewhere: 1000, index: 2, share: 0.45, spread: 18 });
+    const hour = { accounts: { seconds: 3540, prevSeconds: 3600, total: crowd(224_186, 3540), prev: crowd(221_696, 3600), points: [], apps: [] } } as unknown as NonNullable<CardData['hour']>;
+    const words = texts(drawCard('forecast', data({ hour }), art));
+    expect(words).toEqual(expect.arrayContaining(['224k', 'accounts', 'active in the last hour', 'a light breeze.', '+25% busier than usual']));
+    expect(words).not.toContain('rec/sec');
+    // and without the hour's accounts, records a second as before
+    expect(texts(drawCard('forecast', data({ hour: null }), art))).toEqual(expect.arrayContaining(['362', 'rec/sec']));
+  });
+
+  it('keeps the default card to a glance: one number, the condition, how it compares, where to look', async () => {
+    const art = await cardArt();
+    const crowd = (active: number) => ({ seconds: 3600, active, bluesky: active - 900, elsewhere: 1000, index: 2, share: 0.45, spread: 18 });
+    const hour = { accounts: { seconds: 3600, prevSeconds: 3600, total: crowd(224_186), prev: crowd(200_000), points: [], apps: [] } } as unknown as NonNullable<CardData['hour']>;
+    const withHosts = data({ hour, now: fromStation({ ...STATION, hosts: HOSTS }) });
+    const words = texts(drawCard('forecast', withHosts, art));
+    expect(words).toEqual(['the atmosphere weather report', '224k', 'accounts', 'active in the last hour', 'a light breeze.', '+25% busier than usual', 'atpota.to/weather', stamp(NOW)]);
+  });
+
+  it('never gives Poe the frowning face, on any card or in any weather', async () => {
+    expect(Object.values(CONDITION_FACE)).not.toContain('scawy');
+    expect(CONDITION_FACE.stormy).toBe('wow');
+    const frown = readFileSync(`${root}src/assets/mascot/potato-scawy.svg`, 'utf8');
+    const frownUri = `data:image/svg+xml;base64,${Buffer.from(frown).toString('base64')}`;
+    const art = await cardArt();
+    expect(() => art.mascot('scawy' as never)).not.toThrow();
+    expect(art.mascot('scawy' as never)).toBeUndefined();
+    /** Every picture's src in an element tree. */
+    const srcs = (node: unknown): string[] =>
+      Array.isArray(node) ? node.flatMap(srcs) : node && typeof node === 'object' && 'props' in node ? [(node as { props: { src?: string } }).props.src ?? '', ...srcs((node as { props: { children?: unknown } }).props.children)] : [];
+    for (const perSecond of [10, 320, 420, 520, 12345]) {
+      const d = data({ now: fromStation({ ...STATION, records: { ...STATION.records, perSecond } }) });
+      for (const name of CARDS) expect(srcs(drawCard(name, d, art)), `${name} at ${perSecond}`).not.toContain(frownUri);
+    }
+  });
+
+  it('shows where the atmosphere lives, from the station\'s census', async () => {
+    const art = await cardArt();
+    const withHosts = data({ now: fromStation({ ...STATION, hosts: HOSTS }) });
+    const words = texts(drawCard('hosts', withHosts, art));
+    expect(words).toEqual(expect.arrayContaining([
+      "accounts living off bluesky's servers", '1.51%', 'on 1,799 independent pds hosts, of 1,888 active',
+      'the biggest independent hosts', 'pds.wsocial.network', '50,662', 'atpota.to/weather/hosts',
+    ]));
+    expect(words.join(' ')).toMatch(/hosting diversity 7\.4 · early days/);
+    expect(livingOf(withHosts)!.level).toBe('early days');
+  });
+
+  it("shows the hosts from the day's last census, and who grew, when the station's isn't in", async () => {
+    const art = await cardArt();
+    const words = texts(drawCard('hosts', data({ now: null }), art));
+    expect(words).toEqual(expect.arrayContaining(['1.51%', 'growing fastest', 'people signing up or moving in, the last 24 hours', 'eurosky.social', '+98']));
+    expect(words).not.toContain('goodmkt.id');
+    // nobody grew: the share has the card to itself
+    const still = data({ now: null });
+    still.day!.hosts!.growing = [];
+    expect(texts(drawCard('hosts', still, art))).not.toContain('growing fastest');
+    // no census at all
+    expect(drawCard('hosts', data({ now: null, day: { points: points() } }), art)).toBeNull();
+  });
+
+  it('shows the migration winds over the last week, day by day, and where they went', async () => {
+    const art = await cardArt();
+    const words = texts(drawCard('migration', data(), art));
+    // the last seven days: 30 a day for five, then 32 and today's 65 so far, each day's number on its bar
+    expect(words).toEqual(expect.arrayContaining([
+      '247', 'moved out of bluesky', 'the last 7 days', '6 moved back in · 38 host to host', '30', '32', '65',
+      'where they moved to', 'out of bluesky, the last 7 days', 'eurosky.social', '73 movers', 'blacksky.app', '6 movers', 'today', 'thu', 'atpota.to/weather/migration',
+    ]));
+    // sign-ups are the page's business, not the movers' card
+    expect(words.join(' ')).not.toContain('started on an independent host');
+    expect(words.join(' ')).not.toContain('999');
+    // just today, so far: no week to chart
+    const one = data();
+    one.day!.hosts!.identities = one.day!.hosts!.identities.slice(-1);
+    expect(texts(drawCard('migration', one, art))).toEqual(expect.arrayContaining(['65', 'today so far']));
+    // nobody went anywhere we know of: the moves have the card to themselves
+    const nowhere = data();
+    nowhere.day!.hosts!.identities = nowhere.day!.hosts!.identities.map((x) => ({ ...x, destinations: [] }));
+    expect(texts(drawCard('migration', nowhere, art))).not.toContain('where they moved to');
+    expect(drawCard('migration', data({ day: { points: points() } }), art)).toBeNull();
   });
 
   it("stands Poe on the home page's meadow for the season, never on its own colour", () => {
@@ -229,6 +398,7 @@ describe('og weather: the cards', () => {
   });
 
   it('gives way to the quiet card when its numbers are missing', async () => {
+    expect((await cardFor('hosts', data({ now: null, day: null }))).quiet).toBe(true);
     for (const name of CARDS) expect((await cardFor(name, EMPTY)).quiet, name).toBe(true);
     const quiet = await renderPng((await cardFor('forecast', EMPTY)).card);
     expect(pngSize(quiet)).toEqual({ width: 1200, height: 630 });
@@ -239,8 +409,8 @@ describe('og weather: the cards', () => {
     const art = await cardArt();
     // no station: the forecast reads the newest hour, and says so
     const noStation = data({ now: null });
-    expect(texts(drawCard('forecast', noStation, art))).toEqual(expect.arrayContaining(['over the last hour, +25% busier than usual for this time of the week']));
-    expect(texts(drawCard('forecast', data({ now: null, almanac: null }), art))).toEqual(expect.arrayContaining([expect.stringContaining(', over the last hour')]));
+    expect(texts(drawCard('forecast', noStation, art))).toEqual(expect.arrayContaining(['new records a second, the last hour', '+25% busier than usual']));
+    expect(texts(drawCard('forecast', data({ now: null, almanac: null }), art))).toEqual(expect.arrayContaining(['new records a second, the last hour']));
     // an hour too old to be "now" is no forecast
     expect(drawCard('forecast', data({ now: null, at: NOW + 3 * HOUR }), art)).toBeNull();
     // too few hours for a chart
@@ -332,6 +502,31 @@ describe('og weather: the function', () => {
     expect(res.headers.get('cache-control')).toBe(CACHE_OK);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
     expect(drawn[0]).toContain('who else is in the sky');
+  });
+
+  it("puts the app a post is about on the mix card, only when the station heard it", async () => {
+    // a new app's moment, as the droplet asks for it (mentions/src/weather-posts.js freshCardUrl)
+    const fresh = { domain: 'songnario.app', firstSeen: '2026-10-21T11:50:00.000Z', creates: 1500, collections: ['app.songnario.pack'], accounts: 60 };
+    const withNew = () => data({ almanac: { ...data().almanac!, newApps: { ...data().almanac!.newApps!, apps: [fresh] } } });
+    const drawn: string[][] = [];
+    const h = createOgWeatherHandlers({ read: async () => withNew(), render: async (card) => (drawn.push(texts(card)), PNG), log: () => undefined });
+    await get(h, '?card=mix&app=songnario.app');
+    expect(drawn[0]).toEqual(expect.arrayContaining(['songnario.app', 'new · first heard 11:50 utc', '1,500 new records · 60 accounts', 'busiest elsewhere']));
+    // one of the day's apps, with three of the busiest under it and never itself again
+    await get(h, '?card=mix&app=teal.fm');
+    expect(drawn[1]).toEqual(expect.arrayContaining(['teal.fm', 'the last 24 hours', '15,527 new records', 'new records, the last 24 hours', 'rocksky.app', 'standard.site']));
+    expect(drawn[1].filter((x) => x === 'teal.fm')).toHaveLength(1);
+    // an app the station didn't hear, or no domain at all, draws the card as it always is
+    await get(h, '?card=mix&app=never-heard.example');
+    await get(h, `?card=mix&app=${encodeURIComponent('<b>hi</b>')}`);
+    await get(h, '?card=mix');
+    expect(drawn[2]).toEqual(drawn[4]);
+    expect(drawn[3]).toEqual(drawn[4]);
+    expect(drawn[4]).not.toContain('never-heard.example');
+    // an app new since yesterday says so
+    const late = { ...fresh, firstSeen: '2026-10-20T18:04:00.000Z' };
+    const card = drawCard('mix', { ...withNew(), almanac: { ...withNew().almanac!, newApps: { ...withNew().almanac!.newApps!, apps: [late] } }, focus: 'songnario.app' }, await cardArt());
+    expect(texts(card)).toContain('new · first heard 18:04 utc yesterday');
   });
 
   it('draws the default card for no card or one it does not know', async () => {

@@ -177,6 +177,17 @@ describe('reading the firehose', () => {
     expect(accountOf('nope')).toBeNull();
   });
 
+  it("doesn't count a Tangled repository as an account, as the station doesn't", () => {
+    const repo = (collection: string, operation: string, record?: Record<string, unknown>) =>
+      JSON.stringify({ did: 'did:plc:repo', kind: 'commit', commit: { operation, collection, ...(record ? { record } : {}) } });
+    expect(accountOf(repo('org.tangled.feed.comment', 'create', { 'x-tngl-editor': 'did:plc:person' }))).toEqual({ did: 'did:plc:person', app: 'tangled.org' });
+    expect(accountOf(repo('org.tangled.git.refs', 'update', { defaultBranch: 'main' }))).toBeNull();
+    expect(accountOf(repo('org.tangled.repo.manifest', 'create', {}))).toBeNull();
+    expect(accountOf(repo('org.tangled.git.refs', 'update', { 'x-tngl-editor': 'not a did' }))).toBeNull();
+    expect(accountOf(repo('org.tangled.graph.collaborator', 'create', {}))).toEqual({ did: 'did:plc:repo', app: 'tangled.org' });
+    expect(accountOf(repo('com.example.thing', 'create', { 'x-tngl-editor': 'did:plc:person' }))).toEqual({ did: 'did:plc:repo', app: 'example.com' });
+  });
+
   it('counts only new records in the collections it watches', () => {
     expect(metricOf(commit('app.bsky.feed.post'))).toBe('posts');
     expect(metricOf(commit('app.bsky.feed.like'))).toBe('likes');
@@ -282,6 +293,8 @@ describe('/api/atmosphere', () => {
     const res = await pending;
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe(CACHE_OK);
+    // aturi.to's explorer reads it from the browser
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const body = (await res.json()) as { perSecond: Record<string, number>; condition: string };
     expect(Object.keys(body.perSecond).sort()).toEqual(['follows', 'likes', 'posts', 'reposts']);
     expect(body.condition).toBe('calm');
@@ -303,6 +316,7 @@ describe('/api/atmosphere', () => {
     const res = await bad;
     expect(res.status).toBe(503);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('only takes GET and HEAD', async () => {
@@ -353,6 +367,22 @@ describe('reading the weather station', () => {
     expect(r.bluesky).toEqual([]);
   });
 
+  it('passes each busy app\'s accounts through when the station counted them, and drops an odd count', () => {
+    const r = fromStation({
+      ...STATION,
+      apps: [
+        { domain: 'zelk.space', perSecond: 40, count: 2400, collections: [], accounts: 1 },
+        { domain: 'tangled.sh', perSecond: 4, count: 240, collections: [], accounts: 'many' },
+        { domain: 'teal.fm', perSecond: 2, count: 120, collections: [] },
+      ],
+    })!;
+    expect(r.apps).toEqual([
+      { domain: 'zelk.space', perSecond: 40, count: 2400, collections: [], accounts: 1 },
+      { domain: 'tangled.sh', perSecond: 4, count: 240, collections: [] },
+      { domain: 'teal.fm', perSecond: 2, count: 120, collections: [] },
+    ]);
+  });
+
   it('passes the station\'s active accounts through, checked, and does without them when they are off', () => {
     const accounts = {
       active: 21000,
@@ -375,6 +405,57 @@ describe('reading the weather station', () => {
     expect(fromStation(STATION)!.accounts).toBeUndefined();
     expect(fromStation({ ...STATION, accounts: { ...accounts, active: 'lots' } })!.accounts).toBeUndefined();
     expect(fromStation({ ...STATION, accounts: { ...accounts, apps: null } })!.accounts).toBeUndefined();
+  });
+
+  it('passes the station\'s census of hosts through, checked, working the index out itself', () => {
+    const hosts = {
+      measuredAt: '2026-10-22T13:20:00.000Z',
+      listed: 6442,
+      active: 1887,
+      bluesky: 90,
+      independent: 1797,
+      writing: { bluesky: 90, independent: 640, minutes: 60 },
+      accounts: { bluesky: 23767508, independent: 363866 },
+      diversity: { index: 99, share: 1.51, spread: 24.54 },
+      top: [
+        { hostname: 'blacksky.app', accounts: 42366 },
+        { hostname: '<b>x</b>.com', accounts: 9 },
+        { hostname: 'localhost', accounts: 9 },
+        { hostname: 'eurosky.social', accounts: -1 },
+      ],
+      extra: 'ignored',
+    };
+    expect(fromStation({ ...STATION, hosts })!.hosts).toEqual({
+      measuredAt: '2026-10-22T13:20:00.000Z',
+      listed: 6442,
+      active: 1887,
+      bluesky: 90,
+      independent: 1797,
+      writing: { bluesky: 90, independent: 640, minutes: 60 },
+      accounts: { bluesky: 23767508, independent: 363866 },
+      diversity: { index: 7.48, share: 1.51, spread: 24.54 },
+      top: [{ hostname: 'blacksky.app', accounts: 42366 }],
+    });
+    expect(fromStation({ ...STATION, hosts: { ...hosts, writing: null } })!.hosts!.writing).toBeNull();
+    // the census's extras, each kept only when it checks out
+    const extras = fromStation({
+      ...STATION,
+      hosts: {
+        ...hosts,
+        statuses: { active: 1888, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 },
+        sizes: [8, 764, 737, 204, 58, 18, 9],
+        tlds: [{ tld: 'com', hosts: 257, accounts: 7455 }, { tld: '<b>', hosts: 1, accounts: 1 }],
+      },
+    })!.hosts!;
+    expect(extras.statuses).toEqual({ active: 1888, idle: 310, offline: 4174, throttled: 0, banned: 70, other: 0 });
+    expect(extras.sizes).toEqual([8, 764, 737, 204, 58, 18, 9]);
+    expect(extras.tlds).toEqual([{ tld: 'com', hosts: 257, accounts: 7455 }]);
+    const off = fromStation({ ...STATION, hosts: { ...hosts, statuses: { active: 'many' }, sizes: [1, 2] } })!.hosts!;
+    expect(off.statuses).toBeUndefined();
+    expect(off.sizes).toBeUndefined();
+    expect(fromStation(STATION)!.hosts).toBeUndefined();
+    expect(fromStation({ ...STATION, hosts: { ...hosts, active: 'lots' } })!.hosts).toBeUndefined();
+    expect(fromStation({ ...STATION, hosts: { ...hosts, top: null } })!.hosts).toBeUndefined();
   });
 
   it('works the index out from an older station\'s accounts, which sends no share or spread', () => {

@@ -344,6 +344,8 @@ html[data-theme="dark"] {
 
 .home-card__close {
   position: absolute;
+  /* Above .home-card__top, which comes after it and is positioned too. */
+  z-index: 1;
   top: 6px;
   right: 6px;
   display: grid;

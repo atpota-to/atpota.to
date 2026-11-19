@@ -76,6 +76,8 @@ export const WRITE_TRIES = 5;
  * 30 s unless told otherwise, so it would ask again too soon and be refused again.
  */
 export const MAX_RETRY_WAIT_MS = 15 * 60_000;
+/** A dense stretch shorter than this can be left out instead of refusing the range (planRange's skipShort). */
+export const SHORT_DENSE_US = 3600e6;
 
 const iso = (second) => new Date(second * 1000).toISOString();
 const isoUs = (us) => new Date(Math.floor(us / 1000)).toISOString();
@@ -90,7 +92,8 @@ export function timeUsOf(time) {
 /** An SDK event as the v1 message the station's counting reads (eventOfMessage, happenedUs, accountOf). */
 export function messageOf(evt) {
   const c = evt?.kind === 'commit' ? evt.commit : null;
-  return { did: evt?.did, kind: evt?.kind, time_us: timeUsOf(evt?.time), commit: c ? { operation: c.operation, collection: c.collection, rev: c.rev } : undefined };
+  // the record goes along for accountOf's Tangled rule; the raw snapshot's is bytes, which it can't read
+  return { did: evt?.did, kind: evt?.kind, time_us: timeUsOf(evt?.time), commit: c ? { operation: c.operation, collection: c.collection, rev: c.rev, record: c.record } : undefined };
 }
 
 /** Every sealed segment the archive lists, in order. */
@@ -115,28 +118,49 @@ const rateOf = (s) => s.eventCount / Math.max(1, (s.maxWitnessedAt - s.minWitnes
 
 /**
  * Which part of the archive holds [fromSec, toSec): the seq bounds to ask the SDK for,
- * from the segment list. Throws unless the whole range is live stream, with enough after
- * it for the last minute to settle.
+ * from the segment list. Throws unless the whole range is live stream (no segment it
+ * touches runs at a crawl's rate), with enough after it for the last minute to settle.
+ * Only segments the range touches count: a crawl (or one dense segment) elsewhere in the
+ * archive, before or after, doesn't refuse a range clear of it. With `skipShort`, a dense
+ * stretch shorter than SHORT_DENSE_US (a few minutes of re-crawl or flushed backlog, like
+ * #7571 on 2026-10-22) is handed back in `skip`, as [fromUs, toUs] of witnessed time, for
+ * the caller to leave out rather than refusing the range; a long one still refuses it.
  */
-export function planRange(segments, fromSec, toSec) {
+export function planRange(segments, fromSec, toSec, { skipShort = false } = {}) {
   if (!segments.length) throw new Error('the archive lists no segments');
-  const crawl = segments.filter((s) => rateOf(s) >= LIVE_MAX_RATE);
-  const liveFromUs = crawl.length ? Math.max(...crawl.map((s) => s.maxWitnessedAt)) : segments[0].minWitnessedAt;
   const tipUs = Math.max(...segments.map((s) => s.maxWitnessedAt));
   const startUs = (fromSec - LEAD_S) * 1e6;
   // The last minute is out once the stream is MAX_EARLIER_S past its end.
   const endUs = (toSec + MAX_EARLIER_S + LEAD_S) * 1e6;
-  if (startUs < liveFromUs) {
-    throw new Error(`--from must be after ${isoUs(liveFromUs + LEAD_S * 1e6)}: before that the archive is ${crawl.length ? 'a crawl of records that already existed, not the live stream' : 'empty'}`);
-  }
+  const firstUs = Math.min(...segments.map((s) => s.minWitnessedAt));
+  if (startUs < firstUs) throw new Error(`--from must be after ${isoUs(firstUs + LEAD_S * 1e6)}: the archive is empty before that`);
   if (endUs > tipUs) throw new Error(`--to must be before ${isoUs(tipUs - (MAX_EARLIER_S + LEAD_S) * 1e6)}: the archive's last sealed segment ends at ${isoUs(tipUs)}`);
   const picked = segments.filter((s) => s.maxWitnessedAt >= startUs && s.minWitnessedAt <= endUs);
   if (!picked.length) throw new Error(`the archive has no segment for ${iso(fromSec)} to ${iso(toSec)}`);
+  // dense segments in runs of consecutive ones: the 2026-10-02 crawl is thousands of short
+  // segments back to back, so it's a run's length that says crawl or blip, not a segment's
+  const runs = [];
+  for (const s of segments) {
+    if (rateOf(s) < LIVE_MAX_RATE) continue;
+    const run = runs.at(-1);
+    if (run && run.at(-1).index === s.index - 1) run.push(s);
+    else runs.push([s]);
+  }
+  const short = new Set(skipShort ? runs.filter((r) => r.at(-1).maxWitnessedAt - r[0].minWitnessedAt < SHORT_DENSE_US).flat() : []);
+  const dense = picked.filter((s) => rateOf(s) >= LIVE_MAX_RATE);
+  const skip = dense.filter((s) => short.has(s));
+  const crawl = dense.filter((s) => !short.has(s));
+  if (crawl.length) {
+    const lastUs = Math.max(...crawl.map((s) => s.maxWitnessedAt));
+    const which = crawl.slice(0, 3).map((s) => `#${s.index} ${isoUs(s.minWitnessedAt)} to ${isoUs(s.maxWitnessedAt)}, ${Math.round(rateOf(s)).toLocaleString('en-US')} events/s`).join('; ');
+    throw new Error(`--from must be after ${isoUs(lastUs + LEAD_S * 1e6)}: the range reaches into a crawl of records that already existed, not the live stream (${crawl.length} segment${crawl.length === 1 ? '' : 's'}: ${which}${crawl.length > 3 ? '; …' : ''})`);
+  }
   return {
     afterSeq: picked[0].minSeq - 1,
     beforeSeq: picked.at(-1).maxSeq,
     segments: picked.length,
     bytes: picked.reduce((a, s) => a + s.sizeBytes, 0),
+    skip: skip.map((s) => [s.minWitnessedAt, s.maxWitnessedAt, s.index]),
   };
 }
 

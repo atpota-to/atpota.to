@@ -65,9 +65,9 @@
             </header>
 
             <!-- While the page loads (garden-page.ts): the shape of what's coming, a patch or, on
-                 /garden/<someone>/flowers, a flower up close. Only with JS (garden.css). -->
+                 /garden/<someone>/flowers, a flower up close, or on …/tending, a list. Only with JS (garden.css). -->
             <div class="garden-skeleton" aria-hidden="true">
-                <script>if(/^\/garden\/[^/]+\/flowers\/?$/.test(location.pathname))document.currentScript.parentNode.setAttribute('data-level','flowers')</script>
+                <script>(function(s,m){if(m)s.parentNode.setAttribute('data-level',m[1])})(document.currentScript,/^\/garden\/[^/]+\/(flowers|tending)\/?$/.exec(location.pathname))</script>
                 <div class="tile home-patch garden-patch garden-skeleton__patch">
                     <span class="garden-skeleton__bar garden-skeleton__bar--eyebrow"></span>
                     <div class="home-plots garden-skeleton__plots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -83,11 +83,19 @@
                         <span class="garden-skeleton__bar garden-skeleton__bar--button"></span>
                     </span>
                 </div>
+                <div class="tile garden-card garden-skeleton__list">
+                    <span class="garden-skeleton__bar garden-skeleton__bar--eyebrow"></span>
+                    <span class="garden-skeleton__bar"></span>
+                    <span class="garden-skeleton__bar garden-skeleton__bar--short"></span>
+                    <span class="garden-skeleton__bar"></span>
+                    <span class="garden-skeleton__bar garden-skeleton__bar--short"></span>
+                </div>
             </div>
 
             <nav class="garden-levels" aria-label="this garden" data-levels hidden>
                 <a class="garden-levels__link" href="/garden" data-level-link="garden">garden</a>
                 <a class="garden-levels__link" href="/garden" data-level-link="flowers">flowers</a>
+                <a class="garden-levels__link" href="/garden" data-level-link="tending">tending</a>
             </nav>
 
             <div class="garden-level" data-level="garden" hidden>
@@ -242,6 +250,21 @@
                     <p class="garden-card__text">every kind there is. the ones grown so far are drawn in. the rest are still out there, and some only come up in the right weather.</p>
                     <ul class="garden-guide__grid" role="list" data-guide-grid></ul>
                 </section>
+            </div>
+
+            <div class="garden-level" data-level="tending" hidden>
+                <div class="garden-row">
+                    <section class="tile garden-card garden-tends" aria-labelledby="tends-got-title" data-tends-got hidden>
+                        <h2 class="eyebrow" id="tends-got-title" data-tends-got-title>who's tended their flowers</h2>
+                        <ul class="garden-tends__list" role="list" data-tends-got-list></ul>
+                        <p class="garden-card__note" data-tends-got-status></p>
+                    </section>
+                    <section class="tile garden-card garden-tends" aria-labelledby="tends-given-title" data-tends-given hidden>
+                        <h2 class="eyebrow" id="tends-given-title" data-tends-given-title>their tending</h2>
+                        <ul class="garden-tends__list" role="list" data-tends-given-list></ul>
+                        <p class="garden-card__note" data-tends-given-status></p>
+                    </section>
+                </div>
             </div>
 
             <section class="tile garden-card garden-how" aria-labelledby="garden-how-title" data-how hidden>

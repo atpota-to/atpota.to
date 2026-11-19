@@ -58,6 +58,11 @@ Set two variables in the new project's environment:
 | `DROPLET_SHARED_SECRET` | A long random string. The same value goes in the droplet's `.env` |
 | `DROPLET_CALLBACK_URL` | Where the droplet receives drafts, reachable from Vercel |
 
+Later additions: `WEBSITE_SHARED_SECRET` for the chat on atpota.to, and
+`ADMIN_SHARED_SECRET` for its admin page (`agent/channels/memory.ts`), the same
+value as in the website's and the droplet's environments, and different from
+both other secrets.
+
 Then:
 
 ```bash

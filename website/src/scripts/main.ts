@@ -2,7 +2,8 @@
  * Shared entry for every page (<script type="module" src="/src/scripts/main.ts">).
  *
  * 1. theme toggle wiring, tonight's moon in every moon on the page (./moon.ts), header nav (phone menu sheet), mascot expression swapping,
- *    the tab title that asks you to come back, the footer's changing tagline, and the
+ *    the tab title that now and then asks you to come back (./tab.ts says where and how often),
+ *    the footer's changing tagline, and the
  *    header's account button (./account.ts, which also opens sign-in for Poe's panel)
  * 2. the page module picked by <body data-page>: "home" -> ./home.ts, "guide" -> ./guide.ts,
  *    "blog" -> ./blog.ts, "garden" -> ./garden-page.ts, "settings" -> ./settings.ts,
@@ -14,6 +15,9 @@
  *    the page is idle: it's decoration, and the home page and the weather report have
  *    their own reading to share with it by then
  *
+ * With ?taplog in the address, ./tap-log.ts starts before all of these: a readout of what
+ * each tap on the page did, for chasing taps a phone drops.
+ *
  * Page CSS is linked from each page's <head>, not imported here, so it never flashes.
  */
 
@@ -24,6 +28,7 @@ import { paintMoons } from './moon';
 import { initNav } from './nav';
 import { initTabTitle } from './tab';
 import { initTagline } from './tagline';
+import { initTapLog } from './tap-log';
 import { initTheme } from './theme';
 
 type PageModule = { init?: () => void | Promise<void> };
@@ -35,6 +40,7 @@ const PAGE_MODULES: Record<string, () => Promise<PageModule>> = {
   garden: () => import('./garden-page'),
   weather: () => import('./weather-page'),
   settings: () => import('./settings'),
+  admin: () => import('./admin'),
   about: () => import('./about'),
   'overlay-setup': () => import('../overlay/setup'),
 };
@@ -59,6 +65,8 @@ async function initPage(): Promise<void> {
   }
 }
 
+// first, so it sees every listener the rest add (only with ?taplog in the address)
+safely('tap log', () => initTapLog());
 safely('theme', initTheme);
 safely('moon', () => paintMoons());
 safely('nav', () => initNav());

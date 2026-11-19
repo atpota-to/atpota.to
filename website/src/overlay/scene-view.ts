@@ -12,7 +12,16 @@
  *               runs out it says so, and onDone lets Poe cheer), on the end screen the
  *               streamer's links
  *   frame       the backdrop with frameHoles cut out (clip-path), a soft rim round each
- *               window, the title along the bottom, and the weather in the column
+ *               window, and the room left over: under the screen the bar with the title
+ *               (unless frame.words is off, or it would be empty) and a slot for widgets;
+ *               under the camera a column slot. layout.ts puts the scene's frame widgets
+ *               in those two slots (data-ov-frame-slot) and shrinks them to fit
+ *   mark        the atpotato wordmark on the panel and the bar, unless showMark is off
+ *   clock       the panel with the TID clock (tid.ts ticks it) in place of a countdown, and
+ *               a "waiting" line with dots that keep on going
+ *   splash      Anisota's loading screen in place of the backdrop and panel: its mark
+ *               (anisota.ts draws it), the title under it, or with no title one of
+ *               SPLASH_LINES every SPLASH_LINE_MS
  *
  * Every word is the streamer's and goes in through textContent.
  */
@@ -23,6 +32,9 @@ import { countdownText, frameHoles, framePath, type Scene } from './scenes';
 /** How often the countdown ticks. */
 export const TICK_MS = 250;
 export const DONE_TEXT = 'any second now…';
+/** Anisota's own loading lines (its splashMessages.js), for a loading screen without a title. */
+export const SPLASH_LINES = ['Powering on', 'Wiring the lights', 'Striking a match', 'Lighting the lamp', 'Turning on the lights', 'Checking conditions', 'Preparing your space', 'Adjusting the space'] as const;
+export const SPLASH_LINE_MS = 3000;
 
 export interface SceneView {
   /** Shows a scene, or none. A timer starts again only when its length changes. */
@@ -46,15 +58,22 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
   const sub = q('[data-ovsc-sub]');
   const count = q('[data-ovsc-count]');
   const links = q('[data-ovsc-links]');
+  const below = q('[data-ovsc-below]');
   const bar = q('[data-ovsc-bar]');
   const barTitle = q('[data-ovsc-bar-title]');
   const barSub = q('[data-ovsc-bar-sub]');
-  const weather = q('[data-ovsc-weather]');
+  const column = q('[data-ov-frame-slot="beside"]');
   const holes = q('[data-ovsc-holes]');
   const clouds = root.querySelector<HTMLElement>('[data-ovsc-clouds]');
+  const splash = q('[data-ovsc-splash]');
+  const splashLine = q('[data-ovsc-splash-line]');
+  const splashSub = q('[data-ovsc-splash-sub]');
+  const tid = root.querySelector<HTMLElement>('[data-ovsc-tid]');
   const doc = root.ownerDocument;
 
   let timer: number | undefined;
+  let lineTimer: number | undefined;
+  let line = 0;
   let endsAt: number | null = null;
   let countdownKey = '';
   let done = false;
@@ -82,6 +101,7 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
     show(scene) {
       root.hidden = !scene;
       win.clearInterval(timer);
+      win.clearInterval(lineTimer);
       if (!scene) {
         doc.body.removeAttribute('data-scene');
         return;
@@ -89,29 +109,44 @@ export function mountScene(root: HTMLElement, opts: SceneViewOptions = {}): Scen
       doc.body.dataset.scene = scene.kind;
       root.dataset.background = scene.background;
       root.dataset.ground = scene.ground;
+      root.dataset.kind = scene.kind;
+      root.dataset.mark = scene.showMark ? 'on' : 'off';
+
+      const splashing = scene.kind === 'loading';
+      splash.hidden = !splashing;
+      if (splashing) {
+        splashSub.textContent = scene.subtitle;
+        splashSub.hidden = !scene.subtitle;
+        const say = () => (splashLine.textContent = scene.title || SPLASH_LINES[line++ % SPLASH_LINES.length]!);
+        say();
+        if (!scene.title) lineTimer = win.setInterval(say, SPLASH_LINE_MS);
+      }
       if (clouds) renderClouds(clouds, scene.background === 'day' ? 6 : scene.background === 'garden' ? 3 : 0, win);
 
+      if (tid) tid.hidden = scene.kind !== 'clock';
       const framed = scene.kind === 'screenshare';
-      panel.hidden = framed;
-      bar.hidden = !framed;
-      weather.hidden = !framed;
+      panel.hidden = framed || splashing;
+      below.hidden = !framed;
       holes.hidden = !framed;
+      if (!framed) column.hidden = true;
       if (framed) {
-        const h = frameHoles(scene.camera);
+        const h = frameHoles(scene.camera, scene.frame.size);
         back.style.clipPath = `path(evenodd, '${framePath(h, scene.camera.shape)}')`;
         const [screenHole, cameraHole] = [q('[data-ovsc-hole="screen"]'), q('[data-ovsc-hole="camera"]')];
         place(screenHole, h.screen);
         cameraHole.hidden = !h.camera;
         if (h.camera) place(cameraHole, h.camera);
         cameraHole.classList.toggle('is-circle', scene.camera.shape === 'circle');
-        place(bar, h.bar);
-        weather.style.left = `${h.column.x}px`;
-        weather.style.top = `${h.column.y}px`;
-        weather.style.width = `${h.column.w}px`;
+        place(below, h.below);
+        place(column, h.column);
+        // Poe stands under the column, in the middle of it (overlay.css)
+        doc.body.style.setProperty('--ovsc-column-mid', `${h.column.x + h.column.w / 2}px`);
         barTitle.textContent = scene.title;
         barSub.textContent = scene.subtitle;
         barSub.hidden = !scene.subtitle;
+        bar.hidden = !scene.frame.words || (!scene.showMark && !scene.title && !scene.subtitle);
         root.dataset.camera = scene.camera.side;
+        root.dataset.size = scene.frame.size;
       } else {
         back.style.clipPath = '';
         title.textContent = scene.title;

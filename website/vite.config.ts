@@ -5,6 +5,7 @@ import { guideMarkdown } from './build/guide-markdown.js';
 import { GUIDES } from './build/guides.js';
 import { guidesSite } from './build/guides-site.js';
 import { partials } from './build/partials.js';
+import { weatherTopics } from './build/weather-topics.js';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -21,6 +22,8 @@ export default defineConfig({
       pages: GUIDES.documents.map((g) => ({ html: g.html, markdown: g.markdown, base: '/guides/' })),
     }),
     guidesSite({ root }),
+    // /weather/<topic>: the report's pages, each weather/index.html with its own tags
+    weatherTopics({ root }),
     apiMiddleware(),
   ],
   // Same-origin only, like production (keeps CORS preflights reaching api/*.ts in dev).
@@ -39,6 +42,7 @@ export default defineConfig({
         overlay: r('./overlay/index.html'),
         overlaySetup: r('./overlay/setup.html'),
         settings: r('./settings/index.html'),
+        admin: r('./admin/index.html'),
         about: r('./about/index.html'),
         // Filled per request by api/blog.ts (server/blog/shell.ts); not a page of its own.
         blog: r('./shells/blog.html'),

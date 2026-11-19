@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- theme before first paint: localStorage "theme" ("light" | "dark"), else light -->
+    <script>(function(){var d=document.documentElement,t=null;try{t=localStorage.getItem('theme')}catch(e){}d.setAttribute('data-theme',t==='dark'?'dark':'light');d.className+=' js'})()</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>admin · atpotato</title>
+    <meta name="title" content="admin · atpotato">
+    <meta name="description" content="poe's admin page, for the people who run it.">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#F4EEDF">
+    <meta name="referrer" content="no-referrer">
+    <link rel="icon" href="/favicon.png" type="image/png">
+
+    <!-- Eigerdals (Adobe Fonts kit jik6ttx) -->
+    <link rel="preconnect" href="https://use.typekit.net" crossorigin>
+    <link rel="stylesheet" href="https://use.typekit.net/jik6ttx.css">
+
+    <link rel="stylesheet" href="/src/styles/tokens.css">
+    <link rel="stylesheet" href="/src/styles/base.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+    <link rel="stylesheet" href="/src/styles/admin.css">
+
+    <script type="module" src="/src/scripts/main.ts"></script>
+</head>
+<body data-page="admin">
+    <a class="skip-link" href="#main">skip to content</a>
+    <!-- @partial header -->
+
+    <main id="main" class="admin-page" tabindex="-1">
+        <!-- src/scripts/admin.ts: data-state is checking, unavailable, signed-out, refused or ready. -->
+        <div class="admin" data-admin-page data-state="checking">
+            <header class="tile admin-head" aria-labelledby="admin-title">
+                <p class="eyebrow">admin</p>
+                <h1 class="admin-head__title" id="admin-title">how poe is doing</h1>
+                <p class="admin-head__lede" data-admin-lede>checking who you are…</p>
+                <button type="button" class="btn btn--primary btn--sm" data-admin-signin hidden>sign in</button>
+            </header>
+
+            <div class="admin-body" data-admin-body hidden>
+                <section class="tile admin-card" aria-labelledby="admin-state-title" data-admin-state>
+                    <h2 class="admin-card__title" id="admin-state-title">right now</h2>
+                    <div class="admin-state" data-admin-state-body></div>
+                    <form class="admin-nap" data-admin-nap>
+                        <label class="admin-label" for="admin-nap-text">nap or wake poe</label>
+                        <div class="admin-row">
+                            <input class="admin-input" id="admin-nap-text" name="text" maxlength="200" placeholder="nap: 2h, nap: until tomorrow at 9am, wake" autocomplete="off">
+                            <button type="submit" class="btn btn--outline btn--sm">send</button>
+                        </div>
+                        <p class="admin-status" role="status" data-admin-nap-status></p>
+                    </form>
+                </section>
+
+                <nav class="admin-tabs" aria-label="admin sections" data-admin-tabs>
+                    <button type="button" class="admin-tab" data-tab="memory" aria-pressed="true">memory</button>
+                    <button type="button" class="admin-tab" data-tab="guidance" aria-pressed="false">guidance</button>
+                    <button type="button" class="admin-tab" data-tab="people" aria-pressed="false">people</button>
+                    <button type="button" class="admin-tab" data-tab="replies" aria-pressed="false">recent replies</button>
+                    <button type="button" class="admin-tab" data-tab="digest" aria-pressed="false">digest</button>
+                </nav>
+
+                <section class="admin-panel" data-panel="memory" aria-label="memory"></section>
+                <section class="admin-panel" data-panel="guidance" aria-label="guidance" hidden></section>
+                <section class="admin-panel" data-panel="people" aria-label="people" hidden></section>
+                <section class="admin-panel" data-panel="replies" aria-label="recent replies" hidden></section>
+                <section class="admin-panel" data-panel="digest" aria-label="digest" hidden></section>
+                <p class="admin-status admin-status--page" role="status" data-admin-status></p>
+            </div>
+        </div>
+    </main>
+
+    <!-- @partial footer -->
+</body>
+</html>

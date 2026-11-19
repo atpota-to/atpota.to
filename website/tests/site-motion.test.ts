@@ -4,7 +4,7 @@ import { initCopyEmail } from '../src/scripts/home.js';
 import { MASCOT_URLS, bindMascot } from '../src/scripts/mascot.js';
 import { initNavPill } from '../src/scripts/nav.js';
 import { PET_MOTIONS, PET_RESET_MS, initPet, petFlourish, petReaction, pickMotion } from '../src/scripts/pet.js';
-import { AWAY_TITLE, BACK_MS, BACK_TITLE, initTabTitle } from '../src/scripts/tab.js';
+import { AWAY_TITLE, BACK_MS, BACK_TITLE, PLEADED_KEY, PLEA_PAGES, initTabTitle } from '../src/scripts/tab.js';
 import { applyTheme, revealRadius, toggleThemeFrom } from '../src/scripts/theme.js';
 
 afterEach(() => {
@@ -108,31 +108,98 @@ describe('theme reveal', () => {
 });
 
 describe('tab title', () => {
+  // A fresh document per test, so one test's listeners never answer another's events.
+  let doc: Document;
   let state: DocumentVisibilityState = 'visible';
-  beforeEach(() => {
-    state = 'visible';
-    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => state);
-    document.head.innerHTML = '<link rel="icon" href="/favicon.png" type="image/png">';
-    document.title = 'atpotato';
-  });
+  const page = (name: string, title: string) => {
+    doc = document.implementation.createHTMLDocument(title);
+    doc.body.dataset.page = name;
+    doc.head.insertAdjacentHTML('beforeend', '<link rel="icon" href="/favicon.png" type="image/png">');
+    vi.spyOn(doc, 'visibilityState', 'get').mockImplementation(() => state);
+    return doc;
+  };
   const setVisibility = (next: DocumentVisibilityState) => {
     state = next;
-    document.dispatchEvent(new Event('visibilitychange'));
+    doc.dispatchEvent(new Event('visibilitychange'));
   };
+  const always = () => 0;
+  const never = () => 0.99;
+
+  beforeEach(() => {
+    state = 'visible';
+    window.sessionStorage.clear();
+  });
 
   it('asks you to come back, says hi, then puts everything back', () => {
     vi.useFakeTimers();
-    initTabTitle();
-    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')!;
+    initTabTitle(page('home', 'atpotato'), always);
+    const icon = doc.querySelector<HTMLLinkElement>('link[rel="icon"]')!;
     setVisibility('hidden');
-    expect(document.title).toBe(AWAY_TITLE);
+    expect(doc.title).toBe(AWAY_TITLE);
     expect(icon.getAttribute('href')).toBe(MASCOT_URLS.normal);
     setVisibility('visible');
-    expect(document.title).toBe(BACK_TITLE);
+    expect(doc.title).toBe(BACK_TITLE);
     vi.advanceTimersByTime(BACK_MS);
-    expect(document.title).toBe('atpotato');
+    expect(doc.title).toBe('atpotato');
     expect(icon.getAttribute('href')).toBe('/favicon.png');
     expect(icon.getAttribute('type')).toBe('image/png');
+  });
+
+  it('leaves the title of something you are reading alone', () => {
+    for (const name of ['blog', 'guide', 'guides', 'weather', 'garden', 'settings']) {
+      expect(PLEA_PAGES.has(name)).toBe(false);
+      initTabTitle(page(name, 'private atproto spaces are weeks away · atpotato'), always);
+      setVisibility('hidden');
+      expect(doc.title).toBe('private atproto spaces are weeks away · atpotato');
+      expect(doc.querySelector('link[rel="icon"]')!.getAttribute('href')).toBe('/favicon.png');
+      setVisibility('visible');
+    }
+  });
+
+  it('only pleads on a chance, and only once per tab', () => {
+    vi.useFakeTimers();
+    const rolls = [0.99, 0, 0];
+    initTabTitle(page('home', 'atpotato'), () => rolls.shift() ?? 0);
+    // the first leave misses its chance
+    setVisibility('hidden');
+    expect(doc.title).toBe('atpotato');
+    setVisibility('visible');
+    // the second one pleads
+    setVisibility('hidden');
+    expect(doc.title).toBe(AWAY_TITLE);
+    setVisibility('visible');
+    vi.advanceTimersByTime(BACK_MS);
+    // and that was this tab's turn, even on a lucky roll
+    setVisibility('hidden');
+    expect(doc.title).toBe('atpotato');
+    expect(window.sessionStorage.getItem(PLEADED_KEY)).toBe('1');
+  });
+
+  it('remembers the plea across pages in the same tab', () => {
+    window.sessionStorage.setItem(PLEADED_KEY, '1');
+    initTabTitle(page('about', 'about · atpotato'), always);
+    setVisibility('hidden');
+    expect(doc.title).toBe('about · atpotato');
+  });
+
+  it('puts the real title back when you leave again mid-hello', () => {
+    vi.useFakeTimers();
+    initTabTitle(page('home', 'atpotato'), always);
+    setVisibility('hidden');
+    setVisibility('visible');
+    expect(doc.title).toBe(BACK_TITLE);
+    setVisibility('hidden');
+    expect(doc.title).toBe('atpotato');
+    expect(doc.querySelector('link[rel="icon"]')!.getAttribute('href')).toBe('/favicon.png');
+  });
+
+  it('never pleads when every roll misses', () => {
+    initTabTitle(page('notfound', 'nothing growing here - atpotato'), never);
+    for (let i = 0; i < 5; i++) {
+      setVisibility('hidden');
+      expect(doc.title).toBe('nothing growing here - atpotato');
+      setVisibility('visible');
+    }
   });
 });
 

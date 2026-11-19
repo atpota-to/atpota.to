@@ -22,7 +22,7 @@ for (const [file, from, to] of [
 }
 const { memoryKey, personNotesKey, PERSON_SLOT } = await import(new URL("memory-key.js", out));
 const { personScope } = await import(new URL("person-scope.js", out));
-const { JOURNAL_MAX_CHARACTERS, datedNote, emptyNotes, forgetNotes, privateFileMemory, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
+const { JOURNAL_MAX_CHARACTERS, confirmingTools, datedNote, emptyNotes, forgetNotes, privateFileMemory, publishedFileMemory, retryingConcurrentWrites, unpublishableNote } =
   await import(new URL("published-memory.js", out));
 const { createMemoryLock } = await import("../node_modules/eve/dist/src/shared/memory-state.js");
 const { defaultNamespace } = await import("eve/memory");
@@ -100,6 +100,41 @@ test("journal notes are saved with the day they were saved, and person notes are
   const personRecall = (await person.recall["turn.started"](turn("person", "undated-person"))).messages[0].content;
   assert.match(personRecall, /0: builds feeds/);
   assert.equal(personRecall.includes("YYYY"), false);
+});
+
+test("saves and removals answer with what is stored, read back after the write", async () => {
+  const abortSignal = new AbortController().signal;
+  const turn = (slot, key) => ({ memory: { scope: { key, namespace: "n", value: slot }, slot }, abortSignal,
+    turn: { id: "t", input: [], sequence: 0 } });
+  const today = datedNote("x").slice(0, 12);
+
+  // eve's own tools answer nothing; these say which note it is and how many are stored.
+  const notes = await privateFileMemory().tools(turn("dispatch-notes", "confirm-private"));
+  assert.equal(await notes.save_memory.execute({ text: "  lead the weather with its link " }, { abortSignal }),
+    "Saved as note 0. 1 note stored here now.");
+  assert.equal(await notes.save_memory.execute({ text: "headliner gets its own heading" }, { abortSignal }),
+    "Saved as note 1. 2 notes stored here now.");
+  // The same note again is already there, and eve keeps one copy.
+  assert.equal(await notes.save_memory.execute({ text: "headliner gets its own heading" }, { abortSignal }),
+    "Saved as note 1. 2 notes stored here now.");
+  assert.equal(await notes.remove_memory.execute({ index: 7 }, { abortSignal }),
+    "There is no note 7, so nothing was removed. 2 notes stored here now.");
+  assert.equal(await notes.remove_memory.execute({ index: 0 }, { abortSignal }),
+    "Removed note 0. 1 note stored here now.");
+  const recalled = (await privateFileMemory().recall["turn.started"](turn("dispatch-notes", "confirm-private"))).messages[0].content;
+  assert.match(recalled, new RegExp(`1: \\${today} headliner gets its own heading`));
+  assert.equal(recalled.includes("lead the weather"), false);
+
+  // Person notes too, and a note the repo would hold back is still refused before anything is written.
+  const person = await publishedFileMemory().tools(turn("person", "confirm-person"));
+  assert.equal(await person.save_memory.execute({ text: "builds feeds" }, { abortSignal }),
+    "Saved as note 0. 1 note stored here now.");
+  await assert.rejects(person.save_memory.execute({ text: "see https://example.com" }, { abortSignal }), /Not saved: a note with a link/);
+
+  // A save that wrote nothing is a failure, not a silence.
+  const lost = confirmingTools({ save_memory: { description: "", inputSchema: {}, execute: async () => undefined },
+    remove_memory: { description: "", inputSchema: {}, execute: async () => undefined } }, "confirm-lost");
+  await assert.rejects(lost.save_memory.execute({ text: "gone" }, { abortSignal }), /Not saved: the save gave no error/);
 });
 
 test("forgetNotes wipes one person's notes, hands the empty version over, and leaves everyone else's alone", async () => {

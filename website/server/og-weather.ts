@@ -1,11 +1,15 @@
 /**
  * /og/weather.png (vercel.json rewrites it to /api/og-weather): the weather report's Open
- * Graph card, drawn from the weather right now, so a link to /weather, and each of Poe's
- * weather posts, shows the sky as it was when it was shared.
+ * Graph card, drawn from the weather right now, so a link to /weather, to each of its pages
+ * (/weather/<topic>, each naming its card), and each of Poe's weather posts, shows the sky as
+ * it was when it was shared.
  *
  *   GET /og/weather.png                the default card (DEFAULT_CARD)
- *   GET /og/weather.png?card=<name>    forecast | trend | mix | today (server/og-weather-cards.ts);
+ *   GET /og/weather.png?card=<name>    forecast | trend | mix | today | hosts | migration
+ *                                      (server/og-weather-cards.ts);
  *                                      anything else is the default card, never an error
+ *   &app=<domain>                      the app a post is about, which the mix card shows on
+ *                                      its own when the station heard it (focusOf)
  *   ->  image/png, 1200x630, cached at the CDN for CACHE_OK
  *
  * The numbers are read here, from the same places the page reads them, through the same
@@ -41,11 +45,13 @@ import {
   type CardData,
   type CardName,
   type DayHistory,
+  type HourHistory,
   type El,
   type MascotFace,
 } from './og-weather-cards.js';
 import { createAlmanacHandlers } from './weather-almanac.js';
 import { createHistoryHandlers } from './weather-history.js';
+import { DOMAIN_RE } from './supabase-public.js';
 
 export const CACHE_OK = 'public, max-age=0, s-maxage=300, stale-while-revalidate=600';
 /** The quiet card: try again soon. */
@@ -111,11 +117,16 @@ export async function readCardData(deps: OgWeatherDeps = {}): Promise<CardData> 
     const b = await body(await createHistoryHandlers(handlerDeps).GET(new Request('https://atpota.to/api/weather-history?range=day')));
     return b && typeof b === 'object' && Array.isArray((b as DayHistory).points) ? (b as DayHistory) : null;
   });
+  // the last hour's accounts, for the default card's headline (the page's header reads the same)
+  const hour = within<HourHistory>(ms, async () => {
+    const b = await body(await createHistoryHandlers(handlerDeps).GET(new Request('https://atpota.to/api/weather-history?range=hour')));
+    return b && typeof b === 'object' && typeof (b as HourHistory).accounts === 'object' ? (b as HourHistory) : null;
+  });
   const almanac = within<AlmanacData>(ms, async () => {
     const b = await body(await createAlmanacHandlers(handlerDeps).GET(new Request('https://atpota.to/api/weather-almanac?tz=UTC')));
     return b && typeof b === 'object' ? (b as AlmanacData) : null;
   });
-  return { at, now: await now, day: await day, almanac: await almanac };
+  return { at, now: await now, day: await day, almanac: await almanac, hour: await hour };
 }
 
 // ---------- drawing ----------
@@ -134,7 +145,8 @@ const FONTS = [
   ['signika-latin-600-normal.woff', 600],
   ['signika-latin-700-normal.woff', 700],
 ] as const;
-const FACES: readonly MascotFace[] = ['happy', 'sleepy', 'wow', 'scawy', 'kawaii', 'wink'];
+/** Every face a card may use (MascotFace): the frowning one isn't loaded, so no card can draw it. */
+const FACES: readonly MascotFace[] = ['happy', 'sleepy', 'wow', 'kawaii', 'wink'];
 
 interface Kit {
   fonts: Array<{ name: string; data: Buffer; weight: 400 | 600 | 700; style: 'normal' }>;
@@ -203,8 +215,12 @@ export function createOgWeatherHandlers(deps: OgWeatherDeps = {}) {
     });
 
   async function GET(request: Request): Promise<Response> {
-    const asked = new URL(request.url).searchParams.get('card');
+    const params = new URL(request.url).searchParams;
+    const asked = params.get('card');
     const name = isCard(asked) ? asked : DEFAULT_CARD;
+    // the app a post is about (mentions/src/weather-posts.js freshCardUrl): a domain, drawn only if the station heard it
+    const app = params.get('app');
+    const focus = app && DOMAIN_RE.test(app) ? app : null;
     // A HEAD only wants to know there's an image here; drawing one is the expensive part.
     // Never cached, so an empty answer can't stand in for a card.
     if (request.method === 'HEAD') return png(request, null, 'no-store');
@@ -215,6 +231,7 @@ export function createOgWeatherHandlers(deps: OgWeatherDeps = {}) {
       log({ event: 'og_read_error', error: (error as Error)?.message ?? 'Error' });
       data = { at: (deps.now ?? Date.now)(), now: null, day: null, almanac: null };
     }
+    if (focus) data = { ...data, focus };
     try {
       const { card, quiet } = await cardFor(name, data);
       try {

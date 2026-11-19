@@ -164,12 +164,18 @@ describe('loadDiscussion', () => {
     expect(alice.replies[0]!.author).toMatchObject({ name: '@bob.test', avatar: null });
   });
 
-  it('hides accounts with moderation labels or the no-unauthenticated self-label', async () => {
+  it('hides accounts with moderation labels', async () => {
     const net = baseNet();
-    net.profiles[CAROL] = { handle: 'carol.test', labels: [{ val: '!no-unauthenticated', src: CAROL }] };
+    net.profiles[CAROL] = { handle: 'carol.test', labels: [{ val: '!hide', src: 'did:plc:mod' }] };
     net.profiles[BOB] = { handle: 'bob.test', labels: [{ val: 'spam', src: 'did:plc:mod' }] };
     const d = await load(net);
     expect(shape(d.comments)).toEqual([{ rkey: '3a1', replies: [] }]);
+  });
+
+  it('shows accounts with the no-unauthenticated self-label', async () => {
+    const net = baseNet();
+    net.profiles[CAROL] = { handle: 'carol.test', labels: [{ val: '!no-unauthenticated', src: CAROL }] };
+    expect((await load(net)).count).toBe(4);
   });
 
   it('ignores a negated label', async () => {

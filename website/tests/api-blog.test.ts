@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as api from '../api/blog.js';
 import { POE_DID } from '../server/blog/config.js';
 import { resetEmbedCaches } from '../server/blog/embeds.js';
-import { CACHE_MISSING, CACHE_OK, createBlogHandlers, type BlogDeps } from '../server/blog/handler.js';
+import { resetShareCache } from '../server/blog/share.js';
+import { CACHE_MISSING, CACHE_OK, CACHE_PREVIEW, createBlogHandlers, type BlogDeps } from '../server/blog/handler.js';
 import { EMAIL_RETURN_COOKIE, LEAFLET_RETURN_PATH } from '../server/blog/subscribe.js';
 import { pageTitle } from '../server/routes.js';
 
@@ -27,6 +28,10 @@ interface Net {
   plcDown?: boolean;
   shellStatus?: number;
   posts?: unknown[];
+  /** Aturi's compose waypoints (server/blog/share.ts); left out, Aturi doesn't answer. */
+  waypoints?: unknown;
+  /** The droplet's dispatch drafts, by token: what GET /dispatch/preview/<token> answers. */
+  previews?: Record<string, { status: number; body?: unknown }>;
 }
 
 interface Seen {
@@ -58,6 +63,11 @@ function fakeFetch(net: Net, seen: Seen): typeof fetch {
       }
     }
     if (url.origin === 'https://public.api.bsky.app') return json({ posts: net.posts ?? [] });
+    if (url.origin === 'https://aturi.to' && url.pathname === '/api/waypoints' && net.waypoints) return json(net.waypoints);
+    if (url.origin === 'https://hook.atpota.to' && url.pathname.startsWith('/dispatch/preview/')) {
+      const hit = net.previews?.[decodeURIComponent(url.pathname.slice('/dispatch/preview/'.length))];
+      return hit ? json(hit.body ?? {}, hit.status) : json({ error: 'NotFound' }, 404);
+    }
     if (url.origin === ORIGIN && url.pathname.startsWith('/shells/blog')) {
       seen.shellHeaders.push(new Headers(init?.headers));
       return new Response(net.shellStatus && net.shellStatus !== 200 ? 'missing' : SHELL, { status: net.shellStatus ?? 200, headers: { 'content-type': 'text/html' } });
@@ -130,7 +140,10 @@ function html(text: string) {
   return new JSDOM(text).window.document;
 }
 
-beforeEach(() => resetEmbedCaches());
+beforeEach(() => {
+  resetEmbedCaches();
+  resetShareCache();
+});
 
 describe('/api/blog index', () => {
   it('lists this publication\'s posts newest first, skipping future, foreign and invalid records', async () => {
@@ -281,6 +294,45 @@ describe('/api/blog post', () => {
     expect(d.querySelector('.post-pager__link--newer')).toBeNull();
   });
 
+  it("has a menu in the comments to share it on aturi's apps that take a compose link", async () => {
+    const net = defaultNet();
+    net.waypoints = {
+      waypoints: [
+        { id: 'deer', name: 'Deer', composeIntent: { urlTemplate: 'https://deer.social/intent/compose?text={text}', prefillsText: true } },
+        { id: 'bluesky', name: 'Bluesky', composeIntent: { urlTemplate: 'https://bsky.app/intent/compose?text={text}', prefillsText: true } },
+        { id: 'impro', name: 'Impro', composeIntent: { urlTemplate: 'https://impro.social/intent/compose', prefillsText: false } },
+      ],
+    };
+    const { h } = setup(net);
+    const d = html(await (await h.GET(get('view=post&path=issue-2'))).text());
+    const menu = d.querySelector('#comments .post-talk__head .post-talk__share details[data-blog-share]')!;
+    const links = [...menu.querySelectorAll<HTMLAnchorElement>('a[data-share-app]')];
+    expect(links.map((a) => a.dataset.shareApp)).toEqual(['bluesky', 'deer']);
+    const text = 'The Weekly Spud: Issue 2: </script><script>alert(1)</script>\n\nhttps://atpota.to/blog/issue-2';
+    expect(links[0]!.getAttribute('href')).toBe(`https://bsky.app/intent/compose?text=${encodeURIComponent(text)}`);
+    expect(links[1]!.getAttribute('href')).toBe(`https://deer.social/intent/compose?text=${encodeURIComponent(text)}`);
+    // only there: not in the subscribe card, nor at the bottom of the post
+    expect(d.querySelectorAll('[data-blog-share]')).toHaveLength(1);
+    expect(d.querySelector('.post-end__card [data-share-app]')).toBeNull();
+    expect(d.querySelector('.post__share')).toBeNull();
+  });
+
+  it('puts the menu at the bottom of the post when comments are off', async () => {
+    const { h } = setup(defaultNet(), { ...UNPINNED, BLOG_COMMENTS_DISABLED: '1' });
+    const d = html(await (await h.GET(get('view=post&path=issue-2'))).text());
+    expect(d.querySelector('#comments')).toBeNull();
+    expect(d.querySelector('article.post > footer.post__share a[data-share-app="bluesky"]')).not.toBeNull();
+  });
+
+  it('still shares on bluesky when aturi does not answer', async () => {
+    const { h } = setup();
+    const res = await h.GET(get('view=post&path=issue-2'));
+    expect(res.status).toBe(200);
+    const d = html(await res.text());
+    expect(d.querySelector('.post-talk__share details')).toBeNull();
+    expect(d.querySelector('.post-talk__share a[data-share-app="bluesky"]')!.getAttribute('href')).toMatch(/^https:\/\/bsky\.app\/intent\/compose\?text=The%20Weekly%20Spud/);
+  });
+
   it('renders a document without Leaflet content from its textContent', async () => {
     const { h } = setup();
     const d = html(await (await h.GET(get('view=post&path=3old'))).text());
@@ -397,5 +449,82 @@ describe('poe page titles', () => {
   it('names the blog and its posts without reading records', () => {
     expect(pageTitle('/blog')).toBe("poe's atmosphere dispatch");
     expect(pageTitle('/blog/issue-2')).toBe("a post in poe's atmosphere dispatch");
+  });
+});
+
+describe('/api/blog dispatch draft preview', () => {
+  const TOKEN = 'k3Jx9QwErTyUiOpAsDfGhJkL';
+  const draft = (extra: Record<string, unknown> = {}) => ({
+    status: 200,
+    body: {
+      draft: { status: 'ready', version: 3, savedAt: '2026-10-26T13:10:00.000Z', windowStart: '2026-10-19T19:02:15.894Z', windowEnd: '2026-10-26T12:00:00.000Z', ...extra },
+      record: {
+        $type: 'site.standard.document',
+        site: PUB_URI,
+        title: 'spaces near beta',
+        description: 'a quieter week',
+        tags: ['atmosphere', 'dispatch'],
+        textContent: 'what builders talked about\n\nspaces is close.',
+        content: content(
+          { $type: `${T}header`, level: 2, plaintext: 'what builders talked about' },
+          { $type: `${T}text`, plaintext: 'spaces is close.', facets: [{ index: { byteStart: 0, byteEnd: 6 }, features: [{ $type: 'pub.leaflet.richtext.facet#bold' }] }] },
+          { $type: `${T}bskyPost`, postRef: { uri: BSKY_URI, cid: 'c' } },
+        ),
+        contributors: [{ did: POE_DID }],
+      },
+    },
+  });
+
+  it('renders the draft as the issue will look, privately: no cache, no index, no canonical, no document link', async () => {
+    const net = { ...defaultNet(), previews: { [TOKEN]: draft() } };
+    const { h, seen } = setup(net);
+    const res = await h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(CACHE_PREVIEW);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(seen.urls).toContain(`https://hook.atpota.to/dispatch/preview/${TOKEN}`);
+    const d = html(await res.text());
+    expect(d.querySelector('h1')!.textContent).toBe('spaces near beta');
+    // The first paragraph summarizes the issue, so the description isn't repeated under the title.
+    expect(d.querySelector('.post__subtitle')).toBeNull();
+    expect(d.querySelector('.post__header')!.textContent).not.toContain('a quieter week');
+    expect(d.querySelector('.post-preview')!.textContent).toMatch(/^draft previewversion 3, saved .* · waiting for review\. this isn't published/);
+    expect(d.querySelector('.post__body strong')!.textContent).toBe('spaces');
+    expect(d.querySelector('.post__body')!.textContent).toContain('a post worth reading');
+    expect(d.querySelector('meta[name="robots"]')!.getAttribute('content')).toBe('noindex, nofollow');
+    expect(d.querySelector('link[rel="canonical"]')).toBeNull();
+    expect(d.querySelector('link[rel="site.standard.document"]')).toBeNull();
+    expect(d.querySelector('meta[name="atproto:uri"]')).toBeNull();
+    expect(d.querySelector('.post-end')).toBeNull();
+    // nothing to share yet
+    expect(d.querySelector('.post__share')).toBeNull();
+    expect(d.title).toBe('draft: spaces near beta - The Weekly Spud');
+  });
+
+  it('an unknown or malformed token is not found, and a published draft sends you to the issue', async () => {
+    const net = { ...defaultNet(), previews: { [TOKEN]: draft({ status: 'published', published: 'https://atpota.to/blog/3newissue' }) } };
+    const { h, seen } = setup(net);
+    const missing = await h.GET(get('view=preview&token=nopenopenopenopenopenope'));
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe(CACHE_PREVIEW);
+    expect(missing.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    const bad = await h.GET(get('view=preview&token=../../etc/passwd'));
+    expect(bad.status).toBe(404);
+    expect(seen.urls.some((u) => u.includes('etc'))).toBe(false);
+    const out = await h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(out.status).toBe(302);
+    expect(out.headers.get('location')).toBe('https://atpota.to/blog/3newissue');
+  });
+
+  it('says unavailable when the droplet is down, and reads DISPATCH_PREVIEW_ORIGIN', async () => {
+    const down = setup({ ...defaultNet(), previews: { [TOKEN]: { status: 502 } } });
+    const res = await down.h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(res.status).toBe(503);
+    expect(res.headers.get('cache-control')).toBe(CACHE_PREVIEW);
+    expect(down.logs.some((l) => l.event === 'preview_error')).toBe(true);
+
+    const other = setup(defaultNet(), { ...UNPINNED, DISPATCH_PREVIEW_ORIGIN: 'https://droplet.example' });
+    await other.h.GET(get(`view=preview&token=${TOKEN}`));
+    expect(other.seen.urls).toContain(`https://droplet.example/dispatch/preview/${TOKEN}`);
   });
 });

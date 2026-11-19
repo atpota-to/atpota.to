@@ -9,7 +9,12 @@
  *                                ?range=week   the last 7 days, a point an hour
  *                                ?range=month  the last 30 days, a point a day
  *                                ?range=year   the last 12 months, a point a month
- *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts?, bursts? }
+ *   ->  { range, points: Point[], total: Point, apps?, compare?, appsOverTime?, accounts?, hosts?, bursts? }
+ *
+ *   GET /api/weather-history?host=<hostname>   one host: its accounts day by day, who was
+ *                                              active, and who moved in and away, by the
+ *                                              other host (weather-hosts.ts readHost)
+ *   ->  { host: { hostname, bluesky, days, moves, movesSince?, similar? } }
  *
  * Points are raw counts with the seconds they cover, never rates: a rate is
  * count / seconds, worked out in the page, so summing points (into months, or into the
@@ -18,9 +23,11 @@
  * Alongside, each from a read-only function (atmosphere/sql/atmosphere_almanac.sql) and
  * left out if it fails:
  *   apps          the busiest apps outside Bluesky over the range, each with its count in
- *                 an earlier window of the same length (atmosphere_app_trends): the same
- *                 hour yesterday, the day before, the week before, the 30 days before,
- *                 the year before
+ *                 an earlier window of the same length (atmosphere_app_trends): the hour
+ *                 before, the day before, the week before, the 30 days before,
+ *                 the year before. And, when the sketches could be read, how many different
+ *                 accounts wrote each one over the range (`accounts`), so thousands of
+ *                 records from one account read as that account's batch, not a crowd
  *   compare       how much of the range and of that earlier window the station heard, so
  *                 the page compares rates, not counts
  *   appsOverTime  how many apps outside Bluesky were heard each minute, hour, day or
@@ -29,9 +36,14 @@
  *                 diversity index they make, and the apps with the most, from the
  *                 station's sketches (weather-accounts.ts); and everyone in the earlier
  *                 window with its diversity index (prev), when that was all heard live
+ *   hosts         the PDS hosts in each bucket from the station's censuses, the
+ *                 independent hosts new or growing over the range, and each day's sign-ups
+ *                 and accounts moving house, with which host each mover left for which
+ *                 (weather-hosts.ts)
  *   bursts        for a week: the hours that ran far past their steady count
  *                 (below), biggest first, each with the app whose busiest minute made it,
- *                 when one did (atmosphere_minute_app)
+ *                 when one did, and how many accounts wrote to it that minute
+ *                 (atmosphere_minute_app)
  *
  * Hours and days also carry `steady`: their new records with any burst taken out, where
  * no minute counts for more than 3 times its hour's median minute
@@ -45,6 +57,7 @@
 
 import { readAccounts } from './weather-accounts.js';
 import { LIVE_SINCE } from './weather-almanac.js';
+import { askedHost, readHost, readHosts } from './weather-hosts.js';
 import { collectionsOf, counts, DOMAIN_RE, isCount, isRecord, iso, json, methodNotAllowed, num, supabase, type Env, type Fetch, type Supabase } from './supabase-public.js';
 
 export { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase-public.js';
@@ -60,6 +73,8 @@ export interface App {
   /** Its records in the earlier window. */
   prevCreates: number;
   collections: string[];
+  /** Different accounts that wrote to it over the range, when the station's sketches could be read. */
+  accounts?: number;
 }
 
 export interface Burst {
@@ -67,8 +82,8 @@ export interface Burst {
   t: string;
   /** Its records past the hour's steady count. */
   records: number;
-  /** The app whose busiest minute that hour holds most of it, when one does. */
-  app?: { domain: string; minute: string; records: number; collections: string[] };
+  /** The app whose busiest minute that hour holds most of it, when one does, and the different accounts that wrote to it that minute. */
+  app?: { domain: string; minute: string; records: number; collections: string[]; accounts?: number };
 }
 
 export interface Compare {
@@ -81,6 +96,7 @@ export interface Compare {
 export type Bucket = 'minute' | 'hour' | 'day' | 'month';
 
 export const TOP_APPS = 10;
+const MINUTE = 60_000;
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 /** An hour is a burst once its records run this far past its steady count (as a share of it). */
@@ -90,7 +106,7 @@ export const MAX_BURSTS = 3;
 const BURST_APP_SHARE = 0.5;
 
 export const RANGES = {
-  hour: { table: 'atmosphere_minute', key: 'minute', steady: false, bursts: false, spanMs: 60 * 60_000, lagMs: DAY, bucket: 'minute', cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
+  hour: { table: 'atmosphere_minute', key: 'minute', steady: false, bursts: false, spanMs: 60 * 60_000, lagMs: HOUR, bucket: 'minute', cache: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300' },
   day: { table: 'atmosphere_hour', key: 'hour', steady: true, bursts: false, spanMs: DAY, lagMs: DAY, bucket: 'hour', cache: 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600' },
   week: { table: 'atmosphere_hour', key: 'hour', steady: true, bursts: true, spanMs: 7 * DAY, lagMs: 7 * DAY, bucket: 'hour', cache: 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600' },
   month: { table: 'atmosphere_day', key: 'day', steady: true, bursts: false, spanMs: 30 * DAY, lagMs: 30 * DAY, bucket: 'day', cache: 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400' },
@@ -106,9 +122,18 @@ export function isRange(v: string | null): v is Range {
   return v !== null && Object.hasOwn(RANGES, v);
 }
 
+/**
+ * Where a range ends: now, except the hour, which ends on the minute going on, so it's the
+ * same 60 whole minutes the "last hour" tile counts (weather-span.ts stretches) and the
+ * header's number and its chip are about one stretch.
+ */
+export function rangeEnd(range: Range, now: number): number {
+  return range === 'hour' ? Math.floor(now / MINUTE) * MINUTE : now;
+}
+
 /** The start of a range ending at `now`. */
 export function rangeStart(range: Range, now: number): string {
-  return new Date(now - RANGES[range].spanMs).toISOString();
+  return new Date(rangeEnd(range, now) - RANGES[range].spanMs).toISOString();
 }
 
 /** The PostgREST path (under /rest/v1/) for a range ending at `now`. */
@@ -116,6 +141,8 @@ export function queryPath(range: Range, now: number): string {
   const { table, key, steady } = RANGES[range];
   const params = new URLSearchParams({ select: [key, 'seconds_covered', ...COUNTS, ...(steady ? ['steady'] : [])].join(','), order: `${key}.asc`, limit: '1000' });
   params.set(key, `gte.${rangeStart(range, now)}`);
+  // the hour stops at the minute going on, as the "last hour" tile does
+  if (range === 'hour') params.append(key, `lt.${new Date(rangeEnd(range, now)).toISOString()}`);
   return `${table}?${params}`;
 }
 
@@ -123,11 +150,23 @@ export function queryUrl(base: string, range: Range, now: number): string {
   return `${base}/rest/v1/${queryPath(range, now)}`;
 }
 
+/**
+ * How far back the earlier window is: the stretch right before (each range's lagMs), or with
+ * `?vs=cycle` the same stretch a cycle ago, where the network's rhythm repeats: the same hour
+ * yesterday, the same 24 hours a week ago. A week or more is always against the stretch before.
+ */
+export const CYCLE_LAG_MS: Partial<Record<Range, number>> = { hour: DAY, day: 7 * DAY };
+
+export function lagFor(range: Range, vs: string | null): number {
+  return (vs === 'cycle' ? CYCLE_LAG_MS[range] : undefined) ?? RANGES[range].lagMs;
+}
+
 /** The arguments to atmosphere_app_trends: the range, and the same span `lagMs` earlier. */
-export function trendArgs(range: Range, now: number) {
-  const { spanMs, lagMs } = RANGES[range];
+export function trendArgs(range: Range, now: number, lagMs: number = RANGES[range].lagMs) {
+  const { spanMs } = RANGES[range];
+  const end = rangeEnd(range, now);
   const at = (ms: number) => new Date(ms).toISOString();
-  return { since: at(now - spanMs), until: at(now), prev_since: at(now - spanMs - lagMs), prev_until: at(now - lagMs), max_apps: TOP_APPS };
+  return { since: at(end - spanMs), until: at(end), prev_since: at(end - spanMs - lagMs), prev_until: at(end - lagMs), max_apps: TOP_APPS };
 }
 
 /** A row as a Point, or null if anything is off. Views sum to numeric, which may arrive as strings. */
@@ -171,13 +210,25 @@ export function burstHours(points: Point[]): Burst[] {
 /** A burst with the app that made it: the busiest app-minute in its hour, if that holds most of the burst. */
 export async function withBurstApp(db: Supabase, burst: Burst): Promise<Burst> {
   const until = new Date(Date.parse(burst.t) + HOUR).toISOString();
-  const rows = await db.get(`atmosphere_minute_app?select=minute,domain,creates,collections&minute=gte.${burst.t}&minute=lt.${until}&order=creates.desc&limit=1`);
+  const rows = await db.get(`atmosphere_minute_app?select=minute,domain,creates,collections,dids&minute=gte.${burst.t}&minute=lt.${until}&order=creates.desc&limit=1`);
   if (!Array.isArray(rows)) throw new Error('burst apps did not check out');
   const r: unknown = rows[0];
   const minute = isRecord(r) ? iso(r.minute) : null;
   const c = counts(r, ['creates'] as const);
   if (!isRecord(r) || !minute || !c || typeof r.domain !== 'string' || !DOMAIN_RE.test(r.domain) || c.creates < BURST_APP_SHARE * burst.records) return burst;
-  return { ...burst, app: { domain: r.domain, minute, records: c.creates, collections: collectionsOf(r.collections) } };
+  return { ...burst, app: { domain: r.domain, minute, records: c.creates, collections: collectionsOf(r.collections), ...(isCount(r.dids) ? { accounts: num(r.dids) } : {}) } };
+}
+
+/**
+ * The busiest apps with how many accounts wrote each, where the sketches have it. One they
+ * don't (written in the last few minutes, before the hour's sketch was rewritten, or past
+ * the 2,000 apps the station names at a time) is left without: unknown, never zero.
+ */
+export function withAccounts(apps: App[], byApp: Map<string, number> | undefined): App[] {
+  return apps.map((a) => {
+    const n = byApp?.get(a.domain);
+    return n === undefined ? a : { ...a, accounts: n };
+  });
 }
 
 /** Days into calendar months (UTC), oldest first. */
@@ -206,12 +257,27 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
   const env = deps.env ?? (() => process.env);
   const log = deps.log ?? ((fields) => console.warn(JSON.stringify({ src: 'weather-history', ...fields })));
 
+  /** ?host=: one host's days, for the page's host panel. */
+  async function hostDays(request: Request, asked: string): Promise<Response> {
+    const host = askedHost(asked);
+    if (!host) return json(request, 400, { error: 'host must be a hostname' }, 'no-store');
+    try {
+      return json(request, 200, { host: await readHost(supabase(env(), fetchImpl), host, now()) }, RANGES.day.cache);
+    } catch (error) {
+      log({ event: 'history_host_error', error: (error as Error)?.message ?? 'Error' });
+      return json(request, 503, { error: 'unavailable' }, 'no-store');
+    }
+  }
+
   async function GET(request: Request): Promise<Response> {
+    const asked = new URL(request.url).searchParams.get('host');
+    if (asked !== null) return hostDays(request, asked);
     const range = new URL(request.url).searchParams.get('range') ?? 'day';
     if (!isRange(range)) return json(request, 400, { error: 'range must be hour, day, week, month or year' }, 'no-store');
     const db = supabase(env(), fetchImpl);
     const at = now();
-    const { key: column, cache, lagMs, bucket, bursts: listBursts } = RANGES[range];
+    const { key: column, cache, bucket, bursts: listBursts } = RANGES[range];
+    const lagMs = lagFor(range, new URL(request.url).searchParams.get('vs'));
     let partial = false;
     /** An extra: asked alongside the points, and left out if it doesn't come. */
     const extra = async <T>(what: string, run: () => Promise<T>): Promise<T | undefined> => {
@@ -224,7 +290,7 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       }
     };
     const trends = extra('apps', async () => {
-      const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at));
+      const body = await db.rpc('atmosphere_app_trends', trendArgs(range, at, lagMs));
       const c = counts(body, ['seconds', 'prevSeconds'] as const);
       if (!c || !isRecord(body) || !Array.isArray(body.apps)) throw new Error('apps did not check out');
       const apps = body.apps.map(toApp).filter((a): a is App => a !== null).slice(0, TOP_APPS);
@@ -241,9 +307,10 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
       return { bucket, points };
     });
     const accounts = extra('accounts', () => {
-      const { since, until, prev_since, prev_until } = trendArgs(range, at);
+      const { since, until, prev_since, prev_until } = trendArgs(range, at, lagMs);
       return readAccounts(db, { since, until, prev_since, prev_until, period: bucket, maxApps: TOP_APPS, liveSince });
     });
+    const hosts = extra('hosts', () => readHosts(db, rangeStart(range, at), bucket, at));
     let rows: unknown;
     try {
       rows = await db.get(queryPath(range, at));
@@ -255,11 +322,12 @@ export function createHistoryHandlers(deps: HistoryDeps = {}) {
     const points = (rows as unknown[]).map((r) => toPoint(r, column)).filter((p): p is Point => p !== null);
     const shaped = range === 'year' ? byMonth(points) : points;
     const bursts = listBursts ? extra('bursts', () => Promise.all(burstHours(points).map((b) => withBurstApp(db, b)))) : undefined;
-    const [t, overTime, acct, burstList] = await Promise.all([trends, appsOverTime, accounts, bursts]);
+    const [t, overTime, acct, hostList, burstList] = await Promise.all([trends, appsOverTime, accounts, hosts, bursts]);
+    const apps = t ? withAccounts(t.apps, acct?.byApp) : undefined;
     return json(
       request,
       200,
-      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps: t?.apps, compare: t?.compare, appsOverTime: overTime, accounts: acct, bursts: burstList },
+      { range, points: shaped, total: sumPoints(points, new Date(at).toISOString()), apps, compare: t?.compare, appsOverTime: overTime, accounts: acct?.accounts, hosts: hostList, bursts: burstList },
       partial ? PARTIAL_CACHE : cache,
     );
   }

@@ -12,6 +12,8 @@
  *   BLOG_COMMENTS_DISABLED=1  kill switch: posts render without the comments section.
  *   BLOG_EMAIL_DISABLED=1  kill switch: no "subscribe by email" form (subscribe.ts). The form
  *                          only works for a publication with Leaflet's Newsletter Mode on.
+ *   DISPATCH_PREVIEW_ORIGIN  where /blog/preview/<token> reads Poe's dispatch drafts: the
+ *                          droplet's public address. Default https://hook.atpota.to.
  *   BLOG_HIDDEN_COMMENTS   comments to leave off the page: at:// URIs of pub.leaflet.comment
  *                          records, or DIDs to hide everything an account wrote. Separated
  *                          by commas, spaces or new lines. (Blocking an account as the
@@ -65,7 +67,11 @@ export interface BlogConfig {
   emailEnabled: boolean;
   /** Comment at:// URIs and author DIDs from BLOG_HIDDEN_COMMENTS. */
   hiddenComments: ReadonlySet<string>;
+  /** The droplet's origin, which holds the dispatch's drafts (DISPATCH_PREVIEW_ORIGIN). */
+  previewOrigin: string;
 }
+
+export const DEFAULT_PREVIEW_ORIGIN = 'https://hook.atpota.to';
 
 const DID_RE = /^did:(?:plc:[a-z2-7]{24}|web:[a-zA-Z0-9._:%-]+)$/;
 const PUBLICATION_URI_RE = /^at:\/\/(did:[a-z]+:[a-zA-Z0-9._:%-]+)\/site\.standard\.publication\/([A-Za-z0-9._:~-]{1,512})$/;
@@ -116,5 +122,6 @@ export function readBlogConfig(env: Env): BlogConfig {
     commentsEnabled: !flag(env.BLOG_COMMENTS_DISABLED),
     emailEnabled: !flag(env.BLOG_EMAIL_DISABLED),
     hiddenComments: parseHiddenComments(env.BLOG_HIDDEN_COMMENTS),
+    previewOrigin: normalizePublicationUrl(env.DISPATCH_PREVIEW_ORIGIN) ?? DEFAULT_PREVIEW_ORIGIN,
   };
 }

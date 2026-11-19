@@ -36,7 +36,10 @@ import {
 
 export const PHONE_QUERY = '(max-width: 639.98px)';
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+/** The quiet spell (no keys, wheel or touches) the nudge waits for. */
 const NUDGE_DELAY_MS = 4000;
+/** The nudge never shows before the page has been in front of the reader this long. */
+const NUDGE_MIN_VISIBLE_MS = 20_000;
 const NUDGE_AUTO_HIDE_MS = 25_000;
 const NUDGE_SCROLL_HIDE_PX = 40;
 const HOME_NUDGE_MIN_WIDTH = 420;
@@ -56,6 +59,7 @@ export interface PoeWidgetOptions {
   win?: Window & typeof globalThis;
   fetchImpl?: typeof fetch;
   nudgeDelayMs?: number;
+  nudgeMinVisibleMs?: number;
   /** Who the reader is on Bluesky. Defaults to the page's shared sign-in; null turns it off. */
   identity?: PoeIdentity | null;
 }
@@ -114,6 +118,7 @@ export class PoeWidget {
   readonly win: Window & typeof globalThis;
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly nudgeDelay: number;
+  private readonly nudgeMinVisible: number;
   private readonly page: string;
 
   // elements
@@ -175,6 +180,10 @@ export class PoeWidget {
   private pillPressed = false;
   private pointerDown = false;
   private nudgeScrollY = 0;
+  /** Time the page has spent in front of the reader before the current visible stretch. */
+  private visibleMs = 0;
+  /** When the current visible stretch began; null while the tab is hidden. */
+  private visibleSince: number | null = null;
   private saying: Saying | null = null;
 
   // timers
@@ -196,6 +205,8 @@ export class PoeWidget {
     this.win = options.win ?? (window as Window & typeof globalThis);
     this.fetchImpl = options.fetchImpl;
     this.nudgeDelay = options.nudgeDelayMs ?? NUDGE_DELAY_MS;
+    this.nudgeMinVisible = options.nudgeMinVisibleMs ?? NUDGE_MIN_VISIBLE_MS;
+    this.visibleSince = this.doc.visibilityState === 'hidden' ? null : Date.now();
     this.page = this.doc.body.dataset.page ?? '';
     this.ownsIdentity = options.identity === undefined;
     this.identity = options.identity === undefined ? new PoeIdentity(sharedAuth(this.win), { win: this.win, store: sessionStore() }) : options.identity;
@@ -456,6 +467,7 @@ export class PoeWidget {
       this.on(win, type, () => this.noteInput(), { passive: true, capture: true });
     }
     this.on(doc, 'visibilitychange', () => this.noteInput());
+    this.on(doc, 'visibilitychange', () => this.onVisibility());
 
     this.scheduleNudge();
     this.scheduleIdle();
@@ -1227,6 +1239,30 @@ export class PoeWidget {
     return (this.doc.body.dataset.poeNudge ?? '').trim();
   }
 
+  /** How long the page has been in front of the reader: time in a hidden tab doesn't count. */
+  private visibleFor(): number {
+    return this.visibleMs + (this.visibleSince === null ? 0 : Date.now() - this.visibleSince);
+  }
+
+  private onVisibility(): void {
+    const hidden = this.doc.visibilityState === 'hidden';
+    if (hidden && this.visibleSince !== null) {
+      this.visibleMs += Date.now() - this.visibleSince;
+      this.visibleSince = null;
+    } else if (!hidden && this.visibleSince === null) {
+      this.visibleSince = Date.now();
+    }
+    if (this.nudgeDone || this.nudging) return;
+    // Hidden, the clock stops and so does the wait; back in front, it picks up from there.
+    if (hidden) this.win.clearTimeout(this.nudgeTimer);
+    else this.scheduleNudge();
+  }
+
+  /**
+   * The nudge waits for a quiet spell (nudgeDelay since the last key, wheel or touch) and
+   * for the page to have been in front of the reader for nudgeMinVisible, whichever ends
+   * later, so arriving on a page straight from a link never gets a bubble in the face.
+   */
   private scheduleNudge(): void {
     if (this.nudgeDone || this.nudging) return;
     if (!this.nudgeText_() || wasNudged()) {
@@ -1234,7 +1270,9 @@ export class PoeWidget {
       return;
     }
     this.win.clearTimeout(this.nudgeTimer);
-    this.nudgeTimer = this.win.setTimeout(() => this.tryNudge(), this.nudgeDelay);
+    if (this.doc.visibilityState === 'hidden') return; // onVisibility picks it up again
+    const wait = Math.max(this.nudgeDelay, this.nudgeMinVisible - this.visibleFor());
+    this.nudgeTimer = this.win.setTimeout(() => this.tryNudge(), wait);
   }
 
   private noteActivity(): void {
@@ -1245,6 +1283,12 @@ export class PoeWidget {
     if (this.nudgeDone || this.nudging) return;
     if (this.isOpen) {
       this.nudgeDone = true;
+      return;
+    }
+    if (this.doc.visibilityState === 'hidden') return; // onVisibility starts the wait again
+    const left = this.nudgeMinVisible - this.visibleFor();
+    if (left > 0) {
+      this.nudgeTimer = this.win.setTimeout(() => this.tryNudge(), left);
       return;
     }
     if (this.page === 'home' && this.win.innerWidth < HOME_NUDGE_MIN_WIDTH) {

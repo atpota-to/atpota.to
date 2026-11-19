@@ -6,7 +6,7 @@ import { addEvent, emptyTally } from '../src/atmosphere.js';
 import { registerOf } from '../src/hll.js';
 
 const DID = 'did:plc:ewvi7nxzyoun6zhxrhs64oiz';
-const commit = (operation, collection, did = DID) => ({ did, time_us: 1, kind: 'commit', commit: { operation, collection, rkey: 'x' } });
+const commit = (operation, collection, did = DID, record) => ({ did, time_us: 1, kind: 'commit', commit: { operation, collection, rkey: 'x', ...(record ? { record } : {}) } });
 
 test('every commit with a lexicon counts its account, for Bluesky or for its app', () => {
   assert.deepEqual(accountOf(commit('create', 'app.bsky.feed.like')), { register: registerOf(DID), app: null });
@@ -26,6 +26,31 @@ test('identity and account events, odd collections and odd DIDs count nobody', (
   assert.equal(accountOf(commit('create', 'app.bsky.feed.post', 7)), null);
   assert.equal(accountOf(null), null);
   assert.ok(accountOf(commit('create', 'app.bsky.feed.post', 'did:web:example.com')));
+});
+
+test("a Tangled repository isn't an account: its records count for the editor they name, or for nobody", () => {
+  const REPO = 'did:plc:227fpzedbgwohp5frqwiqbtl'; // a repository's own identity, on knot1.tangled.sh
+  const PERSON = 'did:plc:73xkqje76lj5tostbsqa74b7';
+  const tangled = (register) => ({ register, app: 'tangled.org' });
+  // what a knot writes for people (as Jetstream had them on 2026-11-16)
+  assert.deepEqual(accountOf(commit('create', 'org.tangled.feed.comment', REPO, { body: {}, 'x-tngl-editor': PERSON })), tangled(registerOf(PERSON)));
+  assert.deepEqual(accountOf(commit('update', 'org.tangled.track.ticket', REPO, { 'x-tngl-editor': PERSON })), tangled(registerOf(PERSON)));
+  assert.deepEqual(accountOf(commit('create', 'org.tangled.repo.manifest', REPO, { declaration: { owner: PERSON }, 'x-tngl-editor': PERSON })), tangled(registerOf(PERSON)));
+  // the repository's own records count for nobody
+  assert.equal(accountOf(commit('update', 'org.tangled.git.refs', REPO, { defaultBranch: 'main', refs: {} })), null);
+  assert.equal(accountOf(commit('create', 'org.tangled.repo.manifest', REPO, { declaration: { owner: PERSON } })), null);
+  assert.equal(accountOf(commit('delete', 'org.tangled.git.refs', REPO)), null);
+  // an editor that isn't a DID is no editor
+  assert.equal(accountOf(commit('update', 'org.tangled.git.refs', REPO, { 'x-tngl-editor': 'alice' })), null);
+  assert.deepEqual(accountOf(commit('create', 'org.tangled.feed.comment', REPO, { 'x-tngl-editor': 42 })), tangled(registerOf(REPO)));
+  // a record naming no editor, or a deletion (no record), is the writer's
+  assert.deepEqual(accountOf(commit('create', 'org.tangled.graph.collaborator', REPO, { subject: PERSON })), tangled(registerOf(REPO)));
+  assert.deepEqual(accountOf(commit('delete', 'org.tangled.feed.comment', REPO)), tangled(registerOf(REPO)));
+  // people writing from their own PDS are themselves, as ever
+  assert.deepEqual(accountOf(commit('create', 'org.tangled.feed.star', PERSON, { subject: 'at://x' })), tangled(registerOf(PERSON)));
+  assert.deepEqual(accountOf(commit('update', 'sh.tangled.repo', PERSON)), { register: registerOf(PERSON), app: 'tangled.sh' });
+  // and only Tangled's collections are read this way
+  assert.deepEqual(accountOf(commit('create', 'com.example.git.refs', REPO, { 'x-tngl-editor': PERSON })), { register: registerOf(REPO), app: 'example.com' });
 });
 
 test('someone active on Bluesky and elsewhere is one active account, counted on both sides', () => {

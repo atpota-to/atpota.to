@@ -36,6 +36,13 @@ export const publicationRecord = (url = 'https://atpota.to/blog') => ({
   value: { $type: 'site.standard.publication', url, name: "poe's atmosphere dispatch" },
 });
 
+/** The Bluesky accounts the fake AppView knows, by handle. */
+export const ACCOUNTS = {
+  'tangled.org': { did: 'did:plc:wshs7t2adsemcrrd4snkeqli', displayName: 'Tangled' },
+  'mu.social': { did: 'did:plc:fivmz34azxgjafrk6ogns7k5', displayName: 'mu' },
+  'nameless.example': { did: 'did:plc:nameless00000000000000000', displayName: null },
+};
+
 let seq = 0;
 /**
  * An in-memory PDS and web, standing in for every network call announce makes.
@@ -45,8 +52,8 @@ let seq = 0;
 export function network(rkey, { value = documentValue(rkey), page, publisher = true, publication = publicationRecord() } = {}) {
   const s = {
     docs: new Map([[rkey, { uri: docUri(rkey), cid: `bafydoc${++seq}`, value }]]),
-    posts: new Map(), created: [], puts: [], uploads: [], images: [], pageUrls: [],
-    publisher, failCreateAfterWrite: false, failPut: null, beforePut: null,
+    posts: new Map(), created: [], puts: [], uploads: [], images: [], pageUrls: [], lookups: [],
+    publisher, failCreateAfterWrite: false, failPut: null, beforePut: null, failLookup: null,
   };
   const clone = (x) => (x ? structuredClone(x) : null);
   const deps = {
@@ -83,6 +90,11 @@ export function network(rkey, { value = documentValue(rkey), page, publisher = t
       return page ? page(s.pageUrls.length) : { status: 200, html: pageFor(rkey) };
     },
     fetchImage: async (url) => { s.images.push(url); return { bytes: Buffer.from('png!'), mimeType: 'image/png' }; },
+    resolveMentions: async (handles) => {
+      s.lookups.push(handles);
+      if (s.failLookup) throw new Error(s.failLookup);
+      return new Map(handles.filter((h) => ACCOUNTS[h]).map((h) => [h, { handle: h, ...ACCOUNTS[h] }]));
+    },
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   };
   return { s, deps };
