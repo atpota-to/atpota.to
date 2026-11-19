@@ -128,6 +128,23 @@ test('rewriting a minute replaces its app rows, then re-sums the roll-up', async
   ]);
 });
 
+test('minutes whose app rows fail to write are deleted again, so a rerun writes them whole', async () => {
+  const calls = [];
+  const fetch = async (url, init) => {
+    const call = `${init.method} ${url.replace('https://db.example/rest/v1/', '')}`;
+    calls.push(call);
+    return call.startsWith('POST atmosphere_minute_app') ? new Response('bad domain', { status: 400 }) : new Response(null, { status: 204 });
+  };
+  const db = supabaseReplace({ url: 'https://db.example', key: 'k', fetch });
+  await assert.rejects(db.minute({ minute: { minute: '2026-10-18T16:00:00.000Z' }, apps: [{ minute: '2026-10-18T16:00:00.000Z', domain: 'tangled.sh' }] }), /HTTP 400/);
+  assert.deepEqual(calls, [
+    'POST atmosphere_minute?on_conflict=minute',
+    'DELETE atmosphere_minute_app?minute=in.(2026-10-18T16%3A00%3A00.000Z)',
+    'POST atmosphere_minute_app?on_conflict=minute,domain',
+    'DELETE atmosphere_minute?minute=in.(2026-10-18T16%3A00%3A00.000Z)',
+  ]);
+});
+
 test('a replayed minute carries its active accounts, so rewriting its app rows keeps them', async () => {
   const { minuteRows } = await import('../src/writer.js');
   const msgs = [];
