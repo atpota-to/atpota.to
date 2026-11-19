@@ -87,13 +87,15 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
     }).observe(period);
   }
 
+  // closed, the panel is still there to fade and settle into (weather.css), but inert
+  const isOpen = () => dock.dataset.open !== undefined;
   const open = (yes: boolean) => {
-    panel.hidden = !yes;
+    panel.toggleAttribute('inert', !yes);
     strip.setAttribute('aria-expanded', String(yes));
     if (yes) dock.dataset.open = '';
     else delete dock.dataset.open;
   };
-  strip.addEventListener('click', () => open(panel.hidden));
+  strip.addEventListener('click', () => open(!isOpen()));
   // the header's period ("the last 24 hours") opens it too, on the window that's showing
   for (const opener of report.querySelectorAll<HTMLElement>('[data-lens-open]')) {
     opener.addEventListener('click', () => {
@@ -102,7 +104,7 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
     });
   }
   dock.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || panel.hidden) return;
+    if (event.key !== 'Escape' || !isOpen()) return;
     open(false);
     strip.focus();
   });
@@ -110,7 +112,7 @@ export function initLensDock(report: HTMLElement, lens: Lens): void {
   dock.ownerDocument.addEventListener(
     'pointerdown',
     (event) => {
-      if (!panel.hidden && !dock.contains(event.target as Node)) open(false);
+      if (isOpen() && !dock.contains(event.target as Node)) open(false);
     },
     { passive: true },
   );
