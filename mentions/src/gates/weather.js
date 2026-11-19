@@ -198,6 +198,14 @@ export function isSkip(text) {
 // (`_lexicon.<authority>` names its DID, for the collections the station heard),
 // be written by enough accounts that it isn't one person's project, have a name
 // and no pronouns, and carry no labels.
+//
+// Some apps publish their lexicons from a second account of their own: Germ's
+// `_lexicon.germnetwork.com` names lexicon.germnetwork.com, not germnetwork.com.
+// That claim counts as the app's when the record is `_lexicon.<the app's domain>`
+// itself, which only whoever holds the domain can write, and the account it names
+// has a handle under that domain, which only they can hand out. A subdomain's record
+// can be somebody else's (a shared host lets anybody run `you.shared.host`), so for
+// a namespace below the app's domain only the app's own account counts, as before.
 
 /** The domain an NSID's lexicon authority answers on: its name dropped and the rest reversed ("org.tangled.feed.star" is feed.tangled.org). */
 export function lexiconAuthority(nsid) {
@@ -208,6 +216,10 @@ export function lexiconAuthority(nsid) {
 /** How many accounts a weather post may tag (weatherMaxTags): 0 when tagging is off. */
 export const maxTags = (g) => (Number.isInteger(g.weatherMaxTags) && g.weatherMaxTags > 0 ? g.weatherMaxTags : 0);
 
+/** Whether a handle is a subdomain of `domain` ("lexicon.germnetwork.com" is under germnetwork.com; germnetwork.com itself isn't). */
+export const handleUnder = (handle, domain) =>
+  typeof handle === 'string' && Boolean(domain) && handle.toLowerCase().endsWith(`.${domain}`);
+
 /**
  * Why an app's account can't be tagged in a weather post, or null when it can.
  *
@@ -216,7 +228,9 @@ export const maxTags = (g) => (Number.isInteger(g.weatherMaxTags) && g.weatherMa
  *                displayName, pronouns, labels }, or null when there is none
  *   authorities  Map of each of the app's collections to the DIDs its
  *                `_lexicon` record names ([] for none), or null when the lookup failed
- *   ctx          { gates, botDid, isDenied(did), taggedRecently(did) }
+ *   ctx          { gates, botDid, isDenied(did), taggedRecently(did), handleOf(did) }:
+ *                handleOf is the AppView's handle for a DID a `_lexicon` record names
+ *                (null when it has none), for apps that publish from a second account
  */
 export function appAccountProblem(app, profile, authorities, ctx) {
   // One person writing an app's records is somebody's project, whatever it's called.
@@ -226,10 +240,13 @@ export function appAccountProblem(app, profile, authorities, ctx) {
   // People say their pronouns on their profile; an app's account doesn't.
   if (profile.pronouns) return 'pronouns';
   if (profile.labels?.length) return 'labeled';
-  const claims = (app.collections ?? []).map((c) => authorities?.get(c));
-  if (!claims.length || claims.some((dids) => dids == null)) return 'lexicon_unknown';
-  if (!claims.some((dids) => dids.length)) return 'no_lexicon';
-  if (claims.some((dids) => dids.length && (dids.length !== 1 || dids[0] !== profile.did))) return 'not_lexicon_authority';
+  const claims = (app.collections ?? []).map((c) => [c, authorities?.get(c)]);
+  if (!claims.length || claims.some(([, dids]) => dids == null)) return 'lexicon_unknown';
+  if (!claims.some(([, dids]) => dids.length)) return 'no_lexicon';
+  // The app's own account, or (in the app's own zone only) a second account under its domain.
+  const appsClaim = (collection, did) => did === profile.did
+    || (lexiconAuthority(collection) === app.domain && handleUnder(ctx.handleOf?.(did), app.domain));
+  if (claims.some(([c, dids]) => dids.length && (dids.length !== 1 || !appsClaim(c, dids[0])))) return 'not_lexicon_authority';
   if (profile.did === ctx.botDid) return 'self';
   if (ctx.isDenied(profile.did)) return 'opted_out';
   if (ctx.taggedRecently(profile.did)) return 'tagged_recently';

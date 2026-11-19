@@ -176,7 +176,8 @@ export const GATE_DEFAULTS = {
   weatherMixedMinIndex: 6,
   // A weather post may tag the accounts of the apps it names, up to this many, and
   // only accounts that pass every check in gates/weather.js appAccountProblem (the
-  // app's own handle, the namespace's lexicon authority, enough accounts writing it,
+  // app's own handle, the namespace's lexicon authority (it, or in the app's own zone
+  // a second account under its domain), enough accounts writing it,
   // no pronouns, no labels). 0 turns tagging off.
   weatherMaxTags: 2,
   // An account a weather post tagged isn't offered again for this many days, so a
