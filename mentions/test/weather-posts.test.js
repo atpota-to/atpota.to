@@ -243,7 +243,7 @@ function fakeWorld({
   atmosphereBody = atmosphere(), almanacBodyValue = almanacBody({ newApps: [] }), agentStatus = 202,
   historyBody = null, profiles = [], lexicon = {},
 } = {}) {
-  const w = { dispatched: [], posts: [], uploads: [], fetched: [], cards: [], cardDown: false, profileLookups: [], dnsLookups: [] };
+  const w = { dispatched: [], posts: [], uploads: [], fetched: [], cards: [], cardDown: false, profileLookups: [], dnsLookups: [], didLookups: [] };
   w.deps = {
     fetcher: async (url, init) => {
       const u = String(url);
@@ -287,6 +287,10 @@ function fakeWorld({
       const dids = lexicon[authority];
       if (dids instanceof Error) throw dids;
       return dids ?? [];
+    },
+    handlesByDid: async (dids) => {
+      w.didLookups.push(dids);
+      return new Map(profiles.filter((p) => dids.includes(p.did)).map((p) => [p.did, p.handle]));
     },
   };
   return w;
@@ -660,6 +664,10 @@ const COSMIK = { handle: 'cosmik.network', did: 'did:plc:cosmiknetworkcosmik', d
 const TANGLED = { handle: 'tangled.org', did: 'did:plc:tangledorgtangledor', displayName: 'Tangled', pronouns: false, labels: [] };
 // A person whose own domain is their handle, and whose own site writes records under it.
 const PERSON = { handle: 'alice.example', did: 'did:plc:aliceexamplealicee', displayName: 'Alice', pronouns: true, labels: [] };
+// An app that publishes its lexicons from a second account, as Germ does: on 2026-11-18
+// `_lexicon.germnetwork.com` named lexicon.germnetwork.com, not germnetwork.com.
+const GERM = { handle: 'germnetwork.com', did: 'did:plc:germnetworkgermnetw', displayName: 'Germ Network', pronouns: false, labels: [] };
+const GERM_LEXICON = { handle: 'lexicon.germnetwork.com', did: 'did:plc:lexicongermnetworkl', displayName: null, pronouns: false, labels: [] };
 
 /** The last day's busiest apps, the shape /api/weather-history?range=day sent on 2026-11-12, trimmed. */
 const dayHistory = () => ({
@@ -721,6 +729,39 @@ test("an app's account can be tagged only when it's the app's own, by every chec
   assert.equal(problem({ did: POE }, claimed([POE])), 'self');
   assert.equal(problem({}, claimed([COSMIK.did]), { ...ctx, isDenied: (d) => d === COSMIK.did }), 'opted_out');
   assert.equal(problem({}, claimed([COSMIK.did]), { ...ctx, taggedRecently: () => true }), 'tagged_recently');
+});
+
+test("an app whose lexicons come from a second account under its domain can be tagged, from its own zone only", () => {
+  const app = { domain: 'germnetwork.com', accounts: 179, collections: ['com.germnetwork.declaration', 'com.germnetwork.keypackage'] };
+  const claimed = (dids) => new Map(app.collections.map((c) => [c, dids]));
+  const handles = new Map([[GERM_LEXICON.did, GERM_LEXICON.handle]]);
+  const ctx = { gates: g, botDid: POE, isDenied: () => false, taggedRecently: () => false, handleOf: (did) => handles.get(did) ?? null };
+  const problem = (authorities, c = ctx, a = app, profile = GERM) => appAccountProblem(a, profile, authorities, c);
+
+  assert.equal(problem(claimed([GERM_LEXICON.did])), null, '_lexicon.germnetwork.com names lexicon.germnetwork.com');
+  assert.equal(problem(new Map([['com.germnetwork.declaration', [GERM_LEXICON.did]], ['com.germnetwork.keypackage', [GERM.did]]])), null,
+    'some by each');
+  assert.equal(problem(claimed([GERM_LEXICON.did]), { ...ctx, handleOf: () => null }), 'not_lexicon_authority', 'no handle for the DID');
+  assert.equal(problem(claimed([GERM_LEXICON.did]), { ...ctx, handleOf: undefined }), 'not_lexicon_authority');
+  for (const handle of ['lexicon.germnetwork.com.evil.example', 'evilgermnetwork.com', 'germnetwork.com.evil', 'germnetwork.com']) {
+    assert.equal(problem(claimed([GERM_LEXICON.did]), { ...ctx, handleOf: () => handle }), 'not_lexicon_authority', handle);
+  }
+  assert.equal(problem(claimed([GERM_LEXICON.did, GERM.did])), 'not_lexicon_authority', 'two DIDs for one namespace, as before');
+  assert.equal(problem(claimed([GERM_LEXICON.did]), ctx, { ...app, accounts: 1 }), 'few_accounts', 'every other check still applies');
+  assert.equal(problem(claimed([GERM_LEXICON.did]), ctx, app, { ...GERM, pronouns: true }), 'pronouns');
+
+  // Below the app's domain the record can be somebody else's: a shared host lets anybody
+  // run you.shared.host, write records as host.shared.you.*, and name themselves there.
+  const shared = { domain: 'shared.host', accounts: 40, collections: ['host.shared.you.thing'] };
+  const host = { handle: 'shared.host', did: 'did:plc:sharedhostsharedhos', displayName: 'Shared Host', pronouns: false, labels: [] };
+  const you = 'did:plc:youyouyouyouyouyouy';
+  assert.equal(problem(new Map([['host.shared.you.thing', [you]]]), { ...ctx, handleOf: () => 'you.shared.host' }, shared, host),
+    'not_lexicon_authority');
+  // ...so for tangled.org's feed.tangled.org only tangled.org itself counts, as before.
+  const tangled = { domain: 'tangled.org', accounts: 979, collections: ['org.tangled.feed.star'] };
+  assert.equal(problem(new Map([['org.tangled.feed.star', ['did:plc:lexicontangledorglex']]]),
+    { ...ctx, handleOf: () => 'lexicon.tangled.org' }, tangled, TANGLED), 'not_lexicon_authority');
+  assert.equal(problem(new Map([['org.tangled.feed.star', [TANGLED.did]]]), ctx, tangled, TANGLED), null);
 });
 
 test('a weather draft may tag the accounts it was offered, up to weatherMaxTags, and nobody else', () => {
@@ -866,4 +907,36 @@ test('an account that opts out between the ask and the post is not tagged', asyn
   } finally {
     db.prepare('DELETE FROM denylist').run();
   }
+});
+
+test('an app whose lexicons come from a second account is offered after one handle lookup, and not when it fails', async () => {
+  clear();
+  db.prepare('DELETE FROM denylist').run();
+  const history = {
+    range: 'day',
+    apps: [
+      { domain: 'germnetwork.com', creates: 1790, prevCreates: 200, accounts: 179,
+        collections: ['com.germnetwork.declaration', 'com.germnetwork.keypackage'] },
+      dayHistory().apps[0],   // cosmik.network, whose account publishes its own
+    ],
+  };
+  const lexicon = { ...LEXICON, 'germnetwork.com': [GERM_LEXICON.did] };
+  const profiles = [COSMIK, GERM, GERM_LEXICON];
+
+  const w = fakeWorld({ historyBody: history, profiles, lexicon });
+  const offered = await appAccountsFor({}, { nowMs: NOW, deps: w.deps, g });
+  assert.deepEqual(offered, [
+    { handle: 'germnetwork.com', did: GERM.did, displayName: 'Germ Network' },
+    { handle: 'cosmik.network', did: COSMIK.did, displayName: 'Cosmik Network' },
+  ], "the app's own account is offered, never the lexicon one");
+  assert.deepEqual(w.didLookups, [[GERM_LEXICON.did]], 'one lookup, for the second account only');
+
+  const broken = fakeWorld({ historyBody: history, profiles, lexicon });
+  broken.deps.handlesByDid = async () => { throw new Error('the appview answered 502'); };
+  assert.deepEqual((await appAccountsFor({}, { nowMs: NOW, deps: broken.deps, g })).map((a) => a.handle), ['cosmik.network']);
+
+  // Apps whose accounts publish their own lexicons need no lookup at all.
+  const plain = fakeWorld({ historyBody: dayHistory(), profiles: [COSMIK, TANGLED], lexicon: LEXICON });
+  await appAccountsFor({}, { nowMs: NOW, deps: plain.deps, g });
+  assert.deepEqual(plain.didLookups, []);
 });

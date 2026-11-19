@@ -373,8 +373,7 @@ export async function appAccountsFor(facts, { nowMs = Date.now(), deps = default
     const apps = appsNamed(facts, history).filter((a) => enoughAccounts(a, g) && a.collections.length).slice(0, 25);
     if (!apps.length) return [];
     const profiles = await deps.profilesByHandle(apps.map((a) => a.domain));
-    const ctx = { gates: g, botDid: config.botDid, isDenied, taggedRecently: (did) => taggedRecently(did, nowMs, g) };
-    const checked = await Promise.all(apps.map(async (app) => {
+    const looked = await Promise.all(apps.map(async (app) => {
       const profile = profiles.get(app.domain) ?? null;
       // DNS only for an app that has an account by its name. A lookup that fails is
       // null, and an app whose namespace can't be read isn't offered.
@@ -382,8 +381,28 @@ export async function appAccountsFor(facts, { nowMs = Date.now(), deps = default
         ? new Map(await Promise.all(app.collections.map(async (c) =>
           [c, await deps.lexiconDids(lexiconAuthority(c)).catch(() => null)])))
         : null;
-      return { app, profile, problem: appAccountProblem(app, profile, authorities, ctx) };
+      return { app, profile, authorities };
     }));
+    // An app that publishes its lexicons from a second account (lexicon.germnetwork.com
+    // for germnetwork.com): that account's handle, for the DIDs named in the app's own
+    // zone only, the one place appAccountProblem lets a second account count. Usually
+    // nobody, so no call; a failed one leaves those apps not offered, as before.
+    const seconds = [...new Set(looked.flatMap(({ app, profile, authorities }) => [...(authorities ?? [])]
+      .filter(([c]) => lexiconAuthority(c) === app.domain)
+      .flatMap(([, dids]) => dids ?? [])
+      .filter((did) => did !== profile.did)))].slice(0, 25);
+    const handles = seconds.length
+      ? await deps.handlesByDid(seconds).catch((err) => {
+        logger.warn('lexicon accounts not looked up; apps that publish from one are not offered', { error: err.message });
+        return new Map();
+      })
+      : new Map();
+    const ctx = {
+      gates: g, botDid: config.botDid, isDenied, taggedRecently: (did) => taggedRecently(did, nowMs, g),
+      handleOf: (did) => handles.get(did) ?? null,
+    };
+    const checked = looked.map(({ app, profile, authorities }) =>
+      ({ app, profile, problem: appAccountProblem(app, profile, authorities, ctx) }));
     for (const { app, profile, problem } of checked) {
       if (problem && profile) logger.debug('app account not offered for tagging', { app: app.domain, problem });
     }
@@ -449,6 +468,8 @@ export const defaultDeps = {
   // the apps' own accounts (appAccountsFor)
   profilesByHandle: (handles) => profilesByHandle(handles),
   lexiconDids,
+  // getProfiles takes DIDs as well as handles, and leaves out a handle that doesn't verify
+  handlesByDid: async (dids) => new Map([...(await profilesByHandle(dids)).values()].map((p) => [p.did, p.handle])),
 };
 
 // --- the card as the moment saw it ------------------------------------------------

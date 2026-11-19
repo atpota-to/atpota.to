@@ -1045,7 +1045,15 @@ accounts (`/api/weather-history?range=day`). An app's account is offered only wh
   the app's collections the station heard whose `_lexicon.<authority>` TXT record
   (DNS, the [lexicon resolution](https://atproto.com/specs/lexicon) method) names a
   DID names this one, and at least one does. A domain anybody can write records
-  under, a shared host (`web.app`) or a namespace somebody else claimed fails here;
+  under, a shared host (`web.app`) or a namespace somebody else claimed fails here.
+  One exception: an app that publishes its lexicons from a second account (Germ's
+  `_lexicon.germnetwork.com` names lexicon.germnetwork.com) passes when that record
+  is `_lexicon.<the app's domain>` itself and the account it names has a handle
+  under the domain (the AppView's, so verified both ways; one more `getProfiles`
+  call, only when some app needs it). Only whoever holds the domain can write that
+  record or hand out that handle. A namespace below the domain (`feed.tangled.org`)
+  still counts only the app's own account, because a subdomain's record can be
+  somebody else's;
 - it has a display name, no pronouns (people set them, apps don't) and no labels;
 - it isn't Poe, isn't on the denylist, and no weather post tagged it in the last
   `weatherTagCooldownDays` (7), so a busy app isn't notified every day.

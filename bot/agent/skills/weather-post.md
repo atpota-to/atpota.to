@@ -219,8 +219,9 @@ never standing in for a word a screen reader user would need.
 When your post names an app, you can tag the app's own account, so it gets a
 notification and its people see what the sky said about them. The moment's
 `tagging.accounts` lists the ones you may tag: the station has already checked that
-each one's handle is the app's own name, that it's the account that published the
-app's lexicons, that a crowd writes its records, and that it isn't labeled. Nobody
+each one's handle is the app's own name, that the app's lexicons were published by it
+or by another account under its domain (Germ's come from lexicon.germnetwork.com),
+that a crowd writes its records, and that it isn't labeled. Nobody
 else can be tagged: an @handle that isn't on that list stops the post, so name every
 other app without the @ (`tangled.org`, not `@tangled.org`). No `tagging` in the
 moment means nobody to tag today.
