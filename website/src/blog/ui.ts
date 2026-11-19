@@ -15,8 +15,10 @@
  * each gets an "also subscribe with bluesky" box (ticked): submitting writes the
  * subscription record first, then sends the form on to Leaflet, so one submit does both.
  * With the box ticked the email is optional, and an empty one subscribes on Bluesky alone.
- * The "subscribe with bluesky" link under the form would say the same thing as the box, so
- * it steps aside meanwhile.
+ * A signed-out reader gets "sign in to subscribe with bluesky" in that spot instead, so the
+ * form itself says there's another way and that it starts with signing in. The "subscribe
+ * with bluesky" link under the form would say the same thing as either, so it steps aside
+ * until the reader has subscribed there (then it says so, and undoes it).
  *
  * Who's signed in, and signing out, are the header's (src/scripts/account.ts): these pages
  * only say what just happened, in their notice lines.
@@ -114,6 +116,7 @@ export const COPY = {
   } satisfies Record<BlogIntent, string>,
   email: {
     also: (handle: string | null) => (handle ? `also subscribe with bluesky as @${handle}` : 'also subscribe with bluesky'),
+    signIn: 'sign in to subscribe with bluesky',
     failed: "couldn't save the bluesky subscription. try again, or untick the box to subscribe by email only.",
   },
   notices: {
@@ -262,12 +265,12 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
 
   function renderSubscribe(): void {
     const on = Boolean(session && subscriptions?.length);
-    // The form's "also subscribe with bluesky" box (renderEmailExtras) stands in for the button
-    // under it until the reader has subscribed, and the button stays out of the way while the
-    // session or that state loads, so it doesn't show for a moment and go.
-    const boxed = starting || Boolean(session && !subscriptions?.length);
+    // The form's own line (renderEmailExtras: "sign in to subscribe with bluesky", or the
+    // "also subscribe with bluesky" box) stands in for the button under it until the reader
+    // has subscribed, and the button stays out of the way while the session or that state
+    // loads, so it doesn't show for a moment and go.
     for (const button of subscribeButtons) {
-      button.hidden = boxed && underForm.has(button);
+      button.hidden = !on && underForm.has(button);
       // "or subscribed on bluesky" reads oddly; "or follow poe" is fine.
       const or = underForm.get(button);
       if (or) or.hidden = on && !button.hidden;
@@ -394,6 +397,8 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     form: HTMLFormElement;
     input: HTMLInputElement | null;
     send: HTMLButtonElement | null;
+    /** "sign in to subscribe with bluesky", for a signed-out reader. */
+    join: HTMLButtonElement;
     also: HTMLLabelElement;
     box: HTMLInputElement;
     alsoText: HTMLSpanElement;
@@ -406,14 +411,17 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
     const alsoText = el(doc, 'span', {});
     const also = el(doc, 'label', { class: 'blog-email__also', hidden: '' });
     also.append(box, alsoText);
+    const join = el(doc, 'button', { type: 'button', class: 'blog-email__join', hidden: '' }, COPY.email.signIn);
+    join.addEventListener('click', () => openSignIn('subscribe'));
     const error = el(doc, 'p', { class: 'blog-email__error', role: 'alert', hidden: '' });
     const row = form.querySelector('.blog-email__row');
-    if (row) row.after(also, error);
-    else form.append(also, error);
+    if (row) row.after(join, also, error);
+    else form.append(join, also, error);
     const x: EmailExtras = {
       form,
       input: form.querySelector<HTMLInputElement>('input[type="email"]'),
       send: form.querySelector<HTMLButtonElement>('button[type="submit"]'),
+      join,
       also,
       box,
       alsoText,
@@ -425,12 +433,16 @@ export async function mountBlog(opts: BlogOptions = {}): Promise<void> {
   });
 
   /**
-   * The "also subscribe with bluesky" box shows only while it would add something. While
-   * it's ticked the email is optional: an empty one means Bluesky alone.
+   * Signed out, the form offers a sign-in to subscribe with Bluesky (not while a saved
+   * session may still be on its way). Signed in, the "also subscribe with bluesky" box shows
+   * only while it would add something. While it's ticked the email is optional: an empty one
+   * means Bluesky alone.
    */
   function renderEmailExtras(): void {
+    const invite = !starting && !session;
     const offer = Boolean(session && me && subscriptions && !subscriptions.length);
     for (const x of emailExtras) {
+      x.join.hidden = !invite;
       x.also.hidden = !offer;
       if (offer && me) x.alsoText.textContent = COPY.email.also(me.handle.startsWith('did:') ? null : me.handle);
       if (x.input) x.input.required = !(offer && x.box.checked);
