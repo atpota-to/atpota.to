@@ -81,9 +81,9 @@ export const TOPICS: readonly Topic[] = [
     lede: "the servers that hold everyone's accounts: how many accounts live off bluesky's own, across how many independent hosts, and which are growing.",
     pageTitle: 'pds hosts and independence · the atmosphere weather report · atpotato',
     description:
-      "where the atmosphere's accounts live: how many are on independent pds hosts rather than bluesky's own, how spread out they are (hosting diversity), the biggest, newest and fastest growing hosts, and a census of every host the relay knows.",
+      "where the atmosphere's accounts live: how many are on independent pds hosts rather than bluesky's own, how spread out they are (hosting diversity), the liveliest, biggest, newest and fastest growing hosts, and a census of every host the relay knows.",
     card: 'hosts',
-    alt: "the share of accounts living on independent pds hosts as it was when this was shared, the hosting diversity on its scale, and the biggest independent hosts by accounts.",
+    alt: "the share of accounts living on independent pds hosts as it was when this was shared, the hosting diversity on its scale, and the liveliest independent hosts by accounts that wrote something.",
     lens: ['window'],
     nudge: 'psst. ask me what a pds is (◕‿◕)',
   },

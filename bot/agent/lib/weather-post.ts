@@ -49,9 +49,9 @@ export const WEATHER_PAGES = {
   today: "today's high and low against usual, apps new today, the forecast for the next 12 hours, and the busiest times of the week. " +
     "Its picture is the last hour against usual, today's quietest and busiest minute since midnight utc, today's new records and " +
     "the share from other apps, and how many apps were new in the last 24 hours",
-  hosts: "where accounts live: independent pds hosts against bluesky's own, the hosting diversity, the biggest, newest and fastest growing hosts. " +
-    "Its picture is the share of accounts on independent hosts, the hosting diversity, and the five biggest independent hosts " +
-    "by the accounts they hold, not the fastest growing",
+  hosts: "where accounts live: independent pds hosts against bluesky's own, the hosting diversity, the liveliest, biggest, newest and fastest growing hosts. " +
+    "Its picture is the share of accounts on independent hosts, the hosting diversity, and the five liveliest independent hosts " +
+    "by accounts that wrote something yesterday, not the biggest or the fastest growing",
   migration: "accounts moving house (out of bluesky's hosts, back in, or host to host, and where they went), sign-ups and air quality. " +
     "Its picture is the last 7 days: each day's moves out of bluesky (today's so far), the week's moves back in and host to host, " +
     "and where the week's movers out of bluesky went, so a post about today's moves says they're today's",

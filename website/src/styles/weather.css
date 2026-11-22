@@ -2045,9 +2045,9 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   }
 }
 
-/* New, growing and liveliest hosts: three across on wide screens (two while the liveliest wait for a day). */
+/* Biggest, new and growing hosts: three across on wide screens (two while the biggest wait for a week of activity). */
 @media (min-width: 1100px) {
-  .weather-hosts__cols--three:has(> [data-h-lively-wrap]:not([hidden])) {
+  .weather-hosts__cols--three:has(> [data-h-biggest-wrap]:not([hidden])) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

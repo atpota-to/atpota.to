@@ -37,6 +37,7 @@ import {
   hostingPosition,
   isCard,
   LEVEL_TEXT,
+  livelyWhen,
   livingOf,
   MAX_CLOUDS,
   seasonOf,
@@ -128,6 +129,7 @@ function hostHistory(): HostHistory {
     ],
     activeDaily: [],
     liveliest: null,
+    biggest: [],
   };
 }
 
@@ -327,16 +329,21 @@ describe('og weather: the cards', () => {
     }
   });
 
-  it('shows where the atmosphere lives, from the station\'s census', async () => {
+  it('shows where the atmosphere lives, from the station\'s census, and the liveliest hosts', async () => {
     const art = await cardArt();
-    const withHosts = data({ now: fromStation({ ...STATION, hosts: HOSTS }) });
+    const hosts = { ...hostHistory(), liveliest: { day: '2026-10-20', soFar: false, hosts: [{ hostname: 'eurosky.social', active: 9348, accounts: 38177 }, { hostname: 'blacksky.app', active: 2316, accounts: 31220 }] } };
+    const withHosts = data({ now: fromStation({ ...STATION, hosts: { ...HOSTS, top: [{ hostname: 'goodmkt.id', accounts: 60000 }, ...HOSTS.top] } }), day: { ...data().day!, hosts } });
     const words = texts(drawCard('hosts', withHosts, art));
     expect(words).toEqual(expect.arrayContaining([
       "accounts living off bluesky's servers", '1.51%', 'on 1,799 independent pds hosts, of 1,888 active',
-      'the biggest independent hosts', 'pds.wsocial.network', '50,662', 'atpota.to/weather/hosts',
+      'the liveliest independent hosts', 'accounts that wrote something yesterday', 'eurosky.social', '9,348', 'atpota.to/weather/hosts',
     ]));
+    // by who wrote, not by the accounts a host holds: a host a script filled isn't on it
+    expect(words).not.toContain('goodmkt.id');
     expect(words.join(' ')).toMatch(/hosting diversity 7\.4 · early days/);
     expect(livingOf(withHosts)!.level).toBe('early days');
+    expect(livelyWhen('2026-10-21', false, NOW)).toBe('today so far');
+    expect(livelyWhen('2026-10-18', false, NOW)).toBe('on sun');
   });
 
   it("shows the hosts from the day's last census, and who grew, when the station's isn't in", async () => {

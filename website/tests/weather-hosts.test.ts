@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeShareWords, batchWords, destinationsOf, identityWhen, utcDayStartWords, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
+import { activeShareWords, batchWords, biggestBars, livelyWhen, destinationsOf, identityWhen, utcDayStartWords, originsOf, originsSpan, growingWords, hostBars, independentOf, identityView, identityViewWords, livelyBars, oddsWords, shareHeadline, hostRange, identityDayWords, newHostsWords, renderHostTrends, renderIdentities, signed, smogOf, sumDays, toHostHistory, type HostHistory, type IdentityDay } from '../src/scripts/weather-hosts.js';
 import { fetchHistory, renderBars, renderHostCensus, topTenShare } from '../src/scripts/weather-page.js';
 import { HOSTING_SCALE, HOSTING_SCALE_MAX, hostingLevelOf, hostingPosition } from '../src/scripts/weather.js';
 import { HOSTING_LEVELS, hostingLevel } from '../server/atmosphere.js';
@@ -99,12 +99,16 @@ describe('where accounts live, over time', () => {
     expect(part.querySelector<HTMLElement>('[data-h-days-wrap]')!.hidden).toBe(true);
   });
 
-  it('says who is active on independent hosts, charts it by day, and lists the liveliest hosts', () => {
+  it('says who is active on independent hosts, charts it by day, and heads the tile with the liveliest hosts', () => {
+    // the liveliest are the tile's headline list, above the trends
+    const tile = document.querySelector<HTMLElement>('[data-r-hosts]')!;
+    const lively = tile.querySelector<HTMLElement>('[data-h-lively-wrap]')!;
+    expect(part.contains(lively)).toBe(false);
     // nothing counted yet: all of it stays hidden
     renderHostTrends(part, HOSTS, 'week', bars, NOW);
     expect(part.querySelector<HTMLElement>('[data-h-active-share]')!.hidden).toBe(true);
     expect(part.querySelector('[data-h-chart="active-share"]')!.closest<HTMLElement>('.weather-chart-card')!.hidden).toBe(true);
-    expect(part.querySelector<HTMLElement>('[data-h-lively-wrap]')!.hidden).toBe(true);
+    expect(lively.hidden).toBe(true);
     const counted: HostHistory = {
       ...HOSTS,
       activeDaily: [
@@ -118,13 +122,39 @@ describe('where accounts live, over time', () => {
     // the latest finished day (the 28th is yesterday), against the share of accounts living on them
     expect(part.querySelector('[data-h-active-share]')!.textContent).toBe("yesterday, 3.50% of everyone active wrote from an independent host (42,000 accounts), though only 1.51% of accounts live on one: they're busier than most.");
     expect(part.querySelector('[data-h-chart="active-share"]')!.closest<HTMLElement>('.weather-chart-card')!.hidden).toBe(false);
-    expect(part.querySelector<HTMLElement>('[data-h-lively-wrap]')!.hidden).toBe(false);
-    expect(part.querySelector('[data-h-lively-title]')!.textContent).toBe('liveliest yesterday');
-    expect([...part.querySelectorAll('[data-h-lively] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'tiny.example']);
+    expect(lively.hidden).toBe(false);
+    expect(lively.querySelector('h3')!.textContent).toBe('the liveliest independent hosts, by accounts that wrote something yesterday');
+    expect([...lively.querySelectorAll('[data-h-lively] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'tiny.example']);
+    expect(livelyWhen('2026-10-29', false, NOW)).toBe('today so far');
+    expect(livelyWhen('2026-10-27', true, NOW)).toBe('today so far');
+    expect(livelyWhen('2026-10-26', false, NOW)).toBe('on mon, oct 26');
     expect(livelyBars(counted.liveliest!.hosts)[0]).toMatchObject({ value: '9k active', sub: '21% of its 42.9k accounts' });
     expect(livelyBars(counted.liveliest!.hosts)[1]!.sub).toBeUndefined();
     // a day without everyone's count says nothing
     expect(activeShareWords({ ...HOSTS, activeDaily: [{ day: '2026-10-28', independent: 5, all: null }] }, NOW)).toBe('');
+  });
+
+  it('lists the biggest hosts of the ones people use, and hides them without', () => {
+    const wrap = part.querySelector<HTMLElement>('[data-h-biggest-wrap]')!;
+    // a function from before it: no list
+    renderHostTrends(part, HOSTS, 'week', bars, NOW);
+    expect(wrap.hidden).toBe(true);
+    const big = toHostHistory({
+      ...HOSTS,
+      biggest: [
+        { hostname: 'eurosky.social', accounts: 41_762, active: 9348 },
+        { hostname: 'tngl.sh', accounts: 13_261, active: 79 },
+        { hostname: '<b>x</b>.com', accounts: 1, active: 1 },
+        { hostname: 'no-active.example', accounts: 5 },
+      ],
+    })!;
+    expect(big.biggest!.map((h) => h.hostname)).toEqual(['eurosky.social', 'tngl.sh']);
+    renderHostTrends(part, big, 'week', bars, NOW);
+    expect(wrap.hidden).toBe(false);
+    expect([...wrap.querySelectorAll('[data-h-biggest] .weather-bars__label')].map((el) => el.textContent)).toEqual(['eurosky.social', 'tngl.sh']);
+    expect(biggestBars(big.biggest!)[1]).toMatchObject({ value: '13.3k', sub: '79 active' });
+    // an answer without it at all reads as none
+    expect(toHostHistory(HOSTS)!.biggest).toEqual([]);
   });
 
   it('goes day by day in a table, newest first', () => {

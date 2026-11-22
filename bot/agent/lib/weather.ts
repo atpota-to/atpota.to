@@ -689,6 +689,8 @@ export function hostsNowOf(x: unknown) {
     // like the diversity index, but by where accounts live: the percent on independent hosts, times the square root of how many hosts' worth they're spread across
     // its level on its own scale (early days below 10, taking root, spreading from 25, well spread from 75, flourishing from 200)
     hostingDiversity: { index: d.index, level: hostingLevel(d.index), accountsOnIndependentHostsPercent: d.share, spreadAcrossHosts: round1(d.spread) },
+    // by the relay's count, active or not: hosts a script filled with accounts nobody uses (goodmkt.id) are here too.
+    // the hosts report swaps it for the history's, which only has hosts people write from
     biggestIndependentHosts: biggest,
     // how concentrated the independent side is: the share of its accounts on its ten biggest hosts
     ...(biggest.length && accounts.independent > 0 ? { biggestTenHoldPercentOfIndependentAccounts: round1((topTen / accounts.independent) * 100) } : {}),
@@ -933,6 +935,18 @@ export function hostHistoryOf(x: unknown) {
             return hostname && active !== null ? [{ hostname, activeAccounts: active, ...(accounts ? { accountsHeld: accounts, activePercent: round1((active / accounts) * 100) } : {}) }] : [];
           }).slice(0, TOP),
         },
+      }
+      : {}),
+    // the independent hosts holding the most accounts (the relay's count, active or not), of the ones people use: 25 or
+    // more of their accounts wrote something on most of the last week's days. a host a script filled with accounts nobody
+    // uses (goodmkt.id held 19,112 in november 2026, none writing) isn't here, however many it holds
+    ...(Array.isArray(x.biggest)
+      ? {
+        biggestIndependentHosts: list(x.biggest).flatMap((h) => {
+          const hostname = isRecord(h) ? hostnameOf(h.hostname) : null;
+          const c = counts(h, ["accounts", "active"] as const);
+          return hostname && c ? [{ hostname, accountsHeld: c.accounts, activeOnLatestDay: c.active }] : [];
+        }).slice(0, TOP),
       }
       : {}),
   };
@@ -1399,7 +1413,9 @@ export function hostsReport(parts: Parts, range: "week" | "month" = "week") {
   if (!live && !history) return null;
   const unavailable: string[] = [];
   const out: Record<string, unknown> = { report: "hosts", page: `${WEATHER_PAGE}#weather-hosts-title`, range };
-  if (live) out.now = live;
+  // the biggest by accounts held, of the hosts people use, when the history has them: the census's own list counts
+  // hosts a script filled that nobody writes from
+  if (live) out.now = history?.biggestIndependentHosts ? { ...live, biggestIndependentHosts: undefined } : live;
   else unavailable.push("the live census");
   if (history) {
     const today = history.identities[history.identities.length - 1];

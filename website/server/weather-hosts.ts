@@ -19,6 +19,12 @@
  *   daily     day by day (UTC), over the range but at least a week: active hosts at the
  *             day's last census and the change from the day before, and the independent
  *             hosts that joined and left. Each is null where there's nothing to compare.
+ *   liveliest  the independent hosts with the most accounts that wrote anything on the
+ *             latest day counted (yesterday, usually): how the hosts tile ranks them
+ *   biggest   the independent hosts holding the most accounts, by the relay's count, but
+ *             only ones people use: at least 25 accounts wrote something on most of the last
+ *             7 days counted. A host a script filled (goodmkt.id: 19,112 accounts, nobody
+ *             writing) holds as many accounts as a real one, and isn't one
  *   identities  day by day over the same days: new accounts by where they signed up,
  *             own-domain handles among them, the ones made in bulk (runs of sign-ups shaped
  *             as no crowd makes them: atmosphere/src/backfill-hosts.js bulkRun) and the
@@ -71,6 +77,27 @@ export interface HostHistory {
   activeDaily: ActiveDay[];
   /** The independent hosts with the most accounts active on the latest day counted (yesterday, usually). */
   liveliest: Liveliest | null;
+  /**
+   * The independent hosts with the most accounts, of the ones people use (see above); `active`
+   * is how many wrote on the latest day counted. Empty from a function from before it.
+   */
+  biggest: BigHost[];
+}
+
+export interface BigHost {
+  hostname: string;
+  accounts: number;
+  active: number;
+}
+
+/** atmosphere_host_trends's `biggest`, checked. */
+export function toBiggest(x: unknown): BigHost[] {
+  return (Array.isArray(x) ? x : [])
+    .flatMap((h) => {
+      const c = counts(h, ['accounts', 'active'] as const);
+      return isRecord(h) && hostname(h.hostname) && c ? [{ hostname: h.hostname, accounts: c.accounts, active: c.active }] : [];
+    })
+    .slice(0, TOP_HOSTS);
 }
 
 export interface ActiveDay {
@@ -369,6 +396,7 @@ export function toHostHistory(body: unknown, bucket: HostBucket): HostHistory | 
     identities: (Array.isArray(body.identities) ? body.identities : []).map((d) => toIdentityDay(d)).filter((d): d is IdentityDay => d !== null),
     activeDaily: (Array.isArray(body.activeDaily) ? body.activeDaily : []).map(toActiveDay).filter((d): d is ActiveDay => d !== null),
     liveliest: toLiveliest(body.liveliest),
+    biggest: toBiggest(body.biggest),
   };
 }
 

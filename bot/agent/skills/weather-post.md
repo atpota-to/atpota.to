@@ -260,7 +260,7 @@ So when your post is mostly about one part of the report, call
 - `trends`: how busy the sky has been over the last hour, day, week or month
 - `today`: today against usual, the high and low, apps new today, the forecast
 - `hosts`: where accounts live: independent hosts, the hosting diversity, the
-  biggest, newest and fastest growing hosts
+  liveliest, biggest, newest and fastest growing hosts
 - `migration`: accounts moving house (out of Bluesky's hosts, back in, host to
   host), sign-ups on and off Bluesky's hosts, air quality
 

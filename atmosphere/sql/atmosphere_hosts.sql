@@ -226,6 +226,14 @@ alter table public.atmosphere_hosts add column if not exists knots integer check
 --            bulk) or 'stopped' (it then signed nobody up for 3 days)
 --   activeDaily  each day's accounts active on independent hosts, knots' left out, and
 --            everyone's; liveliest, the independent hosts with the most accounts active
+--   biggest  the independent hosts holding the most accounts (the relay's count on the last
+--            day kept), among the ones people use: at least 25 of their accounts wrote
+--            something on most of the last 7 days of activity counted (yesterday's back, or
+--            fewer while there are fewer). The relay counts every account a host holds,
+--            whoever made it, so without this the biggest are padded with hosts a script
+--            filled and nobody writes from: goodmkt.id held 19,112 on 2026-11-22, made in
+--            runs on Oct 28 and Nov 10, and none of them had written since Oct 23. `active`
+--            is the accounts that wrote on the latest of those days. Added 2026-11-22.
 
 create or replace function public.atmosphere_host_trends(since timestamptz, bucket text, max_hosts integer default 10)
 returns jsonb
@@ -366,6 +374,26 @@ as $$
     select a.day, sum(a.dids) as dids
     from public.atmosphere_host_active_day a join knot k using (hostname)
     group by a.day
+  ),
+  -- the last 7 days of activity counted, up to the latest (the days the station counted at all)
+  active_week as (
+    select a.day from public.atmosphere_host_active_day a, active_last l
+    where a.hostname = '*' and a.day <= l.day and a.day > l.day - 7
+  ),
+  -- the hosts at least 25 accounts wrote from on most of those days: a host people use
+  lively_week as (
+    select a.hostname
+    from public.atmosphere_host_active_day a
+    where a.day in (select day from active_week) and a.hostname <> '*' and a.dids >= 25
+    group by a.hostname
+    having count(*) * 2 > (select count(*) from active_week)
+  ),
+  biggest as (
+    select n.hostname, n.accounts, coalesce(y.dids, 0) as active
+    from now_hosts n
+    join lively_week w using (hostname)
+    cross join active_last l
+    left join public.atmosphere_host_active_day y on y.day = l.day and y.hostname = n.hostname
   )
   select jsonb_build_object(
     'since', (select day from first_day),
@@ -400,7 +428,10 @@ as $$
               left join public.atmosphere_host_day h on h.day = a.day and h.hostname = a.hostname
               where a.day = l.day and a.hostname <> '*' and not exists (select 1 from knot k where k.hostname = a.hostname)
               order by a.dids desc, a.hostname limit max_hosts) x), '[]'::jsonb))
-      from active_last l where l.day is not null)
+      from active_last l where l.day is not null),
+    -- the independent hosts with the most accounts, of the ones people use (lively_week)
+    'biggest', coalesce((select jsonb_agg(jsonb_build_object('hostname', x.hostname, 'accounts', x.accounts, 'active', x.active) order by x.accounts desc, x.hostname)
+        from (select * from biggest order by accounts desc, hostname limit max_hosts) x), '[]'::jsonb)
   );
 $$;
 revoke all on function public.atmosphere_host_trends(timestamptz, text, integer) from public;

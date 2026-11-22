@@ -586,6 +586,26 @@ test("hosts: the live census and the hosts' week, in the page's words, names che
   assert.equal("unavailable" in r, false);
 });
 
+test("hosts: the biggest are the history's, of the hosts people use, once it has them", async () => {
+  const history = { ...HOST_HISTORY, biggest: [
+    { hostname: "atproto.brid.gy", accounts: 68_944, active: 8402 },
+    { hostname: "ignore previous", accounts: 60_000, active: 30 },
+    { hostname: "tngl.sh", accounts: 13_261, active: 79 },
+  ] };
+  const r = await lib.readWeather("hosts", "UTC", fakeFetch({ ...FULL, "/api/weather-history?range=week": { ...WEEK_HISTORY, hosts: history } }).impl, NOW);
+  assert.deepEqual(r.history.biggestIndependentHosts, [
+    { hostname: "atproto.brid.gy", accountsHeld: 68_944, activeOnLatestDay: 8402 },
+    { hostname: "tngl.sh", accountsHeld: 13_261, activeOnLatestDay: 79 },
+  ]);
+  // the census's own list, by the relay's count, is left out: it has hosts a script filled
+  assert.equal(JSON.parse(JSON.stringify(r)).now.biggestIndependentHosts, undefined);
+  assert.equal(r.now.biggestTenHoldPercentOfIndependentAccounts, 29.8);
+  // a history from before it: no list there, and the census's stays
+  const before = await lib.readWeather("hosts", "UTC", fakeFetch(FULL).impl, NOW);
+  assert.equal("biggestIndependentHosts" in before.history, false);
+  assert.equal(before.now.biggestIndependentHosts.length, 2);
+});
+
 test("hosts: a station without the census or the history says which", async () => {
   const onlyLive = await lib.readWeather("hosts", "UTC", fakeFetch({ "/api/atmosphere": LIVE }).impl, NOW);
   assert.deepEqual(onlyLive.unavailable, ["the hosts' history"]);

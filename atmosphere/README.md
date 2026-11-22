@@ -156,7 +156,11 @@ applied 2026-10-22; `createHostWriter` in `src/hosts.js`):
 first seen in the range (none count as new on the first day kept), the ones that
 gained the most accounts, and day by day (at least the last 7): active hosts at the day's
 last census, the change from the day before, and the independent hosts that joined and
-left.
+left. And the independent hosts with the most accounts, `biggest`, but only the ones
+people use: at least 25 of their accounts wrote something on most of the last 7 days of
+activity counted. The relay's `accountCount` is every account a host holds, whoever made
+it, so a host a script filled ranks with the real ones without that (goodmkt.id held
+19,112 on 2026-11-22 and none had written since Oct 23).
 
 `/v1/now` carries it as `hosts` (`src/hosts.js` `summarizeHosts`):
 
@@ -177,7 +181,9 @@ left.
   minute, this is where accounts *live*, and mixing them would break the index's history
   and Poe's copy of its levels. `atproto.brid.gy` (Bridgy Fed's bridged accounts) is the
   biggest independent host and counts like any other.
-- `top`: the 10 independent hosts with the most accounts.
+- `top`: the 10 independent hosts with the most accounts, by the relay's count, active or
+  not. The website and Poe list the trends' `biggest` instead, which leaves out the hosts
+  nobody writes from.
 
 A census reading also has every listed host by the relay's state for it (`statuses`),
 the independent hosts by size (`sizes`: how many hold 0, 1, up to 10, 100, 1,000, 10,000

@@ -162,7 +162,7 @@ describe('the host panel', () => {
     const report = document.querySelector<HTMLElement>('[data-weather-report]')!;
     const fetchImpl = vi.fn(async () => Response.json({ host: EUROSKY }));
     initHostPanel(report, fetchImpl as unknown as typeof fetch);
-    const list = report.querySelector<HTMLElement>('[data-h-top]')!;
+    const list = report.querySelector<HTMLElement>('[data-h-lively]')!;
     renderBars(list, [{ label: 'eurosky.social', perSecond: 38036, count: 38036, value: '38k' }], undefined);
     await Promise.resolve(); // the observer marks the new row
     const row = list.querySelector<HTMLElement>('li')!;

@@ -672,8 +672,8 @@ export function renderHosts(report: HTMLElement, h: Hosts | undefined, now = Dat
   }
   renderShare($(tile, '[data-h-bar-bsky]'), $(tile, '[data-h-bar-else]'), h.diversity.share);
   roll(tile, '[data-h-share]', hostsShare(h));
-  const list = $(tile, '[data-h-top]');
-  if (list) renderBars(list, h.top.slice(0, LIST_TOP).map((x) => ({ label: x.hostname, perSecond: x.accounts, count: x.accounts, value: compactCount(x.accounts) })), undefined);
+  // the list beside it is the liveliest hosts, from the trends (weather-hosts.ts renderLiveliest):
+  // the census's `top` goes by the accounts hosts hold, and a script can fill a host nobody uses
   renderHostCensus(report, h);
 }
 
@@ -785,9 +785,10 @@ export const EXPLAINERS: Record<string, Pick<PoeExplanation, 'question' | 'answe
       "every ten minutes i read the relay's list of every host it knows about:",
       '- online hosts are the ones the relay is happily listening to right now (the relay calls them active)',
       "- wrote lately means a host sent the relay anything since i last looked, within the hour",
-      "- the accounts next to each host are every account it holds, active or not: the relay's count. quiet and deactivated accounts count too, so it's how big a host is, not how busy",
+      "- the hosts listed up top are the liveliest: the ones with the most accounts that actually wrote something that day",
       "- tangled's knots don't count. they're git servers the relay lists alongside the hosts, and their \"accounts\" are git repositories, not people. i ask each host what it is once a week",
-      "- liveliest counts the accounts on each host that actually wrote something that day. i keep a list of which independent host each account lives on (from each host's own list, kept up to date from the plc directory), so i can tell where everyone writing lives without keeping who they are",
+      "- to count them i keep a list of which independent host each account lives on (from each host's own list, kept up to date from the plc directory), so i can tell where everyone writing lives without keeping who they are. it only hears what the relay passes on, so a host whose accounts the relay holds back counts as quiet",
+      "- biggest by accounts is every account a host holds, active or not: the relay's count. a script can fill a host with thousands of accounts nobody uses, so a host only makes that list if 25 or more of its accounts wrote something on most days of the past week",
       "- growing fastest counts people arriving: signing up, or moving their account in, from the plc directory. not the relay's count, which also goes up when a script makes thousands of accounts at once, or when a git server makes an identity for each of its repositories",
       "- new hosts are ones i hadn't seen before, as long as most of their accounts are new too. a server that's been running for years and only just turned up on the relay isn't new",
       "- hosting diversity works like the diversity index: the percent of accounts living outside bluesky's hosts, times the square root of how many hosts they're spread across. bluesky's own hosts count as one place. it has its own scale, and a long way to grow: early days below 10, taking root from 10, spreading from 25, well spread from 75, flourishing from 200. 10% of accounts across 100 hosts' worth would be 100",

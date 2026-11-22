@@ -450,9 +450,11 @@
                         </div>
                         <p class="weather-hosts__share" data-h-share></p>
                     </div>
-                    <div class="weather-hosts__list">
-                        <h3 class="weather-hosts__subtitle">the biggest independent hosts, by accounts they hold</h3>
-                        <ol class="weather-bars weather-bars--hosts" role="list" data-h-top data-host-list></ol>
+                    <!-- from the trends (src/scripts/weather-hosts.ts renderLiveliest): hidden until a day of activity is counted -->
+                    <div class="weather-hosts__list" data-h-lively-wrap hidden>
+                        <h3 class="weather-hosts__subtitle">the liveliest independent hosts, by accounts that wrote something <span data-h-lively-when>yesterday</span></h3>
+                        <ol class="weather-bars weather-bars--hosts" role="list" data-h-lively data-host-list></ol>
+                        <p class="weather-tile__note">a day is utc. the share is of every account the host holds, active or not. atproto.brid.gy&#39;s are bridged in from the fediverse.</p>
                     </div>
                 </div>
                 <!-- the hosts over the lens's window, from the station's censuses (src/scripts/weather-hosts.ts); "now" and the last hour show the last 24 hours -->
@@ -493,10 +495,10 @@
                         <p class="weather-tile__note">days are utc. online is the relay&#39;s count at the end of each day, bluesky&#39;s hosts too. first heard and gone quiet count independent hosts the relay heard from that day and not the day before, or the other way round: small hosts drift in and out, so they don&#39;t add up to the change. today&#39;s gone quiet fills in once the day is over. days marked ≈ are from before i kept count, estimated from the plc directory.</p>
                     </div>
                     <div class="weather-hosts__cols weather-hosts__cols--three">
-                        <div class="weather-hosts__list" data-h-lively-wrap hidden>
-                            <h3 class="weather-hosts__subtitle" data-h-lively-title>liveliest yesterday</h3>
-                            <ol class="weather-bars weather-bars--hosts" role="list" data-h-lively data-host-list></ol>
-                            <p class="weather-tile__note">independent hosts by how many of their accounts wrote anything that day (utc), and what share of all their accounts that is. atproto.brid.gy&#39;s are bridged in from the fediverse.</p>
+                        <div class="weather-hosts__list" data-h-biggest-wrap hidden>
+                            <h3 class="weather-hosts__subtitle">biggest by accounts</h3>
+                            <ol class="weather-bars weather-bars--hosts" role="list" data-h-biggest data-host-list></ol>
+                            <p class="weather-tile__note">every account a host holds, active or not, but only hosts where 25 or more accounts wrote something on most days this past week. a host a script filled with accounts nobody uses doesn&#39;t make the list.</p>
                         </div>
                         <div class="weather-hosts__list">
                             <h3 class="weather-hosts__subtitle">new hosts</h3>

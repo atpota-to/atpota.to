@@ -14,7 +14,7 @@
  *   today     the almanac: the last hour against usual on the barometer, today's range with
  *             the last hour on it, and today's totals
  *   hosts     where the atmosphere lives: the share of accounts on independent pds hosts,
- *             the hosting diversity on its scale, and the biggest independent hosts
+ *             the hosting diversity on its scale, and the liveliest independent hosts
  *   migration accounts moving house: out of bluesky over the last week, day by day, back in
  *             and host to host, and where the ones out of bluesky went
  *
@@ -938,16 +938,14 @@ export interface Living {
   level: HostingLevel;
   independent: number;
   active: number;
-  /** The biggest independent hosts, when the station's census came. */
-  top: Array<{ hostname: string; accounts: number }>;
 }
 
 /** Where accounts live: the station's census, else the day's last one. */
 export function livingOf(d: CardData): Living | null {
   const last = d.day?.hosts?.points.at(-1);
   const h = d.now?.hosts;
-  if (h) return { share: h.diversity.share, index: h.diversity.index, level: hostingLevel(h.diversity.index), independent: h.independent, active: h.active, top: h.top };
-  if (last) return { share: last.share, index: last.index, level: hostingLevel(last.index), independent: last.independent, active: last.active, top: [] };
+  if (h) return { share: h.diversity.share, index: h.diversity.index, level: hostingLevel(h.diversity.index), independent: h.independent, active: h.active };
+  if (last) return { share: last.share, index: last.index, level: hostingLevel(last.index), independent: last.independent, active: last.active };
   return null;
 }
 
@@ -992,13 +990,21 @@ function barList(rows: Array<{ name: string; n: number; value: string }>, width:
   );
 }
 
+/** When the liveliest hosts were counted, to end a line with: "yesterday", "today so far" or "on mon" (weather-hosts.ts livelyWhen). */
+export function livelyWhen(day: string, soFar: boolean, at: number): string {
+  if (soFar || day === new Date(at).toISOString().slice(0, 10)) return 'today so far';
+  return day === new Date(at - 86_400_000).toISOString().slice(0, 10) ? 'yesterday' : `on ${weekday(day, at)}`;
+}
+
 function hostsCard(d: CardData, art: Art): El | null {
   const l = livingOf(d);
   if (!l) return null;
+  // the hosts by who wrote, not by the accounts they hold: a script can fill a host nobody uses
+  const lively = d.day?.hosts?.liveliest;
   // the people who arrived (signed up, not in bulk, or moved in), not the relay's count, which goes up for scripts too
   const growing = (d.day?.hosts?.growing ?? []).filter((x) => x.people > 0);
-  const side = l.top.length
-    ? { title: 'the biggest independent hosts', sub: 'by the accounts they hold', rows: l.top.slice(0, 5).map((x) => ({ name: x.hostname, n: x.accounts, value: int(x.accounts) })) }
+  const side = lively?.hosts.length
+    ? { title: 'the liveliest independent hosts', sub: `accounts that wrote something ${livelyWhen(lively.day, lively.soFar, d.at)}`, rows: lively.hosts.slice(0, 5).map((x) => ({ name: x.hostname, n: x.active, value: int(x.active) })) }
     : growing.length
       ? { title: 'growing fastest', sub: 'people signing up or moving in, the last 24 hours', rows: growing.slice(0, 5).map((x) => ({ name: x.hostname, n: x.people, value: signed(x.people) })) }
       : null;

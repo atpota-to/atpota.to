@@ -139,7 +139,9 @@ describe('the atmosphere weather report', () => {
     expect(text('[data-h-writing-words]')).toBe('hosts that wrote in the last 30 minutes');
     expect(text('[data-h-age]')).toBe('counted 7 minutes ago');
     expect(text('[data-h-share]')).toBe('1.5% of 24.1m accounts live on independent hosts, as spread out as 25 hosts the same size.');
-    expect([...report.querySelectorAll('[data-h-top] .weather-bars__label')].map((el) => el.textContent)).toEqual(['blacksky.app', 'eurosky.social']);
+    // the census's biggest by accounts held aren't listed: the list beside it is the liveliest, from the trends
+    expect(report.querySelector('[data-h-top]')).toBeNull();
+    expect(report.querySelector<HTMLElement>('[data-h-lively-wrap]')!.hidden).toBe(true);
     renderHosts(report, { ...hosts, writing: null });
     expect(report.querySelector<HTMLElement>('[data-h-writing-wrap]')!.hidden).toBe(true);
   });

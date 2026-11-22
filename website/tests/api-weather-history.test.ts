@@ -54,6 +54,7 @@ const HOSTS = {
   ],
   activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }, { day: 'x', independent: 1 }],
   liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }, { hostname: '<b>', active: 1, accounts: 1 }] },
+  biggest: [{ hostname: 'blacksky.app', accounts: 42900, active: 9000 }, { hostname: '<b>', accounts: 1, active: 1 }, { hostname: 'tngl.sh', accounts: '13261', active: 79 }, { hostname: 'no-active.example', accounts: 5 }],
 };
 
 type Rpc = Record<string, () => Response>;
@@ -144,6 +145,7 @@ describe('weather history', () => {
       ],
       activeDaily: [{ day: '2026-10-22', independent: 41000, all: 1082706 }, { day: '2026-10-23', independent: 900, all: null }],
       liveliest: { day: '2026-10-22', soFar: false, hosts: [{ hostname: 'blacksky.app', active: 9000, accounts: 42900 }] },
+      biggest: [{ hostname: 'blacksky.app', accounts: 42900, active: 9000 }, { hostname: 'tngl.sh', accounts: 13261, active: 79 }],
     });
   });
 

@@ -4,12 +4,14 @@
  * each census (atmosphere/sql/atmosphere_hosts.sql); /api/weather-history answers them as
  * `hosts` (server/weather-hosts.ts) with the rest of a range's history, so this shares the
  * page's history feed. It draws three charts (active hosts, the hosting diversity, and
- * independent hosts joining each day), lists the independent hosts new in the range and
- * the ones the most people arrived on (signed up or moved in, by the PLC directory's log:
- * not the relay's count, which goes up for accounts made in bulk too), and goes day by
+ * independent hosts joining each day), lists the independent hosts new in the range, the
+ * ones the most people arrived on (signed up or moved in, by the PLC directory's log: not
+ * the relay's count, which goes up for accounts made in bulk too) and the biggest of the
+ * ones people use, and goes day by
  * day in a table: active hosts, the change from the day before, and the independent hosts
  * that joined and left. A day's change is a handful of hosts on nearly two thousand, which
- * a chart from zero can't show, so the table has it in numbers.
+ * a chart from zero can't show, so the table has it in numbers. The tile's headline list,
+ * above, comes from here too: the liveliest independent hosts (renderLiveliest).
  *
  * It follows the lens's window, except that "now" and the last hour show the last 24
  * hours: a census every 10 minutes makes an hour only six points, and hosts don't change
@@ -57,8 +59,14 @@ export interface HostHistory {
   identities: IdentityDay[];
   /** Each day's active accounts on independent hosts, and everyone's (server/weather-hosts.ts ActiveDay). */
   activeDaily?: Array<{ day: string; independent: number; all: number | null }>;
-  /** The independent hosts with the most accounts active on the latest day counted. */
+  /** The independent hosts with the most accounts active on the latest day counted: the hosts tile's headline list. */
   liveliest?: { day: string; soFar: boolean; hosts: Array<{ hostname: string; active: number; accounts: number | null }> } | null;
+  /**
+   * The independent hosts with the most accounts, of the ones people use: at least 25 accounts
+   * wrote something on most of the last week's days (server/weather-hosts.ts). `active` is how
+   * many wrote on the latest day counted.
+   */
+  biggest?: Array<{ hostname: string; accounts: number; active: number }>;
 }
 
 export interface IdentityDay {
@@ -207,6 +215,7 @@ export function toHostHistory(x: unknown): HostHistory | null {
             hosts: x.liveliest.hosts.filter((h): h is { hostname: string; active: number; accounts: number | null } => obj(h) && hostname(h.hostname) && n(h.active) && orNull(h.accounts)).slice(0, 10),
           }
         : null,
+    biggest: Array.isArray(x.biggest) ? x.biggest.filter((h): h is NonNullable<HostHistory['biggest']>[number] => obj(h) && hostname(h.hostname) && n(h.accounts) && n(h.active)).slice(0, 10) : [],
   };
 }
 
@@ -318,7 +327,7 @@ export function livelyBars(list: NonNullable<HostHistory['liveliest']>['hosts'])
   }));
 }
 
-/** Who's active on independent hosts: the share in words and by day, and the liveliest hosts. Each stays hidden without its data. */
+/** Who's active on independent hosts: the share in words and by day. Each stays hidden without its data. */
 function renderActive(part: HTMLElement, h: HostHistory, drawBars: (list: HTMLElement, bars: Bar[]) => void, now: number): void {
   const words = activeShareWords(h, now);
   const line = $(part, '[data-h-active-share]');
@@ -334,14 +343,33 @@ function renderActive(part: HTMLElement, h: HostHistory, drawBars: (list: HTMLEl
     const dayFmt = (t: number) => DAY_FORMAT.format(new Date(t)).toLowerCase();
     renderChart(chart, projectLast(days.map((d) => ({ t: Date.parse(`${d.day}T00:00:00Z`), v: activeShareOf(d) })), now, 86_400_000, { scale: false }), { label: 'active accounts off bluesky, by day', color: 'var(--weather-host-indep)', format: pct, formatTick: (v) => `${Number(v.toFixed(2))}%`, formatTime: dayFmt, stepMs: 86_400_000, fromZero: false });
   }
-  const lively = h.liveliest;
-  const wrap = $(part, '[data-h-lively-wrap]');
+}
+
+/** When the liveliest were counted, to end a sentence with: "yesterday", "today so far" or "on tue, oct 27". */
+export function livelyWhen(day: string, soFar: boolean, now = Date.now()): string {
+  if (soFar || day === new Date(now).toISOString().slice(0, 10)) return 'today so far';
+  return day === new Date(now - 86_400_000).toISOString().slice(0, 10) ? 'yesterday' : `on ${dayWords(day)}`;
+}
+
+/**
+ * The hosts tile's headline list ([data-h-lively-wrap], beside the census): the independent
+ * hosts with the most accounts that wrote something on the latest day counted. Ranking them by
+ * the accounts they hold instead would put hosts a script filled up top, with nobody writing.
+ * It stays hidden until the station has counted a day.
+ */
+export function renderLiveliest(root: ParentNode, h: HostHistory | undefined, drawBars: (list: HTMLElement, bars: Bar[]) => void, now = Date.now()): void {
+  const lively = h?.liveliest;
+  const wrap = $(root, '[data-h-lively-wrap]');
   if (wrap) wrap.hidden = !lively?.hosts.length;
   if (!lively?.hosts.length) return;
-  const today = new Date(now).toISOString().slice(0, 10);
-  setText(part, '[data-h-lively-title]', lively.soFar || lively.day === today ? 'liveliest today so far' : lively.day === new Date(now - 86_400_000).toISOString().slice(0, 10) ? 'liveliest yesterday' : `liveliest on ${dayWords(lively.day)}`);
-  const list = $(part, '[data-h-lively]');
+  setText(root, '[data-h-lively-when]', livelyWhen(lively.day, lively.soFar, now));
+  const list = $(root, '[data-h-lively]');
   if (list) drawBars(list, livelyBars(lively.hosts));
+}
+
+/** The biggest hosts' bars, of the ones people use: every account they hold, and how many wrote lately. */
+export function biggestBars(list: NonNullable<HostHistory['biggest']>): Bar[] {
+  return list.slice(0, HOST_LIST_TOP).map((h) => ({ label: h.hostname, perSecond: h.accounts, count: h.accounts, value: compactCount(h.accounts), sub: `${compactCount(h.active)} active` }));
 }
 
 /** A day's change as text: "+5", "−2", "0", or a dash with nothing to compare. */
@@ -401,6 +429,8 @@ export function growingWords(h: HostHistory, range: HostRange): string {
  * handed in so this module needn't import the page that imports it.
  */
 export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, range: HostRange, drawBars: (list: HTMLElement, bars: Bar[]) => void, now = Date.now()): void {
+  // the tile's headline list is above this part, beside the census
+  renderLiveliest(part.closest('[data-r-hosts]') ?? part, h, drawBars, now);
   if (!h || h.points.length === 0) {
     part.hidden = true;
     return;
@@ -431,6 +461,12 @@ export function renderHostTrends(part: HTMLElement, h: HostHistory | undefined, 
   if (days) days.hidden = h.daily.length === 0;
   const table = $<HTMLTableElement>(part, '[data-h-days]');
   if (table) renderHostDays(table, h.daily, now);
+
+  const big = h.biggest ?? [];
+  const bigWrap = $(part, '[data-h-biggest-wrap]');
+  if (bigWrap) bigWrap.hidden = big.length === 0;
+  const bigList = $(part, '[data-h-biggest]');
+  if (bigList && big.length) drawBars(bigList, biggestBars(big));
 
   const fresh = $(part, '[data-h-new]');
   if (fresh) drawBars(fresh, hostBars(newHostsShown(h), false));
