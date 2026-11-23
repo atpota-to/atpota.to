@@ -667,7 +667,7 @@ describe('the lens', () => {
     initLensDock(report, l);
     bindLens(report, l);
     expect(dock.hidden).toBe(false);
-    expect(panel.hidden).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
     // jsdom lays every section at the top, so the strip is in the last one, where it lives: the measure doesn't reach it
     const visible = () => [...dock.querySelectorAll<HTMLElement>('[data-dock-now] [data-part]')].filter((s) => !s.hidden).map((s) => s.textContent).join('');
     expect(dock.dataset.section).toBe('hosts');
@@ -684,24 +684,26 @@ describe('the lens', () => {
     const period = report.querySelector<HTMLButtonElement>('[data-r-period]')!;
     expect(period.textContent).toBe('the last hour');
     period.click();
-    expect(panel.hidden).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
     expect(report.ownerDocument.activeElement).toBe(panel.querySelector('[data-lens-window="hour"]'));
     l.set({ window: 'now' });
     expect(period.textContent).toBe('right now');
     l.set({ window: 'hour' });
     strip.click();
-    expect(panel.hidden).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
     strip.click();
-    expect(panel.hidden).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
+    expect(dock.dataset.open).toBe('');
     expect(strip.getAttribute('aria-expanded')).toBe('true');
     // a choice keeps it open, to make another
     panel.querySelector<HTMLButtonElement>('[data-lens-window="week"]')!.click();
     expect(l.get().window).toBe('week');
     expect(visible()).toBe('7d'); // still where it lives: the window shows, the measure doesn't
     panel.querySelector<HTMLButtonElement>('[data-lens-measure="records"]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(panel.hidden).toBe(false);
+    expect(panel.hasAttribute('inert')).toBe(false);
     report.querySelector('[data-weather-hero]')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(panel.hidden).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
+    expect(dock.dataset.open).toBeUndefined();
     expect(strip.getAttribute('aria-expanded')).toBe('false');
   });
 

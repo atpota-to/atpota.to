@@ -2626,6 +2626,8 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 }
 
 .weather-dock__strip {
+  /* no grey flash over the pill on a tap (iOS) */
+  -webkit-tap-highlight-color: transparent;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2660,8 +2662,10 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   transform: rotate(180deg);
 }
 
-.weather-dock__strip:hover {
-  border-color: var(--dash);
+@media (hover: hover) {
+  .weather-dock__strip:hover {
+    border-color: var(--dash);
+  }
 }
 
 .weather-dock__strip:focus-visible {
@@ -2683,6 +2687,16 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
   background: var(--card);
   box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--text) 55%, transparent);
   color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  transform-origin: 0 100%;
+}
+
+/* closed: still there, out of sight and out of reach, to grow from the strip when it opens */
+.weather-dock:not([data-open]) .weather-dock__panel {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  pointer-events: none;
 }
 
 /* A control the section on screen doesn't follow: still there (it changes the sections that do), but faint. */
@@ -2703,6 +2717,21 @@ html.js .weather:not([data-state="error"]) .weather-hero .weather-spark[data-wai
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* closing: fade and shrink back to the strip, then go */
+  .weather-dock__panel {
+    transition:
+      opacity var(--dur) ease,
+      transform var(--dur) var(--ease-out),
+      visibility 0s linear var(--dur);
+  }
+
+  /* opening: there at once, and springs up out of the strip */
+  .weather-dock[data-open] .weather-dock__panel {
+    transition:
+      opacity var(--dur) ease,
+      transform var(--dur-spring) var(--ease-spring);
+  }
+
   .weather-dock__chev {
     transition: transform var(--dur-fast) var(--ease-out);
   }
