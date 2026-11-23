@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { Resvg } from '@resvg/resvg-wasm';
 import { describe, expect, it } from 'vitest';
 import { applyRewrites, readApiRewrites } from '../build/api-middleware.js';
 import { DEFAULT_OG_IMAGE } from '../server/blog/pages.js';
-import { CACHE_MISSING, CACHE_OK, cardFor, createOgDispatchHandlers, descriptionMax, keyOf, titleSize, type Issue } from '../server/og-dispatch.js';
-import { renderPng } from '../server/og-weather.js';
+import { CACHE_MISSING, CACHE_OK, cardFor, createOgDispatchHandlers, DESCRIPTION_LINES, fitIssue, keyOf, TITLE_LINES, TITLE_SIZES, type Issue } from '../server/og-dispatch.js';
+import { cardArt, measureHeight, renderPng, renderSvg } from '../server/og-weather.js';
+import { C, CARD_HEIGHT, CARD_WIDTH, h, PAGE_GAP, PAGE_PAD } from '../server/og-weather-cards.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = (file: string) => readFileSync(`${root}${file}`, 'utf8');
@@ -32,6 +34,17 @@ const ISSUE: Issue = {
   name: "poe's atmosphere dispatch",
 };
 
+/** The issue whose card ran off the bottom of the tile (bsky.app/profile/poe.atpota.to/post/3n2yizhubykht). */
+const DISPATCH_2026_11_23: Issue = {
+  title: 'the atmosphere had its first paid game jam',
+  description:
+    "atmosphere games' first jam dole paid out-of-work game developers to build on atproto for two weeks, and five games went live; also germ's encrypted dms reached android, spaces got its moderation plan a week before beta, and the atp working group met at the ietf.",
+  publishedAt: '2026-11-23T16:04:14.491Z',
+  number: 6,
+  handle: 'poe.atpota.to',
+  name: 'poe’s atmosphere dispatch',
+};
+
 const get = (key: string, method = 'GET') => new Request(`https://atpota.to/api/og-dispatch?key=${encodeURIComponent(key)}`, { method });
 
 describe('og dispatch: the card', () => {
@@ -46,10 +59,90 @@ describe('og dispatch: the card', () => {
     expect(pngSize(await renderPng(await cardFor(long)))).toEqual({ width: 1200, height: 630 });
   });
 
-  it('shrinks a longer title, and gives its description less room', () => {
-    const sizes = [10, 40, 60, 90].map((n) => titleSize('a'.repeat(n)));
+  it('shrinks a longer title, and gives its description less room', async () => {
+    const art = await cardArt();
+    const description = 'word '.repeat(80).trim();
+    const fits = await Promise.all(
+      ['a short one', 'a title that runs to two lines or so', 'a title long enough that it takes three lines at the biggest size there is', 'a very long title that keeps on going, well past where a title should stop, and then on a bit further still'].map(
+        (title) => fitIssue({ ...ISSUE, title, description }, art),
+      ),
+    );
+    const sizes = fits.map((f) => f.titleSize);
     expect([...sizes].sort((a, b) => b - a)).toEqual(sizes);
-    expect(descriptionMax('a'.repeat(90))).toBeLessThan(descriptionMax('a'.repeat(10)));
+    expect(sizes[0]).toBe(TITLE_SIZES[0]);
+    // A title on one line leaves the description all its lines; one on two, fewer.
+    expect(fits[0]!.descriptionLines).toBe(DESCRIPTION_LINES);
+    expect(fits[1]!.titleSize).toBe(TITLE_SIZES[0]);
+    expect(fits[1]!.descriptionLines).toBeLessThan(DESCRIPTION_LINES);
+  });
+
+  it('keeps a title to its lines, evened out so no word sits alone', async () => {
+    const art = await cardArt();
+    // 2026-11-23's title: at 66px it wrapped to three lines with "jam" alone on the last.
+    const fit = await fitIssue(DISPATCH_2026_11_23, art);
+    expect(fit.title).toBe('balance');
+    const lines = Math.round((await measureHeight(h({ fontFamily: 'signika', fontSize: fit.titleSize, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.025em' }, DISPATCH_2026_11_23.title), 550)) / fit.titleSize);
+    expect(lines).toBeLessThanOrEqual(TITLE_LINES);
+  });
+
+  it("wraps a title plainly when a word won't fit on a line, and clamps one too long for any size", async () => {
+    const art = await cardArt();
+    const link = await fitIssue({ ...ISSUE, title: 'see https://atmosphere.games/jam/dole/2026/results' }, art);
+    expect(link.title).toBe('wrap');
+    const huge = await fitIssue({ ...ISSUE, title: 'word '.repeat(50).trim() }, art);
+    expect(huge).toMatchObject({ title: 'clamp', titleSize: TITLE_SIZES.at(-1) });
+  });
+
+  it('cuts a long description at a word, with an ellipsis', async () => {
+    const fit = await fitIssue(DISPATCH_2026_11_23, await cardArt());
+    expect(fit.description.endsWith('…')).toBe(true);
+    const kept = fit.description.slice(0, -1);
+    expect(DISPATCH_2026_11_23.description!.startsWith(kept)).toBe(true);
+    expect(DISPATCH_2026_11_23.description![kept.length]).toMatch(/[\s,.;:]/);
+    // A short one is drawn whole.
+    expect((await fitIssue(ISSUE, await cardArt())).description).toBe(ISSUE.description);
+  });
+
+  // The text tile's padding (54px across, 50px down), which nothing should ever be drawn in: the
+  // band under the byline and the band down the right. Inset from the tile's edges, and clear
+  // of its rounded corners. The picture tile beside it is 470px wide.
+  const TEXT_TILE = { left: PAGE_PAD, right: CARD_WIDTH - PAGE_PAD - PAGE_GAP - 470, top: PAGE_PAD, bottom: CARD_HEIGHT - PAGE_PAD };
+  const PADDING_BANDS = [
+    { name: 'under the byline', x0: TEXT_TILE.left + 54, x1: TEXT_TILE.right - 54, y0: TEXT_TILE.bottom - 50 + 4, y1: TEXT_TILE.bottom - 4 },
+    { name: 'down the right', x0: TEXT_TILE.right - 54 + 4, x1: TEXT_TILE.right - 4, y0: TEXT_TILE.top + 44, y1: TEXT_TILE.bottom - 44 },
+  ];
+
+  /** Where in a band the card isn't plain paper, if anywhere. */
+  async function inkIn(issue: Issue): Promise<string[]> {
+    const { pixels, width } = new Resvg(await renderSvg(await cardFor(issue))).render();
+    const paper = [1, 3, 5].map((i) => parseInt(C.paper.slice(i, i + 2), 16));
+    const found: string[] = [];
+    for (const band of PADDING_BANDS) {
+      scan: for (let y = band.y0; y < band.y1; y++) {
+        for (let x = band.x0; x < band.x1; x++) {
+          const i = (y * width + x) * 4;
+          if (paper.some((v, c) => Math.abs(pixels[i + c]! - v) > 3)) {
+            found.push(`${band.name} at ${x},${y}`);
+            break scan;
+          }
+        }
+      }
+    }
+    return found;
+  }
+
+  it('never draws past the text tile, whatever the title and description', async () => {
+    const cases: Issue[] = [
+      ISSUE,
+      DISPATCH_2026_11_23,
+      { ...ISSUE, title: 'tangled moves house, spaces gets a new address, and a halloween costume parade', description: 'tangled relaunched as a federated forge with stable org.tangled lexicons, the protocol team floated a new uri syntax for spaces, and fandom asked whether ao3 belongs on atproto.' },
+      { ...ISSUE, title: 'a', description: 'b' },
+      { ...ISSUE, title: 'word '.repeat(50).trim(), description: 'more '.repeat(300).trim() },
+      { ...ISSUE, title: 'see https://atmosphere.games/jam/dole/2026/results-and-every-game-in-one-very-long-link', description: `${'x'.repeat(200)} and then some` },
+      { ...ISSUE, title: 'Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww', description: null },
+      { ...ISSUE, title: 'mmm mmm mmm mmm mmm mmm mmm mmm mmm mmm mmm mmm', description: 'WWW '.repeat(60).trim() },
+    ];
+    for (const issue of cases) expect(await inkIn(issue), issue.title).toEqual([]);
   });
 });
 

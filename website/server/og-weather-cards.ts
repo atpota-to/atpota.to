@@ -334,9 +334,13 @@ export function svgImage(svg: string, width: number, height: number, style: Styl
   return img(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`, width, height, style);
 }
 
+/** The page's margin around the tiles, and the gap between them. */
+export const PAGE_PAD = 28;
+export const PAGE_GAP = 16;
+
 /** The card itself: the site's paper-coloured page with the tiles on it. */
 export function page(...kids: Array<El | null | false>): El {
-  return h({ width: CARD_WIDTH, height: CARD_HEIGHT, padding: 28, gap: 16, background: C.bg, fontFamily: 'signika', color: C.ink }, ...kids);
+  return h({ width: CARD_WIDTH, height: CARD_HEIGHT, padding: PAGE_PAD, gap: PAGE_GAP, background: C.bg, fontFamily: 'signika', color: C.ink }, ...kids);
 }
 
 export function tile(style: Style, ...kids: Array<Kid | null | false | undefined>): El {

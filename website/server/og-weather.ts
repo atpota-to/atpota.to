@@ -188,6 +188,18 @@ export async function renderSvg(card: El): Promise<string> {
   return satori(card as never, { width: CARD_WIDTH, height: CARD_HEIGHT, fonts });
 }
 
+/**
+ * How tall an element tree comes out at `width`, laid out by satori in the card's fonts:
+ * the same line breaks the card will get, so a card can check its text fits before drawing it.
+ */
+export async function measureHeight(el: El, width: number): Promise<number> {
+  const { fonts } = await loadKit();
+  const svg = await satori(el as never, { width, fonts });
+  const height = /^<svg[^>]*\sheight="([\d.]+)"/.exec(svg)?.[1];
+  if (!height) throw new Error('satori drew no height');
+  return Number(height);
+}
+
 /** A card's element tree to a PNG. */
 export async function renderPng(card: El): Promise<Uint8Array> {
   const svg = await renderSvg(card);
