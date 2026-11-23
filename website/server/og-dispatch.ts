@@ -18,10 +18,10 @@
 import { createBlogData, type BlogDeps } from './blog/handler.js';
 import { formatDate } from './blog/blocks.js';
 import { readBlogConfig } from './blog/config.js';
-import { clip, DEFAULT_OG_IMAGE, siteInfo } from './blog/pages.js';
+import { DEFAULT_OG_IMAGE, siteInfo } from './blog/pages.js';
 import { findDocument } from './blog/records.js';
-import { asset, cardArt, renderPng } from './og-weather.js';
-import { C, CARD_HEIGHT, chip, h, img, mixColor, page, tile, wordmark, type Art, type El } from './og-weather-cards.js';
+import { asset, cardArt, measureHeight, renderPng } from './og-weather.js';
+import { C, CARD_HEIGHT, CARD_WIDTH, chip, h, img, mixColor, page, PAGE_GAP, PAGE_PAD, tile, wordmark, type Art, type El, type Style } from './og-weather-cards.js';
 
 export const CACHE_OK = 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400';
 export const CACHE_MISSING = 'public, max-age=0, s-maxage=60';
@@ -95,30 +95,137 @@ export function backdropSvg(): string {
   );
 }
 
-/** Bigger for a short title, smaller for a long one, so it fits in three lines or so. */
-export function titleSize(title: string): number {
-  const n = [...title].length;
-  return n <= 28 ? 76 : n <= 48 ? 66 : n <= 72 ? 56 : 48;
+// ---------- fitting the text ----------
+//
+// Titles and descriptions vary a lot in length, and how many lines they wrap to depends on
+// the words, not only on how many characters there are. So rather than guess sizes from the
+// length, the card lays its text tile out with satori first (measureHeight) and picks the
+// biggest title, and the most lines of description, that fit inside the tile.
+
+/** The text tile's width, and every tile's height: the card less its margins, the gap and the picture. */
+const TEXT_W = CARD_WIDTH - 2 * PAGE_PAD - PAGE_GAP - ART_W;
+const TILE_H = CARD_HEIGHT - 2 * PAGE_PAD;
+const PAD_X = 54;
+const PAD_Y = 50;
+/** The width the title and description wrap at. */
+const TEXT_INNER_W = TEXT_W - 2 * PAD_X;
+
+/** Title sizes, biggest first. */
+export const TITLE_SIZES = [76, 66, 56, 48, 42] as const;
+/** A title wraps to at most this many lines; past it, the size goes down, and at the smallest it ends in an ellipsis. */
+export const TITLE_LINES = 3;
+/** The description gets the lines left under the title, at most DESCRIPTION_LINES; a title shrinks to leave it DESCRIPTION_MIN. */
+export const DESCRIPTION_LINES = 4;
+const DESCRIPTION_MIN = 2;
+const DESCRIPTION_GAP = 20;
+const DESCRIPTION_TEXT: Style = { fontFamily: 'signika', fontSize: 26, lineHeight: 1.35, color: C.soft, wordBreak: 'break-word' };
+const DESCRIPTION_LINE_H = 26 * 1.35;
+
+/**
+ * How the card sets an issue's text. The title is
+ *   'balance'  evened out across its lines, so no word sits alone on the last one
+ *   'wrap'     wrapped plainly, breaking a word too long for a line (a balanced title can't
+ *              break words: satori would narrow it until it split short ones too)
+ *   'clamp'    too long even at the smallest size: cut off after TITLE_LINES with an ellipsis
+ */
+export interface Fit {
+  titleSize: number;
+  title: 'balance' | 'wrap' | 'clamp';
+  /** The description as drawn, cut at a word to fit descriptionLines; '' draws none. */
+  description: string;
+  descriptionLines: number;
 }
 
-/** A long title leaves room for a line or two of the description; a short one, three or four. */
-export function descriptionMax(title: string): number {
-  return titleSize(title) > 48 ? 150 : 90;
+const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/** Text in a block, cut to `lines` lines with an ellipsis: satori only clamps a block, and a block takes a bare string. */
+function clamped(text: string, lines: number, style: Style): El {
+  return { type: 'div', props: { style: { display: 'block', overflow: 'hidden', lineClamp: lines, ...style }, children: text } };
 }
+
+function titleStyle(size: number): Style {
+  return { fontFamily: 'signika', fontSize: size, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.025em', color: C.ink };
+}
+
+function titleEl(title: string, size: number, how: Fit['title']): El {
+  // satori balances by narrowing the text until it would take another line, so a balanced
+  // title can't also be clamped (it would narrow to nothing) or break words (it would split short ones).
+  if (how === 'balance') return h({ ...titleStyle(size), textWrap: 'balance' }, title);
+  if (how === 'wrap') return h({ ...titleStyle(size), wordBreak: 'break-word' }, title);
+  return clamped(title, TITLE_LINES, { ...titleStyle(size), wordBreak: 'break-word' });
+}
+
+/**
+ * The biggest title that wraps to TITLE_LINES or fewer and leaves the description room, and as
+ * much of the description as then fits, measured with the card's own layout and fonts.
+ */
+export async function fitIssue(issue: Issue, art: Art): Promise<Fit> {
+  const title = flat(issue.title);
+  const description = issue.description ? flat(issue.description) : '';
+  const smallest = TITLE_SIZES[TITLE_SIZES.length - 1]!;
+  const linesOf = async (el: El, lineHeight: number) => Math.round((await measureHeight(el, TEXT_INNER_W)) / lineHeight);
+  const tileHeight = (fit: Fit) => measureHeight(textTile(issue, art, fit, { width: TEXT_W }), TEXT_W);
+
+  let fit: Fit = { titleSize: smallest, title: 'clamp', description: '', descriptionLines: 0 };
+  for (const titleSize of TITLE_SIZES) {
+    const last = titleSize === smallest;
+    const fits = (await linesOf(titleEl(title, titleSize, 'wrap'), titleSize)) <= TITLE_LINES;
+    if (!fits && !last) continue;
+    // A balanced title is as tall as a wrapped one, so 'wrap' stands in for it here.
+    fit = { titleSize, title: fits ? 'wrap' : 'clamp', description: '', descriptionLines: 0 };
+    const room = Math.floor((TILE_H - (await tileHeight(fit)) - DESCRIPTION_GAP) / DESCRIPTION_LINE_H);
+    fit.descriptionLines = description ? Math.max(0, Math.min(DESCRIPTION_LINES, room)) : 0;
+    if (!description || fit.descriptionLines >= DESCRIPTION_MIN || last) break;
+  }
+
+  // Balance the title if every word fits on a line by itself: one word to a line, and none wraps.
+  if (fit.title === 'wrap') {
+    const words = title.split(' ');
+    const alone = h({ ...titleStyle(fit.titleSize), whiteSpace: 'pre-line', wordBreak: 'break-word' }, words.join('\n'));
+    if ((await linesOf(alone, fit.titleSize)) === words.length) fit.title = 'balance';
+  }
+
+  // Cut the description at the last word that fits, then check the whole tile once more (the
+  // layout rounds) and give up a line at a time until it fits.
+  for (; fit.descriptionLines > 0; fit.descriptionLines--) {
+    fit.description = await cutToLines(description, fit.descriptionLines, (text) => linesOf(h(DESCRIPTION_TEXT, text), DESCRIPTION_LINE_H));
+    if ((await tileHeight(fit)) <= TILE_H) return fit;
+  }
+  return { ...fit, description: '' };
+}
+
+/** `text` whole if it takes `lines` lines or fewer, or as many of its words as fit with an ellipsis after them. */
+async function cutToLines(text: string, lines: number, linesOf: (text: string) => Promise<number>): Promise<string> {
+  if ((await linesOf(text)) <= lines) return text;
+  const words = text.split(' ');
+  const cut = (n: number) => `${words.slice(0, n).join(' ').replace(/[\s,.;:]+$/, '')}…`;
+  // The most words that fit: `fit` words do, `over` words don't.
+  let fit = 0;
+  let over = words.length;
+  while (over - fit > 1) {
+    const mid = (fit + over) >> 1;
+    if ((await linesOf(cut(mid))) <= lines) fit = mid;
+    else over = mid;
+  }
+  // Not even one word fits (one very long one): satori's clamp cuts it short instead.
+  return fit > 0 ? cut(fit) : text;
+}
+
+// ---------- the card ----------
 
 const SPROUT_H = 195 / 210;
 
-export function drawIssue(issue: Issue, art: Art, sprout: string): El {
-  const potatoW = 350;
+/** The words half of the card. `size` is how wide it is: flex in the card, a fixed width when measured. */
+function textTile(issue: Issue, art: Art, fit: Fit, size: Style): El {
   const byline = [`@${issue.handle}`, formatDate(issue.publishedAt) || null].filter(Boolean).join(' · ');
-  const text = tile(
-    { flex: 1, minWidth: 0, padding: '50px 54px', background: C.paper },
+  return tile(
+    { ...size, padding: `${PAD_Y}px ${PAD_X}px`, background: C.paper, fontFamily: 'signika' },
     h({ alignItems: 'center', gap: 16 }, wordmark(art, C.brown, 40), chip(`issue ${issue.number}`, { background: C.leafTint, color: C.leaf, height: 40, fontSize: 20, fontWeight: 700 })),
     h(
       { flexDirection: 'column', marginTop: 'auto', paddingTop: 24 },
       h({ marginBottom: 14, fontSize: 24, fontWeight: 600, color: C.muted }, issue.name),
-      h({ fontSize: titleSize(issue.title), fontWeight: 700, lineHeight: 1, letterSpacing: '-0.025em', color: C.ink }, issue.title),
-      issue.description ? h({ marginTop: 20, fontSize: 26, lineHeight: 1.35, color: C.soft }, clip(issue.description, descriptionMax(issue.title))) : null,
+      titleEl(flat(issue.title), fit.titleSize, fit.title),
+      fit.description && fit.descriptionLines > 0 ? clamped(fit.description, fit.descriptionLines, { ...DESCRIPTION_TEXT, marginTop: DESCRIPTION_GAP }) : null,
       h(
         { marginTop: 24, alignSelf: 'flex-start', alignItems: 'center', gap: 8, height: 46, padding: '0 20px', borderRadius: 999, background: C.bg, fontSize: 20, color: C.soft },
         h({}, 'by'),
@@ -126,6 +233,10 @@ export function drawIssue(issue: Issue, art: Art, sprout: string): El {
       ),
     ),
   );
+}
+
+export function drawIssue(issue: Issue, art: Art, sprout: string, fit: Fit): El {
+  const potatoW = 350;
   const pic = tile(
     { width: ART_W, flexShrink: 0 },
     img(`data:image/svg+xml;base64,${Buffer.from(backdropSvg()).toString('base64')}`, ART_W, ART_H, { position: 'absolute', left: 0, top: 0 }),
@@ -134,7 +245,7 @@ export function drawIssue(issue: Issue, art: Art, sprout: string): El {
     img(sprout, 58, Math.round(58 * SPROUT_H), { position: 'absolute', right: 22, bottom: 112 }),
     img(art.mascot('happy'), potatoW, Math.round((potatoW * 419) / 515), { position: 'absolute', left: ART_W / 2 - 180, bottom: FEET }),
   );
-  return page(text, pic);
+  return page(textTile(issue, art, fit, { flex: 1, minWidth: 0 }), pic);
 }
 
 let sproutUri: Promise<string> | null = null;
@@ -147,7 +258,7 @@ function sproutArt(): Promise<string> {
 
 export async function cardFor(issue: Issue): Promise<El> {
   const [art, sprout] = await Promise.all([cardArt(), sproutArt()]);
-  return drawIssue(issue, art, sprout);
+  return drawIssue(issue, art, sprout, await fitIssue(issue, art));
 }
 
 // ---------- the function ----------
